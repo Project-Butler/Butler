@@ -1,0 +1,28 @@
+node_modules/
+.env*
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel (로컬 프로젝트 연동 정보, 사용자별로 다름)
+.vercel/
+
+# ESLint cache
+.eslintcache
+
+# Prisma (Prisma Client를 node_modules가 아닌 별도 경로로 생성하도록 설정할 경우 대비)
+generated/
+
+# 테스트 커버리지 리포트 (추후 테스트 러너 도입 시)
+coverage/
