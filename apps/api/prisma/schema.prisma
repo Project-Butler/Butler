@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  LANDLORD
+  TENANT
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ContractStatus {
+  ACTIVE
+  TERMINATED
+  EXPIRED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role
+  createdAt DateTime @default(now())
+
+  properties Property[] @relation("LandlordProperties")
+  contracts  Contract[] @relation("TenantContracts")
+}
+
+model Property {
+  id                 String             @id @default(uuid())
+  address            String
+  type               String
+  ownerId            String
+  owner              User               @relation("LandlordProperties", fields: [ownerId], references: [id])
+  verificationStatus VerificationStatus @default(PENDING)
+  createdAt          DateTime           @default(now())
+
+  contracts Contract[]
+  tickets   Ticket[]
+  documents Document[]
+}
+
+model Contract {
+  id          String         @id @default(uuid())
+  propertyId  String
+  property    Property       @relation(fields: [propertyId], references: [id])
+  tenantId    String
+  tenant      User           @relation("TenantContracts", fields: [tenantId], references: [id])
+  startDate   DateTime
+  endDate     DateTime
+  deposit     Int
+  monthlyRent Int
+  status      ContractStatus @default(ACTIVE)
+}
+
+model Ticket {
+  id          String       @id @default(uuid())
+  propertyId  String
+  property    Property     @relation(fields: [propertyId], references: [id])
+  title       String
+  description String
+  status      TicketStatus @default(OPEN)
+  createdAt   DateTime     @default(now())
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+  fileUrl    String
+  type       String
+  uploadedAt DateTime @default(now())
+}
+
+// ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====

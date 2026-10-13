@@ -6,4 +6,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@butler/ui', '@butler/api-client'],
   },
+  server: {
+    port: 5175,
+    strictPort: true,
+  },
 });
