@@ -26,3 +26,7 @@ generated/
 
 # 테스트 커버리지 리포트 (추후 테스트 러너 도입 시)
 coverage/
+
+.claude/
+
+docs/
