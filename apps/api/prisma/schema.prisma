@@ -13,16 +13,23 @@ enum Role {
   ADMIN
 }
 
-enum VerificationStatus {
-  PENDING
+// 소유 관계 인증 상태. EXPIRED는 여기 없다 — verificationExpiresAt이 지나면
+// 응답을 만들 때 계산해서 EXPIRED로 내려준다 (src/platform/ownershipStatus.js)
+enum OwnershipVerificationStatus {
+  UNVERIFIED
   VERIFIED
-  REJECTED
+  REVOKED
 }
 
-enum ContractStatus {
-  ACTIVE
-  TERMINATED
-  EXPIRED
+enum OwnershipEndReason {
+  SELF_ENDED
+  SUPERSEDED
+  ADMIN_ENDED
+}
+
+enum LeaseType {
+  MONTHLY
+  JEONSE
 }
 
 enum TicketStatus {
@@ -39,35 +46,117 @@ model User {
   role      Role
   createdAt DateTime @default(now())
 
-  properties Property[] @relation("LandlordProperties")
-  contracts  Contract[] @relation("TenantContracts")
+  ownerships      PropertyOwnership[]
+  tenantContracts Contract[]          @relation("TenantContracts")
+}
+
+// 법정동. 행정안전부 "법정동코드 전체자료"로 셋업 시점에 시딩한다(prisma/seed.js).
+// 조회 API에서 Region을 만드는 경로는 없다 — lazy 생성하지 않는다.
+model Region {
+  legalDongCode String @id
+  sidoName      String
+  sigunguName   String
+  dongName      String
+  fullName      String
+
+  complexes Complex[]
+}
+
+model Complex {
+  id            String  @id @default(uuid())
+  sourceKey     String? @unique
+  name          String
+  jibunAddress  String?
+  roadAddress   String?
+  legalDongCode String
+  region        Region  @relation(fields: [legalDongCode], references: [legalDongCode])
+
+  // buildingInfo — 외부 데이터에 없으면 전부 null. AMI 등 나중 기능이 입력으로 씀.
+  approvalDate   DateTime? @db.Date
+  householdCount Int?
+  buildingCount  Int?
+  maxFloor       Int?
+  parkingCount   Int?
+
+  createdAt DateTime @default(now())
+
+  properties Property[]
 }
 
 model Property {
-  id                 String             @id @default(uuid())
-  address            String
-  type               String
-  ownerId            String
-  owner              User               @relation("LandlordProperties", fields: [ownerId], references: [id])
-  verificationStatus VerificationStatus @default(PENDING)
-  createdAt          DateTime           @default(now())
+  id            String   @id @default(uuid())
+  complexId     String
+  complex       Complex  @relation(fields: [complexId], references: [id])
+  buildingNo    String
+  unitNo        String
+  exclusiveArea Float?
+  floor         Int?
+  createdAt     DateTime @default(now())
+
+  ownerships PropertyOwnership[]
+  tickets    Ticket[]
+  documents  Document[]
+
+  // 같은 단지·동·호는 한 Property로 합친다(POST /properties가 이 키로 찾아 재사용).
+  @@unique([complexId, buildingNo, unitNo])
+}
+
+model PropertyOwnership {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  acquiredYearMonth String?
+  purchasePrice     BigInt?
+
+  verificationStatus    OwnershipVerificationStatus @default(UNVERIFIED)
+  verifiedAt            DateTime?
+  verificationExpiresAt DateTime?
+
+  startedAt DateTime            @default(now())
+  endedAt   DateTime?
+  endReason OwnershipEndReason?
 
   contracts Contract[]
-  tickets   Ticket[]
-  documents Document[]
+
+  @@index([propertyId])
+  @@index([userId])
 }
 
 model Contract {
-  id          String         @id @default(uuid())
-  propertyId  String
-  property    Property       @relation(fields: [propertyId], references: [id])
-  tenantId    String
-  tenant      User           @relation("TenantContracts", fields: [tenantId], references: [id])
-  startDate   DateTime
-  endDate     DateTime
-  deposit     Int
-  monthlyRent Int
-  status      ContractStatus @default(ACTIVE)
+  id          String            @id @default(uuid())
+  ownershipId String
+  ownership   PropertyOwnership @relation(fields: [ownershipId], references: [id])
+
+  // 임차인이 초대를 수락하기 전까지 tenantId는 null. tenantName/tenantPhone은
+  // 임대인이 등록 시점에 입력하는 값이라 계정과 별개로 항상 저장한다.
+  tenantId    String?
+  tenant      User?   @relation("TenantContracts", fields: [tenantId], references: [id])
+  tenantName  String
+  tenantPhone String
+
+  leaseType   LeaseType
+  deposit     BigInt
+  monthlyRent BigInt
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+
+  // status는 저장하지 않는다 — terminatedOn 유무 + 오늘(KST) 날짜로 응답마다 계산한다.
+  // (src/platform/contractStatus.js의 computeContractStatus 참고)
+  terminatedOn      DateTime? @db.Date
+  terminationReason String?
+
+  previousContractId String?
+  memo                String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownershipId])
+  @@index([tenantId])
 }
 
 model Ticket {
