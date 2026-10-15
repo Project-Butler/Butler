@@ -178,4 +178,13 @@ model Document {
   uploadedAt DateTime @default(now())
 }
 
+// 요청 한도(rate limit) 카운터. 서버리스 환경이라 메모리에 못 두고 DB에 둔다
+// (api-contract.md 1장 "요청 한도"). key 예: "login:user@example.com:203.0.113.10".
+// 고정 윈도우(fixed window) 방식 — src/middlewares/rateLimiter.js가 읽고 쓴다.
+model RateLimitCounter {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime
+}
+
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
