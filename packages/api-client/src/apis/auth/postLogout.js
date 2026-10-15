@@ -1,6 +1,6 @@
 import axiosInstance from '../../axios/axiosInstance';
 
+// 204 No Content — 반환할 데이터가 없다.
 export const postLogout = async () => {
-  const { data } = await axiosInstance.post('/api/auth/logout');
-  return data;
+  await axiosInstance.post('/auth/logout');
 };

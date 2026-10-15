@@ -10,11 +10,12 @@ import { prisma } from '../platform/prismaClient.js';
 export const rateLimiter =
   ({ windowMs, max, keyFn, message }) =>
   async (req, res, next) => {
-    try {
-      const key = keyFn(req);
-      const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs);
+    const key = keyFn(req);
+    const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs);
 
-      const count = await prisma.$transaction(async (tx) => {
+    let count;
+    try {
+      count = await prisma.$transaction(async (tx) => {
         const existing = await tx.rateLimitCounter.findUnique({ where: { key } });
 
         if (!existing || existing.windowStart.getTime() !== windowStart.getTime()) {
@@ -32,15 +33,19 @@ export const rateLimiter =
         });
         return incremented.count;
       });
-
-      if (count > max) {
-        throw new AppError('RATE_LIMITED', 429, message ?? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
-      }
-
-      next();
     } catch (error) {
-      next(error);
+      // 카운터 저장소(DB) 자체가 응답하지 않을 때는 요청을 막지 않고 통과시킨다
+      // (fail open). 저장소 장애로 로그인 전체가 막히는 것보다, 잠깐 한도 체크를
+      // 못 하고 통과시키는 쪽이 안전하다.
+      console.error(`[rateLimiter] 카운터 저장 실패, 요청을 통과시킴 (key=${key}):`, error.message);
+      return next();
     }
+
+    if (count > max) {
+      return next(new AppError('RATE_LIMITED', 429, message ?? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'));
+    }
+
+    return next();
   };
 
 // api-contract.md 1장 "요청 한도(기본값)"

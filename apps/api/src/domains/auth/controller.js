@@ -1,9 +1,11 @@
+import { AppError } from '../../platform/AppError.js';
+import { sendData } from '../../platform/respond.js';
 import {
+  buildAuthMe,
   clearAuthCookies,
   findUserByCredentials,
   findUserById,
   setAuthCookies,
-  toPublicUser,
   verifyRefreshToken,
 } from './service.js';
 
@@ -12,46 +14,47 @@ export const login = (req, res) => {
   const user = findUserByCredentials(email, password);
 
   if (!user) {
-    return res.status(401).json({ error: 'UNAUTHORIZED', message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+    throw new AppError('AUTH_INVALID_CREDENTIALS', 401, '이메일 또는 비밀번호가 올바르지 않습니다.');
   }
 
   setAuthCookies(res, user);
-  return res.status(200).json({ user: toPublicUser(user) });
+  sendData(res, buildAuthMe(user), { status: 200 });
 };
 
 export const refresh = (req, res) => {
   const token = req.cookies?.refresh_token;
 
   if (!token) {
-    return res.status(401).json({ error: 'UNAUTHORIZED', message: '다시 로그인해주세요.' });
+    throw new AppError('AUTH_REFRESH_INVALID', 401, '다시 로그인해주세요.');
   }
 
+  let payload;
   try {
-    const payload = verifyRefreshToken(token);
-    const user = findUserById(payload.userId);
-
-    if (!user) {
-      return res.status(401).json({ error: 'UNAUTHORIZED', message: '다시 로그인해주세요.' });
-    }
-
-    setAuthCookies(res, user);
-    return res.status(200).end();
+    payload = verifyRefreshToken(token);
   } catch (error) {
-    return res.status(401).json({ error: 'UNAUTHORIZED', message: '다시 로그인해주세요.' });
+    throw new AppError('AUTH_REFRESH_INVALID', 401, '다시 로그인해주세요.');
   }
+
+  const user = findUserById(payload.userId);
+  if (!user) {
+    throw new AppError('AUTH_REFRESH_INVALID', 401, '다시 로그인해주세요.');
+  }
+
+  setAuthCookies(res, user);
+  res.status(204).end();
 };
 
 export const logout = (req, res) => {
   clearAuthCookies(res);
-  return res.status(200).end();
+  res.status(204).end();
 };
 
 export const me = (req, res) => {
   const user = findUserById(req.user.id);
 
   if (!user) {
-    return res.status(401).json({ error: 'UNAUTHORIZED', message: '로그인이 필요합니다.' });
+    throw new AppError('UNAUTHENTICATED', 401, '로그인이 필요합니다.');
   }
 
-  return res.status(200).json(toPublicUser(user));
+  sendData(res, buildAuthMe(user));
 };
