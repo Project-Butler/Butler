@@ -188,3 +188,54 @@ model RateLimitCounter {
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
+
+// ===== C팀: 임대차 분쟁 해결사 (disputes) =====
+// 분쟁 참고자료(조정사례·판례·가이드라인). 시드로만 채운다(prisma/seedDisputes.js).
+// Core 모델과 relation 없음 (api-contract.md 9장 "임대차 분쟁 해결사").
+
+enum DisputeReferenceType {
+  CASE // 분쟁조정 사례
+  PRECEDENT // 판례
+  GUIDELINE // 제도 안내·FAQ
+}
+
+enum DisputePropertyKind {
+  HOUSING // 주택
+  COMMERCIAL // 상가건물
+}
+
+// 주택·상가건물 임대차보호법 시행령의 분쟁조정 대상 유형
+enum DisputeCategory {
+  RENT_ADJUSTMENT // 차임 또는 보증금의 증감
+  LEASE_TERM // 임대차 기간
+  DEPOSIT_RETURN // 보증금 또는 임차목적물의 반환
+  REPAIR_DUTY // 유지·수선의무
+  CONTRACT_INTERPRETATION // 계약 이행 및 내용의 해석
+  RENEWAL_TERMINATION // 계약 갱신 및 종료
+  DAMAGES // 손해배상
+  BROKERAGE_FEE // 중개사 보수 등 비용 부담
+  PREMIUM // 권리금 (상가)
+  GENERAL // 제도 일반
+}
+
+model DisputeReference {
+  id           String               @id @default(uuid())
+  sourceKey    String               @unique // 시드 upsert 키, 예: "casebook-2025-H-01-1"
+  type         DisputeReferenceType
+  propertyKind DisputePropertyKind? // null이면 주택·상가 공통
+  category     DisputeCategory
+  title        String
+  summary      String // 목록에 보이는 쟁점 요약
+  content      String // 사실관계·당사자 주장·검토 등 본문
+  outcome      String? // 조정 결과 / 판결 요지 (가이드라인은 null)
+  caseNumber   String? // 판례 사건번호
+  relatedLaws  String[]
+  keywords     String[]
+  sourceTitle  String
+  sourcePage   Int?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([type, category])
+  @@map("dispute_references")
+}
