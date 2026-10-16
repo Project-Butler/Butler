@@ -2,4 +2,6 @@
 // 같이 추가한다 — 아직 쓰는 곳이 없는 키를 미리 적어두지 않는다.
 export const queryKey = {
   USER_PROFILE: 'user_profile',
+  DISPUTE_REFERENCES: 'dispute_references',
+  DISPUTE_REFERENCE_DETAIL: 'dispute_reference',
 };
