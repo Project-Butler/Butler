@@ -12,6 +12,8 @@ enum Role {
   LANDLORD
   TENANT
   ADMIN
+
+  @@map("role")
 }
 
 // 소유 관계 인증 상태. EXPIRED는 여기 없다 — verificationExpiresAt이 지나면
@@ -20,23 +22,31 @@ enum OwnershipVerificationStatus {
   UNVERIFIED
   VERIFIED
   REVOKED
+
+  @@map("ownership_verification_status")
 }
 
 enum OwnershipEndReason {
   SELF_ENDED
   SUPERSEDED
   ADMIN_ENDED
+
+  @@map("ownership_end_reason")
 }
 
 enum LeaseType {
   MONTHLY
   JEONSE
+
+  @@map("lease_type")
 }
 
 enum TicketStatus {
   OPEN
   IN_PROGRESS
   DONE
+
+  @@map("ticket_status")
 }
 
 model User {
@@ -213,11 +223,15 @@ enum DisputeReferenceType {
   CASE // 분쟁조정 사례
   PRECEDENT // 판례
   GUIDELINE // 제도 안내·FAQ
+
+  @@map("dispute_reference_type")
 }
 
 enum DisputePropertyKind {
   HOUSING // 주택
   COMMERCIAL // 상가건물
+
+  @@map("dispute_property_kind")
 }
 
 // 주택·상가건물 임대차보호법 시행령의 분쟁조정 대상 유형
@@ -232,6 +246,8 @@ enum DisputeCategory {
   BROKERAGE_FEE // 중개사 보수 등 비용 부담
   PREMIUM // 권리금 (상가)
   GENERAL // 제도 일반
+
+  @@map("dispute_category")
 }
 
 model DisputeReference {
