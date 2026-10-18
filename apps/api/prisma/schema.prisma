@@ -45,54 +45,60 @@ model User {
   password  String
   name      String
   role      Role
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   ownerships      PropertyOwnership[]
   tenantContracts Contract[]          @relation("TenantContracts")
+
+  @@map("users")
 }
 
 // 법정동. 행정안전부 "법정동코드 전체자료"로 셋업 시점에 시딩한다(prisma/seed.js).
 // 조회 API에서 Region을 만드는 경로는 없다 — lazy 생성하지 않는다.
 model Region {
-  legalDongCode String @id
-  sidoName      String
-  sigunguName   String
-  dongName      String
-  fullName      String
+  legalDongCode String @id @map("legal_dong_code")
+  sidoName      String @map("sido_name")
+  sigunguName   String @map("sigungu_name")
+  dongName      String @map("dong_name")
+  fullName      String @map("full_name")
 
   complexes Complex[]
+
+  @@map("regions")
 }
 
 model Complex {
   id            String  @id @default(uuid())
-  sourceKey     String? @unique
+  sourceKey     String? @unique @map("source_key")
   name          String
-  jibunAddress  String?
-  roadAddress   String?
-  legalDongCode String
+  jibunAddress  String? @map("jibun_address")
+  roadAddress   String? @map("road_address")
+  legalDongCode String  @map("legal_dong_code")
   region        Region  @relation(fields: [legalDongCode], references: [legalDongCode])
 
   // buildingInfo — 외부 데이터에 없으면 전부 null. AMI 등 나중 기능이 입력으로 씀.
-  approvalDate   DateTime? @db.Date
-  householdCount Int?
-  buildingCount  Int?
-  maxFloor       Int?
-  parkingCount   Int?
+  approvalDate   DateTime? @map("approval_date") @db.Date
+  householdCount Int?      @map("household_count")
+  buildingCount  Int?      @map("building_count")
+  maxFloor       Int?      @map("max_floor")
+  parkingCount   Int?      @map("parking_count")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   properties Property[]
+
+  @@map("complexes")
 }
 
 model Property {
   id            String   @id @default(uuid())
-  complexId     String
+  complexId     String   @map("complex_id")
   complex       Complex  @relation(fields: [complexId], references: [id])
-  buildingNo    String
-  unitNo        String
-  exclusiveArea Float?
+  buildingNo    String   @map("building_no")
+  unitNo        String   @map("unit_no")
+  exclusiveArea Float?   @map("exclusive_area")
   floor         Int?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime @default(now()) @map("created_at")
 
   ownerships PropertyOwnership[]
   tickets    Ticket[]
@@ -100,83 +106,90 @@ model Property {
 
   // 같은 단지·동·호는 한 Property로 합친다(POST /properties가 이 키로 찾아 재사용).
   @@unique([complexId, buildingNo, unitNo])
+  @@map("properties")
 }
 
 model PropertyOwnership {
   id         String   @id @default(uuid())
-  propertyId String
+  propertyId String   @map("property_id")
   property   Property @relation(fields: [propertyId], references: [id])
-  userId     String
+  userId     String   @map("user_id")
   user       User     @relation(fields: [userId], references: [id])
 
-  acquiredYearMonth String?
-  purchasePrice     BigInt?
+  acquiredYearMonth String? @map("acquired_year_month")
+  purchasePrice     BigInt? @map("purchase_price")
 
-  verificationStatus    OwnershipVerificationStatus @default(UNVERIFIED)
-  verifiedAt            DateTime?
-  verificationExpiresAt DateTime?
+  verificationStatus    OwnershipVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verifiedAt            DateTime?                   @map("verified_at")
+  verificationExpiresAt DateTime?                   @map("verification_expires_at")
 
-  startedAt DateTime            @default(now())
-  endedAt   DateTime?
-  endReason OwnershipEndReason?
+  startedAt DateTime            @default(now()) @map("started_at")
+  endedAt   DateTime?           @map("ended_at")
+  endReason OwnershipEndReason? @map("end_reason")
 
   contracts Contract[]
 
   @@index([propertyId])
   @@index([userId])
+  @@map("property_ownerships")
 }
 
 model Contract {
   id          String            @id @default(uuid())
-  ownershipId String
+  ownershipId String            @map("ownership_id")
   ownership   PropertyOwnership @relation(fields: [ownershipId], references: [id])
 
   // 임차인이 초대를 수락하기 전까지 tenantId는 null. tenantName/tenantPhone은
   // 임대인이 등록 시점에 입력하는 값이라 계정과 별개로 항상 저장한다.
-  tenantId    String?
+  tenantId    String? @map("tenant_id")
   tenant      User?   @relation("TenantContracts", fields: [tenantId], references: [id])
-  tenantName  String
-  tenantPhone String
+  tenantName  String  @map("tenant_name")
+  tenantPhone String  @map("tenant_phone")
 
-  leaseType   LeaseType
+  leaseType   LeaseType @map("lease_type")
   deposit     BigInt
-  monthlyRent BigInt
+  monthlyRent BigInt    @map("monthly_rent")
 
-  startDate DateTime @db.Date
-  endDate   DateTime @db.Date
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
 
   // status는 저장하지 않는다 — terminatedOn 유무 + 오늘(KST) 날짜로 응답마다 계산한다.
   // (src/platform/contractStatus.js의 computeContractStatus 참고)
-  terminatedOn      DateTime? @db.Date
-  terminationReason String?
+  terminatedOn      DateTime? @map("terminated_on") @db.Date
+  terminationReason String?   @map("termination_reason")
 
-  previousContractId String?
-  memo                String?
+  previousContractId String? @map("previous_contract_id")
+  memo               String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([ownershipId])
   @@index([tenantId])
+  @@map("contracts")
 }
 
 model Ticket {
   id          String       @id @default(uuid())
-  propertyId  String
+  propertyId  String       @map("property_id")
   property    Property     @relation(fields: [propertyId], references: [id])
   title       String
   description String
   status      TicketStatus @default(OPEN)
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@map("tickets")
 }
 
 model Document {
   id         String   @id @default(uuid())
-  propertyId String
+  propertyId String   @map("property_id")
   property   Property @relation(fields: [propertyId], references: [id])
-  fileUrl    String
+  fileUrl    String   @map("file_url")
   type       String
-  uploadedAt DateTime @default(now())
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@map("documents")
 }
 
 // 요청 한도(rate limit) 카운터. 서버리스 환경이라 메모리에 못 두고 DB에 둔다
@@ -185,7 +198,9 @@ model Document {
 model RateLimitCounter {
   key         String   @id
   count       Int      @default(0)
-  windowStart DateTime
+  windowStart DateTime @map("window_start")
+
+  @@map("rate_limit_counters")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
@@ -221,21 +236,21 @@ enum DisputeCategory {
 
 model DisputeReference {
   id           String               @id @default(uuid())
-  sourceKey    String               @unique // 시드 upsert 키, 예: "casebook-2025-H-01-1"
+  sourceKey    String               @unique @map("source_key") // 시드 upsert 키, 예: "casebook-2025-H-01-1"
   type         DisputeReferenceType
-  propertyKind DisputePropertyKind? // null이면 주택·상가 공통
+  propertyKind DisputePropertyKind? @map("property_kind") // null이면 주택·상가 공통
   category     DisputeCategory
   title        String
   summary      String // 목록에 보이는 쟁점 요약
   content      String // 사실관계·당사자 주장·검토 등 본문
   outcome      String? // 조정 결과 / 판결 요지 (가이드라인은 null)
-  caseNumber   String? // 판례 사건번호
-  relatedLaws  String[]
+  caseNumber   String?              @map("case_number") // 판례 사건번호
+  relatedLaws  String[]             @map("related_laws")
   keywords     String[]
-  sourceTitle  String
-  sourcePage   Int?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  sourceTitle  String               @map("source_title")
+  sourcePage   Int?                 @map("source_page")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
 
   @@index([type, category])
   @@map("dispute_references")
