@@ -11,6 +11,11 @@ import { requestId } from './platform/requestId.js';
 
 const app = express();
 
+// Vercel 엣지 프록시 한 단계 뒤에서 돌기 때문에 X-Forwarded-For의 마지막 값이 실제
+// 클라이언트 IP다. 1보다 크게 잡으면 클라이언트가 보낸 X-Forwarded-For 값까지 믿게
+// 돼서 req.ip(rateLimiter 키)를 위조할 수 있다.
+app.set('trust proxy', 1);
+
 app.use(requestId);
 app.use(cors(corsOptions));
 app.use(express.json());
