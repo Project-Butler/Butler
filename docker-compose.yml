@@ -1,0 +1,22 @@
+# 로컬 개발용 PostgreSQL. 배포 DB는 Supabase를 쓴다.
+services:
+  postgres:
+    image: postgres:16
+    container_name: butler-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: butler
+      POSTGRES_PASSWORD: butler
+      POSTGRES_DB: butler
+    ports:
+      - "5432:5432"
+    volumes:
+      - butler-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U butler -d butler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  butler-pgdata:
