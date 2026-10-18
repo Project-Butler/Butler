@@ -1,26 +1,26 @@
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('LANDLORD', 'TENANT', 'ADMIN');
+CREATE TYPE "role" AS ENUM ('LANDLORD', 'TENANT', 'ADMIN');
 
 -- CreateEnum
-CREATE TYPE "OwnershipVerificationStatus" AS ENUM ('UNVERIFIED', 'VERIFIED', 'REVOKED');
+CREATE TYPE "ownership_verification_status" AS ENUM ('UNVERIFIED', 'VERIFIED', 'REVOKED');
 
 -- CreateEnum
-CREATE TYPE "OwnershipEndReason" AS ENUM ('SELF_ENDED', 'SUPERSEDED', 'ADMIN_ENDED');
+CREATE TYPE "ownership_end_reason" AS ENUM ('SELF_ENDED', 'SUPERSEDED', 'ADMIN_ENDED');
 
 -- CreateEnum
-CREATE TYPE "LeaseType" AS ENUM ('MONTHLY', 'JEONSE');
+CREATE TYPE "lease_type" AS ENUM ('MONTHLY', 'JEONSE');
 
 -- CreateEnum
-CREATE TYPE "TicketStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'DONE');
+CREATE TYPE "ticket_status" AS ENUM ('OPEN', 'IN_PROGRESS', 'DONE');
 
 -- CreateEnum
-CREATE TYPE "DisputeReferenceType" AS ENUM ('CASE', 'PRECEDENT', 'GUIDELINE');
+CREATE TYPE "dispute_reference_type" AS ENUM ('CASE', 'PRECEDENT', 'GUIDELINE');
 
 -- CreateEnum
-CREATE TYPE "DisputePropertyKind" AS ENUM ('HOUSING', 'COMMERCIAL');
+CREATE TYPE "dispute_property_kind" AS ENUM ('HOUSING', 'COMMERCIAL');
 
 -- CreateEnum
-CREATE TYPE "DisputeCategory" AS ENUM ('RENT_ADJUSTMENT', 'LEASE_TERM', 'DEPOSIT_RETURN', 'REPAIR_DUTY', 'CONTRACT_INTERPRETATION', 'RENEWAL_TERMINATION', 'DAMAGES', 'BROKERAGE_FEE', 'PREMIUM', 'GENERAL');
+CREATE TYPE "dispute_category" AS ENUM ('RENT_ADJUSTMENT', 'LEASE_TERM', 'DEPOSIT_RETURN', 'REPAIR_DUTY', 'CONTRACT_INTERPRETATION', 'RENEWAL_TERMINATION', 'DAMAGES', 'BROKERAGE_FEE', 'PREMIUM', 'GENERAL');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -28,7 +28,7 @@ CREATE TABLE "users" (
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "role" "Role" NOT NULL,
+    "role" "role" NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
@@ -83,12 +83,12 @@ CREATE TABLE "property_ownerships" (
     "user_id" TEXT NOT NULL,
     "acquired_year_month" TEXT,
     "purchase_price" BIGINT,
-    "verification_status" "OwnershipVerificationStatus" NOT NULL DEFAULT 'UNVERIFIED',
+    "verification_status" "ownership_verification_status" NOT NULL DEFAULT 'UNVERIFIED',
     "verified_at" TIMESTAMP(3),
     "verification_expires_at" TIMESTAMP(3),
     "started_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "ended_at" TIMESTAMP(3),
-    "end_reason" "OwnershipEndReason",
+    "end_reason" "ownership_end_reason",
 
     CONSTRAINT "property_ownerships_pkey" PRIMARY KEY ("id")
 );
@@ -100,7 +100,7 @@ CREATE TABLE "contracts" (
     "tenant_id" TEXT,
     "tenant_name" TEXT NOT NULL,
     "tenant_phone" TEXT NOT NULL,
-    "lease_type" "LeaseType" NOT NULL,
+    "lease_type" "lease_type" NOT NULL,
     "deposit" BIGINT NOT NULL,
     "monthly_rent" BIGINT NOT NULL,
     "start_date" DATE NOT NULL,
@@ -121,7 +121,7 @@ CREATE TABLE "tickets" (
     "property_id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "status" "TicketStatus" NOT NULL DEFAULT 'OPEN',
+    "status" "ticket_status" NOT NULL DEFAULT 'OPEN',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "tickets_pkey" PRIMARY KEY ("id")
@@ -151,9 +151,9 @@ CREATE TABLE "rate_limit_counters" (
 CREATE TABLE "dispute_references" (
     "id" TEXT NOT NULL,
     "source_key" TEXT NOT NULL,
-    "type" "DisputeReferenceType" NOT NULL,
-    "property_kind" "DisputePropertyKind",
-    "category" "DisputeCategory" NOT NULL,
+    "type" "dispute_reference_type" NOT NULL,
+    "property_kind" "dispute_property_kind",
+    "category" "dispute_category" NOT NULL,
     "title" TEXT NOT NULL,
     "summary" TEXT NOT NULL,
     "content" TEXT NOT NULL,
