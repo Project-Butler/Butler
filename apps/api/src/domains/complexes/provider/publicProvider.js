@@ -8,13 +8,14 @@
 // 실패는 ExternalServiceError(reason)로만 던진다 — reason에 URL·키·응답 원문을 넣지 않는다.
 // 공통 호출 도구(fetchJson 등)는 publicApi.js.
 import { prisma } from '../../../platform/prismaClient.js';
+import { KAPT_BASIS_API, KAPT_BASIS_LIVE_LIMIT, spendApiCall } from '../apiUsage.js';
+import { fetchKaptBasis, saveKaptBasis } from '../kaptBasis.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { buildPnu, parsePnu, rollUpLegalDongCode, toBuildingRegisterParams } from './pnu.js';
 import { fetchJson, readDataGoKrBody, toItemArray } from './publicApi.js';
 
 const JUSO_BASE_URL = 'https://business.juso.go.kr/addrlink/addrLinkApi.do';
 const KAPT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService4/getLegaldongAptList4';
-const KAPT_BASIS_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5';
 const BUILDING_HUB_BASE_URL = 'https://apis.data.go.kr/1613000/BldRgstHubService';
 const BUILDING_HUB_RECAP_URL = `${BUILDING_HUB_BASE_URL}/getBrRecapTitleInfo`; // 총괄표제부
 const BUILDING_HUB_TITLE_URL = `${BUILDING_HUB_BASE_URL}/getBrTitleInfo`; // 표제부
@@ -198,18 +199,6 @@ const matchKaptComplex = (buildingName, kaptList) => {
   return best;
 };
 
-const fetchKaptBasis = async (kaptCode) => {
-  const json = await fetchJson('kapt-basis', KAPT_BASIS_URL, {
-    serviceKey: process.env.DATA_GO_KR_SERVICE_KEY,
-    kaptCode,
-  });
-  const body = readDataGoKrBody('kapt-basis', json);
-  const item = body?.item;
-  // 없는 kaptCode는 모든 값이 null인 item으로 온다.
-  if (!item || !item.kaptCode) return null;
-  return item;
-};
-
 // 단지 이름으로 kapt_complexes를 직접 찾는다. 도로명주소(juso)는 건물명이 K-apt와 다르거나('SKYVILLE' ↔ '스카이빌')
 // 아예 검색되지 않는 단지가 있어서, 이름 검색을 함께 해야 K-apt 단지를 놓치지 않는다.
 // 검색어 전체가 단지명(공백 제거)에 들어 있거나, 여러 단어면 가장 긴 단어가 단지명에 있고
@@ -359,9 +348,34 @@ const searchComplexes = async (query, size) => {
   return results.slice(0, size);
 };
 
+// 오늘 K-apt 기본정보 호출 한도를 다 쓴 경우: 단지 목록(kapt_complexes) 값만으로 만든다(buildingInfo 없음).
+const getKaptComplexFromList = async (sourceKey, kaptCode) => {
+  const row = await prisma.kaptComplex.findUnique({ where: { kaptCode } });
+  if (!row) return null;
+  console.warn('[complexes] kapt-basis daily limit reached — list fallback');
+  return {
+    sourceKey,
+    name: row.name,
+    jibunAddress: row.jibunAddress ?? trimOrNull(toKaptRegionText(row)),
+    roadAddress: row.roadAddress,
+    legalDongCode: rollUpLegalDongCode(row.legalDongCode),
+    buildingInfo: null,
+  };
+};
+
 const getKaptComplex = async (sourceKey, kaptCode) => {
+  if ((await spendApiCall(prisma, KAPT_BASIS_API, KAPT_BASIS_LIVE_LIMIT)) === null) {
+    return getKaptComplexFromList(sourceKey, kaptCode);
+  }
   const basis = await fetchKaptBasis(kaptCode);
   if (!basis || !/^\d{10}$/.test(String(basis.bjdCode ?? ''))) return null;
+
+  // 받은 기본정보로 kapt_complexes 주소 칸도 채운다(백필 1건 절약). 실패해도 resolve는 계속한다.
+  try {
+    await saveKaptBasis(prisma, kaptCode, basis);
+  } catch (error) {
+    console.error('[complexes] kapt basis save failed', error.code ?? error.name);
+  }
 
   return {
     sourceKey,

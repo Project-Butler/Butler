@@ -32,6 +32,10 @@ export const fetchJson = async (label, baseUrl, params) => {
 
 // data.go.kr 응답의 header.resultCode를 확인하고 body를 돌려준다. 데이터 없음이면 null.
 export const readDataGoKrBody = (label, json) => {
+  // 게이트웨이 오류(키 오류·한도 초과 '22'·일시 오류 '04' 등)는 response 대신 OpenAPI_ServiceResponse로 온다.
+  const gatewayCode = json?.OpenAPI_ServiceResponse?.cmmMsgHeader?.returnReasonCode;
+  if (gatewayCode !== undefined) throw new ExternalServiceError(`${label} gateway ${gatewayCode}`);
+
   const resultCode = json?.response?.header?.resultCode;
   if (DATA_GO_KR_NO_DATA_CODES.includes(resultCode)) return null;
   if (!DATA_GO_KR_OK_CODES.includes(resultCode)) {

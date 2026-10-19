@@ -11,7 +11,8 @@
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js",
-    "sync:kapt": "node prisma/syncKaptComplexes.js"
+    "sync:kapt": "node prisma/syncKaptComplexes.js",
+    "backfill:kapt-basis": "node prisma/backfillKaptBasis.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
