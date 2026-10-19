@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/app.js",
-    "start": "node src/app.js",
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
     "lint": "eslint .",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js"
   },

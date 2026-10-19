@@ -54,7 +54,7 @@ const main = async () => {
     count += 1;
   }
 
-  console.log(`[seed] Region ${count}건 완료.`);
+  console.info(`[seed] Region ${count}건 완료.`);
 };
 
 main()
