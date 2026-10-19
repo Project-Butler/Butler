@@ -151,9 +151,65 @@ model Complex {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  properties Property[]
+  properties      Property[]
+  sourceAliases   ComplexSourceAlias[]
+  buildingLookups ComplexBuildingLookup[]
+  lookupMisses    ComplexLookupMiss[]
 
   @@map("complexes")
+}
+
+// 단지 외부 키 별칭. 같은 아파트가 KAPT 키·PNU 키 두 가지로 검색돼도 한 Complex로 묶는다.
+// complexes.source_key는 처음 만든 키 그대로 두고(응답 호환), resolve·검색은 이 테이블을 먼저 본다.
+// 별칭은 추가만 하고 다른 Complex로 옮기지 않는다.
+model ComplexSourceAlias {
+  sourceKey String   @id @map("source_key") @db.VarChar(50)
+  complexId String   @map("complex_id") @db.Uuid
+  complex   Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([complexId])
+  @@map("complex_source_aliases")
+}
+
+// 동·호 조회에서 동마다 찾은 "찾는 방법"(필지·대장 동 이름·호 표기). 면적·층은 저장하지 않는다.
+// dongKey는 normalizeBuildingNo 결과, pnu는 리 단위 법정동 코드 그대로의 19자리.
+model ComplexBuildingLookup {
+  complexId      String   @map("complex_id") @db.Uuid
+  complex        Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
+  dongKey        String   @map("dong_key") @db.VarChar(20)
+  pnu            String   @db.VarChar(19)
+  registryDongNm String?  @map("registry_dong_nm")
+  hoFormat       String   @map("ho_format") @db.VarChar(20)
+  verifiedAt     DateTime @map("verified_at") @db.Timestamptz(3)
+  missCount      Int      @default(0) @map("miss_count")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([complexId, dongKey])
+  @@map("complex_building_lookups")
+}
+
+// 동을 어느 필지 대장에서도 못 찾은 경우의 음성 캐시. expiresAt이 지나면 무시하고 다시 찾는다.
+model ComplexLookupMiss {
+  complexId String   @map("complex_id") @db.Uuid
+  complex   Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
+  dongKey   String   @map("dong_key") @db.VarChar(20)
+  reason    String?  @db.VarChar(50)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([complexId, dongKey])
+  @@index([expiresAt])
+  @@map("complex_lookup_misses")
+}
+
+// 외부 API 하루 호출 수(KST 날짜). 하루 한도가 있는 API를 여러 경로(백필·resolve·cron)가 나눠 쓸 때 쓴다.
+model ExternalApiUsage {
+  api       String   @db.VarChar(30)
+  usageDate DateTime @map("usage_date") @db.Date
+  count     Int      @default(0)
+
+  @@id([api, usageDate])
+  @@map("external_api_usage")
 }
 
 // K-apt(공동주택관리정보시스템) 전국 단지 목록 캐시. 단지 검색이 juso 결과와 이름을 맞출 때
@@ -175,7 +231,26 @@ model KaptComplex {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  // K-apt 기본정보(getAphusBassInfoV5)에서 채우는 주소. 백필 스크립트·resolve·주간 cron이 채운다.
+  roadAddress     String?   @map("road_address") // doroJuso 원문
+  jibunAddress    String?   @map("jibun_address") // kaptAddr 원문
+  // doroJuso 파싱 결과(도로명 구조 키). 파싱 못 하면 null.
+  roadSigunguCd   String?   @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey     String?   @map("road_name_key") // 공백 없는 도로명
+  roadUnderground Boolean?  @map("road_underground")
+  roadMainNo      Int?      @map("road_main_no")
+  roadSubNo       Int?      @map("road_sub_no")
+  // kaptAddr 번지
+  mainLot         Int?      @map("main_lot")
+  subLot          Int?      @map("sub_lot")
+  // null이면 아직 기본정보를 못 받음. 실패마다 basisAttempts +1, 3회 이상이면 자동 채우기 대상에서 뺀다.
+  basisFetchedAt  DateTime? @map("basis_fetched_at") @db.Timestamptz(3)
+  basisAttempts   Int       @default(0) @map("basis_attempts")
+  basisError      String?   @map("basis_error")
+
   @@index([legalDongCode])
+  @@index([roadSigunguCd, roadNameKey, roadMainNo, roadSubNo])
+  @@index([legalDongCode, mainLot])
   @@map("kapt_complexes")
 }
 
