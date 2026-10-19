@@ -10,6 +10,11 @@ const prisma = new PrismaClient();
 
 const CSV_PATH = path.join(__dirname, 'seed-data', 'legal-dong-codes.csv');
 const EXPECTED_COLUMNS = ['legalDongCode', 'sidoName', 'sigunguName', 'dongName', 'fullName'];
+const NAME_FIELDS = ['sidoName', 'sigunguName', 'dongName', 'fullName'];
+const BATCH_SIZE = 1000;
+// 전국 동 단위는 5천 건 남짓이다. 이보다 크게 적으면 CSV가 잘못된 것이라, 기존 법정동을 한꺼번에
+// 비활성으로 바꾸기 전에 멈춘다.
+const MIN_EXPECTED_ROWS = 4000;
 
 const parseCsv = (text) => {
   const lines = text
@@ -24,37 +29,55 @@ const parseCsv = (text) => {
   }
 
   return lines.slice(1).map((line) => {
+    // 세종처럼 시군구가 없는 행은 sigunguName이 빈 문자열이다(non-null 컬럼).
     const cells = line.split(',').map((cell) => cell.trim());
-    return Object.fromEntries(header.map((col, i) => [col, cells[i]]));
+    return Object.fromEntries(header.map((col, i) => [col, cells[i] ?? '']));
   });
 };
 
+const isChanged = (existing, row) =>
+  !existing.isActive || NAME_FIELDS.some((field) => existing[field] !== row[field]);
+
 const main = async () => {
   const rows = parseCsv(readFileSync(CSV_PATH, 'utf-8'));
+  if (rows.length < MIN_EXPECTED_ROWS) {
+    throw new Error(`legal-dong-codes.csv가 ${rows.length}건뿐입니다. seed-data/README.md 절차로 전체 자료를 다시 만드세요.`);
+  }
+  const csvCodes = new Set(rows.map((row) => row.legalDongCode));
 
-  if (rows.length <= 1) {
-    console.warn(
-      `[seed] ${rows.length}건만 들어있습니다 — 지금은 개발용 샘플입니다. ` +
-        '운영 전 prisma/seed-data/README.md 안내대로 전체 데이터로 교체하세요.',
-    );
+  const existingRows = await prisma.region.findMany();
+  const existingByCode = new Map(existingRows.map((region) => [region.legalDongCode, region]));
+
+  // 5천 건 넘게 행마다 upsert하면 느려서, 새 코드는 묶어서 넣고 바뀐 행만 고친다.
+  const newRows = rows.filter((row) => !existingByCode.has(row.legalDongCode));
+  for (let i = 0; i < newRows.length; i += BATCH_SIZE) {
+    await prisma.region.createMany({ data: newRows.slice(i, i + BATCH_SIZE), skipDuplicates: true });
   }
 
-  let count = 0;
-  for (const row of rows) {
-    await prisma.region.upsert({
-      where: { legalDongCode: row.legalDongCode },
-      update: {
-        sidoName: row.sidoName,
-        sigunguName: row.sigunguName,
-        dongName: row.dongName,
-        fullName: row.fullName,
-      },
-      create: { ...row },
+  const changedRows = rows.filter((row) => {
+    const existing = existingByCode.get(row.legalDongCode);
+    return existing && isChanged(existing, row);
+  });
+  for (const row of changedRows) {
+    const { legalDongCode, ...names } = row;
+    await prisma.region.update({ where: { legalDongCode }, data: { ...names, isActive: true } });
+  }
+
+  // 새 CSV에서 빠진(폐지된) 코드는 지우지 않는다 — complexes가 FK로 참조할 수 있어서
+  // isActive만 false로 바꾼다.
+  const removedCodes = existingRows
+    .filter((region) => region.isActive && !csvCodes.has(region.legalDongCode))
+    .map((region) => region.legalDongCode);
+  if (removedCodes.length > 0) {
+    await prisma.region.updateMany({
+      where: { legalDongCode: { in: removedCodes } },
+      data: { isActive: false },
     });
-    count += 1;
   }
 
-  console.info(`[seed] Region ${count}건 완료.`);
+  console.info(
+    `[seed] Region 전체 ${rows.length}건 — 추가 ${newRows.length}, 변경 ${changedRows.length}, 비활성 ${removedCodes.length}.`,
+  );
 };
 
 main()
