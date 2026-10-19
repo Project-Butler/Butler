@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };
 
-export const AdminLayout = ({ children }) => {
+export const AdminLayout = ({ children, onLogout }) => {
   const [activeKey, setActiveKey] = useState(NAV_ITEMS[0].key);
   const active = [...NAV_ITEMS, SETTINGS_ITEM].find((item) => item.key === activeKey);
 
@@ -24,6 +24,7 @@ export const AdminLayout = ({ children }) => {
       breadcrumb={['관리자 콘솔', active?.label]}
       searchPlaceholder="회원·부동산·계약 검색"
       notificationCount={1}
+      user={{ name: '관리자', role: '어드민', onLogout }}
       primaryAction={{ label: '사용자 추가', icon: UserPlus, onClick: () => {} }}
       nav={NAV_ITEMS.map((item) => ({
         ...item,

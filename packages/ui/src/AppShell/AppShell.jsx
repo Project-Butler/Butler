@@ -1,5 +1,7 @@
 import { Bell, ChevronRight, Home, Search } from 'lucide-react';
 import { Button } from '../Button/Button';
+import { PropertySwitcher } from '../PropertySwitcher/PropertySwitcher';
+import { UserMenu } from '../UserMenu/UserMenu';
 
 const NavItem = ({ icon: Icon, label, badge, active, onClick }) => (
   <button
@@ -35,8 +37,10 @@ export const AppShell = ({
   nav = [],
   settingsItem,
   breadcrumb = [],
-  searchPlaceholder = '검색',
+  searchPlaceholder,
+  propertySwitcher,
   notificationCount,
+  user,
   primaryAction,
   children,
 }) => {
@@ -78,16 +82,20 @@ export const AppShell = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="flex w-64 items-center gap-2 rounded-input border border-line bg-surface-2 px-3 py-2 text-sm text-ink-3 transition-colors hover:border-accent/40"
-            >
-              <Search size={16} className="text-ink-3" />
-              <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
-              <span className="rounded border border-line bg-white px-1.5 py-0.5 font-num text-xs text-ink-3">
-                Ctrl K
-              </span>
-            </button>
+            {propertySwitcher && <PropertySwitcher {...propertySwitcher} />}
+
+            {searchPlaceholder && (
+              <button
+                type="button"
+                className="flex w-64 items-center gap-2 rounded-input border border-line bg-surface-2 px-3 py-2 text-sm text-ink-3 transition-colors hover:border-accent/40"
+              >
+                <Search size={16} className="text-ink-3" />
+                <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
+                <span className="rounded border border-line bg-white px-1.5 py-0.5 font-num text-xs text-ink-3">
+                  Ctrl K
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -106,6 +114,8 @@ export const AppShell = ({
                 {primaryAction.label}
               </Button>
             )}
+
+            {user && <UserMenu {...user} />}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">{children}</main>

@@ -1,4 +1,5 @@
 import { Badge, Button, Card, StatCard } from '@butler/ui';
+import { PROPERTIES } from '../data/mockProperties';
 
 const TODOS = [
   {
@@ -22,23 +23,6 @@ const SCHEDULES = [
   { date: '10.17', day: '토', title: '퇴거 점검', desc: '노원 그린아파트 1234호', dday: 'D-4' },
   { date: '10.20', day: '화', title: '계약 종료', desc: '노원 그린아파트 1234호', dday: 'D-7' },
   { date: '10.26', day: '월', title: '월세 납부일', desc: '강남 햇살빌라 345호', dday: 'D-13' },
-];
-
-const PROPERTIES = [
-  {
-    name: '노원 그린아파트 1234호',
-    type: '아파트 · 84m²',
-    tenant: '박임차',
-    period: '2024-10-20 ~ 2026-10-20',
-    verified: true,
-  },
-  {
-    name: '강남 햇살빌라 345호',
-    type: '빌라 · 59m²',
-    tenant: '최임차',
-    period: '2026-09-26 ~ 2028-09-26',
-    verified: false,
-  },
 ];
 
 const LOGS = [
@@ -125,7 +109,7 @@ export const LandlordDashboard = () => {
             </thead>
             <tbody>
               {PROPERTIES.map((p) => (
-                <tr key={p.name} className="border-b border-line last:border-b-0">
+                <tr key={p.id} className="border-b border-line last:border-b-0">
                   <td className="px-5 py-3">
                     <p className="font-medium text-ink">{p.name}</p>
                     <p className="text-xs text-ink-3">{p.type}</p>
