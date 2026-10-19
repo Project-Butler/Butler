@@ -1,8 +1,9 @@
 // K-apt 기본정보(도로명·지번주소)를 kapt_complexes 전체에 채우는 로컬 재개형 스크립트.
 // K-apt 기본정보 API는 개발계정 하루 5,000회라 하루 4,500회(기본값)까지만 부르고 멈춘다.
 // 다음 날 다시 실행하면 채우지 않은 단지(basis_fetched_at IS NULL, 실패 3회 미만)부터 이어서 한다.
-// 실행: npm run backfill:kapt-basis -w apps/api -- --limit 4500 [--interval-ms 300]
-// --interval-ms: 호출 시작 간격(기본 300ms). 게이트웨이가 막으면(04) 스스로 쉬고 간격을 늘린다.
+// 실행: npm run backfill:kapt-basis -w apps/api -- --limit 4500 [--interval-ms 2000]
+// --interval-ms: 호출 시작 간격(기본 2000ms). 300ms로는 30~40건 뒤 게이트웨이가 몇 분간 막았고(04), 2000ms는 200건 내내 막히지 않았다(2026-10-20 실측).
+// 막히면 스스로 쉬고(30·60·120초) 간격을 늘린다.
 // Prisma Client는 generate 시점에 .env가 없으면 .env를 읽지 않으므로(npm install 직후 등) 직접 읽는다.
 import '../src/loadEnv.js';
 import { getApiUsage, KAPT_BASIS_API, KAPT_BASIS_BACKFILL_LIMIT } from '../src/domains/complexes/apiUsage.js';
@@ -10,6 +11,7 @@ import { fillKaptBasis } from '../src/domains/complexes/kaptBasis.js';
 import { prisma } from '../src/platform/prismaClient.js';
 
 const PROGRESS_EVERY = 100;
+const DEFAULT_INTERVAL_MS = 2000;
 
 const parseIntArg = (argv, name, fallback, min) => {
   const index = argv.indexOf(name);
@@ -23,7 +25,7 @@ const main = async () => {
   if (!process.env.DATA_GO_KR_SERVICE_KEY) throw new Error('DATA_GO_KR_SERVICE_KEY가 없습니다.');
   const argv = process.argv.slice(2);
   const limit = parseIntArg(argv, '--limit', KAPT_BASIS_BACKFILL_LIMIT, 1);
-  const intervalMs = parseIntArg(argv, '--interval-ms', undefined, 0);
+  const intervalMs = parseIntArg(argv, '--interval-ms', DEFAULT_INTERVAL_MS, 0);
   const startedAt = Date.now();
   const usageBefore = await getApiUsage(prisma, KAPT_BASIS_API);
   console.info(`[backfill:kapt-basis] 최대 ${limit}건, 오늘 사용량 ${usageBefore}/${KAPT_BASIS_BACKFILL_LIMIT}`);
