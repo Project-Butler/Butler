@@ -1,6 +1,7 @@
 import { AppError } from '../../platform/AppError.js';
 import { toDateOnlyString } from '../../platform/dateUtils.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { attachAliases, chooseOwnerComplexId, findKeyOwners } from './complexAliases.js';
 import { callProvider } from './provider/index.js';
 import { rollUpLegalDongCode } from './provider/pnu.js';
 
@@ -54,11 +55,9 @@ export const searchComplexes = async ({ query, size }) => {
   if (items.length === 0) return [];
 
   // 이미 플랫폼에 등록된 단지면 complexId를 채운다(없으면 null → 프론트가 resolve).
-  const registered = await prisma.complex.findMany({
-    where: { sourceKey: { in: items.map((item) => item.sourceKey) } },
-    select: { id: true, sourceKey: true },
-  });
-  const idBySourceKey = new Map(registered.map((complex) => [complex.sourceKey, complex.id]));
+  // 별칭으로 붙은 키(같은 건물의 KAPT·PNU 키)도 같은 단지로 본다.
+  const owners = await findKeyOwners(prisma, items.map((item) => item.sourceKey));
+  const idBySourceKey = new Map(owners.map((owner) => [owner.sourceKey, owner.complexId]));
 
   return items.map((item) => ({
     sourceKey: item.sourceKey,
@@ -70,16 +69,30 @@ export const searchComplexes = async ({ query, size }) => {
   }));
 };
 
-export const resolveComplex = async (sourceKey) => {
-  // 이미 있는 단지는 외부 호출 없이 돌려준다.
-  const existing = await prisma.complex.findUnique({ where: { sourceKey }, include: COMPLEX_INCLUDE });
-  if (existing) return toComplexResponse(existing);
-
-  const external = await callProvider((provider) => provider.getComplexBySourceKey(sourceKey));
-  if (!external) {
-    throw new AppError('COMPLEX_SOURCE_NOT_FOUND', 404, '단지 정보를 찾을 수 없습니다.');
+// 같은 건물의 다른 키(KAPT ↔ PNU). 계산이 실패하면(외부 장애 포함) 입력 키만 쓴다 — 연결만 못 할 뿐 등록은 된다.
+const getLinkedSourceKeys = async (sourceKey, external) => {
+  try {
+    return await callProvider((provider) => provider.getLinkedSourceKeys(sourceKey, external));
+  } catch (error) {
+    console.error('[complexes] linked keys failed', error.code ?? error.name);
+    return [sourceKey];
   }
+};
 
+const findComplexWithRegion = (complexId) =>
+  prisma.complex.findUnique({ where: { id: complexId }, include: COMPLEX_INCLUDE });
+
+// 별칭(또는 별칭 행이 아직 없는 옛 complexes.source_key)으로 이미 있는 단지를 찾는다.
+const findExistingComplex = async (sourceKey) => {
+  const alias = await prisma.complexSourceAlias.findUnique({ where: { sourceKey }, select: { complexId: true } });
+  if (alias) return findComplexWithRegion(alias.complexId);
+
+  const legacy = await prisma.complex.findUnique({ where: { sourceKey }, include: COMPLEX_INCLUDE });
+  if (legacy) await attachAliases(prisma, legacy.id, [sourceKey]);
+  return legacy;
+};
+
+const toComplexData = async (sourceKey, external) => {
   // regions는 읍면동 단위만 있어서 리 단위 코드는 올려서 저장한다.
   const legalDongCode = rollUpLegalDongCode(external.legalDongCode);
   const region = await prisma.region.findUnique({ where: { legalDongCode }, select: { legalDongCode: true } });
@@ -90,7 +103,7 @@ export const resolveComplex = async (sourceKey) => {
   }
 
   const buildingInfo = external.buildingInfo ?? {};
-  const data = {
+  return {
     sourceKey,
     name: external.name,
     jibunAddress: external.jibunAddress ?? null,
@@ -102,22 +115,49 @@ export const resolveComplex = async (sourceKey) => {
     maxFloor: buildingInfo.maxFloor ?? null,
     parkingCount: buildingInfo.parkingCount ?? null,
   };
+};
 
-  try {
-    const complex = await prisma.complex.upsert({
-      where: { sourceKey },
-      create: data,
-      update: {},
-      include: COMPLEX_INCLUDE,
+const resolveComplexOnce = async (sourceKey) => {
+  // 1) 이미 있는 단지는 외부 호출 없이 돌려준다.
+  const existing = await findExistingComplex(sourceKey);
+  if (existing) return existing;
+
+  const external = await callProvider((provider) => provider.getComplexBySourceKey(sourceKey));
+  if (!external) {
+    throw new AppError('COMPLEX_SOURCE_NOT_FOUND', 404, '단지 정보를 찾을 수 없습니다.');
+  }
+
+  // 2) 같은 건물의 다른 키가 이미 어느 단지에 붙어 있으면 그 단지에 이 키를 더한다.
+  //    여러 단지에 걸쳐 있으면 KAPT 별칭을 가진 단지를 고르고, 다른 단지에 붙은 키는 옮기지 않는다.
+  const linkedKeys = await getLinkedSourceKeys(sourceKey, external);
+  const owners = await findKeyOwners(prisma, linkedKeys);
+  const ownerId = chooseOwnerComplexId(owners);
+  if (ownerId) {
+    const complexIds = [...new Set(owners.map((owner) => owner.complexId))];
+    if (complexIds.length > 1) console.warn('[complexes] alias_conflict', { keys: linkedKeys, complexIds });
+    await attachAliases(prisma, ownerId, linkedKeys);
+    return findComplexWithRegion(ownerId);
+  }
+
+  // 3) 새로 만든다. 단지와 같은 건물의 키 전부를 한 트랜잭션으로 넣는다.
+  //    동시에 같은 건물을 resolve하면 한쪽이 유니크 충돌(P2002)로 롤백된다 — 호출한 쪽이 다시 시도한다.
+  const data = await toComplexData(sourceKey, external);
+  return prisma.$transaction(async (tx) => {
+    const complex = await tx.complex.create({ data, include: COMPLEX_INCLUDE });
+    await tx.complexSourceAlias.createMany({
+      data: [...new Set(linkedKeys)].map((key) => ({ sourceKey: key, complexId: complex.id })),
     });
-    return toComplexResponse(complex);
+    return complex;
+  });
+};
+
+export const resolveComplex = async (sourceKey) => {
+  try {
+    return toComplexResponse(await resolveComplexOnce(sourceKey));
   } catch (error) {
-    // 같은 sourceKey를 동시에 resolve하면 한쪽 upsert가 유니크 충돌(P2002)로 실패한다.
-    // 먼저 만든 행을 다시 읽어 같은 단지를 돌려준다.
+    // 경쟁에서 진 쪽: 이제 상대가 만든 별칭이 보이므로 한 번 더 하면 그 단지를 돌려준다.
     if (error.code !== 'P2002') throw error;
-    const created = await prisma.complex.findUnique({ where: { sourceKey }, include: COMPLEX_INCLUDE });
-    if (!created) throw error;
-    return toComplexResponse(created);
+    return toComplexResponse(await resolveComplexOnce(sourceKey));
   }
 };
 

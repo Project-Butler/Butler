@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js",
     "sync:kapt": "node prisma/syncKaptComplexes.js",
-    "backfill:kapt-basis": "node prisma/backfillKaptBasis.js"
+    "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
+    "relink:complex-aliases": "node prisma/relinkComplexAliases.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

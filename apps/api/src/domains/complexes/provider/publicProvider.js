@@ -9,6 +9,7 @@
 // 공통 호출 도구(fetchJson 등)는 publicApi.js.
 import { prisma } from '../../../platform/prismaClient.js';
 import { KAPT_BASIS_API, KAPT_BASIS_LIVE_LIMIT, spendApiCall } from '../apiUsage.js';
+import { parseJibunLot, toRoadNameKey } from '../kaptAddress.js';
 import { fetchKaptBasis, saveKaptBasis } from '../kaptBasis.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { buildPnu, parsePnu, rollUpLegalDongCode, toBuildingRegisterParams } from './pnu.js';
@@ -556,4 +557,85 @@ const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
   return null;
 };
 
-export const publicProvider = { searchComplexes, getComplexBySourceKey, getUnitInfo };
+// ---------------------------------------------------------------- 같은 건물의 다른 키(별칭)
+// resolve가 새 단지를 만들 때 KAPT 키·PNU 키를 함께 별칭으로 붙여, 나중에 다른 키로 검색돼도 같은 Complex가 되게 한다.
+// 확실할 때만 연결한다(후보가 정확히 하나). 못 찾으면 입력 키만 쓴다.
+
+// KAPT 키 → K-apt 기본정보 지번(리 단위 법정동 코드 그대로 + 본번·부번)으로 PNU. 외부 호출 없음.
+const findPnuKeyForKapt = async (kaptCode) => {
+  const row = await prisma.kaptComplex.findUnique({
+    where: { kaptCode },
+    select: { legalDongCode: true, jibunAddress: true },
+  });
+  const lot = row ? parseJibunLot(row.jibunAddress) : null;
+  if (!lot) return null;
+  const pnu = buildPnu(row.legalDongCode, lot.isMountain ? '1' : '0', lot.mainLot, lot.subLot);
+  return pnu ? `PNU:${pnu}` : null;
+};
+
+const toJusoRoadKey = (juso) => ({
+  roadSigunguCd: String(juso.admCd ?? '').slice(0, 5),
+  roadNameKey: toRoadNameKey(juso.rn),
+  roadUnderground: String(juso.udrtYn) === '1',
+  roadMainNo: Number(juso.buldMnnm),
+  roadSubNo: Number(juso.buldSlno) || 0,
+});
+
+// PNU를 지번 검색어로: 단지 지번주소('… 신천동 17번지') 또는 법정동 이름 + 번지
+const toPnuSearchKeyword = async (parsed, jibunAddress) => {
+  const cleaned = trimOrNull(String(jibunAddress ?? '').replace(/번지/g, ' ').replace(/\s+/g, ' '));
+  if (cleaned) return stripComplexNameFromJibun(cleaned);
+  const region = await prisma.region.findUnique({
+    where: { legalDongCode: rollUpLegalDongCode(parsed.admCd) },
+    select: { fullName: true },
+  });
+  if (!region) return null;
+  const sub = Number(parsed.subNo);
+  return `${region.fullName} ${parsed.mtYn === '1' ? '산' : ''}${Number(parsed.mainNo)}${sub > 0 ? `-${sub}` : ''}`;
+};
+
+// PNU 키 → juso를 지번으로 찾아 구조 필드(admCd·산·본번·부번)가 PNU와 같은 아파트 행만 고르고,
+// 그 행의 도로명 키로 K-apt 단지를 찾는다. 없으면 같은 법정동(리)·본번의 K-apt 단지가 하나뿐일 때 그 단지.
+const findKaptKeyForPnu = async (pnu, jibunAddress) => {
+  const parsed = parsePnu(pnu);
+  const keyword = parsed ? await toPnuSearchKeyword(parsed, jibunAddress) : null;
+  if (!keyword) return null;
+
+  const rows = await searchJuso(keyword, 20);
+  const matched = rows.filter(
+    (row) =>
+      row.bdKdcd === JUSO_APARTMENT_KIND &&
+      row.admCd === parsed.admCd &&
+      String(row.mtYn) === parsed.mtYn &&
+      Number(row.lnbrMnnm) === Number(parsed.mainNo) &&
+      Number(row.lnbrSlno) === Number(parsed.subNo),
+  );
+
+  const codes = new Set();
+  for (const row of matched) {
+    const key = toJusoRoadKey(row);
+    if (!key.roadNameKey || !Number.isInteger(key.roadMainNo)) continue;
+    const kapts = await prisma.kaptComplex.findMany({ where: { isActive: true, ...key }, select: { kaptCode: true } });
+    kapts.forEach((kapt) => codes.add(kapt.kaptCode));
+  }
+  if (codes.size === 0) {
+    const byLot = await prisma.kaptComplex.findMany({
+      where: { isActive: true, legalDongCode: parsed.admCd, mainLot: Number(parsed.mainNo) },
+      select: { kaptCode: true },
+      take: 2,
+    });
+    if (byLot.length === 1) codes.add(byLot[0].kaptCode);
+  }
+  return codes.size === 1 ? `KAPT:${[...codes][0]}` : null;
+};
+
+// sourceKey와 같은 건물을 가리키는 키 목록(입력 키 포함). complex는 getComplexBySourceKey 결과 등 { jibunAddress }.
+const getLinkedSourceKeys = async (sourceKey, complex) => {
+  const [type, value] = String(sourceKey).split(':');
+  let other = null;
+  if (type === 'KAPT' && value) other = await findPnuKeyForKapt(value);
+  if (type === 'PNU' && value) other = await findKaptKeyForPnu(value, complex?.jibunAddress);
+  return other ? [sourceKey, other] : [sourceKey];
+};
+
+export const publicProvider = { searchComplexes, getComplexBySourceKey, getLinkedSourceKeys, getUnitInfo };

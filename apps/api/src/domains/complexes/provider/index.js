@@ -4,6 +4,7 @@
 // - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode }]
 // - getComplexBySourceKey(sourceKey) → { sourceKey, name, jibunAddress, roadAddress, legalDongCode,
 //     buildingInfo: { approvalDate('YYYY-MM-DD'), householdCount, buildingCount, maxFloor, parkingCount } } | null
+// - getLinkedSourceKeys(sourceKey, complex) → [sourceKey, ...같은 건물의 다른 키] (확실할 때만 추가)
 // - getUnitInfo({ complex, buildingNo, unitNo }) → { exclusiveArea, floor } | null
 import { AppError } from '../../../platform/AppError.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
