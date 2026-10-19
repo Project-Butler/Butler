@@ -77,3 +77,12 @@ export const generalRateLimiter = rateLimiter({
   keyFn: (req) => `general:${req.user?.id ?? req.ip}`,
   message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
 });
+
+// 단지 검색은 요청마다 외부 공공데이터(juso·K-apt)를 부르므로 사용자당 1분에 20회로 좁힌다.
+// authGuard 이후에 건다.
+export const complexSearchRateLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyFn: (req) => `complex-search:${req.user.id}`,
+  message: '단지 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+});
