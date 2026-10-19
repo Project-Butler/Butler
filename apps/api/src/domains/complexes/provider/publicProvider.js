@@ -427,6 +427,37 @@ const stripComplexNameFromJibun = (jibunAddress) => {
   return match ? match[1] : jibunAddress;
 };
 
+// '서울특별시 노원구 중계동 502-1 중계그린' → '서울특별시 노원구 중계동' (번지 앞 지역명)
+const regionFromJibun = (jibunAddress) => {
+  const match = /^(.*?)\s(?:산\s?)?\d+(?:-\d+)?(?=\s|$)/.exec(jibunAddress ?? '');
+  return match ? match[1] : null;
+};
+
+// '114동', ' 114 동' → '114'
+const toDongKey = (value) => String(value ?? '').replace(/\s+/g, '').replace(/동$/, '');
+
+// 대단지는 동마다 필지(번지)가 다르다(예: 중계그린 101~105동은 502-1, 106~116동은 503, 117~125동은 504-1).
+// juso는 건물마다 그 필지에 있는 동 목록(detBdNmList)을 주므로, 단지명으로 찾은 건물 중
+// 입력한 동이 들어 있는 필지를 고른다. 같은 법정동·비슷한 이름의 건물만 본다.
+const findPnuByBuilding = async (complex, buildingNo) => {
+  const region = regionFromJibun(complex.jibunAddress);
+  if (!region || !buildingNo) return null;
+
+  const target = toDongKey(buildingNo);
+  const complexName = normalizeComplexName(complex.name);
+  const rows = await searchJuso(`${region} ${complex.name}`, 20);
+  const juso = rows.find((row) => {
+    if (row.bdKdcd !== JUSO_APARTMENT_KIND) return false;
+    if (rollUpLegalDongCode(row.admCd) !== complex.legalDongCode) return false;
+    const name = normalizeComplexName(row.bdNm);
+    if (!name || !(name.includes(complexName) || complexName.includes(name))) return false;
+    return String(row.detBdNmList ?? '')
+      .split(',')
+      .some((dong) => toDongKey(dong) === target);
+  });
+  return juso ? toJusoPnu(juso) : null;
+};
+
 // KAPT 키 단지는 PNU가 없어서 주소로 juso를 다시 찾아 필지를 얻는다. 롤업된 legalDongCode로는
 // 리 지역 건축물대장을 못 찾기 때문에 juso의 admCd(리 단위)를 그대로 쓴다.
 const findPnuByAddress = async (complex) => {
@@ -443,8 +474,11 @@ const findPnuByAddress = async (complex) => {
   return null;
 };
 
-const resolveComplexPnu = async (complex) => {
+// 입력한 동이 있는 필지를 먼저 찾고, 못 찾으면 단지 대표 주소의 필지를 쓴다.
+const resolveComplexPnu = async (complex, buildingNo) => {
   const [type, value] = String(complex.sourceKey ?? '').split(':');
+  const byBuilding = await findPnuByBuilding(complex, buildingNo);
+  if (byBuilding) return byBuilding;
   if (type === 'PNU') return value;
   return findPnuByAddress(complex);
 };
@@ -456,7 +490,7 @@ const toDongNameCandidates = (buildingNo) => {
 };
 
 const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
-  const pnu = await resolveComplexPnu(complex);
+  const pnu = await resolveComplexPnu(complex, buildingNo);
   const params = pnu ? toBuildingRegisterParams(pnu) : null;
   if (!params) return null;
 
