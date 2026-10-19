@@ -918,3 +918,14 @@ const getLinkedSourceKeys = async (sourceKey, complex) => {
 };
 
 export const publicProvider = { searchComplexes, getComplexBySourceKey, getLinkedSourceKeys, getUnitInfo };
+
+// 주간 cron 외부 API 상태 점검(cron/apiHealth.js)용: 캐시·재시도 없이 한 번씩만 부른다.
+export const healthProbes = {
+  searchJuso: (keyword) => searchJuso(keyword, 5),
+  // 필지·대장 동 이름·호 이름으로 전유 면적 합(못 찾으면 null)
+  fetchExclusiveArea: async (pnu, dongNm, hoNm) => {
+    const rows = await fetchBuildingHub('hub-expos', BUILDING_HUB_EXPOS_URL, { ...toBuildingRegisterParams(pnu), dongNm, hoNm });
+    const exclusiveRows = filterExclusiveRows(rows, { registryDongNm: dongNm, hoNm, omitDong: false });
+    return exclusiveRows.length > 0 ? toUnitInfo(exclusiveRows).exclusiveArea : null;
+  },
+};
