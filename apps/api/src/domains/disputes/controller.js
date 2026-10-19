@@ -1,6 +1,7 @@
 import { DisputeCategory, DisputePropertyKind, DisputeReferenceType } from '@prisma/client';
 import { AppError } from '../../platform/AppError.js';
 import { sendData, sendList } from '../../platform/respond.js';
+import { isUuid } from '../../platform/uuid.js';
 import { findReferenceById, findReferences, SORTABLE_FIELDS } from './service.js';
 
 // api-contract.md 1장 "목록 조회": page는 1부터, size는 기본 20·최대 100
@@ -95,7 +96,9 @@ export const listReferences = async (req, res, next) => {
 
 export const getReference = async (req, res, next) => {
   try {
-    const reference = await findReferenceById(req.params.referenceId);
+    const { referenceId } = req.params;
+    // 형식이 틀린 id는 DB를 조회하지 않고 없는 자료와 같은 404로 응답한다.
+    const reference = isUuid(referenceId) ? await findReferenceById(referenceId) : null;
 
     if (!reference) {
       throw new AppError('DISPUTE_REFERENCE_NOT_FOUND', 404, '분쟁 참고자료를 찾을 수 없습니다.');
