@@ -1,7 +1,12 @@
 import { AppError } from '../../platform/AppError.js';
 import { assertSingleValues, throwIfInvalid } from '../../platform/requestValidation.js';
 import { sendData } from '../../platform/respond.js';
-import { normalizeBuildingNo, normalizeUnitNo } from '../../platform/unitAddress.js';
+import {
+  COMBINED_UNIT_ADDRESS_REASON,
+  isCombinedUnitAddress,
+  normalizeBuildingNo,
+  normalizeUnitNo,
+} from '../../platform/unitAddress.js';
 import { isUuid } from '../../platform/uuid.js';
 import { findComplexById, findUnitInfo, resolveComplex, searchComplexes } from './service.js';
 
@@ -67,13 +72,18 @@ const parseUnitInfoQuery = (query) => {
   assertSingleValues(query);
   const details = [];
 
+  // '101-1203'처럼 동·호를 한 칸에 적으면 나눠 입력하도록 거부한다(길이 검사보다 먼저).
   const buildingNo = normalizeBuildingNo(query.buildingNo);
-  if (buildingNo.length < 1 || buildingNo.length > MAX_UNIT_PART_LENGTH) {
+  if (isCombinedUnitAddress(buildingNo)) {
+    details.push({ field: 'buildingNo', reason: COMBINED_UNIT_ADDRESS_REASON });
+  } else if (buildingNo.length < 1 || buildingNo.length > MAX_UNIT_PART_LENGTH) {
     details.push({ field: 'buildingNo', reason: `1자 이상 ${MAX_UNIT_PART_LENGTH}자 이하여야 합니다.` });
   }
 
-  const unitNo = normalizeUnitNo(query.unitNo);
-  if (unitNo.length < 1 || unitNo.length > MAX_UNIT_PART_LENGTH) {
+  const unitNo = normalizeUnitNo(query.unitNo, query.buildingNo);
+  if (isCombinedUnitAddress(unitNo)) {
+    details.push({ field: 'unitNo', reason: COMBINED_UNIT_ADDRESS_REASON });
+  } else if (unitNo.length < 1 || unitNo.length > MAX_UNIT_PART_LENGTH) {
     details.push({ field: 'unitNo', reason: `1자 이상 ${MAX_UNIT_PART_LENGTH}자 이하여야 합니다.` });
   }
 

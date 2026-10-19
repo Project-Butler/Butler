@@ -8,7 +8,12 @@ import {
   throwIfInvalid,
 } from '../../platform/requestValidation.js';
 import { sendData, sendList } from '../../platform/respond.js';
-import { normalizeBuildingNo, normalizeUnitNo } from '../../platform/unitAddress.js';
+import {
+  COMBINED_UNIT_ADDRESS_REASON,
+  isCombinedUnitAddress,
+  normalizeBuildingNo,
+  normalizeUnitNo,
+} from '../../platform/unitAddress.js';
 import { isUuid } from '../../platform/uuid.js';
 import {
   createPropertyWithOwnership,
@@ -45,8 +50,12 @@ const parseFloor = (value, details) => {
   return value;
 };
 
-const parseUnitPart = (value, field, normalize, details) => {
-  const normalized = normalize(value);
+// '101-1203'처럼 동·호를 한 칸에 적으면 나눠 입력하도록 거부한다(길이 검사보다 먼저).
+const parseUnitPart = (normalized, field, details) => {
+  if (isCombinedUnitAddress(normalized)) {
+    details.push({ field, reason: COMBINED_UNIT_ADDRESS_REASON });
+    return undefined;
+  }
   if (normalized.length < 1 || normalized.length > MAX_UNIT_PART_LENGTH) {
     details.push({ field, reason: `1~${MAX_UNIT_PART_LENGTH}자 문자열이어야 합니다.` });
     return undefined;
@@ -61,8 +70,8 @@ const parseCreateBody = (body) => {
   if (!isUuid(body.complexId)) details.push({ field: 'complexId', reason: 'UUID 형식이어야 합니다.' });
   const input = {
     complexId: body.complexId,
-    buildingNo: parseUnitPart(body.buildingNo, 'buildingNo', normalizeBuildingNo, details),
-    unitNo: parseUnitPart(body.unitNo, 'unitNo', normalizeUnitNo, details),
+    buildingNo: parseUnitPart(normalizeBuildingNo(body.buildingNo), 'buildingNo', details),
+    unitNo: parseUnitPart(normalizeUnitNo(body.unitNo, body.buildingNo), 'unitNo', details),
     exclusiveArea: null,
     floor: null,
     acquiredYearMonth: null,
