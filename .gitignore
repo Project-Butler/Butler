@@ -1,5 +1,7 @@
 node_modules/
 .env*
+# 키 목록만 담은 예시 파일은 올린다 (값은 비우거나 로컬 기본값만)
+!.env.example
 dist/
 build/
 
