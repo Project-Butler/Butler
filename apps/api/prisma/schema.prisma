@@ -156,6 +156,29 @@ model Complex {
   @@map("complexes")
 }
 
+// K-apt(공동주택관리정보시스템) 전국 단지 목록 캐시. 단지 검색이 juso 결과와 이름을 맞출 때
+// 외부 목록 API 대신 이 테이블을 본다. 매주 Vercel Cron(GET /api/cron/kapt-complexes)과
+// `npm run sync:kapt`가 채운다(src/domains/complexes/kaptSync.js). 목록에서 빠진 단지는
+// 지우지 않고 isActive=false로만 바꾼다. Complex와 relation은 없다(sourceKey "KAPT:<kaptCode>"로만 이어짐).
+model KaptComplex {
+  kaptCode      String   @id @map("kapt_code") @db.VarChar(20)
+  name          String
+  // K-apt bjdCode 원본(리 단위일 수 있음). regions FK는 걸지 않는다.
+  legalDongCode String   @map("legal_dong_code") @db.VarChar(10)
+  sidoName      String?  @map("sido_name")
+  sigunguName   String?  @map("sigungu_name")
+  dongName      String?  @map("dong_name")
+  riName        String?  @map("ri_name")
+  isActive      Boolean  @default(true) @map("is_active")
+  // 마지막 동기화에서 목록에 있었던 시각
+  syncedAt      DateTime @map("synced_at") @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([legalDongCode])
+  @@map("kapt_complexes")
+}
+
 model Property {
   id            String   @id @default(uuid()) @db.Uuid
   complexId     String   @map("complex_id") @db.Uuid
