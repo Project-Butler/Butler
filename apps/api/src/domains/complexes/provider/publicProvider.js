@@ -19,6 +19,19 @@ import {
   toRoadKeyString,
 } from '../complexMatching.js';
 import { parseJibunLot } from '../kaptAddress.js';
+import {
+  LOOKUP_MISS_TTL_MS,
+  decideAfterStoredMiss,
+  decideDiscoveryWrite,
+  filterExclusiveRows,
+  findRegistryDong,
+  isMissActive,
+  shouldUseStoredLookup,
+  toHoRequest,
+  toHoRequests,
+  toUnitInfo,
+} from '../unitLookup.js';
+import { normalizeBuildingNo } from '../../../platform/unitAddress.js';
 import { fetchKaptBasis, saveKaptBasis } from '../kaptBasis.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { buildPnu, parsePnu, rollUpLegalDongCode, toBuildingRegisterParams } from './pnu.js';
@@ -37,7 +50,12 @@ const KAPT_LIST_PAGE_SIZE = 100;
 const KAPT_LIST_MAX_PAGES = 5;
 const BUILDING_HUB_PAGE_SIZE = 100;
 // 동·호 정보 후보를 차례로 부를 때 새 호출을 시작하지 않는 시점(ms). 진행 중인 호출은 타임아웃까지 기다린다.
-const UNIT_INFO_DEADLINE_MS = 15000;
+// 12초 직전에 시작한 8초 호출까지 약 20초 < 함수 제한 60초.
+const UNIT_INFO_DEADLINE_MS = 12000;
+// 저장된 동 조회 정보로 부르는 호출(결과를 이미 안다)의 제한 시간. 넘으면 찾기 절차로 간다.
+const STORED_LOOKUP_TIMEOUT_MS = 5000;
+// 찾기 절차에서 표제부를 볼 필지 수
+const MAX_LOOKUP_PARCELS = 3;
 const UNIT_INFO_ATTEMPTS = 2;
 const UNIT_INFO_RETRY_DELAY_MS = 700;
 
@@ -261,14 +279,19 @@ const toKaptNameResult = (row) => ({
 
 // ---------------------------------------------------------------- 건축HUB
 
-const fetchBuildingHub = async (label, url, params) => {
-  const json = await fetchJson(label, url, {
-    serviceKey: process.env.DATA_GO_KR_SERVICE_KEY,
-    ...params,
-    numOfRows: String(BUILDING_HUB_PAGE_SIZE),
-    pageNo: '1',
-    _type: 'json',
-  });
+const fetchBuildingHub = async (label, url, params, { timeoutMs } = {}) => {
+  const json = await fetchJson(
+    label,
+    url,
+    {
+      serviceKey: process.env.DATA_GO_KR_SERVICE_KEY,
+      ...params,
+      numOfRows: String(BUILDING_HUB_PAGE_SIZE),
+      pageNo: '1',
+      _type: 'json',
+    },
+    { timeoutMs },
+  );
   const body = readDataGoKrBody(label, json);
   return toItemArray(body?.items);
 };
@@ -555,7 +578,20 @@ const toDongNameCandidates = (buildingNo) => {
   return value.endsWith('동') ? [value] : [`${value}동`, value];
 };
 
-const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
+// 건축HUB는 정상 요청에도 가끔 429·503을 돌려줘서, 잠깐 쉬었다가 한 번 더 부른다. 다시 불러도 실패하면 그 에러를 던진다.
+const fetchBuildingHubWithRetry = async (label, url, params, { deadline, timeoutMs } = {}) => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetchBuildingHub(label, url, params, { timeoutMs });
+    } catch (error) {
+      if (attempt >= UNIT_INFO_ATTEMPTS || Date.now() + UNIT_INFO_RETRY_DELAY_MS >= deadline) throw error;
+      await sleep(UNIT_INFO_RETRY_DELAY_MS);
+    }
+  }
+};
+
+// COMPLEX_UNIT_LOOKUP_CACHE=off일 때의 이전 방식: 대표 필지 하나에서 동 이름 후보 × {N, N호}를 차례로 부른다.
+const getUnitInfoByCandidates = async ({ complex, buildingNo, unitNo }) => {
   const pnu = await resolveComplexPnu(complex, buildingNo);
   const params = pnu ? toBuildingRegisterParams(pnu) : null;
   if (!params) return null;
@@ -572,40 +608,239 @@ const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
   let lastError = null;
   for (const { dongNm, hoNm } of candidates) {
     if (Date.now() > deadline) break;
-    let rows = null;
-    // 건축HUB는 정상 요청에도 가끔 429·503을 돌려줘서, 같은 후보를 잠깐 쉬었다가 한 번 더 부른다.
-    for (let attempt = 1; attempt <= UNIT_INFO_ATTEMPTS && rows === null; attempt += 1) {
-      try {
-        rows = await fetchBuildingHub('hub-expos', BUILDING_HUB_EXPOS_URL, { ...params, dongNm, hoNm });
-      } catch (error) {
-        if (attempt < UNIT_INFO_ATTEMPTS && Date.now() + UNIT_INFO_RETRY_DELAY_MS < deadline) {
-          await sleep(UNIT_INFO_RETRY_DELAY_MS);
-        } else {
-          // 다시 불러도 실패한 후보만 실패로 남긴다(재시도로 성공한 후보는 실패가 아니다).
-          lastError = error;
-          break;
-        }
-      }
+    let rows;
+    try {
+      rows = await fetchBuildingHubWithRetry('hub-expos', BUILDING_HUB_EXPOS_URL, { ...params, dongNm, hoNm }, { deadline });
+    } catch (error) {
+      lastError = error;
+      continue;
     }
-    if (rows === null) continue;
-    const exclusiveRows = rows.filter(
-      (row) => row.exposPubuseGbCdNm === '전유' && row.dongNm === dongNm && String(row.hoNm) === hoNm,
-    );
-    if (exclusiveRows.length === 0) continue;
-
-    // 전유 부분이 여러 행으로 나뉜 호실도 있어서 면적은 합친다.
-    const totalArea = exclusiveRows.reduce((sum, row) => sum + (Number(row.area) || 0), 0);
-    const [first] = exclusiveRows;
-    const floorNo = Number.parseInt(first.flrNo, 10);
-    const isUnderground = first.flrGbCdNm === '지하' || first.flrGbCd === '10';
-
-    return {
-      exclusiveArea: totalArea > 0 ? Math.round(totalArea * 100) / 100 : null,
-      floor: Number.isInteger(floorNo) ? (isUnderground ? -floorNo : floorNo) : null,
-    };
+    const exclusiveRows = filterExclusiveRows(rows, { registryDongNm: dongNm, hoNm, omitDong: false });
+    if (exclusiveRows.length > 0) return toUnitInfo(exclusiveRows);
   }
   if (lastError) throw lastError;
   return null;
+};
+
+// ---- 동 조회 정보 캐시(COMPLEX_UNIT_LOOKUP_CACHE, 기본 켬)
+// 동마다 찾은 방법(필지·대장 동 이름·호 표기)을 complex_building_lookups에 두고, 다음부터 전유부 1회로 끝낸다.
+// 캐시 읽기·쓰기 실패는 조회를 막지 않는다(로그만 남기고 찾기 절차로 간다).
+
+const isUnitLookupCacheOn = () => isFlagOn(process.env.COMPLEX_UNIT_LOOKUP_CACHE);
+
+const logCacheError = (action, error) => console.error('[complexes] unit lookup cache', action, error.code ?? error.name);
+
+// 필지·대장 동 이름으로 호 요청 하나를 부른다. 결과: 요청한 호의 전유 행 배열(못 찾으면 빈 배열)
+const fetchExposRows = async (pnu, registryDongNm, hoRequest, options) => {
+  const params = toBuildingRegisterParams(pnu);
+  const query = hoRequest.omitDong
+    ? { ...params, hoNm: hoRequest.hoNm }
+    : { ...params, dongNm: registryDongNm ?? '', hoNm: hoRequest.hoNm };
+  const rows = await fetchBuildingHubWithRetry('hub-expos', BUILDING_HUB_EXPOS_URL, query, options);
+  return filterExclusiveRows(rows, { registryDongNm, hoNm: hoRequest.hoNm, omitDong: hoRequest.omitDong });
+};
+
+// 필지 표제부에서 입력 동의 대장 동 이름을 찾는다(unitLookup.findRegistryDong). 없으면 null.
+const fetchRegistryDong = async (pnu, dongKey, complexName, options) => {
+  const titles = await fetchBuildingHubWithRetry('hub-title', BUILDING_HUB_TITLE_URL, toBuildingRegisterParams(pnu), options);
+  return findRegistryDong(titles, dongKey, complexName);
+};
+
+// 마지막 쓰기 우선. 찾은 방법으로 바꾸고 연속 실패 수를 0으로 되돌린다.
+const saveLookup = async (complexId, dongKey, { pnu, registryDongNm, hoFormat }) => {
+  const data = { pnu, registryDongNm, hoFormat, verifiedAt: new Date(), missCount: 0 };
+  try {
+    await prisma.complexBuildingLookup.upsert({
+      where: { complexId_dongKey: { complexId, dongKey } },
+      create: { complexId, dongKey, ...data },
+      update: data,
+    });
+  } catch (error) {
+    logCacheError('save', error);
+  }
+};
+
+// 연속 실패 수 +1(UPDATE ... SET miss_count = miss_count + 1, 원자적)
+const countLookupMiss = async (complexId, dongKey) => {
+  try {
+    await prisma.complexBuildingLookup.update({
+      where: { complexId_dongKey: { complexId, dongKey } },
+      data: { missCount: { increment: 1 } },
+    });
+  } catch (error) {
+    logCacheError('miss-count', error);
+  }
+};
+
+// 동을 어느 필지에서도 못 찾았을 때만 저장한다. 만료된 행은 이때 같이 지운다.
+const saveLookupMiss = async (complexId, dongKey) => {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + LOOKUP_MISS_TTL_MS);
+  try {
+    await prisma.complexLookupMiss.upsert({
+      where: { complexId_dongKey: { complexId, dongKey } },
+      create: { complexId, dongKey, reason: 'dong not found', expiresAt },
+      update: { reason: 'dong not found', expiresAt },
+    });
+    await prisma.complexLookupMiss.deleteMany({ where: { expiresAt: { lt: now } } });
+  } catch (error) {
+    logCacheError('miss-save', error);
+  }
+};
+
+// 저장된 방법으로 찾는다. 결과: { info } | { keep: true }(동은 있고 호만 없음 → 직접 입력) | { rediscover: true }
+const findByStoredLookup = async ({ complex, dongKey, unitNo, lookup, deadline }) => {
+  const options = { deadline, timeoutMs: STORED_LOOKUP_TIMEOUT_MS };
+  const stored = toHoRequest(lookup.hoFormat, unitNo, dongKey);
+  try {
+    const rows = stored ? await fetchExposRows(lookup.pnu, lookup.registryDongNm, stored, options) : [];
+    if (rows.length > 0) {
+      if (lookup.missCount > 0) await saveLookup(complex.id, dongKey, lookup);
+      return { info: toUnitInfo(rows) };
+    }
+  } catch {
+    // 시간 초과·장애면 찾기 절차로 넘어간다.
+    return { rediscover: true };
+  }
+
+  // 동 수준 확인: 저장된 필지 표제부에 그 동이 아직 있는지
+  let registry = null;
+  try {
+    registry = await fetchRegistryDong(lookup.pnu, dongKey, complex.name, options);
+  } catch {
+    return { rediscover: true };
+  }
+  if (decideAfterStoredMiss(Boolean(registry)) === 'rediscover') return { rediscover: true };
+
+  // 동은 그대로 있다 → 저장값은 두고 다른 호 표기만 다시 본다.
+  let lastError = null;
+  for (const hoRequest of toHoRequests(registry.hoFormats, unitNo, dongKey)) {
+    if (hoRequest.hoFormat === lookup.hoFormat && registry.registryDongNm === lookup.registryDongNm) continue;
+    if (Date.now() > deadline) break;
+    try {
+      const rows = await fetchExposRows(lookup.pnu, registry.registryDongNm, hoRequest, options);
+      if (rows.length > 0) {
+        await saveLookup(complex.id, dongKey, {
+          pnu: lookup.pnu,
+          registryDongNm: registry.registryDongNm,
+          hoFormat: hoRequest.hoFormat,
+        });
+        return { info: toUnitInfo(rows) };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  await countLookupMiss(complex.id, dongKey);
+  return { keep: true };
+};
+
+// 후보 필지(최대 3): juso 동 목록에 입력 동이 있는 필지 → 단지의 PNU 키·별칭 → K-apt 대표 지번 필지.
+// 하나도 없으면 단지 대표 주소로 juso를 다시 찾는다. 결과: { pnus, lastError }
+const findCandidatePnus = async (complex, buildingNo) => {
+  const pnus = [];
+  let lastError = null;
+  const add = (pnu) => {
+    if (pnu && !pnus.includes(pnu)) pnus.push(pnu);
+  };
+
+  try {
+    add(await findPnuByBuilding(complex, buildingNo));
+  } catch (error) {
+    lastError = error;
+  }
+  const aliases = await prisma.complexSourceAlias.findMany({
+    where: { complexId: complex.id },
+    select: { sourceKey: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const keys = [...new Set([complex.sourceKey, ...aliases.map((alias) => alias.sourceKey)].filter(Boolean))];
+  keys.filter((key) => key.startsWith('PNU:')).forEach((key) => add(key.slice(4)));
+  for (const key of keys.filter((value) => value.startsWith('KAPT:'))) {
+    const lotKey = await findPnuKeyForKapt(key.slice(5));
+    if (lotKey) add(lotKey.slice(4));
+  }
+  if (pnus.length === 0) {
+    try {
+      add(await findPnuByAddress(complex));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return { pnus: pnus.slice(0, MAX_LOOKUP_PARCELS), lastError };
+};
+
+// 찾기 절차: 필지마다 표제부로 대장 동 이름을 확정하고, 그 동에서 호 표기를 차례로 부른다.
+const discoverUnitInfo = async ({ complex, dongKey, buildingNo, unitNo, deadline }) => {
+  const options = { deadline };
+  const candidates = await findCandidatePnus(complex, buildingNo);
+  let lastError = candidates.lastError;
+  let incomplete = false;
+  let dongFound = false;
+
+  for (const pnu of candidates.pnus) {
+    if (Date.now() > deadline) {
+      incomplete = true;
+      break;
+    }
+    let registry;
+    try {
+      registry = await fetchRegistryDong(pnu, dongKey, complex.name, options);
+    } catch (error) {
+      lastError = error;
+      continue;
+    }
+    if (!registry) continue;
+    dongFound = true;
+
+    for (const hoRequest of toHoRequests(registry.hoFormats, unitNo, dongKey)) {
+      if (Date.now() > deadline) break;
+      try {
+        const rows = await fetchExposRows(pnu, registry.registryDongNm, hoRequest, options);
+        if (rows.length > 0) {
+          await saveLookup(complex.id, dongKey, { pnu, registryDongNm: registry.registryDongNm, hoFormat: hoRequest.hoFormat });
+          return toUnitInfo(rows);
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    // 동은 찾았는데 호가 없다 — 다른 필지는 보지 않는다(같은 동이 두 필지에 있지 않다).
+    break;
+  }
+
+  const write = decideDiscoveryWrite({ found: false, dongFound, hadError: Boolean(lastError) || incomplete });
+  if (write === 'miss') await saveLookupMiss(complex.id, dongKey);
+  if (lastError) throw lastError;
+  return null;
+};
+
+const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
+  if (!isUnitLookupCacheOn()) return getUnitInfoByCandidates({ complex, buildingNo, unitNo });
+
+  const deadline = Date.now() + UNIT_INFO_DEADLINE_MS;
+  const dongKey = normalizeBuildingNo(String(buildingNo));
+  const where = { complexId_dongKey: { complexId: complex.id, dongKey } };
+  let lookup = null;
+  let miss = null;
+  try {
+    [lookup, miss] = await Promise.all([
+      prisma.complexBuildingLookup.findUnique({ where }),
+      prisma.complexLookupMiss.findUnique({ where }),
+    ]);
+  } catch (error) {
+    logCacheError('read', error);
+  }
+  // 최근에 동을 못 찾은 단지·동이면 외부 호출 없이 직접 입력으로 보낸다.
+  if (isMissActive(miss, new Date())) return null;
+
+  if (shouldUseStoredLookup(lookup)) {
+    const stored = await findByStoredLookup({ complex, dongKey, unitNo, lookup, deadline });
+    if (stored.info) return stored.info;
+    if (stored.keep) return null;
+  }
+  return discoverUnitInfo({ complex, dongKey, buildingNo, unitNo, deadline });
 };
 
 // ---------------------------------------------------------------- 같은 건물의 다른 키(별칭)

@@ -14,11 +14,12 @@ const DATA_GO_KR_NO_DATA_CODES = ['03'];
 
 const getTimeoutMs = () => Number(process.env.EXTERNAL_API_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
 
-export const fetchJson = async (label, baseUrl, params) => {
+// timeoutMs: 이 호출만 다른 제한 시간을 쓸 때(예: 결과를 이미 아는 동·호 조회 5초)
+export const fetchJson = async (label, baseUrl, params, { timeoutMs } = {}) => {
   const url = new URL(baseUrl);
   url.search = new URLSearchParams(params).toString();
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(getTimeoutMs()) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs ?? getTimeoutMs()) });
   if (!response.ok) throw new ExternalServiceError(`${label} HTTP ${response.status}`);
 
   const text = await response.text();
