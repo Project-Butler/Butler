@@ -6,6 +6,7 @@ import { corsOptions } from './config/corsOptions.js';
 import authRouter from './domains/auth/router.js';
 import complexesRouter from './domains/complexes/router.js';
 import disputesRouter from './domains/disputes/router.js';
+import propertiesRouter from './domains/properties/router.js';
 import { csrfGuard } from './middlewares/csrfGuard.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { requestId } from './platform/requestId.js';
@@ -27,6 +28,7 @@ app.use(csrfGuard);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/disputes', disputesRouter);
 app.use('/api/v1/complexes', complexesRouter);
+app.use('/api/v1/properties', propertiesRouter);
 
 app.use(errorHandler);
 
