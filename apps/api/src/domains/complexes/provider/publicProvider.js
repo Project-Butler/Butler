@@ -25,6 +25,12 @@ const MAX_LEGAL_DONGS_PER_SEARCH = 5;
 const KAPT_LIST_PAGE_SIZE = 100;
 const KAPT_LIST_MAX_PAGES = 5;
 const BUILDING_HUB_PAGE_SIZE = 100;
+// 동·호 정보 후보를 차례로 부를 때 새 호출을 시작하지 않는 시점(ms). 진행 중인 호출은 타임아웃까지 기다린다.
+const UNIT_INFO_DEADLINE_MS = 15000;
+const UNIT_INFO_ATTEMPTS = 2;
+const UNIT_INFO_RETRY_DELAY_MS = 700;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 검색어 문제(빈 값·한 글자·숫자만·특수문자·SQL 예약어 등)는 오류가 아니라 결과 없음으로 본다.
 // 그 밖의 코드(E0001 미승인 키, E0014 키 만료, -999 시스템 오류 등)는 503.
@@ -204,6 +210,56 @@ const fetchKaptBasis = async (kaptCode) => {
   return item;
 };
 
+// 단지 이름으로 kapt_complexes를 직접 찾는다. 도로명주소(juso)는 건물명이 K-apt와 다르거나('SKYVILLE' ↔ '스카이빌')
+// 아예 검색되지 않는 단지가 있어서, 이름 검색을 함께 해야 K-apt 단지를 놓치지 않는다.
+// 검색어 전체가 단지명(공백 제거)에 들어 있거나, 여러 단어면 가장 긴 단어가 단지명에 있고
+// 나머지 단어가 단지명이나 지역명(시도·시군구·읍면동·리)에 모두 들어 있는 단지를 고른다.
+const MAX_NAME_CANDIDATES = 300;
+
+const toKaptRegionText = (row) =>
+  [row.sidoName, row.sigunguName, row.dongName, row.riName].filter(Boolean).join(' ');
+
+const findKaptByName = async (query, size) => {
+  const compact = normalizeComplexName(query);
+  const tokens = String(query)
+    .split(/\s+/)
+    .map(normalizeComplexName)
+    .filter((token) => token.length >= 2);
+  if (compact.length < 2 || tokens.length === 0) return [];
+
+  const longest = tokens.reduce((a, b) => (b.length > a.length ? b : a));
+  const rows = await prisma.$queryRaw`
+    SELECT kapt_code AS "kaptCode", name, legal_dong_code AS "legalDongCode",
+           sido_name AS "sidoName", sigungu_name AS "sigunguName", dong_name AS "dongName", ri_name AS "riName"
+    FROM kapt_complexes
+    WHERE is_active
+      AND (lower(regexp_replace(name, '\\s|아파트|단지', '', 'g')) LIKE ${`%${compact}%`}
+        OR lower(regexp_replace(name, '\\s|아파트|단지', '', 'g')) LIKE ${`%${longest}%`})
+    LIMIT ${MAX_NAME_CANDIDATES}`;
+
+  const ranked = [];
+  for (const row of rows) {
+    const name = normalizeComplexName(row.name);
+    const haystack = name + normalizeComplexName(toKaptRegionText(row));
+    let rank = null;
+    if (name === compact) rank = 0;
+    else if (name.includes(compact)) rank = 1;
+    else if (tokens.every((token) => haystack.includes(token))) rank = 2;
+    if (rank !== null) ranked.push({ row, rank, gap: Math.abs(name.length - compact.length) });
+  }
+  ranked.sort((a, b) => a.rank - b.rank || a.gap - b.gap || a.row.kaptCode.localeCompare(b.row.kaptCode));
+  return ranked.slice(0, size).map(({ row, rank }) => ({ row, isExact: rank === 0 }));
+};
+
+const toKaptNameResult = (row) => ({
+  sourceKey: `KAPT:${row.kaptCode}`,
+  name: row.name,
+  // 단지 목록에는 번지·도로명이 없어서 지역명만 둔다. 정확한 주소는 resolve가 K-apt 기본정보로 채운다.
+  jibunAddress: trimOrNull(toKaptRegionText(row)),
+  roadAddress: null,
+  legalDongCode: rollUpLegalDongCode(row.legalDongCode),
+});
+
 // ---------------------------------------------------------------- 건축HUB
 
 const fetchBuildingHub = async (label, url, params) => {
@@ -245,7 +301,10 @@ const toTitleBuildingInfo = (titles) => {
 // ---------------------------------------------------------------- provider 함수
 
 const searchComplexes = async (query, size) => {
-  const jusoRows = await searchJuso(query, Math.min(size * 2, MAX_JUSO_ROWS));
+  const [jusoRows, nameMatches] = await Promise.all([
+    searchJuso(query, Math.min(size * 2, MAX_JUSO_ROWS)),
+    (async () => ((await isKaptCacheReady()) ? findKaptByName(query, size) : []))(),
+  ]);
   const apartments = jusoRows.filter((juso) => juso.bdKdcd === JUSO_APARTMENT_KIND && trimOrNull(juso.bdNm));
 
   const admCds = [...new Set(apartments.map((juso) => juso.admCd))].slice(0, MAX_LEGAL_DONGS_PER_SEARCH);
@@ -253,7 +312,18 @@ const searchComplexes = async (query, size) => {
 
   const results = [];
   const seen = new Set();
+  const pushNameMatch = ({ row }) => {
+    const item = toKaptNameResult(row);
+    if (seen.has(item.sourceKey)) return;
+    seen.add(item.sourceKey);
+    results.push(item);
+  };
+
+  // 단지명이 검색어와 똑같은 K-apt 단지를 맨 앞에 둔다. 주소 검색 결과(번지까지 있음)가 그다음,
+  // 부분 일치한 단지명 결과는 남는 자리에 채운다.
+  nameMatches.filter((match) => match.isExact).forEach(pushNameMatch);
   for (const juso of apartments) {
+    if (results.length >= size) break;
     // 법정동 5개를 넘는 결과는 K-apt를 조회하지 않았으므로 버린다.
     if (!kaptLists.has(juso.admCd)) continue;
 
@@ -265,19 +335,28 @@ const searchComplexes = async (query, size) => {
       const pnu = toJusoPnu(juso);
       if (pnu) sourceKey = `PNU:${pnu}`;
     }
-    if (!sourceKey || seen.has(sourceKey)) continue;
-    seen.add(sourceKey);
-
-    results.push({
+    if (!sourceKey) continue;
+    // 이름 검색으로 먼저 넣은 단지라도 주소가 있는 이쪽 정보로 바꿔 둔다.
+    const existingIndex = results.findIndex((item) => item.sourceKey === sourceKey);
+    const item = {
       sourceKey,
       name: kapt ? kapt.kaptName : juso.bdNm.trim(),
       jibunAddress: trimOrNull(juso.jibunAddr),
       roadAddress: trimOrNull(juso.roadAddrPart1),
       legalDongCode: rollUpLegalDongCode(juso.admCd),
-    });
-    if (results.length >= size) break;
+    };
+    if (existingIndex >= 0) {
+      results[existingIndex] = item;
+      continue;
+    }
+    if (seen.has(sourceKey)) continue;
+    seen.add(sourceKey);
+    results.push(item);
   }
-  return results;
+  nameMatches.filter((match) => !match.isExact).forEach((match) => {
+    if (results.length < size) pushNameMatch(match);
+  });
+  return results.slice(0, size);
 };
 
 const getKaptComplex = async (sourceKey, kaptCode) => {
@@ -386,17 +465,30 @@ const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
   const candidates = toDongNameCandidates(buildingNo).flatMap((dongNm) =>
     [unitValue, `${unitValue}호`].map((hoNm) => ({ dongNm, hoNm })),
   );
-  // 순서대로 부르면 느린 첫 조회가 겹쳐 Vercel 함수 제한(10초)을 넘을 수 있어서 동시에 부르고,
-  // 앞 순서 후보의 결과를 쓴다. 하나도 못 찾았는데 실패한 호출이 있으면 그 실패(→ 503)를 낸다.
-  const results = await Promise.allSettled(
-    candidates.map(({ dongNm, hoNm }) =>
-      fetchBuildingHub('hub-expos', BUILDING_HUB_EXPOS_URL, { ...params, dongNm, hoNm }),
-    ),
-  );
-  for (const [index, result] of results.entries()) {
-    if (result.status !== 'fulfilled') continue;
-    const { dongNm, hoNm } = candidates[index];
-    const exclusiveRows = result.value.filter(
+  // 흔한 표기부터 하나씩 부르고 찾으면 멈춘다. 한꺼번에 부르면 건축HUB가 초당 한도로 429·503을 돌려주고
+  // 하루 쿼터도 4배로 쓴다. 한 후보가 실패해도 다음 후보는 시도하고, 끝까지 못 찾았는데 실패가 있었으면
+  // 그 실패(→ 503)를 낸다. 느린 응답이 이어져도 오래 붙잡지 않도록 전체 시간을 제한한다.
+  const deadline = Date.now() + UNIT_INFO_DEADLINE_MS;
+  let lastError = null;
+  for (const { dongNm, hoNm } of candidates) {
+    if (Date.now() > deadline) break;
+    let rows = null;
+    // 건축HUB는 정상 요청에도 가끔 429·503을 돌려줘서, 같은 후보를 잠깐 쉬었다가 한 번 더 부른다.
+    for (let attempt = 1; attempt <= UNIT_INFO_ATTEMPTS && rows === null; attempt += 1) {
+      try {
+        rows = await fetchBuildingHub('hub-expos', BUILDING_HUB_EXPOS_URL, { ...params, dongNm, hoNm });
+      } catch (error) {
+        if (attempt < UNIT_INFO_ATTEMPTS && Date.now() + UNIT_INFO_RETRY_DELAY_MS < deadline) {
+          await sleep(UNIT_INFO_RETRY_DELAY_MS);
+        } else {
+          // 다시 불러도 실패한 후보만 실패로 남긴다(재시도로 성공한 후보는 실패가 아니다).
+          lastError = error;
+          break;
+        }
+      }
+    }
+    if (rows === null) continue;
+    const exclusiveRows = rows.filter(
       (row) => row.exposPubuseGbCdNm === '전유' && row.dongNm === dongNm && String(row.hoNm) === hoNm,
     );
     if (exclusiveRows.length === 0) continue;
@@ -412,8 +504,7 @@ const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
       floor: Number.isInteger(floorNo) ? (isUnderground ? -floorNo : floorNo) : null,
     };
   }
-  const failed = results.find((result) => result.status === 'rejected');
-  if (failed) throw failed.reason;
+  if (lastError) throw lastError;
   return null;
 };
 
