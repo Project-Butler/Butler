@@ -14,7 +14,7 @@ export default {
         line: '#DCE3E0',
       },
       fontFamily: {
-        sans: ['IBM Plex Sans KR', 'Malgun Gothic', 'sans-serif'],
+        sans: ['Pretendard', 'IBM Plex Sans KR', 'Malgun Gothic', 'sans-serif'],
         num: ['Pretendard', 'IBM Plex Sans KR', 'sans-serif'],
       },
       borderRadius: {
