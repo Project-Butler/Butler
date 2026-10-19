@@ -102,9 +102,11 @@ test('캐시: 음성 캐시는 만료 전까지만', () => {
 
 test('캐시: 찾기 절차 뒤 저장 — 찾음 upsert, 동 없음만 음성 캐시, 호만 없음·장애는 저장 안 함', () => {
   assert.equal(decideDiscoveryWrite({ found: true, dongFound: true, hadError: false }), 'upsert');
-  assert.equal(decideDiscoveryWrite({ found: false, dongFound: false, hadError: false }), 'miss');
+  assert.equal(decideDiscoveryWrite({ found: false, dongFound: false, hadError: false, parcelsChecked: 1 }), 'miss');
+  // 후보 필지가 하나도 없었으면 동이 없다는 뜻이 아니다
+  assert.equal(decideDiscoveryWrite({ found: false, dongFound: false, hadError: false, parcelsChecked: 0 }), 'none');
   assert.equal(decideDiscoveryWrite({ found: false, dongFound: true, hadError: false }), 'none');
-  assert.equal(decideDiscoveryWrite({ found: false, dongFound: false, hadError: true }), 'none');
+  assert.equal(decideDiscoveryWrite({ found: false, dongFound: false, hadError: true, parcelsChecked: 1 }), 'none');
 });
 
 test('캐시: 저장된 방법이 실패하면 동이 있을 때만 저장값을 유지', () => {

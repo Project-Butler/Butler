@@ -150,16 +150,18 @@ test('채우기: 차단(429·게이트웨이 04)이면 쉬었다 같은 단지�
   assert.equal(summary.throttlePauses, 1);
 });
 
-test('채우기: 쉬었다 불러도 계속 차단이면 남은 행을 부르지 않고 멈춘다', async () => {
+test('채우기: 쉬었다 불러도 계속 차단이면 실패 수를 올리지 않고 멈춘다(그 행은 다음 실행에)', async () => {
   globalThis.fetch = async () => {
     fetchCalls += 1;
     return { ok: false, status: 429, text: async () => '' };
   };
-  const { prisma } = createFakePrisma({ rowCount: 10 });
+  const { prisma, state } = createFakePrisma({ rowCount: 10 });
   const summary = await fillKaptBasis({ prisma, maxRows: 10, usageLimit: 100, minIntervalMs: 0, throttlePauseMs: 1 });
 
   assert.equal(fetchCalls, 4);
-  assert.equal(summary.failed, 1);
+  assert.equal(summary.failed, 0);
+  assert.equal(summary.processed, 0);
+  assert.equal(state.updates.length, 0);
   assert.match(summary.stopReason, /^throttled/);
 });
 
@@ -184,9 +186,19 @@ test('채우기: 하루 한도 초과 응답(게이트웨이 22)이면 멈춘다
     ok: true,
     text: async () => JSON.stringify({ OpenAPI_ServiceResponse: { cmmMsgHeader: { returnReasonCode: '22' } } }),
   });
-  const { prisma } = createFakePrisma({ rowCount: 5 });
+  const { prisma, state } = createFakePrisma({ rowCount: 5 });
   const summary = await fillKaptBasis({ prisma, maxRows: 5, usageLimit: 100, minIntervalMs: 0 });
 
-  assert.equal(summary.processed, 1);
+  // basis_attempts를 올리지 않는다 — 한도 탓이라 그 단지는 다음 실행에 다시 부른다.
+  assert.equal(state.updates.length, 0);
+  assert.equal(summary.processed, 0);
+  assert.equal(summary.failed, 0);
   assert.equal(summary.stopReason, 'quota: kapt-basis gateway 22');
+});
+
+test('채우기: 산 번지는 main_lot·sub_lot을 비우고 지번 원문은 남긴다', () => {
+  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, kaptAddr: '경기도 가평군 가평읍 읍내리 산12-3 OO' }, '4182025021', NOW);
+  assert.equal(columns.mainLot, null);
+  assert.equal(columns.subLot, null);
+  assert.equal(columns.jibunAddress, '경기도 가평군 가평읍 읍내리 산12-3 OO');
 });

@@ -13,16 +13,19 @@ import { prisma } from '../src/platform/prismaClient.js';
 const PROGRESS_EVERY = 100;
 const DEFAULT_INTERVAL_MS = 2000;
 
+// 실행 방법이 틀린 경우의 에러. 문구를 그대로 보여 준다.
+const toUsageError = (message) => Object.assign(new Error(message), { reason: message });
+
 const parseIntArg = (argv, name, fallback, min) => {
   const index = argv.indexOf(name);
   if (index < 0) return fallback;
   const value = Number(argv[index + 1]);
-  if (!Number.isInteger(value) || value < min) throw new Error(`${name}은 ${min} 이상의 정수여야 합니다.`);
+  if (!Number.isInteger(value) || value < min) throw toUsageError(`${name}은 ${min} 이상의 정수여야 합니다.`);
   return value;
 };
 
 const main = async () => {
-  if (!process.env.DATA_GO_KR_SERVICE_KEY) throw new Error('DATA_GO_KR_SERVICE_KEY가 없습니다.');
+  if (!process.env.DATA_GO_KR_SERVICE_KEY) throw toUsageError('DATA_GO_KR_SERVICE_KEY가 없습니다.');
   const argv = process.argv.slice(2);
   const limit = parseIntArg(argv, '--limit', KAPT_BASIS_BACKFILL_LIMIT, 1);
   const intervalMs = parseIntArg(argv, '--interval-ms', DEFAULT_INTERVAL_MS, 0);
@@ -64,7 +67,8 @@ const main = async () => {
 
 main()
   .catch((error) => {
-    console.error('[backfill:kapt-basis] 실패:', error.reason ?? error.message);
+    // Prisma 등 원본 메시지에는 접속 정보가 섞일 수 있어서 사유·코드만 남긴다(입력 검사 에러는 reason에 문구를 둔다).
+    console.error('[backfill:kapt-basis] 실패:', error.reason ?? error.code ?? 'internal error');
     process.exitCode = 1;
   })
   .finally(async () => {

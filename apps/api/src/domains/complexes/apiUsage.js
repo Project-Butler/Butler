@@ -19,9 +19,6 @@ export const getApiUsage = async (prisma, api, now = new Date()) => {
   return rows[0]?.count ?? 0;
 };
 
-export const canSpend = async (prisma, api, limit, now = new Date()) =>
-  (await getApiUsage(prisma, api, now)) < limit;
-
 // 호출 1회를 기록한다. 오늘 수가 이미 limit 이상이면 늘리지 않고 null을 돌려준다(호출하지 말 것).
 // 비교와 증가를 한 문장으로 해서 여러 경로가 동시에 불러도 limit을 넘지 않는다.
 export const spendApiCall = async (prisma, api, limit, now = new Date()) => {

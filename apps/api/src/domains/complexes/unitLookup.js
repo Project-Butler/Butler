@@ -103,11 +103,12 @@ export const isMissActive = (miss, now) => Boolean(miss) && miss.expiresAt.getTi
 
 // 찾기 절차가 끝난 뒤 무엇을 저장할지.
 //   found: 호실을 찾음 / dongFound: 어느 필지에서든 대장 동을 찾음 / hadError: 외부 호출 실패가 있었음
-//   'upsert'(동 조회 정보 저장) | 'miss'(음성 캐시 — 동을 못 찾았고 실패도 없음) | 'none'
-// 호만 못 찾은 경우(입력 오타일 수 있음)와 외부 장애는 저장하지 않는다.
-export const decideDiscoveryWrite = ({ found, dongFound, hadError }) => {
+//   parcelsChecked: 표제부를 실제로 확인한 필지 수
+//   'upsert'(동 조회 정보 저장) | 'miss'(음성 캐시 — 필지를 하나 이상 봤는데 동이 없고 실패도 없음) | 'none'
+// 호만 못 찾은 경우(입력 오타일 수 있음)·외부 장애·후보 필지가 없던 경우(동이 없다는 뜻이 아님)는 저장하지 않는다.
+export const decideDiscoveryWrite = ({ found, dongFound, hadError, parcelsChecked }) => {
   if (found) return 'upsert';
-  if (!dongFound && !hadError) return 'miss';
+  if (!dongFound && !hadError && parcelsChecked > 0) return 'miss';
   return 'none';
 };
 

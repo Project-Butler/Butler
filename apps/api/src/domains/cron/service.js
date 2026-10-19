@@ -10,11 +10,15 @@ const UNAVAILABLE_MESSAGE = 'K-apt 단지 목록 갱신에 실패했습니다.';
 
 // 동기화 뒤 남은 시간에 기본정보가 없는 새 단지를 채운다. 함수 제한(60초) 안에 끝나도록
 // cron 시작부터 40초가 지나면 새 호출을 시작하지 않는다(진행 중인 호출은 타임아웃 8초까지).
+// 호출 간격 1.5초: 몰아 부르면 게이트웨이가 막는다(kaptBasis.js 실측 메모, 백필은 2초).
 const BASIS_FILL_MAX_ROWS = 30;
 const BASIS_FILL_DEADLINE_MS = 40000;
-// 외부 API 상태 점검(표본 3건 병렬, 호출당 8초)은 함수 제한 60초 중 10초 이상 남았을 때만 한다.
+const BASIS_FILL_MIN_INTERVAL_MS = 1500;
+// 외부 API 상태 점검은 함수 제한 60초 중 15초 이상 남았을 때만 한다. 점검 자체가 최악 약 8초(표본 병렬, 호출당
+// 타임아웃 8초) + jobs 쓰기·읽기라서, 10초로는 앞 단계가 늦게 끝났을 때 60초를 넘을 수 있다. 채우기가 마감(40초)까지
+// 가서 마지막 호출이 48초 무렵 끝나면 점검은 건너뛴다 — 채우기는 다음 주에 이어지고, 점검은 건너뛴 사유를 남긴다.
 const CRON_BUDGET_MS = 60000;
-const HEALTH_MIN_REMAINING_MS = 10000;
+const HEALTH_MIN_REMAINING_MS = 15000;
 
 // 채우기 실패는 동기화 결과에 영향을 주지 않는다(다음 주에 다시 채운다).
 const fillNewKaptBasis = async (startedAt) => {
@@ -24,6 +28,7 @@ const fillNewKaptBasis = async (startedAt) => {
       maxRows: BASIS_FILL_MAX_ROWS,
       usageLimit: KAPT_BASIS_CRON_LIMIT,
       deadlineAt: startedAt + BASIS_FILL_DEADLINE_MS,
+      minIntervalMs: BASIS_FILL_MIN_INTERVAL_MS,
     });
     return {
       processed: summary.processed,

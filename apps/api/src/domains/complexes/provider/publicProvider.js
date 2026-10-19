@@ -322,6 +322,9 @@ const toTitleBuildingInfo = (titles) => {
 
 // ---------------------------------------------------------------- provider 함수
 
+// K-apt 지번이 산 번지인지(main_lot은 산이면 비워 두지만, 그 전에 채운 행도 있어서 원문으로 본다)
+const isMountainLot = (row) => parseJibunLot(row.jibunAddress)?.isMountain === true;
+
 // 도로명 구조 키·법정동(리)+본번으로 kapt_complexes를 한 번씩 읽는다(기본정보가 채워진 단지만 나온다).
 // 결과: { kaptCodesByRoadKey, kaptCodesByLotKey, nameByCode }
 const findKaptLinkCandidates = async (apartments) => {
@@ -343,8 +346,9 @@ const findKaptLinkCandidates = async (apartments) => {
     roadUnderground: true,
     roadMainNo: true,
     roadSubNo: true,
+    jibunAddress: true,
   };
-  const [roadRows, lotRows] = await Promise.all([
+  const [roadRows, lotRowsAll] = await Promise.all([
     roadKeys.size > 0
       ? prisma.kaptComplex.findMany({ where: { isActive: true, OR: [...roadKeys.values()] }, select })
       : [],
@@ -352,6 +356,8 @@ const findKaptLinkCandidates = async (apartments) => {
       ? prisma.kaptComplex.findMany({ where: { isActive: true, OR: [...lotKeys.values()] }, select })
       : [],
   ]);
+  // juso 번지 키는 산이 아닌 번지만 만든다. 산 번지 K-apt 단지는 번지로 연결하지 않는다.
+  const lotRows = lotRowsAll.filter((row) => !isMountainLot(row));
 
   const group = (rows, toKey) => {
     const map = new Map();
@@ -423,11 +429,11 @@ const searchComplexes = async (query, size) => {
   return results.map(({ fromName, ...item }) => item);
 };
 
-// 오늘 K-apt 기본정보 호출 한도를 다 쓴 경우: 단지 목록(kapt_complexes) 값만으로 만든다(buildingInfo 없음).
-const getKaptComplexFromList = async (sourceKey, kaptCode) => {
+// K-apt 기본정보를 지금 부를 수 없는 경우(오늘 한도 소진·차단·장애): 단지 목록(kapt_complexes) 값만으로 만든다(buildingInfo 없음).
+const getKaptComplexFromList = async (sourceKey, kaptCode, cause) => {
   const row = await prisma.kaptComplex.findUnique({ where: { kaptCode } });
   if (!row) return null;
-  console.warn('[complexes] kapt-basis daily limit reached — list fallback');
+  console.warn('[complexes] kapt-basis unavailable — list fallback', cause);
   return {
     sourceKey,
     name: row.name,
@@ -438,11 +444,27 @@ const getKaptComplexFromList = async (sourceKey, kaptCode) => {
   };
 };
 
+// 목록 값으로 대신할 기본정보 실패: 하루 한도(게이트웨이 22)·잠시 차단(04)·HTTP 429/503·시간 초과
+const isKaptBasisUnavailable = (error) =>
+  (error instanceof ExternalServiceError && /(?:gateway (?:22|04)|HTTP (?:429|503))$/.test(error.reason)) ||
+  error?.name === 'TimeoutError' ||
+  error?.name === 'AbortError';
+
 const getKaptComplex = async (sourceKey, kaptCode) => {
   if ((await spendApiCall(prisma, KAPT_BASIS_API, KAPT_BASIS_LIVE_LIMIT)) === null) {
-    return getKaptComplexFromList(sourceKey, kaptCode);
+    return getKaptComplexFromList(sourceKey, kaptCode, 'daily limit');
   }
-  const basis = await fetchKaptBasis(kaptCode);
+  let basis;
+  try {
+    basis = await fetchKaptBasis(kaptCode);
+  } catch (error) {
+    // external_api_usage 카운터는 DB마다 따로다. 같은 키를 다른 DB(로컬 백필·다른 환경)에서도 쓰면 카운터가
+    // 한도 아래여도 게이트웨이가 22를 줄 수 있어서, 그 경우도 503 대신 목록 값으로 만든다. 목록에도 없으면 원래 에러.
+    if (!isKaptBasisUnavailable(error)) throw error;
+    const fallback = await getKaptComplexFromList(sourceKey, kaptCode, error.reason ?? 'timeout');
+    if (fallback) return fallback;
+    throw error;
+  }
   if (!basis || !/^\d{10}$/.test(String(basis.bjdCode ?? ''))) return null;
 
   // 받은 기본정보로 kapt_complexes 주소 칸도 채운다(백필 1건 절약). 실패해도 resolve는 계속한다.
@@ -458,6 +480,8 @@ const getKaptComplex = async (sourceKey, kaptCode) => {
     jibunAddress: trimOrNull(basis.kaptAddr),
     roadAddress: trimOrNull(basis.doroJuso),
     legalDongCode: rollUpLegalDongCode(basis.bjdCode),
+    // 리 단위 그대로의 법정동 코드(별칭 PNU 계산용, 응답에는 안 나감)
+    bjdCode: basis.bjdCode,
     buildingInfo: {
       approvalDate: toDateString(basis.kaptUsedate),
       householdCount: toPositiveInt(basis.kaptdaCnt),
@@ -528,9 +552,10 @@ const toDongKey = (value) => String(value ?? '').replace(/\s+/g, '').replace(/�
 // 대단지는 동마다 필지(번지)가 다르다(예: 중계그린 101~105동은 502-1, 106~116동은 503, 117~125동은 504-1).
 // juso는 건물마다 그 필지에 있는 동 목록(detBdNmList)을 주므로, 단지명으로 찾은 건물 중
 // 입력한 동이 들어 있는 필지를 고른다. 같은 법정동·비슷한 이름의 건물만 본다.
-const findPnuByBuilding = async (complex, buildingNo) => {
+// deadline(ms 시각)이 지났으면 juso를 부르지 않고 null.
+const findPnuByBuilding = async (complex, buildingNo, { deadline = Infinity } = {}) => {
   const region = regionFromJibun(complex.jibunAddress);
-  if (!region || !buildingNo) return null;
+  if (!region || !buildingNo || Date.now() > deadline) return null;
 
   const target = toDongKey(buildingNo);
   const complexName = normalizeComplexName(complex.name);
@@ -549,12 +574,13 @@ const findPnuByBuilding = async (complex, buildingNo) => {
 
 // KAPT 키 단지는 PNU가 없어서 주소로 juso를 다시 찾아 필지를 얻는다. 롤업된 legalDongCode로는
 // 리 지역 건축물대장을 못 찾기 때문에 juso의 admCd(리 단위)를 그대로 쓴다.
-const findPnuByAddress = async (complex) => {
+const findPnuByAddress = async (complex, { deadline = Infinity } = {}) => {
   const keywords = [complex.roadAddress, complex.jibunAddress && stripComplexNameFromJibun(complex.jibunAddress)]
     .map(trimOrNull)
     .filter(Boolean);
 
   for (const keyword of keywords) {
+    if (Date.now() > deadline) return null;
     const rows = await searchJuso(keyword, 5);
     const juso = rows.find((row) => row.bdKdcd === JUSO_APARTMENT_KIND) ?? rows[0];
     const pnu = juso ? toJusoPnu(juso) : null;
@@ -579,11 +605,15 @@ const toDongNameCandidates = (buildingNo) => {
 };
 
 // 건축HUB는 정상 요청에도 가끔 429·503을 돌려줘서, 잠깐 쉬었다가 한 번 더 부른다. 다시 불러도 실패하면 그 에러를 던진다.
+// 시간 초과 등 다른 실패는 다시 부르지 않는다(마감 안에 한 번 더 기다릴 여유가 없다).
+const isRetryableHubError = (error) => error instanceof ExternalServiceError && /HTTP (?:429|503)$/.test(error.reason);
+
 const fetchBuildingHubWithRetry = async (label, url, params, { deadline, timeoutMs } = {}) => {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await fetchBuildingHub(label, url, params, { timeoutMs });
     } catch (error) {
+      if (!isRetryableHubError(error)) throw error;
       if (attempt >= UNIT_INFO_ATTEMPTS || Date.now() + UNIT_INFO_RETRY_DELAY_MS >= deadline) throw error;
       await sleep(UNIT_INFO_RETRY_DELAY_MS);
     }
@@ -737,16 +767,19 @@ const findByStoredLookup = async ({ complex, dongKey, unitNo, lookup, deadline }
 };
 
 // 후보 필지(최대 3): juso 동 목록에 입력 동이 있는 필지 → 단지의 PNU 키·별칭 → K-apt 대표 지번 필지.
-// 하나도 없으면 단지 대표 주소로 juso를 다시 찾는다. 결과: { pnus, lastError }
-const findCandidatePnus = async (complex, buildingNo) => {
+// 하나도 없으면 단지 대표 주소로 juso를 다시 찾는다. 마감(deadline)이 지나 juso를 건너뛰면 incomplete.
+// 결과: { pnus, lastError, incomplete }
+const findCandidatePnus = async (complex, buildingNo, deadline) => {
   const pnus = [];
   let lastError = null;
+  let incomplete = false;
   const add = (pnu) => {
     if (pnu && !pnus.includes(pnu)) pnus.push(pnu);
   };
 
+  if (Date.now() > deadline) incomplete = true;
   try {
-    add(await findPnuByBuilding(complex, buildingNo));
+    add(await findPnuByBuilding(complex, buildingNo, { deadline }));
   } catch (error) {
     lastError = error;
   }
@@ -763,21 +796,23 @@ const findCandidatePnus = async (complex, buildingNo) => {
   }
   if (pnus.length === 0) {
     try {
-      add(await findPnuByAddress(complex));
+      add(await findPnuByAddress(complex, { deadline }));
     } catch (error) {
       lastError = error;
     }
+    if (pnus.length === 0 && Date.now() > deadline) incomplete = true;
   }
-  return { pnus: pnus.slice(0, MAX_LOOKUP_PARCELS), lastError };
+  return { pnus: pnus.slice(0, MAX_LOOKUP_PARCELS), lastError, incomplete };
 };
 
 // 찾기 절차: 필지마다 표제부로 대장 동 이름을 확정하고, 그 동에서 호 표기를 차례로 부른다.
 const discoverUnitInfo = async ({ complex, dongKey, buildingNo, unitNo, deadline }) => {
   const options = { deadline };
-  const candidates = await findCandidatePnus(complex, buildingNo);
+  const candidates = await findCandidatePnus(complex, buildingNo, deadline);
   let lastError = candidates.lastError;
-  let incomplete = false;
+  let incomplete = candidates.incomplete;
   let dongFound = false;
+  let parcelsChecked = 0;
 
   for (const pnu of candidates.pnus) {
     if (Date.now() > deadline) {
@@ -791,6 +826,7 @@ const discoverUnitInfo = async ({ complex, dongKey, buildingNo, unitNo, deadline
       lastError = error;
       continue;
     }
+    parcelsChecked += 1;
     if (!registry) continue;
     dongFound = true;
 
@@ -810,7 +846,12 @@ const discoverUnitInfo = async ({ complex, dongKey, buildingNo, unitNo, deadline
     break;
   }
 
-  const write = decideDiscoveryWrite({ found: false, dongFound, hadError: Boolean(lastError) || incomplete });
+  const write = decideDiscoveryWrite({
+    found: false,
+    dongFound,
+    hadError: Boolean(lastError) || incomplete,
+    parcelsChecked,
+  });
   if (write === 'miss') await saveLookupMiss(complex.id, dongKey);
   if (lastError) throw lastError;
   return null;
@@ -848,17 +889,22 @@ const getUnitInfo = async ({ complex, buildingNo, unitNo }) => {
 // 확실할 때만 연결한다(후보가 정확히 하나). 못 찾으면 입력 키만 쓴다.
 
 // KAPT 키 → K-apt 기본정보 지번(리 단위 법정동 코드 그대로 + 본번·부번)으로 PNU. 외부 호출 없음.
-const findPnuKeyForKapt = async (kaptCode) => {
+// kapt_complexes 행이 없거나 지번이 아직 비어 있으면 resolve가 받아 온 기본정보(external: { bjdCode, jibunAddress })를 쓴다.
+const findPnuKeyForKapt = async (kaptCode, external) => {
   const row = await prisma.kaptComplex.findUnique({
     where: { kaptCode },
     select: { legalDongCode: true, jibunAddress: true },
   });
-  const lot = row ? parseJibunLot(row.jibunAddress) : null;
+  const source = row?.jibunAddress
+    ? row
+    : external?.bjdCode
+      ? { legalDongCode: String(external.bjdCode), jibunAddress: external.jibunAddress }
+      : null;
+  const lot = source ? parseJibunLot(source.jibunAddress) : null;
   if (!lot) return null;
-  const pnu = buildPnu(row.legalDongCode, lot.isMountain ? '1' : '0', lot.mainLot, lot.subLot);
+  const pnu = buildPnu(source.legalDongCode, lot.isMountain ? '1' : '0', lot.mainLot, lot.subLot);
   return pnu ? `PNU:${pnu}` : null;
 };
-
 
 // PNU를 지번 검색어로: 단지 지번주소('… 신천동 17번지') 또는 법정동 이름 + 번지
 const toPnuSearchKeyword = async (parsed, jibunAddress) => {
@@ -874,7 +920,8 @@ const toPnuSearchKeyword = async (parsed, jibunAddress) => {
 };
 
 // PNU 키 → juso를 지번으로 찾아 구조 필드(admCd·산·본번·부번)가 PNU와 같은 아파트 행만 고르고,
-// 그 행의 도로명 키로 K-apt 단지를 찾는다. 없으면 같은 법정동(리)·본번의 K-apt 단지가 하나뿐일 때 그 단지.
+// 그 행의 도로명 키로 K-apt 단지를 찾는다. 없으면 같은 법정동(리)·본번의 K-apt 단지가 하나뿐일 때 그 단지
+// (산 PNU는 K-apt 번지 칸에 산 여부가 없어서 이 단계를 건너뛴다).
 const findKaptKeyForPnu = async (pnu, jibunAddress) => {
   const parsed = parsePnu(pnu);
   const keyword = parsed ? await toPnuSearchKeyword(parsed, jibunAddress) : null;
@@ -897,12 +944,14 @@ const findKaptKeyForPnu = async (pnu, jibunAddress) => {
     const kapts = await prisma.kaptComplex.findMany({ where: { isActive: true, ...key }, select: { kaptCode: true } });
     kapts.forEach((kapt) => codes.add(kapt.kaptCode));
   }
-  if (codes.size === 0) {
-    const byLot = await prisma.kaptComplex.findMany({
-      where: { isActive: true, legalDongCode: parsed.admCd, mainLot: Number(parsed.mainNo) },
-      select: { kaptCode: true },
-      take: 2,
-    });
+  if (codes.size === 0 && parsed.mtYn !== '1') {
+    const byLot = (
+      await prisma.kaptComplex.findMany({
+        where: { isActive: true, legalDongCode: parsed.admCd, mainLot: Number(parsed.mainNo) },
+        select: { kaptCode: true, jibunAddress: true },
+        take: 5,
+      })
+    ).filter((row) => !isMountainLot(row));
     if (byLot.length === 1) codes.add(byLot[0].kaptCode);
   }
   return codes.size === 1 ? `KAPT:${[...codes][0]}` : null;
@@ -912,7 +961,7 @@ const findKaptKeyForPnu = async (pnu, jibunAddress) => {
 const getLinkedSourceKeys = async (sourceKey, complex) => {
   const [type, value] = String(sourceKey).split(':');
   let other = null;
-  if (type === 'KAPT' && value) other = await findPnuKeyForKapt(value);
+  if (type === 'KAPT' && value) other = await findPnuKeyForKapt(value, complex);
   if (type === 'PNU' && value) other = await findKaptKeyForPnu(value, complex?.jibunAddress);
   return other ? [sourceKey, other] : [sourceKey];
 };

@@ -48,6 +48,36 @@ test('도로명주소: 전각 숫자도 읽는다', () => {
   assert.equal(parseRoadAddress('서울특별시 송파구 올림픽로 ４３５', '1171010200').mainNo, 435);
 });
 
+test('도로명주소: 줄인 시도·도로명에 붙은 건물번호·뒤의 단지명', () => {
+  assert.deepEqual(parseRoadAddress('강원 태백시 고원로167 대윤아파트', '5119010100'), {
+    sigunguCd: '51190',
+    roadNameKey: '고원로',
+    underground: false,
+    mainNo: 167,
+    subNo: 0,
+  });
+  assert.equal(parseRoadAddress('강원 태백시 고원로 167 대윤아파트', '5119010100').mainNo, 167);
+  assert.equal(parseRoadAddress('경북 영주시 영주로 299 (휴천동) 영주A', '4721010100').roadNameKey, '영주로');
+});
+
+test('도로명주소: 시도가 빠진 주소(시군구부터)', () => {
+  assert.deepEqual(parseRoadAddress('영주시 영주로299', '4721010100'), {
+    sigunguCd: '47210',
+    roadNameKey: '영주로',
+    underground: false,
+    mainNo: 299,
+    subNo: 0,
+  });
+});
+
+test('도로명주소: 숫자가 든 도로명은 건물번호로 나누지 않는다', () => {
+  const parsed = parseRoadAddress('경기도 의정부시 동일로522번길49-3', '4115010400');
+  assert.equal(parsed.roadNameKey, '동일로522번길');
+  assert.equal(parsed.mainNo, 49);
+  assert.equal(parsed.subNo, 3);
+  assert.equal(parseRoadAddress('강원특별자치도 홍천군 희망로17길 10', '5172025024').roadNameKey, '희망로17길');
+});
+
 test('도로명주소: 형식이 맞지 않으면 null', () => {
   assert.equal(parseRoadAddress(null, '1171010200'), null);
   assert.equal(parseRoadAddress('', '1171010200'), null);

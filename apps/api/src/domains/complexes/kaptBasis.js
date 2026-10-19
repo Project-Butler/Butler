@@ -23,7 +23,6 @@ const MAX_THROTTLE_RETRIES = 3;
 const MAX_CONSECUTIVE_FAILURES = 20;
 const BASIS_ERROR_MAX_LENGTH = 200;
 
-
 export const fetchKaptBasis = async (kaptCode) => {
   const json = await fetchJson('kapt-basis', KAPT_BASIS_URL, {
     serviceKey: process.env.DATA_GO_KR_SERVICE_KEY,
@@ -61,8 +60,9 @@ export const toKaptBasisColumns = (item, legalDongCode, now) => {
     roadUnderground: road ? road.underground : null,
     roadMainNo: road?.mainNo ?? null,
     roadSubNo: road ? road.subNo : null,
-    mainLot: lot?.mainLot ?? null,
-    subLot: lot ? lot.subLot : null,
+    // 산 번지는 juso 번지 키(산 제외)와 섞이지 않게 비워 둔다. 원문(jibunAddress)은 그대로 남아 PNU 계산에 쓴다.
+    mainLot: lot && !lot.isMountain ? lot.mainLot : null,
+    subLot: lot && !lot.isMountain ? lot.subLot : null,
     basisFetchedAt: now,
     basisError: null,
   };
@@ -85,7 +85,6 @@ const toFailureReason = (error) => {
   return 'internal error';
 };
 
-
 // 하루 한도 초과면 남은 행을 계속 부르지 않는다.
 const isQuotaError = (reason) => reason.endsWith('gateway 22');
 // 쉬었다 다시 부를 응답(초당 한도·잠시 차단)
@@ -100,7 +99,6 @@ const recordFailure = async (prisma, kaptCode, reason) => {
     data: { basisAttempts: { increment: 1 }, basisError: reason.slice(0, BASIS_ERROR_MAX_LENGTH) },
   });
 };
-
 
 // 아직 채우지 않은 단지(basis_fetched_at IS NULL, 실패 3회 미만)를 kapt_code 순서로 채운다.
 // 중간에 멈춰도 다음 실행이 이어서 한다. 멈추는 조건(먼저 닿는 쪽):
@@ -188,19 +186,26 @@ export const fillKaptBasis = async ({
     }
   };
 
-  // 반환값 false = 부르지 않음(처리 수에 넣지 않는다)
+  // 반환값 false = 부르지 않았거나 한도·차단으로 멈춤(처리 수에 넣지 않는다)
   const processRow = async (row) => {
     let result;
     try {
       result = await fetchWithBudget(row.kaptCode);
     } catch (error) {
       const reason = toFailureReason(error);
+      // 하루 한도·계속 차단은 단지 탓이 아니다. 실패 수를 올리지 않고 그 행을 다음 실행에 남긴 채 멈춘다.
+      if (isQuotaError(reason)) {
+        stop(`quota: ${reason}`);
+        return false;
+      }
+      if (isThrottled(error)) {
+        stop(`throttled: ${reason}`);
+        return false;
+      }
       await recordFailure(prisma, row.kaptCode, reason);
       summary.failed += 1;
       consecutiveFailures += 1;
-      if (isQuotaError(reason)) stop(`quota: ${reason}`);
-      else if (isThrottled(error)) stop(`throttled: ${reason}`);
-      else if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) stop(`consecutive failures: ${reason}`);
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) stop(`consecutive failures: ${reason}`);
       return true;
     }
     if (result.stopped) return false;

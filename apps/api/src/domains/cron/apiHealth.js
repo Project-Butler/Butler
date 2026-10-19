@@ -89,39 +89,43 @@ const summarize = (results) => ({
   samples: results,
 });
 
+// 점검 중 예상 못 한 에러(DB 오류 등)가 나도 jobs 행을 PROCESSING으로 두지 않는다(finally에서 FAILED로 닫는다).
 export const runExternalApiHealth = async ({ prisma }) => {
   const job = await prisma.job.create({
     data: { type: EXTERNAL_API_HEALTH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: new Date() },
     select: { id: true },
   });
+  let status = 'FAILED';
+  let result = { error: 'internal error' };
 
-  const [juso, buildingHub, kaptBasis] = await Promise.all([
-    Promise.all(HEALTH_SAMPLES.map(checkJuso)),
-    Promise.all(HEALTH_SAMPLES.map(checkBuildingHub)),
-    checkKaptBasis(prisma, HEALTH_SAMPLES[0]),
-  ]);
-  const apis = {
-    juso: summarize(juso.map((result, index) => ({ name: HEALTH_SAMPLES[index].name, ...result }))),
-    kaptBasis,
-    buildingHub: summarize(buildingHub.map((result, index) => ({ name: HEALTH_SAMPLES[index].name, ...result }))),
-  };
-  const failedApis = Object.entries(apis)
-    .filter(([, result]) => !result.ok)
-    .map(([api]) => api);
-  const failed = failedApis.length > 0;
+  try {
+    const [juso, buildingHub, kaptBasis] = await Promise.all([
+      Promise.all(HEALTH_SAMPLES.map(checkJuso)),
+      Promise.all(HEALTH_SAMPLES.map(checkBuildingHub)),
+      checkKaptBasis(prisma, HEALTH_SAMPLES[0]),
+    ]);
+    const apis = {
+      juso: summarize(juso.map((outcome, index) => ({ name: HEALTH_SAMPLES[index].name, ...outcome }))),
+      kaptBasis,
+      buildingHub: summarize(buildingHub.map((outcome, index) => ({ name: HEALTH_SAMPLES[index].name, ...outcome }))),
+    };
+    const failedApis = Object.entries(apis)
+      .filter(([, api]) => !api.ok)
+      .map(([api]) => api);
+    const failed = failedApis.length > 0;
 
-  const previous = await prisma.job.findFirst({
-    where: { type: EXTERNAL_API_HEALTH_JOB_TYPE, id: { not: job.id }, status: { in: ['SUCCEEDED', 'FAILED'] } },
-    orderBy: { createdAt: 'desc' },
-    select: { status: true },
-  });
-  const alert = shouldAlertConsecutiveFailure(failed, previous);
-  if (alert) console.error('[health] consecutive_failures=2', failedApis.join(','));
+    const previous = await prisma.job.findFirst({
+      where: { type: EXTERNAL_API_HEALTH_JOB_TYPE, id: { not: job.id }, status: { in: ['SUCCEEDED', 'FAILED'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true },
+    });
+    const alert = shouldAlertConsecutiveFailure(failed, previous);
+    if (alert) console.error('[health] consecutive_failures=2', failedApis.join(','));
 
-  const result = { apis, failedApis, alert };
-  await prisma.job.update({
-    where: { id: job.id },
-    data: { status: failed ? 'FAILED' : 'SUCCEEDED', result, lockedAt: null },
-  });
-  return { status: failed ? 'FAILED' : 'SUCCEEDED', failedApis, alert };
+    status = failed ? 'FAILED' : 'SUCCEEDED';
+    result = { apis, failedApis, alert };
+    return { status, failedApis, alert };
+  } finally {
+    await prisma.job.update({ where: { id: job.id }, data: { status, result, lockedAt: null } });
+  }
 };
