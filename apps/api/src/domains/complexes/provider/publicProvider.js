@@ -6,8 +6,11 @@
 // 보안: 호스트·경로는 아래 상수로만 정한다(SSRF 방지). 사용자 입력은 URLSearchParams 값으로만
 // 들어간다. data.go.kr 키는 Decoding 키라 URLSearchParams가 한 번만 인코딩한다.
 // 실패는 ExternalServiceError(reason)로만 던진다 — reason에 URL·키·응답 원문을 넣지 않는다.
+// 공통 호출 도구(fetchJson 등)는 publicApi.js.
+import { prisma } from '../../../platform/prismaClient.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { buildPnu, parsePnu, rollUpLegalDongCode, toBuildingRegisterParams } from './pnu.js';
+import { fetchJson, readDataGoKrBody, toItemArray } from './publicApi.js';
 
 const JUSO_BASE_URL = 'https://business.juso.go.kr/addrlink/addrLinkApi.do';
 const KAPT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService4/getLegaldongAptList4';
@@ -17,8 +20,6 @@ const BUILDING_HUB_RECAP_URL = `${BUILDING_HUB_BASE_URL}/getBrRecapTitleInfo`; /
 const BUILDING_HUB_TITLE_URL = `${BUILDING_HUB_BASE_URL}/getBrTitleInfo`; // 표제부
 const BUILDING_HUB_EXPOS_URL = `${BUILDING_HUB_BASE_URL}/getBrExposPubuseAreaInfo`; // 전유공용면적
 
-// 건축물대장 API는 캐시되지 않은 첫 조회가 7초 넘게 걸리기도 한다. Vercel 함수 제한(10초)보다는 짧게 둔다.
-const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_JUSO_ROWS = 50;
 const MAX_LEGAL_DONGS_PER_SEARCH = 5;
 const KAPT_LIST_PAGE_SIZE = 100;
@@ -28,48 +29,7 @@ const BUILDING_HUB_PAGE_SIZE = 100;
 // 검색어 문제(빈 값·한 글자·숫자만·특수문자·SQL 예약어 등)는 오류가 아니라 결과 없음으로 본다.
 // 그 밖의 코드(E0001 미승인 키, E0014 키 만료, -999 시스템 오류 등)는 503.
 const JUSO_EMPTY_RESULT_CODES = ['E0005', 'E0006', 'E0008', 'E0009', 'E0010', 'E0011', 'E0012', 'E0013', 'E0015'];
-// data.go.kr: '00' 정상, '03' 데이터 없음
-const DATA_GO_KR_OK_CODES = ['00', '000'];
-const DATA_GO_KR_NO_DATA_CODES = ['03'];
-
 const JUSO_APARTMENT_KIND = '1'; // bdKdcd: 1 공동주택
-
-const getTimeoutMs = () => Number(process.env.EXTERNAL_API_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
-
-const fetchJson = async (label, baseUrl, params) => {
-  const url = new URL(baseUrl);
-  url.search = new URLSearchParams(params).toString();
-
-  const response = await fetch(url, { signal: AbortSignal.timeout(getTimeoutMs()) });
-  if (!response.ok) throw new ExternalServiceError(`${label} HTTP ${response.status}`);
-
-  const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    // 키 오류 등은 XML로 오기도 한다. 원문은 남기지 않는다.
-    throw new ExternalServiceError(`${label} invalid JSON`);
-  }
-};
-
-// data.go.kr 응답의 header.resultCode를 확인하고 body를 돌려준다. 데이터 없음이면 null.
-const readDataGoKrBody = (label, json) => {
-  const resultCode = json?.response?.header?.resultCode;
-  if (DATA_GO_KR_NO_DATA_CODES.includes(resultCode)) return null;
-  if (!DATA_GO_KR_OK_CODES.includes(resultCode)) {
-    throw new ExternalServiceError(`${label} resultCode ${resultCode ?? 'missing'}`);
-  }
-  return json.response.body ?? null;
-};
-
-// items가 배열 / { item: 배열 | 객체 } / '' 중 어느 모양으로 와도 배열로 맞춘다.
-const toItemArray = (items) => {
-  if (!items) return [];
-  if (Array.isArray(items)) return items;
-  const { item } = items;
-  if (!item) return [];
-  return Array.isArray(item) ? item : [item];
-};
 
 const toPositiveInt = (value) => {
   const number = Number(value);
@@ -136,6 +96,7 @@ const fetchKaptList = async (bjdCode) => {
 
 // 리 단위 admCd는 K-apt에 그대로 없을 수 있어서, 비어 있으면 읍면동으로 올린 코드로 한 번 더 찾는다.
 // cache는 요청 하나 안에서만 쓴다(같은 법정동을 두 번 부르지 않도록).
+// kapt_complexes 테이블이 아직 비어 있을 때(동기화 전 새 환경)만 쓰는 대체 경로다.
 const getKaptListForAdmCd = (admCd, cache) => {
   if (!cache.has(admCd)) {
     cache.set(
@@ -149,6 +110,53 @@ const getKaptListForAdmCd = (admCd, cache) => {
     );
   }
   return cache.get(admCd);
+};
+
+const fetchKaptListsFromApi = async (admCds) => {
+  const cache = new Map();
+  return new Map(await Promise.all(admCds.map(async (admCd) => [admCd, await getKaptListForAdmCd(admCd, cache)])));
+};
+
+// 단지 목록 캐시(kapt_complexes)에 활성 행이 있는지. 한 번 있으면 프로세스가 끝날 때까지 다시 보지 않는다.
+// 비어 있으면 다음 검색에서 다시 확인한다 — 첫 동기화 직후부터 바로 테이블을 쓰도록.
+let isKaptCacheFilled = false;
+let hasWarnedEmptyKaptCache = false;
+
+const isKaptCacheReady = async () => {
+  if (isKaptCacheFilled) return true;
+  const row = await prisma.kaptComplex.findFirst({ where: { isActive: true }, select: { kaptCode: true } });
+  isKaptCacheFilled = Boolean(row);
+  if (!isKaptCacheFilled && !hasWarnedEmptyKaptCache) {
+    hasWarnedEmptyKaptCache = true;
+    console.warn('[complexes] kapt_complexes가 비어 있음 — 동기화(npm run sync:kapt) 전까지 K-apt 목록 API를 직접 부릅니다');
+  }
+  return isKaptCacheFilled;
+};
+
+// admCd마다 admCd와 읍면동으로 올린 코드의 활성 단지를 쿼리 한 번으로 읽는다.
+// 반환 모양은 외부 목록 API와 같은 { kaptCode, kaptName } 배열이다(matchKaptComplex 입력).
+const findKaptListsFromDb = async (admCds) => {
+  const codesByAdmCd = new Map(admCds.map((admCd) => [admCd, [admCd, rollUpLegalDongCode(admCd)]]));
+  const rows = await prisma.kaptComplex.findMany({
+    where: { isActive: true, legalDongCode: { in: [...new Set([...codesByAdmCd.values()].flat())] } },
+    select: { kaptCode: true, name: true, legalDongCode: true },
+    orderBy: { kaptCode: 'asc' },
+  });
+
+  return new Map(
+    admCds.map((admCd) => {
+      const codes = codesByAdmCd.get(admCd);
+      const list = rows
+        .filter((row) => codes.includes(row.legalDongCode))
+        .map((row) => ({ kaptCode: row.kaptCode, kaptName: row.name }));
+      return [admCd, list];
+    }),
+  );
+};
+
+const getKaptLists = async (admCds) => {
+  if (admCds.length === 0) return new Map();
+  return (await isKaptCacheReady()) ? findKaptListsFromDb(admCds) : fetchKaptListsFromApi(admCds);
 };
 
 // 이름 비교용: 공백·'아파트'·'단지'를 빼고 소문자로. juso '파크리오' ↔ K-apt '잠실파크리오'처럼
@@ -241,10 +249,7 @@ const searchComplexes = async (query, size) => {
   const apartments = jusoRows.filter((juso) => juso.bdKdcd === JUSO_APARTMENT_KIND && trimOrNull(juso.bdNm));
 
   const admCds = [...new Set(apartments.map((juso) => juso.admCd))].slice(0, MAX_LEGAL_DONGS_PER_SEARCH);
-  const cache = new Map();
-  const kaptLists = new Map(
-    await Promise.all(admCds.map(async (admCd) => [admCd, await getKaptListForAdmCd(admCd, cache)])),
-  );
+  const kaptLists = await getKaptLists(admCds);
 
   const results = [];
   const seen = new Set();
