@@ -77,6 +77,9 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 - 새 테이블을 만드는 마이그레이션에는 `ALTER TABLE "<테이블>" ENABLE ROW LEVEL SECURITY;`를 직접 추가한다.
 - Supabase 반영(`prisma migrate deploy`)은 PR이 머지된 뒤 A팀이 한다. CI 자동 반영은 아직 없다.
 - Supabase 대시보드에서 테이블을 직접 만들거나 고치지 않는다. `prisma db push`, `prisma migrate reset`도 쓰지 않는다.
+- 대시보드에서 Exposed schemas에 public을 다시 넣지 않는다.
+- data_api에는 테이블을 만들지 않는다
+
 
 ## 브랜치 · 커밋 · PR
 - `dev`에서 `feature/<팀>-<이슈번호>-<기능명>` 브랜치를 만들어 작업하고 `dev`로 PR을 올린다. `main`·`dev`에 직접 푸시하지 않는다.
