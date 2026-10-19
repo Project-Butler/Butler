@@ -5,6 +5,7 @@ import express from 'express';
 import { corsOptions } from './config/corsOptions.js';
 import authRouter from './domains/auth/router.js';
 import complexesRouter from './domains/complexes/router.js';
+import cronRouter from './domains/cron/router.js';
 import disputesRouter from './domains/disputes/router.js';
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
@@ -31,6 +32,9 @@ app.use('/api/v1/disputes', disputesRouter);
 app.use('/api/v1/complexes', complexesRouter);
 app.use('/api/v1/properties', propertiesRouter);
 app.use('/api/v1/property-ownerships', propertyOwnershipsRouter);
+
+// Vercel Cron 전용(/api/cron/*). 계약 API가 아니라서 /api/v1 밖이고, 경로는 라우터 안에 있다.
+app.use(cronRouter);
 
 app.use(errorHandler);
 

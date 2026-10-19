@@ -1,3 +1,5 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "crons": [{ "path": "/api/cron/kapt-complexes", "schedule": "0 18 * * 0" }],
+  "functions": { "api/index.js": { "maxDuration": 60 } }
 }

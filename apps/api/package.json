@@ -10,7 +10,8 @@
     "test": "node --test \"src/**/*.test.js\"",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "seed:disputes": "node prisma/seedDisputes.js"
+    "seed:disputes": "node prisma/seedDisputes.js",
+    "sync:kapt": "node prisma/syncKaptComplexes.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
