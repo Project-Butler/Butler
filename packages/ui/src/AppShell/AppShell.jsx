@@ -7,7 +7,7 @@ const NavItem = ({ icon: Icon, label, badge, active, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`group flex w-full items-center gap-2.5 rounded-btn px-3 py-2.5 text-left text-sm transition-colors ${
+    className={`group flex w-full items-center gap-2.5 rounded-btn px-3 py-2.5 text-left text-body transition-colors ${
       active ? 'bg-accent-soft font-semibold text-accent-strong' : 'font-medium text-ink-2 hover:bg-surface-2 hover:text-ink'
     }`}
   >
@@ -21,8 +21,8 @@ const NavItem = ({ icon: Icon, label, badge, active, onClick }) => (
     <span className="flex-1">{label}</span>
     {badge != null && (
       <span
-        className={`rounded-full px-1.5 py-0.5 text-xs leading-none font-num ${
-          active ? 'bg-white/70 text-accent-strong' : 'bg-surface-2 text-ink-3'
+        className={`rounded-full px-1.5 py-0.5 text-chip leading-none font-num ${
+          active ? 'bg-surface/70 text-accent-strong' : 'bg-surface-2 text-ink-3'
         }`}
       >
         {badge}
@@ -46,14 +46,14 @@ export const AppShell = ({
 }) => {
   return (
     <div className="flex min-h-screen bg-ground font-sans text-ink">
-      <aside className="flex w-64 flex-col border-r border-line bg-white">
+      <aside className="flex w-64 flex-col border-r border-line bg-surface">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-btn bg-accent text-white">
             <Home size={18} strokeWidth={2.25} />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-base font-bold leading-tight text-seal-ink">{brand}</p>
-            {brandSubtitle && <p className="truncate text-xs leading-tight text-ink-3">{brandSubtitle}</p>}
+            <p className="truncate text-card font-bold leading-tight text-seal-ink">{brand}</p>
+            {brandSubtitle && <p className="truncate text-chip leading-tight text-ink-3">{brandSubtitle}</p>}
           </div>
         </div>
 
@@ -71,8 +71,8 @@ export const AppShell = ({
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between gap-4 border-b border-line bg-white px-6">
-          <div className="flex min-w-0 items-center gap-1 text-sm text-ink-3">
+        <header className="flex h-16 items-center justify-between gap-4 border-b border-line bg-surface px-6">
+          <div className="flex min-w-0 items-center gap-1 text-body text-ink-3">
             {breadcrumb.map((crumb, i) => (
               <span key={crumb} className="flex items-center gap-1">
                 {i > 0 && <ChevronRight size={14} className="text-ink-3" />}
@@ -87,11 +87,11 @@ export const AppShell = ({
             {searchPlaceholder && (
               <button
                 type="button"
-                className="flex w-64 items-center gap-2 rounded-input border border-line bg-surface-2 px-3 py-2 text-sm text-ink-3 transition-colors hover:border-accent/40"
+                className="flex w-64 items-center gap-2 rounded-input border border-line bg-surface-2 px-3 py-2 text-body text-ink-3 transition-colors hover:border-accent/40"
               >
                 <Search size={16} className="text-ink-3" />
                 <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
-                <span className="rounded border border-line bg-white px-1.5 py-0.5 font-num text-xs text-ink-3">
+                <span className="rounded border border-line bg-surface px-1.5 py-0.5 font-num text-chip text-ink-3">
                   Ctrl K
                 </span>
               </button>

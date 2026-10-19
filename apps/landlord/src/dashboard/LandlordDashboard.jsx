@@ -16,6 +16,7 @@ const TODOS = [
     title: '권리자 인증 필요 — 등기부등본 업로드',
     desc: '강남 햇살빌라 345호 · 인증하면 커뮤니티 글쓰기·분쟁 상담이 열립니다',
     actionLabel: '인증하기',
+    verify: true,
   },
 ];
 
@@ -35,9 +36,9 @@ export const LandlordDashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-ink-3">2026-10-19 (월)</p>
-        <h2 className="mt-1 text-xl font-bold text-ink">안녕하세요, 버틀러님</h2>
-        <p className="mt-1 text-sm text-ink-2">오늘 확인할 일이 2건 있습니다. 노원 그린아파트 계약 종료가 7일 남았습니다.</p>
+        <p className="text-body text-ink-3">2026-10-19 (월)</p>
+        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, 버틀러님</h2>
+        <p className="mt-1 text-body text-ink-2">오늘 확인할 일이 2건 있습니다. 노원 그린아파트 계약 종료가 7일 남았습니다.</p>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
@@ -50,18 +51,18 @@ export const LandlordDashboard = () => {
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-ink">오늘 할 일</h3>
-            <span className="text-xs text-ink-3">{TODOS.length}건</span>
+            <h3 className="text-body font-semibold text-ink">오늘 할 일</h3>
+            <span className="text-chip text-ink-3">{TODOS.length}건</span>
           </div>
           <div className="mt-4 space-y-3">
             {TODOS.map((todo) => (
               <div key={todo.id} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">
                 <div className="min-w-0">
-                  <Badge tone={todo.ddayTone === 'warn' ? 'warning' : 'default'}>{todo.dday}</Badge>
-                  <p className="mt-1.5 text-sm font-semibold text-ink">{todo.title}</p>
-                  <p className="mt-0.5 text-xs text-ink-3">{todo.desc}</p>
+                  <Badge tone={todo.ddayTone === 'warn' ? 'warning' : 'default'} className="font-num tabular-nums">{todo.dday}</Badge>
+                  <p className="mt-1.5 text-body font-semibold text-ink">{todo.title}</p>
+                  <p className="mt-0.5 text-chip text-ink-3">{todo.desc}</p>
                 </div>
-                <Button variant="soft" size="sm" className="shrink-0 whitespace-nowrap">
+                <Button variant={todo.verify ? 'verifyOutline' : 'secondary'} size="sm" className="shrink-0 whitespace-nowrap">
                   {todo.actionLabel}
                 </Button>
               </div>
@@ -71,19 +72,19 @@ export const LandlordDashboard = () => {
 
         <Card className="p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-ink">예정 일정</h3>
-            <span className="text-xs text-ink-3">30일 이내</span>
+            <h3 className="text-body font-semibold text-ink">예정 일정</h3>
+            <span className="text-chip text-ink-3">30일 이내</span>
           </div>
           <div className="mt-4 space-y-3">
             {SCHEDULES.map((s) => (
               <div key={s.title + s.date} className="flex items-start gap-3">
                 <div className="w-10 shrink-0 text-center">
-                  <p className="font-num text-sm font-bold text-ink">{s.date}</p>
-                  <p className="text-[11px] text-ink-3">{s.day}</p>
+                  <p className="font-num text-body font-bold text-ink">{s.date}</p>
+                  <p className="text-eyebrow text-ink-3">{s.day}</p>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink">{s.title}</p>
-                  <p className="truncate text-xs text-ink-3">{s.desc}</p>
+                  <p className="text-body font-medium text-ink">{s.title}</p>
+                  <p className="truncate text-chip text-ink-3">{s.desc}</p>
                 </div>
                 <Badge>{s.dday}</Badge>
               </div>
@@ -95,12 +96,12 @@ export const LandlordDashboard = () => {
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 overflow-hidden p-0">
           <div className="flex items-center justify-between p-5 pb-0">
-            <h3 className="text-sm font-semibold text-ink">내 부동산</h3>
-            <span className="text-xs text-ink-3">{PROPERTIES.length}건</span>
+            <h3 className="text-body font-semibold text-ink">내 부동산</h3>
+            <span className="text-chip text-ink-3">{PROPERTIES.length}건</span>
           </div>
-          <table className="mt-4 w-full text-sm">
+          <table className="mt-4 w-full text-body">
             <thead>
-              <tr className="border-y border-line text-left text-xs text-ink-3">
+              <tr className="border-y border-line text-left text-chip text-ink-3">
                 <th className="px-5 py-2 font-medium">부동산</th>
                 <th className="px-3 py-2 font-medium">임차인</th>
                 <th className="px-3 py-2 font-medium">계약 기간</th>
@@ -112,12 +113,12 @@ export const LandlordDashboard = () => {
                 <tr key={p.id} className="border-b border-line last:border-b-0">
                   <td className="px-5 py-3">
                     <p className="font-medium text-ink">{p.name}</p>
-                    <p className="text-xs text-ink-3">{p.type}</p>
+                    <p className="text-chip text-ink-3">{p.type}</p>
                   </td>
                   <td className="px-3 py-3 text-ink-2">{p.tenant}</td>
-                  <td className="px-3 py-3 font-num text-xs text-ink-2">{p.period}</td>
+                  <td className="px-3 py-3 font-num text-chip text-ink-2">{p.period}</td>
                   <td className="px-5 py-3">
-                    <Badge tone={p.verified ? 'success' : 'default'}>{p.verified ? '인증 완료' : '미인증'}</Badge>
+                    <Badge tone={p.verified ? 'verified' : 'pending'}>{p.verified ? '인증 완료' : '미인증'}</Badge>
                   </td>
                 </tr>
               ))}
@@ -126,16 +127,16 @@ export const LandlordDashboard = () => {
         </Card>
 
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-ink">최근 관리 로그</h3>
+          <h3 className="text-body font-semibold text-ink">최근 관리 로그</h3>
           <div className="mt-4 space-y-4">
             {LOGS.map((log) => (
               <div key={log.title} className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
                 <div className="min-w-0">
-                  <p className="font-num text-xs text-ink-3">
+                  <p className="font-num text-chip text-ink-3">
                     {log.date} · {log.unit}
                   </p>
-                  <p className="text-sm text-ink-2">{log.title}</p>
+                  <p className="text-body text-ink-2">{log.title}</p>
                 </div>
               </div>
             ))}

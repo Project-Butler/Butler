@@ -12,17 +12,17 @@ export const UserMenu = ({ name, role, onLogout }) => {
       </button>
 
       <div className="invisible absolute right-0 top-full z-10 pt-2 opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
-        <div className="w-44 overflow-hidden rounded-btn border border-line bg-white shadow-lg">
+        <div className="w-44 overflow-hidden rounded-btn border border-line bg-surface">
           {(name || role) && (
             <div className="border-b border-line px-3 py-2">
-              {name && <p className="truncate text-sm font-semibold text-ink">{name}</p>}
-              {role && <p className="truncate text-xs text-ink-3">{role}</p>}
+              {name && <p className="truncate text-body font-semibold text-ink">{name}</p>}
+              {role && <p className="truncate text-chip text-ink-3">{role}</p>}
             </div>
           )}
           <button
             type="button"
             onClick={onLogout}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-crit-ink transition-colors hover:bg-crit-soft"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-body text-crit-ink transition-colors hover:bg-crit-soft"
           >
             <LogOut size={15} />
             로그아웃

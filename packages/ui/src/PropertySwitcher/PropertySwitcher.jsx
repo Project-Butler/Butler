@@ -22,22 +22,22 @@ export const PropertySwitcher = ({ properties = [], activeId, allLabel = '전체
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-input border border-line bg-white px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-accent/40"
+        className="flex items-center gap-2 rounded-input border border-line bg-surface px-3 py-2 text-body font-medium text-ink transition-colors hover:border-accent/40"
       >
         <Building2 size={16} className="text-ink-3" />
-        <span className="max-w-[180px] truncate">{label}</span>
+        <span className="max-w-44 truncate">{label}</span>
         <ChevronDown size={14} className={`text-ink-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-10 w-64 overflow-hidden rounded-btn border border-line bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-[calc(100%+6px)] z-10 w-64 overflow-hidden rounded-btn border border-line bg-surface py-1">
           <button
             type="button"
             onClick={() => {
               onChange?.(null);
               setOpen(false);
             }}
-            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-body ${
               !activeId ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-ink-2 hover:bg-surface-2'
             }`}
           >
@@ -53,7 +53,7 @@ export const PropertySwitcher = ({ properties = [], activeId, allLabel = '전체
                 onChange?.(p.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-body ${
                 p.id === activeId ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-ink-2 hover:bg-surface-2'
               }`}
             >

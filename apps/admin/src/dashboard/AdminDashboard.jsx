@@ -33,9 +33,9 @@ export const AdminDashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-ink-3">2026-10-19 (월)</p>
-        <h2 className="mt-1 text-xl font-bold text-ink">안녕하세요, 관리자님</h2>
-        <p className="mt-1 text-sm text-ink-2">처리 대기 항목이 2건 있습니다. 신고 접수 1건은 24시간 내 확인이 필요합니다.</p>
+        <p className="text-body text-ink-3">2026-10-19 (월)</p>
+        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, 관리자님</h2>
+        <p className="mt-1 text-body text-ink-2">처리 대기 항목이 2건 있습니다. 신고 접수 1건은 24시간 내 확인이 필요합니다.</p>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
@@ -48,29 +48,29 @@ export const AdminDashboard = () => {
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-ink">처리 대기</h3>
-            <span className="text-xs text-ink-3">{PENDING.length}건</span>
+            <h3 className="text-body font-semibold text-ink">처리 대기</h3>
+            <span className="text-chip text-ink-3">{PENDING.length}건</span>
           </div>
           <div className="mt-4 space-y-3">
             {PENDING.map((item) => (
               <div key={item.id} className="rounded-btn border border-line p-3">
                 <Badge tone={item.tagTone === 'crit' ? 'danger' : 'warning'}>{item.tag}</Badge>
-                <p className="mt-1.5 text-sm font-semibold text-ink">{item.title}</p>
-                <p className="mt-0.5 text-xs text-ink-3">{item.desc}</p>
+                <p className="mt-1.5 text-body font-semibold text-ink">{item.title}</p>
+                <p className="mt-0.5 text-chip text-ink-3">{item.desc}</p>
               </div>
             ))}
           </div>
         </Card>
 
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-ink">최근 활동 로그</h3>
+          <h3 className="text-body font-semibold text-ink">최근 활동 로그</h3>
           <div className="mt-4 space-y-4">
             {LOGS.map((log) => (
               <div key={log.title} className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-seal" />
                 <div className="min-w-0">
-                  <p className="font-num text-xs text-ink-3">{log.date}</p>
-                  <p className="text-sm text-ink-2">{log.title}</p>
+                  <p className="font-num text-chip text-ink-3">{log.date}</p>
+                  <p className="text-body text-ink-2">{log.title}</p>
                 </div>
               </div>
             ))}
@@ -80,12 +80,12 @@ export const AdminDashboard = () => {
 
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between p-5 pb-0">
-          <h3 className="text-sm font-semibold text-ink">최근 가입 회원</h3>
-          <span className="text-xs text-ink-3">{USERS.length}명</span>
+          <h3 className="text-body font-semibold text-ink">최근 가입 회원</h3>
+          <span className="text-chip text-ink-3">{USERS.length}명</span>
         </div>
-        <table className="mt-4 w-full text-sm">
+        <table className="mt-4 w-full text-body">
           <thead>
-            <tr className="border-y border-line text-left text-xs text-ink-3">
+            <tr className="border-y border-line text-left text-chip text-ink-3">
               <th className="px-5 py-2 font-medium">이름</th>
               <th className="px-3 py-2 font-medium">역할</th>
               <th className="px-3 py-2 font-medium">가입일</th>
@@ -97,9 +97,9 @@ export const AdminDashboard = () => {
               <tr key={u.name} className="border-b border-line last:border-b-0">
                 <td className="px-5 py-3 font-medium text-ink">{u.name}</td>
                 <td className="px-3 py-3 text-ink-2">{u.role}</td>
-                <td className="px-3 py-3 font-num text-xs text-ink-2">{u.joined}</td>
+                <td className="px-3 py-3 font-num text-chip text-ink-2">{u.joined}</td>
                 <td className="px-5 py-3">
-                  <Badge tone={u.verified ? 'success' : 'default'}>{u.verified ? '인증 완료' : '미인증'}</Badge>
+                  <Badge tone={u.verified ? 'verified' : 'pending'}>{u.verified ? '인증 완료' : '미인증'}</Badge>
                 </td>
               </tr>
             ))}
