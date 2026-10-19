@@ -3,9 +3,11 @@ import jwt from 'jsonwebtoken';
 // TODO(A팀, DB 연결 시 교체): 지금은 fixture 유저. 비밀번호도 평문 비교라 실제 구현에서는
 // Prisma User 테이블 조회 + bcrypt.compare로 바꿔야 한다. 응답 모양(AuthMe)은 그대로
 // 유지한 채 내부 구현만 교체하면 된다(api-contract.md 1장).
+// id는 DB(users.id uuid)와 같은 형식이어야 req.user.id로 조회해도 Prisma P2023이 나지 않는다.
+// 이 유저들은 DB에 없으므로 users를 FK로 참조하는 쓰기는 아직 FK 위반이 난다.
 const FIXTURE_USERS = [
   {
-    id: 'u-landlord-1',
+    id: '00000000-0000-4000-8000-000000000001',
     email: 'landlord@butler.test',
     password: 'password123',
     name: '김집주',
@@ -15,7 +17,7 @@ const FIXTURE_USERS = [
     createdAt: '2026-10-01T00:00:00Z',
   },
   {
-    id: 'u-tenant-1',
+    id: '00000000-0000-4000-8000-000000000002',
     email: 'tenant@butler.test',
     password: 'password123',
     name: '이세입',
@@ -25,7 +27,7 @@ const FIXTURE_USERS = [
     createdAt: '2026-10-01T00:00:00Z',
   },
   {
-    id: 'u-admin-1',
+    id: '00000000-0000-4000-8000-000000000003',
     email: 'admin@butler.test',
     password: 'password123',
     name: '박운영',
