@@ -2,6 +2,7 @@ import { AppError } from '../../platform/AppError.js';
 import { toDateOnlyString } from '../../platform/dateUtils.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { attachAliases, chooseOwnerComplexId, findKeyOwners } from './complexAliases.js';
+import { chooseSearchIdentity } from './complexMatching.js';
 import { callProvider } from './provider/index.js';
 import { rollUpLegalDongCode } from './provider/pnu.js';
 
@@ -56,17 +57,30 @@ export const searchComplexes = async ({ query, size }) => {
 
   // 이미 플랫폼에 등록된 단지면 complexId를 채운다(없으면 null → 프론트가 resolve).
   // 별칭으로 붙은 키(같은 건물의 KAPT·PNU 키)도 같은 단지로 본다.
-  const owners = await findKeyOwners(prisma, items.map((item) => item.sourceKey));
-  const idBySourceKey = new Map(owners.map((owner) => [owner.sourceKey, owner.complexId]));
+  const keys = items.flatMap((item) => [item.sourceKey, ...(item.linkedKeys ?? [])]);
+  const owners = await findKeyOwners(prisma, [...new Set(keys)]);
+  const ownerByKey = new Map(owners.map((owner) => [owner.sourceKey, owner.complexId]));
 
-  return items.map((item) => ({
-    sourceKey: item.sourceKey,
-    complexId: idBySourceKey.get(item.sourceKey) ?? null,
-    name: item.name,
-    jibunAddress: item.jibunAddress ?? null,
-    roadAddress: item.roadAddress ?? null,
-    legalDongCode: item.legalDongCode,
-  }));
+  const seen = new Set();
+  const results = [];
+  for (const item of items) {
+    const identity = chooseSearchIdentity(item, ownerByKey);
+    if (identity.split) {
+      console.warn('[complexes] alias_split', { keys: item.linkedKeys, complexId: identity.complexId });
+    }
+    // 별칭 규칙으로 키가 바뀌어 앞 항목과 같아지면 하나만 둔다.
+    if (seen.has(identity.sourceKey)) continue;
+    seen.add(identity.sourceKey);
+    results.push({
+      sourceKey: identity.sourceKey,
+      complexId: identity.complexId,
+      name: item.name,
+      jibunAddress: item.jibunAddress ?? null,
+      roadAddress: item.roadAddress ?? null,
+      legalDongCode: item.legalDongCode,
+    });
+  }
+  return results;
 };
 
 // 같은 건물의 다른 키(KAPT ↔ PNU). 계산이 실패하면(외부 장애 포함) 입력 키만 쓴다 — 연결만 못 할 뿐 등록은 된다.

@@ -9,7 +9,16 @@
 // 공통 호출 도구(fetchJson 등)는 publicApi.js.
 import { prisma } from '../../../platform/prismaClient.js';
 import { KAPT_BASIS_API, KAPT_BASIS_LIVE_LIMIT, spendApiCall } from '../apiUsage.js';
-import { parseJibunLot, toRoadNameKey } from '../kaptAddress.js';
+import {
+  isFlagOn,
+  linkJusoRowsToKapt,
+  mergeSearchGroups,
+  toJusoLotKey,
+  toJusoRoadKey,
+  toLotKeyString,
+  toRoadKeyString,
+} from '../complexMatching.js';
+import { parseJibunLot } from '../kaptAddress.js';
 import { fetchKaptBasis, saveKaptBasis } from '../kaptBasis.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { buildPnu, parsePnu, rollUpLegalDongCode, toBuildingRegisterParams } from './pnu.js';
@@ -290,6 +299,54 @@ const toTitleBuildingInfo = (titles) => {
 
 // ---------------------------------------------------------------- provider 함수
 
+// 도로명 구조 키·법정동(리)+본번으로 kapt_complexes를 한 번씩 읽는다(기본정보가 채워진 단지만 나온다).
+// 결과: { kaptCodesByRoadKey, kaptCodesByLotKey, nameByCode }
+const findKaptLinkCandidates = async (apartments) => {
+  const roadKeys = new Map();
+  const lotKeys = new Map();
+  for (const juso of apartments) {
+    const roadKey = toJusoRoadKey(juso);
+    if (roadKey) roadKeys.set(toRoadKeyString(roadKey), roadKey);
+    const lotKey = toJusoLotKey(juso);
+    if (lotKey) lotKeys.set(toLotKeyString(lotKey), lotKey);
+  }
+  const select = {
+    kaptCode: true,
+    name: true,
+    legalDongCode: true,
+    mainLot: true,
+    roadSigunguCd: true,
+    roadNameKey: true,
+    roadUnderground: true,
+    roadMainNo: true,
+    roadSubNo: true,
+  };
+  const [roadRows, lotRows] = await Promise.all([
+    roadKeys.size > 0
+      ? prisma.kaptComplex.findMany({ where: { isActive: true, OR: [...roadKeys.values()] }, select })
+      : [],
+    lotKeys.size > 0
+      ? prisma.kaptComplex.findMany({ where: { isActive: true, OR: [...lotKeys.values()] }, select })
+      : [],
+  ]);
+
+  const group = (rows, toKey) => {
+    const map = new Map();
+    for (const row of rows) {
+      const key = toKey(row);
+      map.set(key, [...(map.get(key) ?? []), row.kaptCode]);
+    }
+    return map;
+  };
+  return {
+    kaptCodesByRoadKey: group(roadRows, toRoadKeyString),
+    kaptCodesByLotKey: group(lotRows, (row) => toLotKeyString({ legalDongCode: row.legalDongCode, mainLot: row.mainLot })),
+    nameByCode: new Map([...roadRows, ...lotRows].map((row) => [row.kaptCode, row.name])),
+  };
+};
+
+const isRoadMatchOn = () => isFlagOn(process.env.COMPLEX_ROAD_MATCH);
+
 const searchComplexes = async (query, size) => {
   const [jusoRows, nameMatches] = await Promise.all([
     searchJuso(query, Math.min(size * 2, MAX_JUSO_ROWS)),
@@ -298,55 +355,49 @@ const searchComplexes = async (query, size) => {
   const apartments = jusoRows.filter((juso) => juso.bdKdcd === JUSO_APARTMENT_KIND && trimOrNull(juso.bdNm));
 
   const admCds = [...new Set(apartments.map((juso) => juso.admCd))].slice(0, MAX_LEGAL_DONGS_PER_SEARCH);
-  const kaptLists = await getKaptLists(admCds);
+  // 법정동 5개를 넘는 결과는 K-apt를 조회하지 않았으므로 버린다.
+  const [kaptLists, linkCandidates] = await Promise.all([
+    getKaptLists(admCds),
+    isRoadMatchOn() && (await isKaptCacheReady()) ? findKaptLinkCandidates(apartments) : null,
+  ]);
+  const usable = apartments.filter((juso) => kaptLists.has(juso.admCd));
+  const links = linkCandidates ? linkJusoRowsToKapt(usable, linkCandidates) : usable.map(() => null);
 
-  const results = [];
-  const seen = new Set();
-  const pushNameMatch = ({ row }) => {
-    const item = toKaptNameResult(row);
-    if (seen.has(item.sourceKey)) return;
-    seen.add(item.sourceKey);
-    results.push(item);
-  };
-
-  // 단지명이 검색어와 똑같은 K-apt 단지를 맨 앞에 둔다. 주소 검색 결과(번지까지 있음)가 그다음,
-  // 부분 일치한 단지명 결과는 남는 자리에 채운다.
-  nameMatches.filter((match) => match.isExact).forEach(pushNameMatch);
-  for (const juso of apartments) {
-    if (results.length >= size) break;
-    // 법정동 5개를 넘는 결과는 K-apt를 조회하지 않았으므로 버린다.
-    if (!kaptLists.has(juso.admCd)) continue;
-
-    const kapt = matchKaptComplex(juso.bdNm, kaptLists.get(juso.admCd));
+  const linkedItems = [];
+  const jusoItems = [];
+  usable.forEach((juso, index) => {
+    const link = links[index];
+    const pnu = toJusoPnu(juso);
+    // 도로명·형제 건물·본번으로 연결 → 이름 비교 → 애매하거나 못 찾으면 PNU
+    const kapt = link?.kaptCode
+      ? { kaptCode: link.kaptCode, kaptName: linkCandidates.nameByCode.get(link.kaptCode) }
+      : link?.ambiguous
+        ? null
+        : matchKaptComplex(juso.bdNm, kaptLists.get(juso.admCd));
     let sourceKey = null;
-    if (kapt) {
-      sourceKey = `KAPT:${kapt.kaptCode}`;
-    } else {
-      const pnu = toJusoPnu(juso);
-      if (pnu) sourceKey = `PNU:${pnu}`;
-    }
-    if (!sourceKey) continue;
-    // 이름 검색으로 먼저 넣은 단지라도 주소가 있는 이쪽 정보로 바꿔 둔다.
-    const existingIndex = results.findIndex((item) => item.sourceKey === sourceKey);
+    if (kapt) sourceKey = `KAPT:${kapt.kaptCode}`;
+    else if (pnu) sourceKey = `PNU:${pnu}`;
+    if (!sourceKey) return;
+
     const item = {
       sourceKey,
-      name: kapt ? kapt.kaptName : juso.bdNm.trim(),
+      name: kapt?.kaptName ?? juso.bdNm.trim(),
       jibunAddress: trimOrNull(juso.jibunAddr),
       roadAddress: trimOrNull(juso.roadAddrPart1),
       legalDongCode: rollUpLegalDongCode(juso.admCd),
     };
-    if (existingIndex >= 0) {
-      results[existingIndex] = item;
-      continue;
-    }
-    if (seen.has(sourceKey)) continue;
-    seen.add(sourceKey);
-    results.push(item);
-  }
-  nameMatches.filter((match) => !match.isExact).forEach((match) => {
-    if (results.length < size) pushNameMatch(match);
+    // 같은 건물의 KAPT·PNU 키(service가 별칭 소유 단지를 고를 때 쓴다, 응답에는 안 나감)
+    if (linkCandidates && kapt && pnu) item.linkedKeys = [sourceKey, `PNU:${pnu}`];
+    (link?.kaptCode ? linkedItems : jusoItems).push(item);
   });
-  return results.slice(0, size);
+
+  const toNameItems = (matches) => matches.map(({ row }) => ({ ...toKaptNameResult(row), fromName: true }));
+  const exact = toNameItems(nameMatches.filter((match) => match.isExact));
+  const partial = toNameItems(nameMatches.filter((match) => !match.isExact));
+  // 도로명·형제·본번으로 연결된 결과 ≥ 단지명이 검색어와 똑같은 K-apt 단지 → 나머지 주소 검색 결과 → 부분 일치 단지명.
+  // 같은 단지가 이름 검색과 주소 검색에 다 나오면 주소가 있는 주소 검색 쪽 값으로 둔다.
+  const results = mergeSearchGroups([linkedItems, exact, jusoItems, partial], size);
+  return results.map(({ fromName, ...item }) => item);
 };
 
 // 오늘 K-apt 기본정보 호출 한도를 다 쓴 경우: 단지 목록(kapt_complexes) 값만으로 만든다(buildingInfo 없음).
@@ -573,13 +624,6 @@ const findPnuKeyForKapt = async (kaptCode) => {
   return pnu ? `PNU:${pnu}` : null;
 };
 
-const toJusoRoadKey = (juso) => ({
-  roadSigunguCd: String(juso.admCd ?? '').slice(0, 5),
-  roadNameKey: toRoadNameKey(juso.rn),
-  roadUnderground: String(juso.udrtYn) === '1',
-  roadMainNo: Number(juso.buldMnnm),
-  roadSubNo: Number(juso.buldSlno) || 0,
-});
 
 // PNU를 지번 검색어로: 단지 지번주소('… 신천동 17번지') 또는 법정동 이름 + 번지
 const toPnuSearchKeyword = async (parsed, jibunAddress) => {
@@ -614,7 +658,7 @@ const findKaptKeyForPnu = async (pnu, jibunAddress) => {
   const codes = new Set();
   for (const row of matched) {
     const key = toJusoRoadKey(row);
-    if (!key.roadNameKey || !Number.isInteger(key.roadMainNo)) continue;
+    if (!key) continue;
     const kapts = await prisma.kaptComplex.findMany({ where: { isActive: true, ...key }, select: { kaptCode: true } });
     kapts.forEach((kapt) => codes.add(kapt.kaptCode));
   }
