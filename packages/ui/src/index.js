@@ -6,3 +6,4 @@ export { StatCard } from './StatCard/StatCard';
 export { PropertySwitcher } from './PropertySwitcher/PropertySwitcher';
 export { UserMenu } from './UserMenu/UserMenu';
 export { LoggedOutScreen } from './LoggedOutScreen/LoggedOutScreen';
+export { LoginScreen } from './LoginScreen/LoginScreen';

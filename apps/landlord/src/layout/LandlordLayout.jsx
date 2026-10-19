@@ -15,7 +15,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };
 
-export const LandlordLayout = ({ children, onLogout }) => {
+export const LandlordLayout = ({ children, user, onLogout }) => {
   const [activeKey, setActiveKey] = useState(NAV_ITEMS[0].key);
   const active = [...NAV_ITEMS, SETTINGS_ITEM].find((item) => item.key === activeKey);
 
@@ -25,7 +25,7 @@ export const LandlordLayout = ({ children, onLogout }) => {
       brandSubtitle="버틀러의 자산"
       breadcrumb={['버틀러의 자산', active?.label]}
       notificationCount={2}
-      user={{ name: '버틀러님', role: '임대인', onLogout }}
+      user={{ name: `${user?.name}님`, role: '임대인', onLogout }}
       primaryAction={{ label: '부동산 등록', icon: Plus, onClick: () => {} }}
       nav={NAV_ITEMS.map((item) => ({
         ...item,
