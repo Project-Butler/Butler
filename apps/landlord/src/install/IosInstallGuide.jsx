@@ -3,11 +3,11 @@ export const IosInstallGuide = ({ open, onClose }) => {
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 flex items-center justify-center bg-black/50">
-      <div className="max-w-sm rounded bg-white p-6 text-gray-900">
+      <div className="max-w-sm rounded-card border border-line bg-surface p-6 text-ink">
         <p className="mb-4">
           Safari 하단의 <strong>공유</strong> 버튼을 누른 뒤, <strong>홈 화면에 추가</strong>를 선택하면 앱처럼 설치할 수 있어요.
         </p>
-        <button type="button" onClick={onClose} className="rounded bg-gray-900 px-3 py-1 text-white">
+        <button type="button" onClick={onClose} className="rounded bg-accent px-3 py-1 text-white">
           닫기
         </button>
       </div>
