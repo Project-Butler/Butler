@@ -22,27 +22,45 @@ const SEARCH_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 const SOURCE_NOT_FOUND_MESSAGE = '단지 정보를 찾을 수 없습니다. 주소를 다시 검색해 주세요.';
 
-// buildingInfo 다섯 값이 모두 null이면 buildingInfo 자체를 null로 내려준다(api-contract.md 2장).
-const toBuildingInfo = (complex) => {
+const BUILDING_INFO_FIELDS = ['approvalDate', 'householdCount', 'buildingCount', 'maxFloor', 'parkingCount'];
+
+const hasOwnBuildingInfo = (complex) => BUILDING_INFO_FIELDS.some((field) => complex[field] != null);
+
+// buildingInfo: 단지 자체 칸이 채워져 있으면(관리자 등록) 그 값, 아니면 연결된 K-apt 단지의
+// 사용승인일·세대수·동수(나머지 null). 다섯 값이 모두 null이면 buildingInfo 자체를 null(api-contract.md 2장).
+const toBuildingInfo = (complex, kaptBasis) => {
+  const source = hasOwnBuildingInfo(complex) ? complex : kaptBasis ?? {};
   const buildingInfo = {
-    approvalDate: toDateOnlyString(complex.approvalDate),
-    householdCount: complex.householdCount,
-    buildingCount: complex.buildingCount,
-    maxFloor: complex.maxFloor,
-    parkingCount: complex.parkingCount,
+    approvalDate: toDateOnlyString(source.approvalDate ?? null),
+    householdCount: source.householdCount ?? null,
+    buildingCount: source.buildingCount ?? null,
+    maxFloor: source.maxFloor ?? null,
+    parkingCount: source.parkingCount ?? null,
   };
   return Object.values(buildingInfo).every((value) => value === null) ? null : buildingInfo;
 };
 
+// 단지 자체 buildingInfo가 비어 있고 kaptCode가 있을 때만 K-apt 기본정보를 읽는다(쿼리 1번).
+const loadKaptBasis = async (complex) => {
+  if (hasOwnBuildingInfo(complex) || !complex.kaptCode) return null;
+  return prisma.kaptComplex.findUnique({
+    where: { kaptCode: complex.kaptCode },
+    select: { approvalDate: true, householdCount: true, buildingCount: true },
+  });
+};
+
 // resolve·상세 공통 응답. createdByAdmin·updatedAt은 내려주지 않는다.
 // complex는 region을 include한 Prisma Complex여야 한다.
-const toComplexResponse = (complex) => ({
+const toComplexResponse = (complex, kaptBasis = null) => ({
   id: complex.id,
   sourceKey: complex.sourceKey,
   name: complex.name,
   legalDongCode: complex.legalDongCode,
   roadAddress: complex.roadAddress,
   jibunAddress: complex.jibunAddress,
+  zipCode: complex.zipCode ?? null,
+  kaptCode: complex.kaptCode ?? null,
+  detailBuildingNames: complex.detailBuildingNames ?? [],
   region: {
     legalDongCode: complex.region.legalDongCode,
     sidoName: complex.region.sidoName,
@@ -50,9 +68,11 @@ const toComplexResponse = (complex) => ({
     dongName: complex.region.dongName,
     fullName: complex.region.fullName,
   },
-  buildingInfo: toBuildingInfo(complex),
+  buildingInfo: toBuildingInfo(complex, kaptBasis),
   createdAt: complex.createdAt.toISOString(),
 });
+
+const toComplexResponseWithBasis = async (complex) => toComplexResponse(complex, await loadKaptBasis(complex));
 
 // 아직 단지가 없는 검색 결과만 저장한다. 같은 키는 1시간에 한 번만 덮어쓴다(같은 검색을 여러 번 해도 쓰기가 늘지 않음).
 const saveSearchResults = async (items) => {
@@ -156,13 +176,14 @@ const toIntOrNull = (value) => {
   return value !== null && value !== undefined && value !== '' && Number.isInteger(number) ? number : null;
 };
 
-// 검색 저장본(juso 칸) → complexes 행
-const toComplexData = (sourceKey, payload, legalDongCode) => {
+// 검색 저장본(juso 칸) + 연결된 K-apt 단지(없으면 null) → complexes 행.
+// 이름: juso 건물명 → K-apt 단지명 → 도로명주소.
+const toComplexData = (sourceKey, payload, legalDongCode, kapt) => {
   const roadAddress = trimOrNull(payload.roadAddr);
   const roadName = trimOrNull(payload.rn);
   return {
     sourceKey,
-    name: trimOrNull(payload.bdNm) ?? roadAddress ?? sourceKey,
+    name: trimOrNull(payload.bdNm) ?? trimOrNull(kapt?.name) ?? roadAddress ?? sourceKey,
     jibunAddress: trimOrNull(payload.jibunAddr),
     roadAddress,
     legalDongCode,
@@ -180,6 +201,7 @@ const toComplexData = (sourceKey, payload, legalDongCode) => {
     mainLot: toIntOrNull(payload.lnbrMnnm),
     subLot: toIntOrNull(payload.lnbrSlno),
     buildingMgtNo: trimOrNull(payload.bdMgtSn),
+    kaptCode: kapt?.kaptCode ?? null,
   };
 };
 
@@ -190,6 +212,17 @@ const throwSourceNotFound = () => {
   throw new AppError('COMPLEX_SOURCE_NOT_FOUND', 404, SOURCE_NOT_FOUND_MESSAGE);
 };
 
+// 연결 표에서 이 주소의 K-apt 단지. 조회가 실패해도 단지는 만든다(kaptCode null).
+const findKaptForPayload = async (payload) => {
+  try {
+    const [kapt] = await findKaptByRoadKeys(prisma, [toRoadLinkKey(payload)]);
+    return kapt;
+  } catch (error) {
+    console.error('[complexes] kapt link lookup failed', error.code ?? error.name);
+    return null;
+  }
+};
+
 // 외부 호출 없음: 이미 있는 단지는 그대로, 없으면 24시간 안의 검색 저장본으로 만든다.
 const resolveComplexOnce = async (sourceKey) => {
   const existing = await findComplexBySourceKey(sourceKey);
@@ -197,6 +230,17 @@ const resolveComplexOnce = async (sourceKey) => {
 
   const saved = await prisma.addressSearchResult.findUnique({ where: { sourceKey } });
   if (!saved || saved.fetchedAt.getTime() < Date.now() - SEARCH_RESULT_TTL_MS) throwSourceNotFound();
+
+  // 만들기 전에 한 번 더: 같은 대표 건물관리번호의 단지가 있으면(도로명이 바뀐 주소) 그 단지를 돌려준다.
+  const buildingMgtNo = trimOrNull(saved.payload.bdMgtSn);
+  if (buildingMgtNo) {
+    const sameBuilding = await prisma.complex.findFirst({
+      where: { buildingMgtNo },
+      include: COMPLEX_INCLUDE,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    if (sameBuilding) return sameBuilding;
+  }
 
   // regions는 읍면동 단위만 있어서 리 단위 코드는 올려서 저장한다.
   const legalDongCode = rollUpLegalDongCode(saved.payload.admCd);
@@ -208,20 +252,26 @@ const resolveComplexOnce = async (sourceKey) => {
     throwSourceNotFound();
   }
 
-  return prisma.complex.create({ data: toComplexData(sourceKey, saved.payload, legalDongCode), include: COMPLEX_INCLUDE });
+  const kapt = await findKaptForPayload(saved.payload);
+  return prisma.complex.create({
+    data: toComplexData(sourceKey, saved.payload, legalDongCode, kapt),
+    include: COMPLEX_INCLUDE,
+  });
 };
 
 export const resolveComplex = async (sourceKey) => {
+  let complex;
   try {
-    return toComplexResponse(await resolveComplexOnce(sourceKey));
+    complex = await resolveComplexOnce(sourceKey);
   } catch (error) {
     // 동시에 같은 키를 resolve해 경쟁에서 진 쪽: 이제 상대가 만든 단지가 보이므로 한 번 더 하면 그 단지를 돌려준다.
     if (error.code !== 'P2002') throw error;
-    return toComplexResponse(await resolveComplexOnce(sourceKey));
+    complex = await resolveComplexOnce(sourceKey);
   }
+  return toComplexResponseWithBasis(complex);
 };
 
 export const findComplexById = async (complexId) => {
   const complex = await prisma.complex.findUnique({ where: { id: complexId }, include: COMPLEX_INCLUDE });
-  return complex ? toComplexResponse(complex) : null;
+  return complex ? toComplexResponseWithBasis(complex) : null;
 };
