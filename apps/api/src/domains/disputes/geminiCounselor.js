@@ -5,6 +5,10 @@ import { AppError } from '../../platform/AppError.js';
 import { BASE_SYSTEM_PROMPT, toReferenceBody, toReferenceContext } from './counselorPrompt.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+// 무료 티어는 MODEL이 붐비면 503(high demand)을 자주 준다. 그때 한 번 더 시도할 가벼운 모델.
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite';
+// 첫 시도가 SDK 재시도로 오래 붙잡히지 않게 한 번만 보내고, 답변이 늦으면 끊고 대체 모델로 넘어간다.
+const PRIMARY_HTTP_OPTIONS = { timeout: 30_000, retryOptions: { attempts: 1 } };
 // Gemini는 생각(thinking) 토큰도 이 한도에 포함된다.
 const MAX_OUTPUT_TOKENS = 8192;
 
@@ -58,17 +62,34 @@ const toAnswer = (text, references) => {
   return { content: content.trim(), referenceIds };
 };
 
+const generate = (model, contents, httpOptions) =>
+  getClient().models.generateContent({
+    model,
+    contents,
+    config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: MAX_OUTPUT_TOKENS, httpOptions },
+  });
+
+const logFailure = (model, error) =>
+  console.error(`[disputes/gemini] ${model} 호출 실패:`, error.status ?? error.name ?? '', error.message);
+
+// MODEL이 실패하면(혼잡 503, 한도 429, 시간 초과 등) FALLBACK_MODEL로 한 번 더 시도한다.
+const generateWithFallback = async (contents) => {
+  try {
+    return await generate(MODEL, contents, PRIMARY_HTTP_OPTIONS);
+  } catch (error) {
+    if (error instanceof AppError || FALLBACK_MODEL === MODEL) throw error;
+    logFailure(MODEL, error);
+    return generate(FALLBACK_MODEL, contents);
+  }
+};
+
 export const askGemini = async ({ references, history, question }) => {
   let response;
   try {
-    response = await getClient().models.generateContent({
-      model: MODEL,
-      contents: buildContents(references, history, question),
-      config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: MAX_OUTPUT_TOKENS },
-    });
+    response = await generateWithFallback(buildContents(references, history, question));
   } catch (error) {
     if (error instanceof AppError) throw error;
-    console.error('[disputes/gemini] API 호출 실패:', error.status ?? '', error.message);
+    logFailure(FALLBACK_MODEL, error);
     if (error instanceof ApiError && error.status === 429) {
       throw new AppError('EXTERNAL_SERVICE_UNAVAILABLE', 503, '상담 챗봇 사용량이 많습니다. 잠시 후 다시 시도해주세요.');
     }
