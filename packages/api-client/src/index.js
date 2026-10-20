@@ -21,3 +21,12 @@ export { getPropertyOwnershipList } from './apis/propertyOwnerships/getPropertyO
 export { getPropertyOwnership } from './apis/propertyOwnerships/getPropertyOwnership';
 export { patchPropertyOwnership } from './apis/propertyOwnerships/patchPropertyOwnership';
 export { postPropertyOwnershipEnd } from './apis/propertyOwnerships/postPropertyOwnershipEnd';
+
+export { getLandlordBuildingList } from './apis/landlordBuildings/getLandlordBuildingList';
+export { getLandlordBuilding } from './apis/landlordBuildings/getLandlordBuilding';
+export { postLandlordBuilding } from './apis/landlordBuildings/postLandlordBuilding';
+export { patchLandlordBuilding } from './apis/landlordBuildings/patchLandlordBuilding';
+export { deleteLandlordBuilding } from './apis/landlordBuildings/deleteLandlordBuilding';
+
+export { getLandlordSetup } from './apis/dashboard/getLandlordSetup';
+export { getActivityList } from './apis/activities/getActivityList';
