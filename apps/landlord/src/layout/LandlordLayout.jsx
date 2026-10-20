@@ -3,7 +3,7 @@ import { Bot, Building2, ClipboardList, FileSignature, FolderOpen, Home, Plus, S
 
 const NAV_ITEMS = [
   { key: 'home', label: '홈', icon: Home },
-  { key: 'properties', label: '내 부동산', icon: Building2 },
+  { key: 'buildingList', label: '내 부동산', icon: Building2 },
   { key: 'leases', label: '계약', icon: FileSignature, badge: 1 },
   { key: 'tickets', label: '유지보수 요청', icon: Wrench },
   { key: 'log', label: '관리 로그', icon: ClipboardList },
@@ -27,7 +27,7 @@ export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate
       breadcrumb={breadcrumb}
       notificationCount={2}
       user={{ name: `${user?.name}님`, role: '임대인', onLogout }}
-      primaryAction={{ label: '부동산 등록', icon: Plus, onClick: () => onNavigate('propertyRegister', { step: 1 }) }}
+      primaryAction={{ label: '부동산 등록', icon: Plus, onClick: () => onNavigate('propertyRegister') }}
       nav={NAV_ITEMS.map((item) => ({
         ...item,
         active: item.key === activeKey,

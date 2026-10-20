@@ -4,6 +4,7 @@ import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
+import { getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 const PAGE_SIZE = 20;
@@ -15,7 +16,7 @@ const RELATION_TABS = [
 
 const PropertyCard = ({ property, isFormer, onClick }) => {
   const badge = isFormer ? { tone: 'default', label: '소유 종료' } : getVerificationBadge(property.myRelation?.verificationStatus);
-  const spec = formatUnitSpec(property);
+  const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
 
   return (
     <button type="button" onClick={onClick} className="block w-full text-left">
@@ -26,9 +27,7 @@ const PropertyCard = ({ property, isFormer, onClick }) => {
             {badge.label}
           </Badge>
         </div>
-        <p className="mt-1 text-sub text-ink-2">
-          아파트{spec && <span className="font-num tabular-nums"> · {spec}</span>}
-        </p>
+        {spec && <p className="mt-1 font-num text-sub tabular-nums text-ink-2">{spec}</p>}
       </Card>
     </button>
   );
@@ -58,8 +57,8 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
         </p>
         {!isFormer && (
           <>
-            <p className="text-body text-ink-2">단지를 검색해 첫 부동산을 등록해 보세요.</p>
-            <Button onClick={() => onNavigate('propertyRegister', { step: 1 })}>
+            <p className="text-body text-ink-2">건물을 고르고 첫 호실을 등록해 보세요.</p>
+            <Button onClick={() => onNavigate('propertyRegister')}>
               <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
               부동산 등록
             </Button>
@@ -97,8 +96,8 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
 export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => (
   <div className="mx-auto max-w-2xl space-y-5">
     <div className="flex items-center justify-between gap-4">
-      <h1 className="text-h1 font-semibold text-ink">내 부동산</h1>
-      <Button onClick={() => onNavigate('propertyRegister', { step: 1 })}>
+      <h1 className="text-h1 font-semibold text-ink">호실 목록</h1>
+      <Button onClick={() => onNavigate('propertyRegister')}>
         <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
         부동산 등록
       </Button>

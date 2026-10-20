@@ -4,18 +4,40 @@ import { postLogin, postLogout } from '@butler/api-client';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
+import { BuildingDetailPage } from './pages/BuildingDetailPage';
+import { BuildingEditPage } from './pages/BuildingEditPage';
+import { BuildingListPage } from './pages/BuildingListPage';
+import { BuildingRegisterPage } from './pages/BuildingRegisterPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
+import { SetupPage } from './pages/SetupPage';
+import { clearUserDrafts } from './utils/draftStorage';
 
 // 화면 전환은 라우터 없이 App의 view({ key, params }) + History API로 한다.
 // navigate = pushState(또는 replaceState) + setView, 브라우저 뒤로가기는 popstate로 view를 되살린다.
 // 새로고침·딥링크는 로그인처럼 홈부터 다시 시작한다.
 const HOME_VIEW = { key: 'home', params: {} };
 
-// 하위 화면은 사이드바에서 '내 부동산'을 선택된 메뉴로 보여 준다.
-const NAV_KEY_BY_VIEW = { propertyDetail: 'properties', propertyRegister: 'properties' };
-const SUB_TITLE_BY_VIEW = { propertyDetail: '상세', propertyRegister: '부동산 등록' };
+// 하위 화면은 사이드바에서 '내 부동산'(건물 목록)을 선택된 메뉴로 보여 준다. 초기 세팅은 홈 아래.
+const NAV_KEY_BY_VIEW = {
+  properties: 'buildingList',
+  propertyDetail: 'buildingList',
+  propertyRegister: 'buildingList',
+  buildingRegister: 'buildingList',
+  buildingEdit: 'buildingList',
+  buildingDetail: 'buildingList',
+  setup: 'home',
+};
+const SUB_TITLE_BY_VIEW = {
+  properties: '호실 목록',
+  propertyDetail: '호실 상세',
+  propertyRegister: '호실 등록',
+  buildingRegister: '건물 등록',
+  buildingEdit: '건물 수정',
+  buildingDetail: '건물 상세',
+  setup: '초기 세팅',
+};
 
 export const App = () => {
   const [user, setUser] = useState(null);
@@ -77,6 +99,7 @@ export const App = () => {
 
   const handleLogout = async () => {
     await postLogout();
+    clearUserDrafts(user.id);
     setUser(null);
     resetToHome();
   };
@@ -96,13 +119,32 @@ export const App = () => {
     const pageProps = { onNavigate: navigate, onUnauthorized: handleUnauthorized };
 
     switch (view.key) {
+      case 'buildingList':
+        return <BuildingListPage {...pageProps} />;
+      case 'buildingRegister':
+        return <BuildingRegisterPage user={user} params={view.params} {...pageProps} />;
+      case 'buildingDetail':
+        return (
+          <BuildingDetailPage
+            key={view.params.landlordBuildingId}
+            landlordBuildingId={view.params.landlordBuildingId}
+            {...pageProps}
+          />
+        );
+      case 'buildingEdit':
+        return (
+          <BuildingEditPage key={view.params.landlordBuildingId} landlordBuildingId={view.params.landlordBuildingId} {...pageProps} />
+        );
+      case 'setup':
+        return <SetupPage params={view.params} {...pageProps} />;
       case 'properties':
+        // 예전 소유 호실 등 관계별 호실 목록(건물 목록에서 들어온다)
         return <PropertyListPage relation={view.params.relation ?? 'OWNER'} {...pageProps} />;
       case 'propertyDetail':
         return <PropertyDetailPage key={view.params.propertyId} propertyId={view.params.propertyId} {...pageProps} />;
       case 'propertyRegister':
-        // 단계가 바뀌면 화면 상태를 새로 시작한다(key).
-        return <PropertyRegisterPage key={view.params.step ?? 1} params={view.params} {...pageProps} />;
+        // 건물(complexId)이 바뀌면 화면 상태를 새로 시작한다(key).
+        return <PropertyRegisterPage key={view.params.complexId ?? 'pick'} user={user} params={view.params} {...pageProps} />;
       default:
         // 홈과 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리).
         return <LandlordDashboard {...pageProps} />;

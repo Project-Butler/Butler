@@ -9,17 +9,25 @@ import { usePatchProperty } from '../hooks/usePatchProperty';
 import { usePatchPropertyOwnership } from '../hooks/usePatchPropertyOwnership';
 import { usePostPropertyOwnershipEnd } from '../hooks/usePostPropertyOwnershipEnd';
 import { toFieldErrors } from '../utils/apiError';
+import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '../utils/floor';
 import { formatDateKST, formatNumber } from '../utils/format';
 import {
   toAreaInput,
-  toFloorInput,
   toPriceDigits,
   toYearMonthInput,
   validateAcquiredYearMonth,
   validateExclusiveArea,
-  validateFloor,
   validatePurchasePrice,
 } from '../utils/formValidation';
+import { formatUnitLabel } from '../utils/unitAddress';
+import {
+  EQUIPMENT_OPTIONS,
+  formatEquipment,
+  getPropertyStatusBadge,
+  getUnitTypeLabel,
+  MAX_EQUIPMENT_ETC_LENGTH,
+  UNIT_TYPE_OPTIONS,
+} from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 const END_REASONS = ['매도', '증여', '기타'];
@@ -39,7 +47,7 @@ const SectionTitle = ({ children, action }) => (
   </div>
 );
 
-// 기본 정보: 주소·법정동·건물 정보 + 면적·층(인증된 소유자만 수정)
+// 호실 정보: 주소·법정동·건물 정보 + 동·호 + 면적·층(인증된 소유자만 수정, 아니면 잠금 + 안내)
 const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
   const patch = usePatchProperty({ onUnauthorized });
   const [isEditing, setIsEditing] = useState(false);
@@ -53,14 +61,14 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
   const startEdit = () => {
     setDraft({
       exclusiveArea: property.exclusiveArea != null ? String(property.exclusiveArea) : '',
-      floor: property.floor != null ? String(property.floor) : '',
+      floor: toFloorText(property.floor),
     });
     setFieldErrors({});
     patch.reset();
     setIsEditing(true);
   };
 
-  const clientErrors = { exclusiveArea: validateExclusiveArea(draft.exclusiveArea), floor: validateFloor(draft.floor) };
+  const clientErrors = { exclusiveArea: validateExclusiveArea(draft.exclusiveArea), floor: validateFloorInput(draft.floor) };
   const hasClientError = Boolean(clientErrors.exclusiveArea || clientErrors.floor);
 
   // 미인증이면 저장 버튼이 비활성이라 여기까지 오지 않는다. 403 박스는 서버만 거절하는 경우
@@ -69,7 +77,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
     if (hasClientError) return;
     const { data, error } = await patch.updateProperty(property.id, {
       exclusiveArea: draft.exclusiveArea ? Number(draft.exclusiveArea) : null,
-      floor: draft.floor ? Number(draft.floor) : null,
+      floor: parseFloorInput(draft.floor),
     });
     if (data) {
       setIsEditing(false);
@@ -92,14 +100,15 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
           )
         }
       >
-        기본 정보
+        호실 정보
       </SectionTitle>
-      {!canEdit && !isEditing && <p className="text-sub text-ink-3">권리자 인증 후 수정할 수 있습니다</p>}
+      {!canEdit && !isEditing && <p className="text-sub text-ink-3">면적·층은 권리자 인증 후 수정할 수 있습니다</p>}
 
       <dl className="divide-y divide-line">
         <InfoRow label="도로명" value={complex?.roadAddress} />
         <InfoRow label="지번" value={complex?.jibunAddress} />
         <InfoRow label="법정동" value={complex?.region.fullName} />
+        <InfoRow label="동·호" value={formatUnitLabel(property.buildingNo, property.unitNo)} />
         <InfoRow label="준공일" value={buildingInfo?.approvalDate} numeric />
         <InfoRow
           label="세대수"
@@ -109,7 +118,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
         {!isEditing && (
           <>
             <InfoRow label="전용면적" value={property.exclusiveArea != null ? `${property.exclusiveArea}㎡` : null} numeric />
-            <InfoRow label="층" value={property.floor != null ? `${property.floor}층` : null} numeric />
+            <InfoRow label="층" value={formatFloor(property.floor)} numeric />
           </>
         )}
       </dl>
@@ -127,11 +136,10 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
             />
             <TextField
               label="층"
-              suffix="층"
-              numeric
-              inputMode="numeric"
+              placeholder="12 또는 B1"
+              hint="지하는 B1처럼 적어요"
               value={draft.floor}
-              onChange={(event) => setDraft((prev) => ({ ...prev, floor: toFloorInput(event.target.value) }))}
+              onChange={(event) => setDraft((prev) => ({ ...prev, floor: event.target.value }))}
               error={clientErrors.floor ?? fieldErrors.floor}
             />
           </div>
@@ -150,7 +158,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
   );
 };
 
-// 내 소유 정보: 취득 연월·매입가 수정, 소유 종료. 종료된 소유 관계는 조회만.
+// 내 소유 정보: 취득 연월·매입가 수정, 호실 삭제(= 소유 관계 종료, 확인 패널). 종료된 소유 관계는 조회만.
 const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const end = usePostPropertyOwnershipEnd({ onUnauthorized });
@@ -237,7 +245,7 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
             수정
           </Button>
           <Button variant="secondary" size="sm" onClick={startEnd}>
-            소유 종료
+            호실 삭제
           </Button>
         </div>
       )}
@@ -283,9 +291,10 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
       {mode === 'end' && (
         <div className="space-y-4 border-t border-line pt-4">
           <div>
-            <p className="text-body font-semibold text-ink">이 부동산의 소유를 종료할까요?</p>
+            <p className="text-body font-semibold text-ink">이 호실을 삭제할까요?</p>
             <p className="mt-0.5 text-sub text-ink-2">
-              종료하면 되돌릴 수 없고 &apos;예전 소유&apos;로 옮겨집니다. 진행 중인 계약이 있으면 종료할 수 없어요.
+              내 소유 관계를 종료합니다. 되돌릴 수 없고 &apos;예전 소유 호실&apos;로 옮겨지며, 건물의 등록 호실 수에서 빠집니다.
+              진행 중인 계약이 있으면 삭제할 수 없어요.
             </p>
           </div>
           <div>
@@ -316,7 +325,7 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
               취소
             </Button>
             <Button onClick={handleEnd} disabled={end.isLoading}>
-              {end.isLoading ? '종료 중' : '소유 종료'}
+              {end.isLoading ? '삭제 중' : '호실 삭제'}
             </Button>
           </div>
         </div>
@@ -325,7 +334,137 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
   );
 };
 
-// 내 부동산 상세. 소유 정보는 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
+// 내 임대 조건: 방 구성·설비(내 활성 소유 관계에 저장, PATCH /property-ownerships/:id). 종료된 소유 관계는 조회만.
+const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
+  const patch = usePatchPropertyOwnership({ onUnauthorized });
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState({ unitType: '', equipment: [], equipmentEtc: '' });
+
+  const startEdit = () => {
+    setDraft({
+      unitType: ownership.unitType ?? '',
+      equipment: ownership.equipment ?? [],
+      equipmentEtc: ownership.equipmentEtc ?? '',
+    });
+    patch.reset();
+    setIsEditing(true);
+  };
+
+  const toggleEquipment = (code) =>
+    setDraft((prev) => ({
+      ...prev,
+      equipment: prev.equipment.includes(code) ? prev.equipment.filter((value) => value !== code) : [...prev.equipment, code],
+    }));
+
+  const etcError =
+    draft.equipmentEtc.trim().length > MAX_EQUIPMENT_ETC_LENGTH ? `${MAX_EQUIPMENT_ETC_LENGTH}자 이하로 입력해 주세요.` : undefined;
+
+  const handleSave = async () => {
+    if (etcError) return;
+    const { data } = await patch.updateOwnership(ownership.id, {
+      unitType: draft.unitType || null,
+      equipment: draft.equipment,
+      equipmentEtc: draft.equipmentEtc.trim() || null,
+    });
+    if (data) {
+      setIsEditing(false);
+      onSaved();
+    }
+  };
+
+  return (
+    <Card className="space-y-3 p-5">
+      <SectionTitle
+        action={
+          ownership.isActive &&
+          !isEditing && (
+            <Button variant="secondary" size="sm" onClick={startEdit}>
+              수정
+            </Button>
+          )
+        }
+      >
+        임대 조건
+      </SectionTitle>
+
+      {!isEditing && (
+        <dl className="divide-y divide-line">
+          <InfoRow label="방 구성" value={getUnitTypeLabel(ownership.unitType)} />
+          <InfoRow label="설비" value={formatEquipment(ownership.equipment, ownership.equipmentEtc)} />
+        </dl>
+      )}
+
+      {isEditing && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="listing-unit-type" className="text-label font-semibold text-ink">
+              방 구성
+            </label>
+            <select
+              id="listing-unit-type"
+              value={draft.unitType}
+              onChange={(event) => setDraft((prev) => ({ ...prev, unitType: event.target.value }))}
+              className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent"
+            >
+              <option value="">선택 안 함</option>
+              {UNIT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-label font-semibold text-ink">설비</p>
+            <div className="grid grid-cols-4 gap-2">
+              {EQUIPMENT_OPTIONS.map((option) => (
+                <label key={option.value} className="flex h-10 cursor-pointer items-center gap-2 rounded-input border border-line px-3 text-body text-ink-2 hover:bg-surface-2">
+                  <input
+                    type="checkbox"
+                    className="accent-accent"
+                    checked={draft.equipment.includes(option.value)}
+                    onChange={() => toggleEquipment(option.value)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <TextField
+            label="기타 설비"
+            maxLength={MAX_EQUIPMENT_ETC_LENGTH}
+            value={draft.equipmentEtc}
+            onChange={(event) => setDraft((prev) => ({ ...prev, equipmentEtc: event.target.value }))}
+            error={etcError}
+          />
+          {patch.error && <NoticeBox>{patch.error.message}</NoticeBox>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsEditing(false)} disabled={patch.isLoading}>
+              취소
+            </Button>
+            <Button onClick={handleSave} disabled={Boolean(etcError) || patch.isLoading}>
+              {patch.isLoading ? '저장 중' : '저장'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// 임대 정보·임차인·계약 자리. TODO(#4 계약 관리): 계약 데이터가 생기면 채운다.
+const LeaseSection = () => (
+  <Card className="space-y-3 p-5">
+    <SectionTitle>임대 정보</SectionTitle>
+    <dl className="divide-y divide-line">
+      <InfoRow label="계약 상태" value="계약 등록 전" />
+      <InfoRow label="임차인" value={null} />
+      <InfoRow label="계약" value={null} />
+    </dl>
+  </Card>
+);
+
+// 호실 상세. 소유 정보·임대 조건은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
 export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
@@ -338,7 +477,7 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
   if (!property) {
     return (
       <div className="mx-auto max-w-2xl space-y-5">
-        <PageHeader title="부동산 상세" onBack={goBack} />
+        <PageHeader title="호실 상세" onBack={goBack} />
         {propertyQuery.error ? (
           <NoticeBox>{propertyQuery.error.message}</NoticeBox>
         ) : (
@@ -348,9 +487,17 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
     );
   }
 
+  const status = getPropertyStatusBadge(property.status);
+  const verification = getVerificationBadge(property.myRelation?.verificationStatus);
+
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-10">
       <PageHeader title={property.displayName} onBack={goBack} />
+      <div className="flex items-center gap-2">
+        <span className="text-sub text-ink-3">운영 상태</span>
+        <Badge tone={status.tone}>{status.label}</Badge>
+        {property.myRelation?.type === 'OWNER' && <Badge tone={verification.tone}>{verification.label}</Badge>}
+      </div>
       {propertyQuery.error && <NoticeBox>{propertyQuery.error.message}</NoticeBox>}
       {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
 
@@ -363,11 +510,22 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
 
       {ownershipQuery.error && <NoticeBox>{ownershipQuery.error.message}</NoticeBox>}
       {ownershipQuery.data && (
+        <ListingSection
+          key={`listing-${ownershipQuery.data.id}`}
+          ownership={ownershipQuery.data}
+          onSaved={ownershipQuery.refetch}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
+
+      <LeaseSection />
+
+      {ownershipQuery.data && (
         <OwnershipSection
           key={ownershipQuery.data.id}
           ownership={ownershipQuery.data}
           onSaved={ownershipQuery.refetch}
-          onEnded={() => onNavigate('properties', { relation: 'FORMER_OWNER' })}
+          onEnded={() => onNavigate('buildingList', {}, { replace: true })}
           onUnauthorized={onUnauthorized}
         />
       )}
