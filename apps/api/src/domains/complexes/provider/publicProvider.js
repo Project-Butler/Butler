@@ -6,6 +6,7 @@
 // 보안: 호스트·경로는 아래 상수로만 정한다(SSRF 방지). 사용자 입력은 URLSearchParams 값으로만
 // 들어간다. 실패는 ExternalServiceError(reason)로만 던진다 — reason에 URL·키·응답 원문을 넣지 않는다.
 // 공통 호출 도구(fetchJson 등)는 publicApi.js.
+import { parseDetailBuildingNames } from '../detailBuildingNames.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { rollUpLegalDongCode } from './pnu.js';
 import { fetchJson } from './publicApi.js';
@@ -103,6 +104,12 @@ const searchComplexes = async (query, size) => {
       jibunAddress: trimOrNull(juso.jibunAddr),
       roadAddress,
       legalDongCode: rollUpLegalDongCode(juso.admCd),
+      zipCode: trimOrNull(juso.zipNo),
+      officialBuildingName: trimOrNull(juso.bdNm),
+      detailBuildingNames: parseDetailBuildingNames(juso.detBdNmList),
+      // bdKdcd: 공동주택 여부(1 공동주택, 0 비공동주택)
+      isApartment: String(juso.bdKdcd) === '1',
+      buildingMgtNo: trimOrNull(juso.bdMgtSn),
       payload: toSearchPayload(juso),
     });
   }

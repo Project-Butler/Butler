@@ -1,7 +1,8 @@
 // 단지 외부 데이터 공급자(provider) 선택과 공통 에러 변환.
 //
 // provider 인터페이스(없으면 null):
-// - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode, payload }]
+// - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode, zipCode,
+//     officialBuildingName, detailBuildingNames, isApartment, buildingMgtNo, payload }]
 //     payload: 검색 저장본(address_search_results)에 남길 juso 칸(응답에는 내보내지 않음)
 import { AppError } from '../../../platform/AppError.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
