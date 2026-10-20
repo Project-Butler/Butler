@@ -1,5 +1,5 @@
 // 분쟁 참고자료(DisputeReference)의 임베딩을 계산해 저장한다. 챗봇 RAG 검색에 쓴다.
-// seed:disputes 다음에 실행한다. 매번 전체를 다시 계산한다(59건이라 몇 초면 끝난다).
+// seed:disputes 다음에 실행한다. 매번 전체를 다시 계산한다(59건이라 Gemini 임베딩 API로 몇 초면 끝난다).
 // 실행: npm run embed:disputes -w apps/api
 import '../src/loadEnv.js';
 import { PrismaClient } from '@prisma/client';
