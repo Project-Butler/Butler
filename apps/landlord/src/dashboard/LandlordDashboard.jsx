@@ -1,7 +1,9 @@
 import { Badge, Button, Card, StatCard } from '@butler/ui';
+import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
 import { formatUnitSpec } from '../utils/format';
+import { getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 // 표에 보여 줄 부동산 수(나머지는 [전체 보기] → 내 부동산)
@@ -53,7 +55,42 @@ const getVerificationHint = ({ verified, total, error }) => {
   return unverified > 0 ? { hint: `인증 필요 ${unverified}건`, tone: 'crit' } : { hint: '모두 인증 완료', tone: 'ok' };
 };
 
+// 아직 등록하지 않은 호실 수 = 건물마다 (정원 − 등록 수)의 합. 정원이 없는 건물은 세지 않는다.
+const sumRemaining = (buildings) => buildings.reduce((sum, building) => sum + (building.remainingCount ?? 0), 0);
+
+// 초기 세팅 안내(Landly 홈 "N개의 호실이 아직 등록되지 않았어요")
+const SetupCard = ({ setup, onNavigate }) => {
+  const { data, error } = setup;
+  if (error) return <Card className="p-5 text-body text-crit-ink">{error.message}</Card>;
+  if (!data) return null;
+
+  const remaining = sumRemaining(data.buildings);
+  const buildingCount = data.buildings.length;
+  const propertyCount = data.buildings.reduce((sum, building) => sum + building.propertyCount, 0);
+  const message =
+    buildingCount === 0
+      ? '첫 건물을 등록하고 호실을 추가해 보세요'
+      : remaining > 0
+        ? `${remaining}개의 호실이 아직 등록되지 않았어요`
+        : `건물 ${buildingCount}개 · 호실 ${propertyCount}개를 등록했어요`;
+
+  return (
+    <Card className="flex items-center justify-between gap-4 p-5">
+      <div className="min-w-0">
+        <p className="text-chip font-medium text-ink-3">
+          초기 세팅 <span className="font-num tabular-nums">{data.progress}%</span>
+        </p>
+        <p className={`mt-1 text-card font-semibold ${remaining > 0 ? 'text-warn-ink' : 'text-ink'}`}>{message}</p>
+      </div>
+      <Button className="shrink-0" onClick={() => onNavigate(buildingCount === 0 ? 'buildingRegister' : 'setup')}>
+        {buildingCount === 0 ? '건물 등록' : '초기 세팅 보기'}
+      </Button>
+    </Card>
+  );
+};
+
 export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
+  const setup = useGetLandlordSetup({ onUnauthorized });
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: TABLE_SIZE }, { onUnauthorized });
   const properties = propertyList.data?.items ?? [];
   const propertyTotal = propertyList.data?.meta.total ?? null;
@@ -73,23 +110,26 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
         <p className="mt-1 text-body text-ink-2">오늘 확인할 일이 2건 있습니다. 노원 그린아파트 계약 종료가 7일 남았습니다.</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <SetupCard setup={setup} onNavigate={onNavigate} />
+
+      <div className="grid grid-cols-3 gap-4">
         <StatCard label="총 보증금" value="80,000,000" unit="원" hint="계약 2건 합계" />
         <StatCard
           label="보유 부동산"
           value={propertyTotal ?? '—'}
           unit="건"
-          hint={propertyList.error ? propertyList.error.message : propertyTotal != null ? `아파트 ${propertyTotal}` : '불러오는 중'}
+          hint={
+            propertyList.error
+              ? propertyList.error.message
+              : setup.data
+                ? `건물 ${setup.data.buildings.length}개`
+                : propertyTotal != null
+                  ? `호실 ${propertyTotal}`
+                  : '불러오는 중'
+          }
           hintTone={propertyList.error ? 'crit' : 'neutral'}
         />
         <StatCard label="계약 중" value="2" unit="건" hint="종료 임박 1건" hintTone="warn" />
-        <StatCard
-          label="권리자 인증"
-          value={verification.verified ?? '—'}
-          unit={verification.total != null ? `/ ${verification.total}` : undefined}
-          hint={verificationHint.hint}
-          hintTone={verificationHint.tone}
-        />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -143,7 +183,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
             <h3 className="text-body font-semibold text-ink">내 부동산</h3>
             <div className="flex items-center gap-3">
               <span className="font-num text-chip tabular-nums text-ink-3">{propertyTotal ?? 0}건</span>
-              <Button variant="secondary" size="sm" onClick={() => onNavigate('properties')}>
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('buildingList')}>
                 전체 보기
               </Button>
             </div>
@@ -160,7 +200,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
             <tbody>
               {properties.map((property) => {
                 const badge = getVerificationBadge(property.myRelation?.verificationStatus);
-                const spec = formatUnitSpec(property);
+                const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
                 return (
                   <tr key={property.id} className="border-b border-line last:border-b-0">
                     <td className="px-5 py-3">
@@ -171,9 +211,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
                       >
                         {property.displayName}
                       </button>
-                      <p className="text-chip text-ink-3">
-                        아파트{spec && <span className="font-num tabular-nums"> · {spec}</span>}
-                      </p>
+                      {spec && <p className="font-num text-chip tabular-nums text-ink-3">{spec}</p>}
                     </td>
                     {/* TODO(#4 계약 관리): 임차인·계약 기간은 계약 데이터가 생기면 채운다 */}
                     <td className="px-3 py-3 text-ink-3">—</td>
@@ -211,6 +249,16 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
             ))}
           </div>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard
+          label="권리자 인증"
+          value={verification.verified ?? '—'}
+          unit={verification.total != null ? `/ ${verification.total}` : undefined}
+          hint={verificationHint.hint}
+          hintTone={verificationHint.tone}
+        />
       </div>
     </div>
   );
