@@ -3,6 +3,7 @@
 import { toMoney } from './money.js';
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 import { formatDisplayName } from './unitAddress.js';
+import { toListing } from './unitListing.js';
 
 const toIsoOrNull = (date) => (date ? date.toISOString() : null);
 
@@ -42,6 +43,8 @@ export const toOwnershipResponse = (ownership, propertySummary, now = new Date()
     endedAt: toIsoOrNull(ownership.endedAt),
     endReason: ownership.endReason ?? null,
     isActive: !ownership.endedAt,
+    // 내 임대 조건(명세 변경 C9)
+    ...toListing(ownership),
   };
 };
 

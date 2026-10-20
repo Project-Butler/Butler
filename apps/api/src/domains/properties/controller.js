@@ -14,6 +14,7 @@ import {
   normalizeBuildingNo,
   normalizeUnitNo,
 } from '../../platform/unitAddress.js';
+import { LISTING_FIELDS, parseListingFields } from '../../platform/unitListing.js';
 import { isUuid } from '../../platform/uuid.js';
 import {
   createPropertyWithOwnership,
@@ -28,7 +29,16 @@ const EXCLUSIVE_AREA_PATTERN = /^\d+(\.\d{1,2})?$/;
 const MIN_FLOOR = -10;
 const MAX_FLOOR = 200;
 
-const CREATE_FIELDS = ['complexId', 'buildingNo', 'unitNo', 'exclusiveArea', 'floor', 'acquiredYearMonth', 'purchasePrice'];
+const CREATE_FIELDS = [
+  'complexId',
+  'buildingNo',
+  'unitNo',
+  'exclusiveArea',
+  'floor',
+  'acquiredYearMonth',
+  'purchasePrice',
+  ...LISTING_FIELDS,
+];
 const UPDATE_FIELDS = ['exclusiveArea', 'floor'];
 const RELATIONS = ['OWNER', 'FORMER_OWNER', 'TENANT'];
 
@@ -51,16 +61,28 @@ const parseFloor = (value, details) => {
 };
 
 // '101-1203'처럼 동·호를 한 칸에 적으면 나눠 입력하도록 거부한다(길이 검사보다 먼저).
-const parseUnitPart = (normalized, field, details) => {
+// 동은 비워도 된다(동이 없는 건물, 명세 변경 C6) — 빈 문자열로 저장한다.
+const parseUnitPart = (normalized, field, details, { allowEmpty = false } = {}) => {
   if (isCombinedUnitAddress(normalized)) {
     details.push({ field, reason: COMBINED_UNIT_ADDRESS_REASON });
     return undefined;
   }
-  if (normalized.length < 1 || normalized.length > MAX_UNIT_PART_LENGTH) {
-    details.push({ field, reason: `1~${MAX_UNIT_PART_LENGTH}자 문자열이어야 합니다.` });
+  const minLength = allowEmpty ? 0 : 1;
+  if (normalized.length < minLength || normalized.length > MAX_UNIT_PART_LENGTH) {
+    details.push({ field, reason: `${minLength}~${MAX_UNIT_PART_LENGTH}자 문자열이어야 합니다.` });
     return undefined;
   }
   return normalized;
+};
+
+// 생략·null은 동 없음(''). 문자열이 아닌 값은 거부한다.
+const parseBuildingNo = (value, details) => {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') {
+    details.push({ field: 'buildingNo', reason: `0~${MAX_UNIT_PART_LENGTH}자 문자열이어야 합니다.` });
+    return undefined;
+  }
+  return parseUnitPart(normalizeBuildingNo(value), 'buildingNo', details, { allowEmpty: true });
 };
 
 const parseCreateBody = (body) => {
@@ -68,14 +90,17 @@ const parseCreateBody = (body) => {
   const details = [];
 
   if (!isUuid(body.complexId)) details.push({ field: 'complexId', reason: 'UUID 형식이어야 합니다.' });
+  const buildingNo = typeof body.buildingNo === 'string' ? body.buildingNo : '';
   const input = {
     complexId: body.complexId,
-    buildingNo: parseUnitPart(normalizeBuildingNo(body.buildingNo), 'buildingNo', details),
-    unitNo: parseUnitPart(normalizeUnitNo(body.unitNo, body.buildingNo), 'unitNo', details),
+    buildingNo: parseBuildingNo(body.buildingNo, details),
+    unitNo: parseUnitPart(normalizeUnitNo(body.unitNo, buildingNo), 'unitNo', details),
     exclusiveArea: null,
     floor: null,
     acquiredYearMonth: null,
     purchasePrice: null,
+    // 오지 않은 칸은 키가 없다 → service가 내가 끝낸 이전 소유 관계의 값을 이어받는다.
+    listing: parseListingFields(body, details),
   };
 
   // 선택 필드는 생략하거나 null이면 값 없음으로 본다.
@@ -120,8 +145,12 @@ const parseListQuery = (query) => {
   }
   const { page, size } = parsePagination(query, details);
 
+  // 명세 변경 C8: 한 단지(건물)의 호실만
+  const complexId = query.complexId ?? null;
+  if (complexId !== null && !isUuid(complexId)) details.push({ field: 'complexId', reason: 'UUID 형식이어야 합니다.' });
+
   throwIfInvalid(details);
-  return { relation, page, size };
+  return { relation, page, size, complexId };
 };
 
 const throwPropertyNotFound = () => {

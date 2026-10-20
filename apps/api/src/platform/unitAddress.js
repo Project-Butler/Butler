@@ -57,8 +57,10 @@ export const COMBINED_UNIT_ADDRESS_REASON = '동과 호를 나눠 입력해 주�
 
 // 화면 표시용 이름. 예: formatDisplayName('잠실OO아파트', '101', '1203') → '잠실OO아파트 101동 1203호'
 // '가동'처럼 이미 '동'으로 끝나는 동 이름에는 '동'을 한 번 더 붙이지 않는다.
+// 동이 없는 건물(buildingNo '')은 동을 빼고 '단지명 410호'.
 export const formatDisplayName = (complexName, buildingNo, unitNo) => {
-  const building = buildingNo.endsWith('동') ? buildingNo : `${buildingNo}동`;
   const unit = unitNo.endsWith('호') ? unitNo : `${unitNo}호`;
+  if (!buildingNo) return `${complexName} ${unit}`;
+  const building = buildingNo.endsWith('동') ? buildingNo : `${buildingNo}동`;
   return `${complexName} ${building} ${unit}`;
 };
