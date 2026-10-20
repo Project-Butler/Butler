@@ -8,10 +8,12 @@ import {
   throwIfInvalid,
 } from '../../platform/requestValidation.js';
 import { sendData, sendList } from '../../platform/respond.js';
+import { LISTING_FIELDS, parseListingFields } from '../../platform/unitListing.js';
 import { isUuid } from '../../platform/uuid.js';
 import { endOwnership, findMyOwnerships, findOwnershipForUser, updateOwnership } from './service.js';
 
-const UPDATE_FIELDS = ['acquiredYearMonth', 'purchasePrice'];
+// 방 구성·설비(unitType·equipment·equipmentEtc)는 명세 변경 C9
+const UPDATE_FIELDS = ['acquiredYearMonth', 'purchasePrice', ...LISTING_FIELDS];
 const END_FIELDS = ['reason'];
 const MAX_END_REASON_LENGTH = 200;
 
@@ -54,6 +56,7 @@ const parseUpdateBody = (body) => {
   if (body.purchasePrice !== undefined) {
     data.purchasePrice = body.purchasePrice === null ? null : parsePurchasePrice(body.purchasePrice, details);
   }
+  Object.assign(data, parseListingFields(body, details));
 
   throwIfInvalid(details);
   return data;

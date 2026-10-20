@@ -1,3 +1,4 @@
+import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { getTodayKST } from '../../platform/dateUtils.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -49,14 +50,31 @@ export const findOwnershipForUser = async (user, ownershipId) => {
   return toResponse(ownership);
 };
 
+const toActivityParams = (ownership) => ({
+  buildingNo: ownership.property.buildingNo,
+  unitNo: ownership.property.unitNo,
+});
+
 // PATCH /property-ownerships/:ownershipId — 본인의 활성 소유 관계만.
 export const updateOwnership = async (user, ownershipId, data) => {
-  const { count } = await prisma.propertyOwnership.updateMany({
-    where: { id: ownershipId, userId: user.id, endedAt: null },
-    data,
+  const { count, ownership } = await prisma.$transaction(async (tx) => {
+    const result = await tx.propertyOwnership.updateMany({
+      where: { id: ownershipId, userId: user.id, endedAt: null },
+      data,
+    });
+    const row = await tx.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+    if (result.count > 0) {
+      await recordActivity(tx, {
+        userId: user.id,
+        type: ACTIVITY_TYPES.OWNERSHIP_UPDATED,
+        complexId: row.property.complexId,
+        propertyId: row.propertyId,
+        params: { ...toActivityParams(row), fields: Object.keys(data) },
+      });
+    }
+    return { count: result.count, ownership: row };
   });
 
-  const ownership = await prisma.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
   if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
   // count 0인데 본인 것이면 이미 종료된 소유 관계다.
   if (count === 0) throwOwnershipEnded();
@@ -97,7 +115,15 @@ export const endOwnership = async (user, ownershipId, { reason }) => {
     });
     if (count === 0) throwOwnershipEnded();
 
-    return tx.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+    const endedRow = await tx.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+    await recordActivity(tx, {
+      userId: user.id,
+      type: ACTIVITY_TYPES.OWNERSHIP_ENDED,
+      complexId: endedRow.property.complexId,
+      propertyId: endedRow.propertyId,
+      params: toActivityParams(endedRow),
+    });
+    return endedRow;
   });
 
   // TODO(audit): OWNERSHIP_ENDED — audit.record()가 생기면 여기서 기록한다.
