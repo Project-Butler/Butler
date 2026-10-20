@@ -79,3 +79,20 @@ export const parseJibunLot = (kaptAddr) => {
     isMountain: Boolean(match[1]),
   };
 };
+
+// kaptAddr(엑셀 법정동주소) → 번지 목록. 엑셀은 필지가 여럿이면 쉼표로 잇는다
+//   '서울특별시 노원구 중계동 504-1,서울특별시 노원구 중계동 503 중계그린' → [504-1, 503]
+// 산 번지는 juso 건물DB 번지 키와 섞이지 않게 뺀다. 같은 번지는 한 번만.
+export const parseJibunLots = (kaptAddr) => {
+  const lots = [];
+  const seen = new Set();
+  for (const part of String(kaptAddr ?? '').split(',')) {
+    const lot = parseJibunLot(` ${part.trim()}`);
+    if (!lot || lot.isMountain) continue;
+    const id = `${lot.mainLot}-${lot.subLot}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    lots.push({ mainLot: lot.mainLot, subLot: lot.subLot });
+  }
+  return lots;
+};
