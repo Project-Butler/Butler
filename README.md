@@ -104,8 +104,8 @@ npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>           
 - **세션 모드 pooler `aws-0-<region>.pooler.supabase.com:5432`**(IPv6가 되는 곳이면 직접 호스트 `db.<ref>.supabase.co:5432`)로, `postgres` 역할로 붙는다. **트랜잭션 모드 `:6543`은 쓰지 않는다**(적재는 몇 분짜리 트랜잭션 하나와 트랜잭션 잠금을 쓴다).
 - 접속 주소는 **명령 한 번에만** 넣고 `.env`에 쓰지 않는다. 스크립트는 Prisma Client라서 `DATABASE_URL`을 읽으므로 두 변수에 같은 세션 모드 주소를 넣는다.
   ```powershell
-  $env:DATABASE_URL='postgresql://postgres.<ref>:<비밀번호>@aws-0-<region>.pooler.supabase.com:5432/postgres'; $env:DIRECT_URL=$env:DATABASE_URL
-  npm run import:juso-buildings -w apps/api -- C:\data609_건물DB_전체분.zip
+  $env:DATABASE_URL='<Supabase 세션 모드 pooler 접속 문자열(aws-0-<region>.pooler.supabase.com:5432)>'; $env:DIRECT_URL=$env:DATABASE_URL
+  npm run import:juso-buildings -w apps/api -- C:\data\202609_건물DB_전체분.zip
   Remove-Item Env:DATABASE_URL; Remove-Item Env:DIRECT_URL
   ```
 - Supabase 적재는 마이그레이션 반영 뒤, 반영 전 `pg_dump`를 떠 둔다. 로컬 DB에서 먼저 같은 순서로 돌려 본다.

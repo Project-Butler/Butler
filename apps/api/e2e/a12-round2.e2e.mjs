@@ -14,9 +14,8 @@ const dbHost = (() => { try { return new URL(process.env.DATABASE_URL).hostname;
 if (!['localhost', '127.0.0.1'].includes(dbHost)) {
   throw new Error('E2E는 로컬 DB에서만 실행합니다. DATABASE_URL 호스트: ' + (dbHost || '(없음)'));
 }
-const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
-const db = new PrismaClient();
+const { prisma: db } = await import(new URL('../src/platform/prismaClient.js', import.meta.url).href);
 const base = 'http://127.0.0.1:4000/api/v1';
 const tag = `codex-r2-${Date.now()}-${randomUUID().slice(0, 7)}`;
 const userId = randomUUID();
@@ -167,7 +166,7 @@ test('A-12 round 2 production risks', async (t) => {
     return {statuses:dist,perUser:10,expected429:0,p50Ms:+percentile(lat,.5).toFixed(1),p95Ms:+percentile(lat,.95).toFixed(1),wallMs:+wall.toFixed(1),limiter:'20/user/min; no 429 expected at 10 each'};
   });
   await run('juso invalid-key and 1ms-timeout isolated API instances',async()=>{
-    const badKey=await startServer(4001,{JUSO_API_KEY:'invalid-round2-key'});
+    const badKey=await startServer(4001,{JUSO_API_KEY:'invalid'});
     const search=await call(badKey,cookie,'GET','/complexes/search?query=중계그린');
     assert.equal(search.status,503);assert.ok(search.data.error?.code);
     const complex=await db.complex.findFirst({where:{id:{in:[...complexIds]}}});assert.ok(complex);

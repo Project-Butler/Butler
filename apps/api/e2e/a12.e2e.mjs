@@ -14,8 +14,7 @@ if (!['localhost', '127.0.0.1'].includes(dbHost)) {
   throw new Error('E2E는 로컬 DB에서만 실행합니다. DATABASE_URL 호스트: ' + (dbHost || '(없음)'));
 }
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
-const db = new PrismaClient();
+const { prisma: db } = await import(new URL('../src/platform/prismaClient.js', import.meta.url).href);
 const BASE = 'http://127.0.0.1:4000/api/v1';
 const tag = `codex-e2e-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const tempUserId = randomUUID();
