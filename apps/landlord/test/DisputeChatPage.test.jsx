@@ -93,6 +93,30 @@ describe('DisputeChatPage', () => {
     expect(within(referenceItem).getByText('분쟁조정 사례')).toBeInTheDocument();
   });
 
+  it('질문을 보내는 즉시 상담 목록에 나타나고, 답변이 오면 실제 대화로 바뀐다', async () => {
+    const user = userEvent.setup();
+    let resolveAnswer;
+    api.postDisputeChat.mockReturnValue(new Promise((resolve) => (resolveAnswer = resolve)));
+    api.getDisputeChat.mockResolvedValue(CREATED_CHAT);
+    renderPage();
+    await screen.findByText('아직 상담 기록이 없어요.');
+
+    await user.type(screen.getByLabelText('상담 질문'), '세입자가 이사를 안 나가요');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    const sidebar = screen.getByRole('complementary');
+    expect(within(sidebar).getByText('세입자가 이사를 안 나가요')).toBeInTheDocument();
+    expect(within(sidebar).getByText('답변 기다리는 중…')).toBeInTheDocument();
+
+    // 답변 뒤 다시 불러온 서버 목록에는 새 대화가 들어 있다.
+    const { messages: _messages, ...summary } = CREATED_CHAT;
+    api.getDisputeChatList.mockResolvedValue({ data: [summary], meta: { page: 1, size: 50, total: 1, hasNext: false } });
+    resolveAnswer(CREATED_CHAT);
+
+    expect(await within(sidebar).findByRole('button', { current: true })).toHaveTextContent('세입자가 이사를 안 나가요');
+    expect(within(sidebar).queryByText('답변 기다리는 중…')).not.toBeInTheDocument();
+  });
+
   it('답변을 받지 못하면 서버가 준 오류 문구를 보여주고, 질문을 입력창에 되돌린다', async () => {
     const user = userEvent.setup();
     api.postDisputeChat.mockRejectedValue({

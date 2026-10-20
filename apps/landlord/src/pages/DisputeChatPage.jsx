@@ -98,6 +98,7 @@ export const DisputeChatPage = () => {
             chats={chatList.data?.data ?? []}
             isLoading={chatList.isLoading}
             selectedChatId={selectedChatId}
+            pendingTitle={isPending && !selectedChatId ? pendingQuestion : null}
             onSelect={selectChat}
             onNewChat={() => selectChat(null)}
             onDelete={removeChat}

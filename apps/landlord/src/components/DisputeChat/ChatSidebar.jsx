@@ -2,7 +2,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { formatShortDateTime } from '../../utils/formatDateTime';
 
-export const ChatSidebar = ({ chats, isLoading, selectedChatId, onSelect, onNewChat, onDelete }) => (
+// pendingTitle: 새 대화의 첫 질문을 보내고 답변을 기다리는 중이면 그 질문(아직 서버에 없는 대화)
+export const ChatSidebar = ({ chats, isLoading, selectedChatId, pendingTitle, onSelect, onNewChat, onDelete }) => (
   <div className="flex h-full flex-col rounded-card border border-line bg-surface">
     <div className="border-b border-line p-3">
       <Button variant="secondary" onClick={onNewChat} className="flex min-h-11 w-full items-center justify-center gap-1.5">
@@ -12,9 +13,17 @@ export const ChatSidebar = ({ chats, isLoading, selectedChatId, onSelect, onNewC
 
     <div className="flex-1 overflow-y-auto p-2">
       {isLoading && <p className="px-2 py-3 text-sub text-ink-3">상담 목록을 불러오는 중…</p>}
-      {!isLoading && chats.length === 0 && <p className="px-2 py-3 text-sub text-ink-3">아직 상담 기록이 없어요.</p>}
+      {!isLoading && chats.length === 0 && !pendingTitle && (
+        <p className="px-2 py-3 text-sub text-ink-3">아직 상담 기록이 없어요.</p>
+      )}
 
       <ul className="space-y-0.5">
+        {pendingTitle && (
+          <li aria-current="true" className="min-h-11 rounded-input bg-accent-soft px-3 py-2">
+            <p className="truncate text-body font-semibold text-accent-strong">{pendingTitle}</p>
+            <p className="text-chip text-ink-3">답변 기다리는 중…</p>
+          </li>
+        )}
         {chats.map((chat) => {
           const isActive = chat.id === selectedChatId;
           return (
