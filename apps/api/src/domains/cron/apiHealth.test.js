@@ -21,3 +21,11 @@ test('직전 실패 + 이번 성공 → 경보 안 함', () => {
 test('진행 중(PROCESSING) 행은 직전 완료 점검으로 보지 않는다', () => {
   assert.equal(shouldAlertConsecutiveFailure(true, { status: 'PROCESSING' }), false);
 });
+
+test('juso 변동분: 마지막 성공이 3일 이내면 OK, 넘으면 STALE, 없으면 STALE', async () => {
+  const { isDeltaStale } = await import('./apiHealth.js');
+  assert.equal(isDeltaStale('2026-10-18', '2026-10-20'), false);
+  assert.equal(isDeltaStale('2026-10-17', '2026-10-20'), false);
+  assert.equal(isDeltaStale('2026-10-16', '2026-10-20'), true);
+  assert.equal(isDeltaStale(null, '2026-10-20'), true);
+});

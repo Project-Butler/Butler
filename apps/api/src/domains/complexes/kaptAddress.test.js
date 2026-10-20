@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseJibunLot, parseRoadAddress, toRoadNameKey } from './kaptAddress.js';
+import { parseJibunLot, parseJibunLots, parseRoadAddress, toRoadNameKey } from './kaptAddress.js';
 
 test('도로명주소: 시도·시군구·도로명·본번', () => {
   assert.deepEqual(parseRoadAddress('서울특별시 송파구 올림픽로 435', '1171010200'), {
@@ -107,4 +107,19 @@ test('지번주소: 부번 자리가 비어 있거나 리 지역·산', () => {
 test('지번주소: 번지가 없으면 null', () => {
   assert.equal(parseJibunLot('서울특별시 송파구 신천동 잠실파크리오'), null);
   assert.equal(parseJibunLot(undefined), null);
+});
+
+test('지번주소 목록: 엑셀처럼 쉼표로 이은 필지를 모두, 산·중복은 뺀다', () => {
+  assert.deepEqual(
+    parseJibunLots('서울특별시 노원구 중계동 504-1,서울특별시 노원구 중계동 503,서울특별시 노원구 중계동 502-1 중계그린'),
+    [
+      { mainLot: 504, subLot: 1 },
+      { mainLot: 503, subLot: 0 },
+      { mainLot: 502, subLot: 1 },
+    ],
+  );
+  assert.deepEqual(parseJibunLots('경기도 가평군 가평읍 읍내리 산12-3,경기도 가평군 가평읍 읍내리 12, 경기도 가평군 가평읍 읍내리 12'), [
+    { mainLot: 12, subLot: 0 },
+  ]);
+  assert.deepEqual(parseJibunLots(null), []);
 });
