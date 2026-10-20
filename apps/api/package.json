@@ -15,7 +15,8 @@
     "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
     "import:kapt-basis": "node prisma/importKaptBasis.js",
     "import:juso-buildings": "node --max-old-space-size=4096 prisma/importJusoBuildings.js",
-    "apply:juso-changes": "node prisma/applyJusoChanges.js"
+    "apply:juso-changes": "node prisma/applyJusoChanges.js",
+    "test:e2e": "node --test --test-concurrency=1 e2e/*.e2e.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
