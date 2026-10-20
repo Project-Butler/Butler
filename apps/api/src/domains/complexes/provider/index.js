@@ -1,12 +1,8 @@
-// 단지·호실 외부 데이터 공급자(provider) 선택과 공통 에러 변환.
+// 단지 외부 데이터 공급자(provider) 선택과 공통 에러 변환.
 //
-// provider 인터페이스(반환 모양은 api-contract.md 2장 응답 필드와 같고, 없으면 null):
-// - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode, linkedKeys? }]
-//     linkedKeys: 같은 건물의 [KAPT:y, PNU:x](연결된 경우만, 응답에는 내보내지 않음)
-// - getComplexBySourceKey(sourceKey) → { sourceKey, name, jibunAddress, roadAddress, legalDongCode,
-//     buildingInfo: { approvalDate('YYYY-MM-DD'), householdCount, buildingCount, maxFloor, parkingCount } } | null
-// - getLinkedSourceKeys(sourceKey, complex) → [sourceKey, ...같은 건물의 다른 키] (확실할 때만 추가)
-// - getUnitInfo({ complex, buildingNo, unitNo }) → { exclusiveArea, floor } | null
+// provider 인터페이스(없으면 null):
+// - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode, payload }]
+//     payload: 검색 저장본(address_search_results)에 남길 juso 칸(응답에는 내보내지 않음)
 import { AppError } from '../../../platform/AppError.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { publicProvider } from './publicProvider.js';

@@ -1,4 +1,5 @@
-// resolveComplex 흐름(별칭 조회 → 외부 조회 → 같은 건물 키 → 생성)을 가짜 prisma·provider로 확인한다(DB·외부 호출 없음).
+// 단지 검색(juso → ROAD 키, 검색 저장본 쓰기)과 resolve(이미 있는 단지 → 검색 저장본으로 생성)를
+// 가짜 prisma·provider로 확인한다(DB·외부 호출 없음).
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 
@@ -7,10 +8,9 @@ process.env.DATA_GO_KR_SERVICE_KEY = process.env.DATA_GO_KR_SERVICE_KEY ?? 'test
 
 const { prisma } = await import('../../platform/prismaClient.js');
 const { publicProvider } = await import('./provider/publicProvider.js');
-const { resolveComplex } = await import('./service.js');
+const { resolveComplex, searchComplexes } = await import('./service.js');
 
-const KAPT_KEY = 'KAPT:A13824006';
-const PNU_KEY = 'PNU:1171010200100170000';
+const ROAD_KEY = 'ROAD:117103123006-0-435-0';
 const REGION = {
   legalDongCode: '1171010200',
   sidoName: '서울특별시',
@@ -18,155 +18,154 @@ const REGION = {
   dongName: '신천동',
   fullName: '서울특별시 송파구 신천동',
 };
-const EXTERNAL = {
-  sourceKey: KAPT_KEY,
-  name: '잠실파크리오',
-  jibunAddress: '서울특별시 송파구 신천동 17',
-  roadAddress: '서울특별시 송파구 올림픽로 435',
-  legalDongCode: '1171010200',
-  buildingInfo: null,
+const PAYLOAD = {
+  roadAddr: '서울특별시 송파구 올림픽로 435 (신천동)',
+  jibunAddr: '서울특별시 송파구 신천동 17 잠실파크리오',
+  zipNo: '05507',
+  admCd: '1171010200',
+  rn: '올림픽로',
+  rnMgtSn: '117103123006',
+  udrtYn: '0',
+  buldMnnm: '435',
+  buldSlno: '0',
+  mtYn: '0',
+  lnbrMnnm: '17',
+  lnbrSlno: '0',
+  bdMgtSn: '1171010200100170000000001',
+  bdNm: '잠실파크리오',
+  detBdNmList: '101동, 102동,102동',
 };
 
 const uniqueError = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-// complexes·complex_source_aliases만 흉내 낸 메모리 DB. 유니크 충돌은 P2002, 트랜잭션은 실패하면 되돌린다.
+// complexes·address_search_results만 흉내 낸 메모리 DB
 const createFakeDb = () => {
-  const db = { complexes: [], aliases: [], transactions: 0, beforeTransaction: null };
+  const db = { complexes: [], saved: new Map(), rawWrites: [], beforeCreate: null };
   let nextId = 1;
   const withRegion = (complex) => (complex ? { ...complex, region: REGION } : null);
 
-  db.addComplex = (sourceKey, keys, createdAt = new Date('2026-10-01T00:00:00Z')) => {
-    const complex = { ...EXTERNAL, id: `c${nextId++}`, sourceKey, createdAt };
+  db.addComplex = (sourceKey) => {
+    const complex = { id: `c${nextId++}`, sourceKey, name: '잠실파크리오', legalDongCode: REGION.legalDongCode, createdAt: new Date() };
     db.complexes.push(complex);
-    keys.forEach((key) => db.aliases.push({ sourceKey: key, complexId: complex.id }));
     return complex;
   };
 
-  const client = {
+  Object.assign(prisma, {
     complex: {
       findUnique: async ({ where }) =>
         withRegion(db.complexes.find((c) => (where.id ? c.id === where.id : c.sourceKey === where.sourceKey))),
       findMany: async ({ where }) =>
-        db.complexes
-          .filter((c) => where.sourceKey.in.includes(c.sourceKey))
-          .map((c) => ({ id: c.id, sourceKey: c.sourceKey, createdAt: c.createdAt })),
+        db.complexes.filter((c) => where.sourceKey.in.includes(c.sourceKey)).map((c) => ({ id: c.id, sourceKey: c.sourceKey })),
       create: async ({ data }) => {
+        if (db.beforeCreate) await db.beforeCreate();
         if (db.complexes.some((c) => c.sourceKey === data.sourceKey)) throw uniqueError();
         const complex = { ...data, id: `c${nextId++}`, createdAt: new Date() };
         db.complexes.push(complex);
         return withRegion(complex);
       },
     },
-    complexSourceAlias: {
-      findUnique: async ({ where }) => db.aliases.find((a) => a.sourceKey === where.sourceKey) ?? null,
-      findMany: async ({ where }) =>
-        db.aliases
-          .filter((a) => where.sourceKey.in.includes(a.sourceKey))
-          .map((a) => ({
-            sourceKey: a.sourceKey,
-            complexId: a.complexId,
-            complex: { createdAt: db.complexes.find((c) => c.id === a.complexId).createdAt },
-          })),
-      createMany: async ({ data, skipDuplicates }) => {
-        let count = 0;
-        for (const row of data) {
-          if (db.aliases.some((a) => a.sourceKey === row.sourceKey)) {
-            if (skipDuplicates) continue;
-            throw uniqueError();
-          }
-          db.aliases.push(row);
-          count += 1;
-        }
-        return { count };
-      },
+    addressSearchResult: {
+      findUnique: async ({ where }) => db.saved.get(where.sourceKey) ?? null,
     },
-    region: { findUnique: async () => ({ legalDongCode: REGION.legalDongCode }) },
-    $transaction: async (fn) => {
-      db.transactions += 1;
-      if (db.beforeTransaction) await db.beforeTransaction();
-      const snapshot = { complexes: [...db.complexes], aliases: [...db.aliases] };
-      try {
-        return await fn(client);
-      } catch (error) {
-        db.complexes = snapshot.complexes;
-        db.aliases = snapshot.aliases;
-        throw error;
-      }
+    region: { findUnique: async ({ where }) => (where.legalDongCode === REGION.legalDongCode ? { legalDongCode: where.legalDongCode } : null) },
+    $executeRaw: async (strings, ...values) => {
+      db.rawWrites.push(values);
+      return values[0].length;
     },
-  };
-  Object.assign(prisma, client);
+  });
   return db;
 };
 
-let providerCalls;
-let linkedKeysFor;
 beforeEach(() => {
-  providerCalls = 0;
-  linkedKeysFor = () => [KAPT_KEY, PNU_KEY];
-  publicProvider.getComplexBySourceKey = async (sourceKey) => {
-    providerCalls += 1;
-    return { ...EXTERNAL, sourceKey };
-  };
-  publicProvider.getLinkedSourceKeys = async (sourceKey) => linkedKeysFor(sourceKey);
+  publicProvider.searchComplexes = async () => [
+    {
+      sourceKey: ROAD_KEY,
+      name: '잠실파크리오',
+      jibunAddress: PAYLOAD.jibunAddr,
+      roadAddress: '서울특별시 송파구 올림픽로 435',
+      legalDongCode: REGION.legalDongCode,
+      payload: PAYLOAD,
+    },
+    {
+      sourceKey: 'ROAD:117103123006-0-300-0',
+      name: '롯데월드몰',
+      jibunAddress: '서울특별시 송파구 신천동 29',
+      roadAddress: '서울특별시 송파구 올림픽로 300',
+      legalDongCode: REGION.legalDongCode,
+      payload: { ...PAYLOAD, buldMnnm: '300' },
+    },
+  ];
 });
 
-test('resolve: 별칭에 있는 키면 외부 호출 없이 그 단지', async () => {
+test('검색: 이미 있는 단지는 complexId를 채우고, 없는 결과만 저장본에 쓴다(payload는 응답에 없음)', async () => {
   const db = createFakeDb();
-  const existing = db.addComplex(PNU_KEY, [PNU_KEY, KAPT_KEY]);
+  const existing = db.addComplex(ROAD_KEY);
 
-  const result = await resolveComplex(KAPT_KEY);
+  const results = await searchComplexes({ query: '올림픽로', size: 20 });
+
+  assert.equal(results[0].complexId, existing.id);
+  assert.equal(results[1].complexId, null);
+  assert.equal('payload' in results[0], false);
+  assert.equal(db.rawWrites.length, 1);
+  assert.deepEqual(db.rawWrites[0][0], ['ROAD:117103123006-0-300-0']);
+});
+
+test('resolve: 이미 있는 단지는 저장본 없이 그대로', async () => {
+  const db = createFakeDb();
+  const existing = db.addComplex(ROAD_KEY);
+
+  const result = await resolveComplex(ROAD_KEY);
 
   assert.equal(result.id, existing.id);
-  assert.equal(providerCalls, 0);
   assert.equal(db.complexes.length, 1);
 });
 
-test('resolve: 새 단지는 같은 건물 키 전부를 한 트랜잭션으로 넣는다', async () => {
+test('resolve: 24시간 안의 검색 저장본으로 단지를 만든다', async () => {
   const db = createFakeDb();
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
 
-  const result = await resolveComplex(KAPT_KEY);
+  const result = await resolveComplex(ROAD_KEY);
 
-  assert.equal(db.transactions, 1);
-  assert.equal(db.complexes.length, 1);
-  assert.equal(result.sourceKey, KAPT_KEY);
-  assert.deepEqual(
-    db.aliases.map((a) => [a.sourceKey, a.complexId]),
-    [
-      [KAPT_KEY, result.id],
-      [PNU_KEY, result.id],
-    ],
-  );
-  // 다른 키로 다시 resolve해도 같은 단지
-  assert.equal((await resolveComplex(PNU_KEY)).id, result.id);
-  assert.equal(db.complexes.length, 1);
+  assert.equal(result.sourceKey, ROAD_KEY);
+  assert.equal(result.name, '잠실파크리오');
+  const created = db.complexes[0];
+  assert.equal(created.zipCode, '05507');
+  assert.equal(created.roadCode, '117103123006');
+  assert.equal(created.sigunguCode, '11710');
+  assert.equal(created.roadNameKey, '올림픽로');
+  assert.equal(created.buildingMainNo, 435);
+  assert.equal(created.buildingSubNo, 0);
+  assert.equal(created.buildingMgtNo, PAYLOAD.bdMgtSn);
+  assert.deepEqual(created.detailBuildingNames, ['101동', '102동']);
 });
 
-test('resolve: 동시에 만든 쪽이 이기면(P2002) 다시 시도해 그 단지를 돌려준다', async () => {
+test('resolve: 저장본이 없거나 24시간이 지났으면 404 COMPLEX_SOURCE_NOT_FOUND', async () => {
   const db = createFakeDb();
+  await assert.rejects(resolveComplex(ROAD_KEY), { code: 'COMPLEX_SOURCE_NOT_FOUND' });
+
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date(Date.now() - 25 * 3600 * 1000) });
+  await assert.rejects(resolveComplex(ROAD_KEY), { code: 'COMPLEX_SOURCE_NOT_FOUND' });
+  assert.equal(db.complexes.length, 0);
+});
+
+test('resolve: 법정동이 regions에 없으면 만들지 않고 404', async () => {
+  const db = createFakeDb();
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: { ...PAYLOAD, admCd: '9999999999' }, fetchedAt: new Date() });
+
+  await assert.rejects(resolveComplex(ROAD_KEY), { code: 'COMPLEX_SOURCE_NOT_FOUND' });
+  assert.equal(db.complexes.length, 0);
+});
+
+test('resolve: 동시에 만든 쪽이 이기면(P2002) 다시 읽어 그 단지를 돌려준다', async () => {
+  const db = createFakeDb();
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
   let winner = null;
-  // 우리 트랜잭션 직전에 다른 요청이 같은 건물을 PNU 키로 먼저 만든다.
-  db.beforeTransaction = async () => {
-    if (!winner) winner = db.addComplex(PNU_KEY, [PNU_KEY, KAPT_KEY]);
+  db.beforeCreate = async () => {
+    if (!winner) winner = db.addComplex(ROAD_KEY);
   };
 
-  const result = await resolveComplex(KAPT_KEY);
+  const result = await resolveComplex(ROAD_KEY);
 
   assert.equal(result.id, winner.id);
   assert.equal(db.complexes.length, 1);
-  assert.equal(db.aliases.filter((a) => a.complexId !== winner.id).length, 0);
-});
-
-test('resolve: 이미 갈라진 두 단지가 있어도 세 번째 단지를 만들지 않는다', async () => {
-  const db = createFakeDb();
-  const kaptOwner = db.addComplex(KAPT_KEY, [KAPT_KEY], new Date('2026-10-05T00:00:00Z'));
-  db.addComplex(PNU_KEY, [PNU_KEY], new Date('2026-10-01T00:00:00Z'));
-  const otherPnu = 'PNU:1171010200100180000';
-  linkedKeysFor = (sourceKey) => [sourceKey, KAPT_KEY, PNU_KEY];
-
-  const result = await resolveComplex(otherPnu);
-
-  assert.equal(result.id, kaptOwner.id);
-  assert.equal(db.complexes.length, 2);
-  assert.equal(db.transactions, 0);
-  assert.equal(db.aliases.find((a) => a.sourceKey === otherPnu).complexId, kaptOwner.id);
 });

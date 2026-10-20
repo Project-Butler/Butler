@@ -1,5 +1,5 @@
 // 동·호 표기 정규화 — 서버 apps/api/src/platform/unitAddress.js와 같은 규칙.
-// 등록 직전 확인 문구와 동·호 정보(unit-info) 재조회 판단에 쓴다. 규칙을 바꾸면 양쪽을 함께 고친다.
+// 등록 직전 확인 문구에 쓴다. 규칙을 바꾸면 양쪽을 함께 고친다.
 const stripTrailingSuffix = (value, suffix) => value.replace(new RegExp(`([0-9A-Z])${suffix}$`), '$1');
 
 const normalizeUnitPart = (value, suffix) => {

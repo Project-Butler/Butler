@@ -12,15 +12,10 @@ const PARKRIO_ITEM = {
   bjdCode: '1171010200',
 };
 
-test('기본정보 → kapt_complexes 칸', () => {
-  assert.deepEqual(toKaptBasisColumns(PARKRIO_ITEM, '1171010200', NOW), {
+test('기본정보 → kapt_complexes 칸(도로명 키 칸은 쓰지 않는다)', () => {
+  assert.deepEqual(toKaptBasisColumns(PARKRIO_ITEM, NOW), {
     roadAddress: '서울특별시 송파구 올림픽로 435',
     jibunAddress: '서울특별시 송파구 신천동 17 잠실파크리오',
-    roadSigunguCd: '11710',
-    roadNameKey: '올림픽로',
-    roadUnderground: false,
-    roadMainNo: 435,
-    roadSubNo: 0,
     mainLot: 17,
     subLot: 0,
     basisFetchedAt: NOW,
@@ -29,11 +24,10 @@ test('기본정보 → kapt_complexes 칸', () => {
 });
 
 test('도로명주소가 없거나 못 읽어도 원문·지번은 저장한다', () => {
-  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, doroJuso: '알 수 없는 주소' }, '1171010200', NOW);
+  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, doroJuso: '알 수 없는 주소' }, NOW);
   assert.equal(columns.roadAddress, '알 수 없는 주소');
-  assert.equal(columns.roadNameKey, null);
   assert.equal(columns.mainLot, 17);
-  assert.equal(toKaptBasisColumns({ ...PARKRIO_ITEM, doroJuso: ' ' }, '1171010200', NOW).roadAddress, null);
+  assert.equal(toKaptBasisColumns({ ...PARKRIO_ITEM, doroJuso: ' ' }, NOW).roadAddress, null);
 });
 
 // ---------------------------------------------------------------- fillKaptBasis (가짜 prisma·fetch)
@@ -197,7 +191,7 @@ test('채우기: 하루 한도 초과 응답(게이트웨이 22)이면 멈춘다
 });
 
 test('채우기: 산 번지는 main_lot·sub_lot을 비우고 지번 원문은 남긴다', () => {
-  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, kaptAddr: '경기도 가평군 가평읍 읍내리 산12-3 OO' }, '4182025021', NOW);
+  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, kaptAddr: '경기도 가평군 가평읍 읍내리 산12-3 OO' }, NOW);
   assert.equal(columns.mainLot, null);
   assert.equal(columns.subLot, null);
   assert.equal(columns.jibunAddress, '경기도 가평군 가평읍 읍내리 산12-3 OO');

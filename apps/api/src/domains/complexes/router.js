@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authGuard } from '../../middlewares/authGuard.js';
 import { complexSearchRateLimiter, generalRateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
-import { getComplex, getComplexUnitInfo, resolveComplexBySourceKey, searchComplexList } from './controller.js';
+import { getComplex, resolveComplexBySourceKey, searchComplexList } from './controller.js';
 
 const router = Router();
 
@@ -12,6 +12,5 @@ router.use(authGuard);
 router.get('/search', roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), complexSearchRateLimiter, searchComplexList);
 router.post('/resolve', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, resolveComplexBySourceKey);
 router.get('/:complexId', generalRateLimiter, getComplex);
-router.get('/:complexId/unit-info', roleGuard(['LANDLORD', 'ADMIN']), complexSearchRateLimiter, getComplexUnitInfo);
 
 export default router;

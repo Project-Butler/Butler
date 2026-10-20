@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { BottomActionBar } from '../components/BottomActionBar/BottomActionBar';
@@ -6,7 +6,6 @@ import { LeaseInfoStepPlaceholder } from '../components/LeaseInfoStepPlaceholder
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetComplexSearchList } from '../hooks/useGetComplexSearchList';
-import { useGetComplexUnitInfo } from '../hooks/useGetComplexUnitInfo';
 import { usePostComplexResolve } from '../hooks/usePostComplexResolve';
 import { usePostProperty } from '../hooks/usePostProperty';
 import { toFieldErrors } from '../utils/apiError';
@@ -30,8 +29,6 @@ const MAX_UNIT_PART_LENGTH = 10;
 
 const EMPTY_FORM = { buildingNo: '', unitNo: '', exclusiveArea: '', floor: '', acquiredYearMonth: '', purchasePrice: '' };
 const FORM_FIELDS = Object.keys(EMPTY_FORM);
-
-const UNIT_INFO_MISSING_MESSAGE = '정보를 찾지 못했어요. 직접 입력해 주세요';
 
 const validateUnitPart = (value, normalize) => {
   if (!value.trim()) return undefined;
@@ -104,7 +101,6 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const search = useGetComplexSearchList(hookOptions);
   const resolve = usePostComplexResolve(hookOptions);
-  const unitInfo = useGetComplexUnitInfo(hookOptions);
   const register = usePostProperty(hookOptions);
 
   const [query, setQuery] = useState('');
@@ -112,15 +108,7 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
   const [resolvingKey, setResolvingKey] = useState(null);
   const [complex, setComplex] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [unitInfoResult, setUnitInfoResult] = useState(null);
   const [serverFieldErrors, setServerFieldErrors] = useState({});
-
-  // 동·호 정보는 검색 요청 한도(20회/분)를 같이 쓰므로, 같은 값은 다시 묻지 않는다.
-  // 키 `complexId|동|호`, 이 화면에 있는 동안만 저장한다.
-  const unitInfoCacheRef = useRef(new Map());
-  const lastUnitKeyRef = useRef(null);
-  // 동·호 정보로 자동 채운 값. 사용자가 직접 고친 칸은 덮어쓰지 않는다.
-  const autoFilledRef = useRef({ exclusiveArea: '', floor: '' });
 
   const clientErrors = validateForm(form);
   const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
@@ -151,84 +139,16 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
 
     setComplex(data);
     setForm(EMPTY_FORM);
-    autoFilledRef.current = { exclusiveArea: '', floor: '' };
-    setUnitInfoResult(null);
     setServerFieldErrors({});
-    lastUnitKeyRef.current = null;
   };
 
   const handleChangeComplex = () => {
     setComplex(null);
-    setUnitInfoResult(null);
-    lastUnitKeyRef.current = null;
   };
 
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
     setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
-
-  const applyUnitInfo = (result) => {
-    setUnitInfoResult(result);
-    if (result.status !== 'found') return;
-    setForm((prev) => {
-      const next = { ...prev };
-      const filled = autoFilledRef.current;
-      [
-        ['exclusiveArea', result.exclusiveArea],
-        ['floor', result.floor],
-      ].forEach(([name, value]) => {
-        if (value == null) return;
-        // 비어 있거나 직전에 자동으로 채운 값 그대로일 때만 새 값으로 바꾼다.
-        if (prev[name] === '' || prev[name] === filled[name]) {
-          next[name] = String(value);
-          filled[name] = String(value);
-        }
-      });
-      return next;
-    });
-  };
-
-  // 동·호가 둘 다 채워진 상태에서 칸을 벗어날 때, 직전에 물어본 값과 다를 때만 조회한다.
-  const handleUnitBlur = async () => {
-    if (!complex || !buildingNo || !unitNo || clientErrors.buildingNo || clientErrors.unitNo) return;
-
-    const key = `${complex.id}|${buildingNo}|${unitNo}`;
-    if (key === lastUnitKeyRef.current) return;
-    lastUnitKeyRef.current = key;
-
-    const cached = unitInfoCacheRef.current.get(key);
-    if (cached) {
-      applyUnitInfo(cached);
-      return;
-    }
-
-    setUnitInfoResult({ status: 'loading' });
-    const { data, error } = await unitInfo.fetchUnitInfo(complex.id, {
-      buildingNo: form.buildingNo.trim(),
-      unitNo: form.unitNo.trim(),
-    });
-    // 세션이 끊긴 경우 — 다음 blur에서 다시 묻는다.
-    if (!data && !error) {
-      if (lastUnitKeyRef.current === key) {
-        lastUnitKeyRef.current = null;
-        setUnitInfoResult(null);
-      }
-      return;
-    }
-
-    const result = data
-      ? { status: 'found', exclusiveArea: data.exclusiveArea, floor: data.floor }
-      : { status: 'missing', message: error.status === 404 ? null : error.message };
-    // 찾았거나 없는(404) 결과만 저장한다. 503·429는 잠깐의 실패라 같은 동·호로 다시 물을 수 있게 둔다
-    // (공공데이터 API는 처음 조회할 때 수 초씩 걸려 타임아웃이 나기도 한다).
-    const isTransient = !data && error.status !== 404;
-    if (!isTransient) unitInfoCacheRef.current.set(key, result);
-    // 기다리는 사이 동·호를 바꿨으면 이 결과는 화면에 쓰지 않는다.
-    if (lastUnitKeyRef.current === key) {
-      applyUnitInfo(result);
-      if (isTransient) lastUnitKeyRef.current = null;
-    }
   };
 
   const handleSubmit = async () => {
@@ -329,7 +249,6 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
             placeholder="101"
             value={form.buildingNo}
             onChange={(event) => updateField('buildingNo', event.target.value)}
-            onBlur={handleUnitBlur}
             error={fieldError('buildingNo')}
             disabled={!complex || isSubmitting}
           />
@@ -339,7 +258,6 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
             placeholder="1203"
             value={form.unitNo}
             onChange={(event) => updateField('unitNo', event.target.value)}
-            onBlur={handleUnitBlur}
             error={fieldError('unitNo')}
             disabled={!complex || isSubmitting}
           />
@@ -368,21 +286,6 @@ const BasicInfoStep = ({ onNavigate, onUnauthorized }) => {
               error={fieldError('floor')}
               disabled={!complex || isSubmitting}
             />
-          </div>
-          <div aria-live="polite">
-            {unitInfoResult?.status === 'loading' && (
-              <p className="flex items-center gap-1.5 text-sub text-ink-3">
-                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                건축물대장에서 면적·층을 찾는 중입니다
-              </p>
-            )}
-            {unitInfoResult?.status === 'found' && <p className="text-sub text-ink-3">건축물대장 기준</p>}
-            {unitInfoResult?.status === 'missing' && (
-              <p className="text-sub text-warn-ink">
-                {UNIT_INFO_MISSING_MESSAGE}
-                {unitInfoResult.message && ` · ${unitInfoResult.message}`}
-              </p>
-            )}
           </div>
         </div>
 

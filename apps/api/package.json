@@ -13,7 +13,6 @@
     "seed:disputes": "node prisma/seedDisputes.js",
     "sync:kapt": "node prisma/syncKaptComplexes.js",
     "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
-    "relink:complex-aliases": "node prisma/relinkComplexAliases.js",
     "audit:complex-matching": "node prisma/auditComplexMatching.js"
   },
   "dependencies": {

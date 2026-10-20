@@ -1,4 +1,4 @@
-// 외부 API 상태 점검(주간 cron, 단지 목록 동기화·기본정보 채우기 뒤). 고정 표본 3건으로 juso·K-apt 기본정보·건축HUB를
+// 외부 API 상태 점검(주간 cron, 단지 목록 동기화·기본정보 채우기 뒤). 고정 표본 3건으로 juso·K-apt 기본정보를
 // 한 번씩 불러 결과를 jobs(type EXTERNAL_API_HEALTH)에 남기고, 직전 점검도 실패였으면(2회 연속) 경보 로그를 남긴다.
 // K-apt 기본정보는 하루 한도가 있어서 1회만, 사용량 카운터(apiUsage.js)를 거쳐 부른다.
 import { KAPT_BASIS_API, KAPT_BASIS_CRON_LIMIT, spendApiCall } from '../complexes/apiUsage.js';
@@ -8,34 +8,22 @@ import { healthProbes } from '../complexes/provider/publicProvider.js';
 
 export const EXTERNAL_API_HEALTH_JOB_TYPE = 'EXTERNAL_API_HEALTH';
 
-// 정답을 사람이 확인한 표본(2026-10-20). pnu는 리 단위 법정동 코드 그대로의 19자리, 동·호는 대장 표기 그대로.
+// 정답을 사람이 확인한 표본(2026-10-20).
 export const HEALTH_SAMPLES = [
   {
     name: '잠실파크리오',
     kaptCode: 'A13824006',
     jusoKeyword: '서울특별시 송파구 올림픽로 435',
-    pnu: '1171010200100170000',
-    dongNm: '101동',
-    hoNm: '1203',
-    exclusiveArea: 35.24,
   },
   {
     name: '가평읍내',
     kaptCode: 'A47771105',
     jusoKeyword: '경기도 가평군 가평읍 가화로 142-26',
-    pnu: '4182025021102700000',
-    dongNm: '105동',
-    hoNm: '304호',
-    exclusiveArea: 39.51,
   },
   {
     name: '중계그린',
     kaptCode: 'A13986306',
     jusoKeyword: '서울특별시 노원구 섬밭로 285',
-    pnu: '1135010600105030000',
-    dongNm: '114동',
-    hoNm: '410호',
-    exclusiveArea: 39.78,
   },
 ];
 
@@ -67,12 +55,6 @@ const checkJuso = (sample) =>
     return rows.some((row) => row.bdKdcd === '1') ? null : 'no apartment row';
   });
 
-const checkBuildingHub = (sample) =>
-  check(async () => {
-    const area = await healthProbes.fetchExclusiveArea(sample.pnu, sample.dongNm, sample.hoNm);
-    return area === sample.exclusiveArea ? null : `unexpected area ${area}`;
-  });
-
 // 하루 한도에 닿았으면 부르지 않고 skipped(실패로 치지 않음)
 const checkKaptBasis = async (prisma, sample) => {
   if ((await spendApiCall(prisma, KAPT_BASIS_API, KAPT_BASIS_CRON_LIMIT)) === null) {
@@ -99,15 +81,13 @@ export const runExternalApiHealth = async ({ prisma }) => {
   let result = { error: 'internal error' };
 
   try {
-    const [juso, buildingHub, kaptBasis] = await Promise.all([
+    const [juso, kaptBasis] = await Promise.all([
       Promise.all(HEALTH_SAMPLES.map(checkJuso)),
-      Promise.all(HEALTH_SAMPLES.map(checkBuildingHub)),
       checkKaptBasis(prisma, HEALTH_SAMPLES[0]),
     ]);
     const apis = {
       juso: summarize(juso.map((outcome, index) => ({ name: HEALTH_SAMPLES[index].name, ...outcome }))),
       kaptBasis,
-      buildingHub: summarize(buildingHub.map((outcome, index) => ({ name: HEALTH_SAMPLES[index].name, ...outcome }))),
     };
     const failedApis = Object.entries(apis)
       .filter(([, api]) => !api.ok)

@@ -1,6 +1,6 @@
-// K-apt 기본정보(getAphusBassInfoV5)로 kapt_complexes의 주소 칸(도로명·지번 원문과 파싱 결과)을 채운다.
-// 부르는 곳: 백필 스크립트(prisma/backfillKaptBasis.js), 주간 cron(동기화 뒤 남은 시간),
-// 단지 resolve(publicProvider.getKaptComplex — 받은 값을 그대로 저장해 호출을 아낀다).
+// K-apt 기본정보(getAphusBassInfoV5)로 kapt_complexes의 주소 칸(도로명·지번 원문과 번지)을 채운다.
+// 도로명 키는 kapt_complexes에 두지 않는다(단지 하나가 도로명주소 여럿 — 키는 연결 표 kapt_address_links에만).
+// 부르는 곳: 백필 스크립트(prisma/backfillKaptBasis.js), 주간 cron(동기화 뒤 남은 시간).
 // 모든 호출은 external_api_usage 카운터(apiUsage.js)를 거친다.
 import { KAPT_BASIS_API, spendApiCall } from './apiUsage.js';
 import { parseJibunLot, parseRoadAddress } from './kaptAddress.js';
@@ -47,34 +47,19 @@ export const toRoadParseStatus = (roadAddress, parsed) => {
 };
 
 // 기본정보 item → kapt_complexes에 쓸 칸
-export const toKaptBasisColumns = (item, legalDongCode, now) => {
+export const toKaptBasisColumns = (item, now) => {
   const roadAddress = trimOrNull(item.doroJuso);
   const jibunAddress = trimOrNull(item.kaptAddr);
-  const road = parseRoadAddress(roadAddress, legalDongCode);
   const lot = parseJibunLot(jibunAddress);
   return {
     roadAddress,
     jibunAddress,
-    roadSigunguCd: road?.sigunguCd ?? null,
-    roadNameKey: road?.roadNameKey ?? null,
-    roadUnderground: road ? road.underground : null,
-    roadMainNo: road?.mainNo ?? null,
-    roadSubNo: road ? road.subNo : null,
     // 산 번지는 juso 번지 키(산 제외)와 섞이지 않게 비워 둔다. 원문(jibunAddress)은 그대로 남아 PNU 계산에 쓴다.
     mainLot: lot && !lot.isMountain ? lot.mainLot : null,
     subLot: lot && !lot.isMountain ? lot.subLot : null,
     basisFetchedAt: now,
     basisError: null,
   };
-};
-
-// resolve 등에서 이미 받은 기본정보를 저장한다(추가 호출 없음). kapt_complexes에 없는 코드면 아무것도 안 한다.
-export const saveKaptBasis = async (prisma, kaptCode, item, now = new Date()) => {
-  const row = await prisma.kaptComplex.findUnique({ where: { kaptCode }, select: { legalDongCode: true } });
-  if (!row) return null;
-  const columns = toKaptBasisColumns(item, row.legalDongCode, now);
-  await prisma.kaptComplex.update({ where: { kaptCode }, data: columns });
-  return columns;
 };
 
 // basis_error에 남길 짧은 사유. 원본 메시지(URL·키가 섞일 수 있음)는 넣지 않는다.
@@ -217,11 +202,13 @@ export const fillKaptBasis = async ({
       return true;
     }
 
-    const columns = toKaptBasisColumns(result.item, row.legalDongCode, now());
+    const columns = toKaptBasisColumns(result.item, now());
     await prisma.kaptComplex.update({ where: { kaptCode: row.kaptCode }, data: columns });
     summary.filled += 1;
 
-    const status = toRoadParseStatus(columns.roadAddress, columns.roadNameKey !== null);
+    // 도로명 파싱 결과는 저장하지 않고 품질 집계에만 쓴다.
+    const parsed = parseRoadAddress(columns.roadAddress, row.legalDongCode) !== null;
+    const status = toRoadParseStatus(columns.roadAddress, parsed);
     summary.road[status] += 1;
     if (status === 'UNPARSEABLE') {
       const sido = row.sidoName ?? 'unknown';

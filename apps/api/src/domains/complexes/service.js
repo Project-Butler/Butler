@@ -1,8 +1,7 @@
 import { AppError } from '../../platform/AppError.js';
 import { toDateOnlyString } from '../../platform/dateUtils.js';
 import { prisma } from '../../platform/prismaClient.js';
-import { attachAliases, chooseOwnerComplexId, findKeyOwners } from './complexAliases.js';
-import { chooseSearchIdentity } from './complexMatching.js';
+import { toRoadNameKey } from './kaptAddress.js';
 import { callProvider } from './provider/index.js';
 import { rollUpLegalDongCode } from './provider/pnu.js';
 
@@ -15,6 +14,11 @@ const REGION_SELECT = {
 };
 
 const COMPLEX_INCLUDE = { region: { select: REGION_SELECT } };
+
+// resolve가 읽는 검색 저장본 기간(검색 뒤 이 시간 안에 고른 주소만 새 단지로 만든다)
+const SEARCH_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
+
+const SOURCE_NOT_FOUND_MESSAGE = '단지 정보를 찾을 수 없습니다. 주소를 다시 검색해 주세요.';
 
 // buildingInfo 다섯 값이 모두 null이면 buildingInfo 자체를 null로 내려준다(api-contract.md 2장).
 const toBuildingInfo = (complex) => {
@@ -48,128 +52,128 @@ const toComplexResponse = (complex) => ({
   createdAt: complex.createdAt.toISOString(),
 });
 
-// 'YYYY-MM-DD' → Prisma @db.Date 컬럼에 넣을 UTC 자정 Date
-const toDateColumn = (dateString) => (dateString ? new Date(`${dateString}T00:00:00Z`) : null);
+// 아직 단지가 없는 검색 결과만 저장한다. 같은 키는 1시간에 한 번만 덮어쓴다(같은 검색을 여러 번 해도 쓰기가 늘지 않음).
+const saveSearchResults = async (items) => {
+  if (items.length === 0) return;
+  const keys = items.map((item) => item.sourceKey);
+  const payloads = items.map((item) => JSON.stringify(item.payload));
+  await prisma.$executeRaw`
+    INSERT INTO address_search_results (source_key, payload, fetched_at)
+    SELECT key, payload::jsonb, now()
+    FROM unnest(${keys}::text[], ${payloads}::text[]) AS t(key, payload)
+    ON CONFLICT (source_key) DO UPDATE
+      SET payload = EXCLUDED.payload, fetched_at = EXCLUDED.fetched_at
+      WHERE address_search_results.fetched_at < now() - interval '1 hour'`;
+};
 
 export const searchComplexes = async ({ query, size }) => {
   const items = await callProvider((provider) => provider.searchComplexes(query, size));
   if (items.length === 0) return [];
 
   // 이미 플랫폼에 등록된 단지면 complexId를 채운다(없으면 null → 프론트가 resolve).
-  // 별칭으로 붙은 키(같은 건물의 KAPT·PNU 키)도 같은 단지로 본다.
-  const keys = items.flatMap((item) => [item.sourceKey, ...(item.linkedKeys ?? [])]);
-  const owners = await findKeyOwners(prisma, [...new Set(keys)]);
-  const ownerByKey = new Map(owners.map((owner) => [owner.sourceKey, owner.complexId]));
+  const existing = await prisma.complex.findMany({
+    where: { sourceKey: { in: items.map((item) => item.sourceKey) } },
+    select: { id: true, sourceKey: true },
+  });
+  const complexIdByKey = new Map(existing.map((complex) => [complex.sourceKey, complex.id]));
 
-  const seen = new Set();
-  const results = [];
-  for (const item of items) {
-    const identity = chooseSearchIdentity(item, ownerByKey);
-    if (identity.split) {
-      console.warn('[complexes] alias_split', { keys: item.linkedKeys, complexId: identity.complexId });
-    }
-    // 별칭 규칙으로 키가 바뀌어 앞 항목과 같아지면 하나만 둔다.
-    if (seen.has(identity.sourceKey)) continue;
-    seen.add(identity.sourceKey);
-    results.push({
-      sourceKey: identity.sourceKey,
-      complexId: identity.complexId,
-      name: item.name,
-      jibunAddress: item.jibunAddress ?? null,
-      roadAddress: item.roadAddress ?? null,
-      legalDongCode: item.legalDongCode,
-    });
-  }
-  return results;
-};
-
-// 같은 건물의 다른 키(KAPT ↔ PNU). 계산이 실패하면(외부 장애 포함) 입력 키만 쓴다 — 연결만 못 할 뿐 등록은 된다.
-const getLinkedSourceKeys = async (sourceKey, external) => {
+  // 저장본 쓰기가 실패해도 검색은 성공으로 응답한다(resolve가 404 "다시 검색"을 낸다).
   try {
-    return await callProvider((provider) => provider.getLinkedSourceKeys(sourceKey, external));
+    await saveSearchResults(items.filter((item) => !complexIdByKey.has(item.sourceKey)));
   } catch (error) {
-    console.error('[complexes] linked keys failed', error.code ?? error.name);
-    return [sourceKey];
-  }
-};
-
-const findComplexWithRegion = (complexId) =>
-  prisma.complex.findUnique({ where: { id: complexId }, include: COMPLEX_INCLUDE });
-
-// 별칭(또는 별칭 행이 아직 없는 옛 complexes.source_key)으로 이미 있는 단지를 찾는다.
-const findExistingComplex = async (sourceKey) => {
-  const alias = await prisma.complexSourceAlias.findUnique({ where: { sourceKey }, select: { complexId: true } });
-  if (alias) return findComplexWithRegion(alias.complexId);
-
-  const legacy = await prisma.complex.findUnique({ where: { sourceKey }, include: COMPLEX_INCLUDE });
-  if (legacy) await attachAliases(prisma, legacy.id, [sourceKey]);
-  return legacy;
-};
-
-const toComplexData = async (sourceKey, external) => {
-  // regions는 읍면동 단위만 있어서 리 단위 코드는 올려서 저장한다.
-  const legalDongCode = rollUpLegalDongCode(external.legalDongCode);
-  const region = await prisma.region.findUnique({ where: { legalDongCode }, select: { legalDongCode: true } });
-  if (!region) {
-    // 법정동 전체 시드 이후에는 생기지 않아야 한다. 응답은 일반 500으로 둔다.
-    console.error('[complexes] region missing', legalDongCode);
-    throw new Error('region missing');
+    console.error('[complexes] search result save failed', error.code ?? error.name);
   }
 
-  const buildingInfo = external.buildingInfo ?? {};
+  return items.map((item) => ({
+    sourceKey: item.sourceKey,
+    complexId: complexIdByKey.get(item.sourceKey) ?? null,
+    name: item.name,
+    jibunAddress: item.jibunAddress ?? null,
+    roadAddress: item.roadAddress ?? null,
+    legalDongCode: item.legalDongCode,
+  }));
+};
+
+const trimOrNull = (value) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text.length > 0 ? text : null;
+};
+
+const toIntOrNull = (value) => {
+  const number = Number(value);
+  return value !== null && value !== undefined && value !== '' && Number.isInteger(number) ? number : null;
+};
+
+// juso detBdNmList('101동,102동, 103동') → ['101동', '102동', '103동'](공백 제거, 중복 제거)
+const toDetailBuildingNames = (value) => [
+  ...new Set(
+    String(value ?? '')
+      .split(',')
+      .map((name) => name.replace(/\s+/g, ''))
+      .filter(Boolean),
+  ),
+];
+
+// 검색 저장본(juso 칸) → complexes 행
+const toComplexData = (sourceKey, payload, legalDongCode) => {
+  const roadAddress = trimOrNull(payload.roadAddr);
+  const roadName = trimOrNull(payload.rn);
   return {
     sourceKey,
-    name: external.name,
-    jibunAddress: external.jibunAddress ?? null,
-    roadAddress: external.roadAddress ?? null,
+    name: trimOrNull(payload.bdNm) ?? roadAddress ?? sourceKey,
+    jibunAddress: trimOrNull(payload.jibunAddr),
+    roadAddress,
     legalDongCode,
-    approvalDate: toDateColumn(buildingInfo.approvalDate),
-    householdCount: buildingInfo.householdCount ?? null,
-    buildingCount: buildingInfo.buildingCount ?? null,
-    maxFloor: buildingInfo.maxFloor ?? null,
-    parkingCount: buildingInfo.parkingCount ?? null,
+    zipCode: trimOrNull(payload.zipNo),
+    officialBuildingName: trimOrNull(payload.bdNm),
+    detailBuildingNames: toDetailBuildingNames(payload.detBdNmList),
+    roadCode: trimOrNull(payload.rnMgtSn),
+    isUnderground: String(payload.udrtYn) === '1',
+    buildingMainNo: toIntOrNull(payload.buldMnnm),
+    buildingSubNo: toIntOrNull(payload.buldSlno),
+    sigunguCode: String(payload.admCd ?? '').slice(0, 5) || null,
+    roadName,
+    roadNameKey: roadName ? toRoadNameKey(roadName) : null,
+    isMountain: String(payload.mtYn) === '1',
+    mainLot: toIntOrNull(payload.lnbrMnnm),
+    subLot: toIntOrNull(payload.lnbrSlno),
+    buildingMgtNo: trimOrNull(payload.bdMgtSn),
   };
 };
 
+const findComplexBySourceKey = (sourceKey) =>
+  prisma.complex.findUnique({ where: { sourceKey }, include: COMPLEX_INCLUDE });
+
+const throwSourceNotFound = () => {
+  throw new AppError('COMPLEX_SOURCE_NOT_FOUND', 404, SOURCE_NOT_FOUND_MESSAGE);
+};
+
+// 외부 호출 없음: 이미 있는 단지는 그대로, 없으면 24시간 안의 검색 저장본으로 만든다.
 const resolveComplexOnce = async (sourceKey) => {
-  // 1) 이미 있는 단지는 외부 호출 없이 돌려준다.
-  const existing = await findExistingComplex(sourceKey);
+  const existing = await findComplexBySourceKey(sourceKey);
   if (existing) return existing;
 
-  const external = await callProvider((provider) => provider.getComplexBySourceKey(sourceKey));
-  if (!external) {
-    throw new AppError('COMPLEX_SOURCE_NOT_FOUND', 404, '단지 정보를 찾을 수 없습니다.');
+  const saved = await prisma.addressSearchResult.findUnique({ where: { sourceKey } });
+  if (!saved || saved.fetchedAt.getTime() < Date.now() - SEARCH_RESULT_TTL_MS) throwSourceNotFound();
+
+  // regions는 읍면동 단위만 있어서 리 단위 코드는 올려서 저장한다.
+  const legalDongCode = rollUpLegalDongCode(saved.payload.admCd);
+  const region = legalDongCode
+    ? await prisma.region.findUnique({ where: { legalDongCode }, select: { legalDongCode: true } })
+    : null;
+  if (!region) {
+    console.error('[complexes] region missing', legalDongCode);
+    throwSourceNotFound();
   }
 
-  // 2) 같은 건물의 다른 키가 이미 어느 단지에 붙어 있으면 그 단지에 이 키를 더한다.
-  //    여러 단지에 걸쳐 있으면 KAPT 별칭을 가진 단지를 고르고, 다른 단지에 붙은 키는 옮기지 않는다.
-  const linkedKeys = await getLinkedSourceKeys(sourceKey, external);
-  const owners = await findKeyOwners(prisma, linkedKeys);
-  const ownerId = chooseOwnerComplexId(owners);
-  if (ownerId) {
-    const complexIds = [...new Set(owners.map((owner) => owner.complexId))];
-    if (complexIds.length > 1) console.warn('[complexes] alias_conflict', { keys: linkedKeys, complexIds });
-    await attachAliases(prisma, ownerId, linkedKeys);
-    return findComplexWithRegion(ownerId);
-  }
-
-  // 3) 새로 만든다. 단지와 같은 건물의 키 전부를 한 트랜잭션으로 넣는다.
-  //    동시에 같은 건물을 resolve하면 한쪽이 유니크 충돌(P2002)로 롤백된다 — 호출한 쪽이 다시 시도한다.
-  const data = await toComplexData(sourceKey, external);
-  return prisma.$transaction(async (tx) => {
-    const complex = await tx.complex.create({ data, include: COMPLEX_INCLUDE });
-    await tx.complexSourceAlias.createMany({
-      data: [...new Set(linkedKeys)].map((key) => ({ sourceKey: key, complexId: complex.id })),
-    });
-    return complex;
-  });
+  return prisma.complex.create({ data: toComplexData(sourceKey, saved.payload, legalDongCode), include: COMPLEX_INCLUDE });
 };
 
 export const resolveComplex = async (sourceKey) => {
   try {
     return toComplexResponse(await resolveComplexOnce(sourceKey));
   } catch (error) {
-    // 경쟁에서 진 쪽: 이제 상대가 만든 별칭이 보이므로 한 번 더 하면 그 단지를 돌려준다.
+    // 동시에 같은 키를 resolve해 경쟁에서 진 쪽: 이제 상대가 만든 단지가 보이므로 한 번 더 하면 그 단지를 돌려준다.
     if (error.code !== 'P2002') throw error;
     return toComplexResponse(await resolveComplexOnce(sourceKey));
   }
@@ -178,21 +182,4 @@ export const resolveComplex = async (sourceKey) => {
 export const findComplexById = async (complexId) => {
   const complex = await prisma.complex.findUnique({ where: { id: complexId }, include: COMPLEX_INCLUDE });
   return complex ? toComplexResponse(complex) : null;
-};
-
-export const findUnitInfo = async ({ complexId, buildingNo, unitNo }) => {
-  const complex = await prisma.complex.findUnique({
-    where: { id: complexId },
-    select: { id: true, sourceKey: true, name: true, jibunAddress: true, roadAddress: true, legalDongCode: true },
-  });
-  if (!complex) {
-    throw new AppError('COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
-  }
-
-  const unitInfo = await callProvider((provider) => provider.getUnitInfo({ complex, buildingNo, unitNo }));
-  if (!unitInfo || (unitInfo.exclusiveArea == null && unitInfo.floor == null)) {
-    throw new AppError('UNIT_INFO_NOT_FOUND', 404, '동·호 정보를 찾지 못했습니다. 직접 입력해 주세요.');
-  }
-
-  return { exclusiveArea: unitInfo.exclusiveArea ?? null, floor: unitInfo.floor ?? null };
 };

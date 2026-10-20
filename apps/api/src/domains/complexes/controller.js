@@ -1,24 +1,17 @@
 import { AppError } from '../../platform/AppError.js';
 import { assertSingleValues, throwIfInvalid } from '../../platform/requestValidation.js';
 import { sendData } from '../../platform/respond.js';
-import {
-  COMBINED_UNIT_ADDRESS_REASON,
-  isCombinedUnitAddress,
-  normalizeBuildingNo,
-  normalizeUnitNo,
-} from '../../platform/unitAddress.js';
 import { isUuid } from '../../platform/uuid.js';
-import { findComplexById, findUnitInfo, resolveComplex, searchComplexes } from './service.js';
+import { findComplexById, resolveComplex, searchComplexes } from './service.js';
 
 // api-contract.md 2장: query 2자 이상, size 기본 20·최대 50, 페이지 없음
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
 const DEFAULT_SEARCH_SIZE = 20;
 const MAX_SEARCH_SIZE = 50;
-const MAX_UNIT_PART_LENGTH = 10;
 
-// sourceKey는 provider가 만든 값만 받는다: KAPT:<단지코드> 또는 PNU:<19자리>
-const SOURCE_KEY_PATTERN = /^(KAPT:[A-Z0-9]{1,20}|PNU:\d{19})$/;
+// sourceKey는 provider가 만든 값만 받는다: ROAD:<도로명코드12>-<지하0/1>-<건물본번>-<건물부번>
+const SOURCE_KEY_PATTERN = /^ROAD:\d{12}-[01]-\d{1,5}-\d{1,5}$/;
 
 // 도로명주소 API가 검색어에 있으면 거부하는 특수문자
 const SEARCH_FORBIDDEN_CHARS = /[%=><[\]]/g;
@@ -68,29 +61,6 @@ const parseResolveBody = (body) => {
   return sourceKey;
 };
 
-const parseUnitInfoQuery = (query) => {
-  assertSingleValues(query);
-  const details = [];
-
-  // '101-1203'처럼 동·호를 한 칸에 적으면 나눠 입력하도록 거부한다(길이 검사보다 먼저).
-  const buildingNo = normalizeBuildingNo(query.buildingNo);
-  if (isCombinedUnitAddress(buildingNo)) {
-    details.push({ field: 'buildingNo', reason: COMBINED_UNIT_ADDRESS_REASON });
-  } else if (buildingNo.length < 1 || buildingNo.length > MAX_UNIT_PART_LENGTH) {
-    details.push({ field: 'buildingNo', reason: `1자 이상 ${MAX_UNIT_PART_LENGTH}자 이하여야 합니다.` });
-  }
-
-  const unitNo = normalizeUnitNo(query.unitNo, query.buildingNo);
-  if (isCombinedUnitAddress(unitNo)) {
-    details.push({ field: 'unitNo', reason: COMBINED_UNIT_ADDRESS_REASON });
-  } else if (unitNo.length < 1 || unitNo.length > MAX_UNIT_PART_LENGTH) {
-    details.push({ field: 'unitNo', reason: `1자 이상 ${MAX_UNIT_PART_LENGTH}자 이하여야 합니다.` });
-  }
-
-  throwIfInvalid(details);
-  return { buildingNo, unitNo };
-};
-
 const throwComplexNotFound = () => {
   throw new AppError('COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
 };
@@ -122,18 +92,6 @@ export const getComplex = async (req, res, next) => {
     if (!complex) throwComplexNotFound();
 
     sendData(res, complex);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getComplexUnitInfo = async (req, res, next) => {
-  try {
-    const { complexId } = req.params;
-    if (!isUuid(complexId)) throwComplexNotFound();
-
-    const unitInfo = await findUnitInfo({ complexId, ...parseUnitInfoQuery(req.query) });
-    sendData(res, unitInfo);
   } catch (error) {
     next(error);
   }
