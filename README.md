@@ -93,7 +93,7 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 npm run sync:kapt -w apps/api                                                # 1. K-apt 단지 목록(약 2.2만 건)
 npm run import:kapt-basis -w apps/api -- <엑셀.xlsx> --file-date 2026-10-16    # 2. 엑셀 → 기본정보 + 도로명 연결(KAPT_EXCEL)
 npm run backfill:kapt-basis -w apps/api                                      # 3. 엑셀에 없는 단지(약 600곳) 기본정보 API — 하루 한도 4,500, 남으면 다음 날 다시
-npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>               # 4. juso 건물DB → 건물별 K-apt 연결(약 20만 행, 로컬 약 3분)
+npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>               # 4. juso 건물DB → 건물별 K-apt 연결(약 20만 행, 로컬 약 1분)
 ```
 - 2·4번은 소스별 품질 게이트(읽은 줄 수, 연결률, 규칙별 비율, 지난 성공 대비)를 넘지 못하면 아무것도 바꾸지 않고 실패한다(`reference_data_imports.error`에 사유). 잘린 파일로는 기존 데이터를 지우지 않는다.
 - 4번이 성공하면 juso 변동분 커서가 전체분 기준일로 옮겨지고, 매일 cron이 그다음 날부터 변동분을 적용한다. 4번은 변동분이 `RUNNING`·`PARTIAL`이면 시작하지 않는다(같은 잠금 키).
