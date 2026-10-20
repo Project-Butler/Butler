@@ -88,10 +88,12 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions        Session[]
-  requestedJobs   Job[]
-  ownerships      PropertyOwnership[]
-  tenantContracts Contract[]          @relation("TenantContracts")
+  sessions          Session[]
+  requestedJobs     Job[]
+  ownerships        PropertyOwnership[]
+  tenantContracts   Contract[]          @relation("TenantContracts")
+  landlordBuildings LandlordBuilding[]
+  activityLogs      ActivityLog[]
 
   @@map("users")
 }
@@ -131,12 +133,34 @@ model Region {
 
 model Complex {
   id            String  @id @default(uuid()) @db.Uuid
+  // juso 도로명주소에서 만든 결정적 키 "ROAD:<도로명코드12>-<지하0/1>-<건물본번>-<건물부번>".
+  // 불투명 값이라 도로명이 바뀌어도 고치지 않는다(대표 건물관리번호로 다시 찾는다).
   sourceKey     String? @unique @map("source_key")
   name          String
   jibunAddress  String? @map("jibun_address")
   roadAddress   String? @map("road_address")
   legalDongCode String  @map("legal_dong_code")
   region        Region  @relation(fields: [legalDongCode], references: [legalDongCode])
+
+  // juso 검색 결과에서 온 주소 칸. 관리자가 만든 단지는 비어 있을 수 있다.
+  zipCode              String?  @map("zip_code") @db.VarChar(5)
+  officialBuildingName String?  @map("official_building_name") @db.VarChar(100) // juso bdNm
+  detailBuildingNames  String[] @default([]) @map("detail_building_names") // juso detBdNmList(예: 101동~105동)
+  roadCode             String?  @map("road_code") @db.VarChar(12) // 도로명코드(rnMgtSn)
+  isUnderground        Boolean? @map("is_underground")
+  buildingMainNo       Int?     @map("building_main_no")
+  buildingSubNo        Int?     @map("building_sub_no")
+  sigunguCode          String?  @map("sigungu_code") @db.VarChar(5)
+  roadName             String?  @map("road_name") @db.VarChar(80) // rn 원문
+  // toRoadNameKey(roadName). 앱이 채우는 일반 칸(생성 칸 아님). K-apt 연결 표와 비교하는 텍스트 키.
+  roadNameKey          String?  @map("road_name_key")
+  isMountain           Boolean? @map("is_mountain")
+  mainLot              Int?     @map("main_lot")
+  subLot               Int?     @map("sub_lot")
+  // 대표 건물관리번호(bdMgtSn). 도로명이 바뀐 주소를 기존 단지로 다시 찾을 때 쓴다.
+  buildingMgtNo        String?  @map("building_mgt_no") @db.VarChar(25)
+  // 연결 표(kapt_address_links·juso_building_links)에서만 정해진다. 사용자 입력 아님.
+  kaptCode             String?  @map("kapt_code") @db.VarChar(20)
 
   // buildingInfo — 외부 데이터에 없으면 전부 null. AMI 등 나중 기능이 입력으로 씀.
   // 응답의 buildingInfo 객체로 묶어 내려주고, 다섯 값이 모두 null이면 buildingInfo: null.
@@ -151,58 +175,51 @@ model Complex {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  properties      Property[]
-  sourceAliases   ComplexSourceAlias[]
-  buildingLookups ComplexBuildingLookup[]
-  lookupMisses    ComplexLookupMiss[]
+  properties        Property[]
+  landlordBuildings LandlordBuilding[]
 
+  @@index([sigunguCode, roadNameKey, isUnderground, buildingMainNo, buildingSubNo])
+  @@index([buildingMgtNo])
+  @@index([kaptCode])
   @@map("complexes")
 }
 
-// 단지 외부 키 별칭. 같은 아파트가 KAPT 키·PNU 키 두 가지로 검색돼도 한 Complex로 묶는다.
-// complexes.source_key는 처음 만든 키 그대로 두고(응답 호환), resolve·검색은 이 테이블을 먼저 본다.
-// 별칭은 추가만 하고 다른 Complex로 옮기지 않는다.
-model ComplexSourceAlias {
-  sourceKey String   @id @map("source_key") @db.VarChar(50)
+// 임대인 개인 건물 설정(임대인 × 단지). 건물명·정원·메모. 상태는 저장하지 않는다.
+// 한 임대인이 같은 단지(도로명주소)에 설정을 두 개 만들 수 없다(정원을 단지 단위로 센다).
+model LandlordBuilding {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
   complexId String   @map("complex_id") @db.Uuid
-  complex   Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
+  complex   Complex  @relation(fields: [complexId], references: [id])
+  name      String   @db.VarChar(50)
+  capacity  Int? // 전체 호실 수 1~999. null이면 정원 검사 안 함
+  memo      String?  @db.VarChar(500)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@unique([userId, complexId])
   @@index([complexId])
-  @@map("complex_source_aliases")
+  @@map("landlord_buildings")
 }
 
-// 동·호 조회에서 동마다 찾은 "찾는 방법"(필지·대장 동 이름·호 표기). 면적·층은 저장하지 않는다.
-// dongKey는 normalizeBuildingNo 결과, pnu는 리 단위 법정동 코드 그대로의 19자리.
-model ComplexBuildingLookup {
-  complexId      String   @map("complex_id") @db.Uuid
-  complex        Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
-  dongKey        String   @map("dong_key") @db.VarChar(20)
-  pnu            String   @db.VarChar(19)
-  registryDongNm String?  @map("registry_dong_nm")
-  hoFormat       String   @map("ho_format") @db.VarChar(20)
-  verifiedAt     DateTime @map("verified_at") @db.Timestamptz(3)
-  missCount      Int      @default(0) @map("miss_count")
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+// 최근 활동(사용자별). 문장은 저장하지 않고 화면이 type + params로 만든다.
+// complexId·propertyId는 FK 없이 값만 둔다(대상이 지워져도 기록은 남김).
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  user       User     @relation(fields: [userId], references: [id])
+  type       String   @db.VarChar(40)
+  complexId  String?  @map("complex_id") @db.Uuid
+  propertyId String?  @map("property_id") @db.Uuid
+  params     Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  @@id([complexId, dongKey])
-  @@map("complex_building_lookups")
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("activity_logs")
 }
 
-// 동을 어느 필지 대장에서도 못 찾은 경우의 음성 캐시. expiresAt이 지나면 무시하고 다시 찾는다.
-model ComplexLookupMiss {
-  complexId String   @map("complex_id") @db.Uuid
-  complex   Complex  @relation(fields: [complexId], references: [id], onDelete: Cascade)
-  dongKey   String   @map("dong_key") @db.VarChar(20)
-  reason    String?  @db.VarChar(50)
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
-
-  @@id([complexId, dongKey])
-  @@index([expiresAt])
-  @@map("complex_lookup_misses")
-}
-
-// 외부 API 하루 호출 수(KST 날짜). 하루 한도가 있는 API를 여러 경로(백필·resolve·cron)가 나눠 쓸 때 쓴다.
+// 외부 API 하루 호출 수(KST 날짜). K-apt 목록·기본정보 API만 센다(juso는 세지 않음).
 model ExternalApiUsage {
   api       String   @db.VarChar(30)
   usageDate DateTime @map("usage_date") @db.Date
@@ -212,10 +229,9 @@ model ExternalApiUsage {
   @@map("external_api_usage")
 }
 
-// K-apt(공동주택관리정보시스템) 전국 단지 목록 캐시. 단지 검색이 juso 결과와 이름을 맞출 때
-// 외부 목록 API 대신 이 테이블을 본다. 매주 Vercel Cron(GET /api/cron/kapt-complexes)과
+// K-apt(공동주택관리정보시스템) 전국 단지 목록 캐시. 매주 Vercel Cron(GET /api/cron/kapt-complexes)과
 // `npm run sync:kapt`가 채운다(src/domains/complexes/kaptSync.js). 목록에서 빠진 단지는
-// 지우지 않고 isActive=false로만 바꾼다. Complex와 relation은 없다(sourceKey "KAPT:<kaptCode>"로만 이어짐).
+// 지우지 않고 isActive=false로만 바꾼다. 단지(Complex)와는 연결 표를 거쳐 kaptCode로만 이어진다.
 model KaptComplex {
   kaptCode      String   @id @map("kapt_code") @db.VarChar(20)
   name          String
@@ -231,27 +247,101 @@ model KaptComplex {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  // K-apt 기본정보(getAphusBassInfoV5)에서 채우는 주소. 백필 스크립트·resolve·주간 cron이 채운다.
-  roadAddress     String?   @map("road_address") // doroJuso 원문
-  jibunAddress    String?   @map("jibun_address") // kaptAddr 원문
-  // doroJuso 파싱 결과(도로명 구조 키). 파싱 못 하면 null.
-  roadSigunguCd   String?   @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String?   @map("road_name_key") // 공백 없는 도로명
-  roadUnderground Boolean?  @map("road_underground")
-  roadMainNo      Int?      @map("road_main_no")
-  roadSubNo       Int?      @map("road_sub_no")
+  // K-apt 기본정보(엑셀 또는 getAphusBassInfoV5) 값. 도로명 키는 연결 표(kapt_address_links)에만 둔다.
+  roadAddress    String?   @map("road_address") // doroJuso 원문
+  jibunAddress   String?   @map("jibun_address") // kaptAddr 원문
   // kaptAddr 번지
-  mainLot         Int?      @map("main_lot")
-  subLot          Int?      @map("sub_lot")
+  mainLot        Int?      @map("main_lot")
+  subLot         Int?      @map("sub_lot")
+  saleType       String?   @map("sale_type") @db.VarChar(20) // 분양형태(분양·임대·혼합 등)
+  householdCount Int?      @map("household_count")
+  buildingCount  Int?      @map("building_count")
+  approvalDate   DateTime? @map("approval_date") @db.Date
+  basisSource    String?   @map("basis_source") @db.VarChar(10) // EXCEL / API
+  basisFileDate  DateTime? @map("basis_file_date") @db.Date
   // null이면 아직 기본정보를 못 받음. 실패마다 basisAttempts +1, 3회 이상이면 자동 채우기 대상에서 뺀다.
-  basisFetchedAt  DateTime? @map("basis_fetched_at") @db.Timestamptz(3)
-  basisAttempts   Int       @default(0) @map("basis_attempts")
-  basisError      String?   @map("basis_error")
+  basisFetchedAt DateTime? @map("basis_fetched_at") @db.Timestamptz(3)
+  basisAttempts  Int       @default(0) @map("basis_attempts")
+  basisError     String?   @map("basis_error")
 
   @@index([legalDongCode])
-  @@index([roadSigunguCd, roadNameKey, roadMainNo, roadSubNo])
   @@index([legalDongCode, mainLot])
   @@map("kapt_complexes")
+}
+
+// K-apt 쪽이 알려 준 도로명주소(엑셀·기본정보 API). 키는 kaptAddress.js의
+// parseRoadAddress()·toRoadNameKey() 규칙. 소스별로 mark-and-sweep(import_run_id).
+model KaptAddressLink {
+  source          String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
+  roadSigunguCd   String   @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey     String   @map("road_name_key")
+  roadUnderground Boolean  @map("road_underground")
+  roadMainNo      Int      @map("road_main_no")
+  roadSubNo       Int      @map("road_sub_no")
+  kaptCode        String   @map("kapt_code") @db.VarChar(20)
+  importRunId     String?  @map("import_run_id") @db.Uuid
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([source, roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo, kaptCode])
+  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@index([kaptCode])
+  @@map("kapt_address_links")
+}
+
+// juso 건물DB의 건물(동)별 K-apt 연결. 변동분이 건물관리번호 단위로 오므로 건물 단위로 둔다.
+// K-apt 단지와 맞은 건물만 저장한다. 같은 필지 형제 조회용 식 인덱스
+// (substr(building_mgt_no, 1, 19))는 마이그레이션 SQL에 있다.
+model JusoBuildingLink {
+  buildingMgtNo   String    @id @map("building_mgt_no") @db.VarChar(25)
+  roadSigunguCd   String    @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey     String    @map("road_name_key")
+  roadUnderground Boolean   @map("road_underground")
+  roadMainNo      Int       @map("road_main_no")
+  roadSubNo       Int       @map("road_sub_no")
+  roadCode        String?   @map("road_code") @db.VarChar(12)
+  kaptCode        String    @map("kapt_code") @db.VarChar(20)
+  matchRule       String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
+  importRunId     String?   @map("import_run_id") @db.Uuid
+  appliedFileDate DateTime? @map("applied_file_date") @db.Date
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@index([kaptCode])
+  @@map("juso_building_links")
+}
+
+// 참고 데이터 가져오기 실행 기록이자 실행 단위 잠금.
+// 부분 유니크 (lock_key) WHERE status='RUNNING', (source, file_date) WHERE status='SUCCEEDED'
+// AND source='JUSO_DELTA'는 마이그레이션 SQL에 있다.
+model ReferenceDataImport {
+  id          String    @id @default(uuid()) @db.Uuid
+  source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_DELTA / KAPT_API_BASIS
+  lockKey     String    @map("lock_key") @db.VarChar(100)
+  fileName    String?   @map("file_name")
+  fileDate    DateTime? @map("file_date") @db.Date
+  fileSize    BigInt?   @map("file_size")
+  fileSha1    String?   @map("file_sha1") @db.Char(40)
+  status      String    @db.VarChar(10) // RUNNING / PARTIAL / SUCCEEDED / FAILED
+  rowsRead    Int       @default(0) @map("rows_read")
+  rowsWritten Int       @default(0) @map("rows_written")
+  cursorLine  Int       @default(0) @map("cursor_line")
+  stats       Json?
+  error       String?
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz(3)
+
+  @@index([source, status, fileDate])
+  @@map("reference_data_imports")
+}
+
+// 단지 검색 결과 저장본(아직 단지가 없는 결과만). resolve가 24시간 안의 행으로 단지를 만든다.
+model AddressSearchResult {
+  sourceKey String   @id @map("source_key") @db.VarChar(50)
+  payload   Json
+  fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  @@index([fetchedAt])
+  @@map("address_search_results")
 }
 
 model Property {
@@ -297,6 +387,11 @@ model PropertyOwnership {
   endedAt   DateTime?           @map("ended_at") @db.Timestamptz(3)
   endReason OwnershipEndReason? @map("end_reason")
   endNote   String?             @map("end_note")
+
+  // 내 임대 조건(사용자별). 값은 JS 상수 UNIT_TYPES·EQUIPMENT_CODES로 검사한다(enum 아님).
+  unitType     String?  @map("unit_type") @db.VarChar(20)
+  equipment    String[] @default([]) @db.VarChar(30)
+  equipmentEtc String?  @map("equipment_etc") @db.VarChar(200)
 
   contracts Contract[]
 
