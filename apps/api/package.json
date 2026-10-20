@@ -12,6 +12,7 @@
     "seed:disputes": "node prisma/seedDisputes.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@prisma/client": "^5.20.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

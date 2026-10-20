@@ -357,3 +357,43 @@ model DisputeReference {
   @@index([type, category])
   @@map("dispute_references")
 }
+
+// 분쟁 상담 챗봇 대화 기록 (api-contract.md 9장 "챗봇 대화 기록은 피처 소유").
+// userId는 User와 relation을 걸지 않는다 — 걸면 A팀 User 모델에 반대쪽 필드를 추가해야 하고,
+// 지금 로그인 유저는 fixture라 users에 없어서 FK를 걸면 저장이 실패한다.
+
+enum DisputeChatRole {
+  USER
+  ASSISTANT
+
+  @@map("dispute_chat_role")
+}
+
+model DisputeChat {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  title     String // 첫 질문 앞부분
+  messages  DisputeChatMessage[]
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([userId, updatedAt])
+  @@map("dispute_chats")
+}
+
+model DisputeChatMessage {
+  id           String          @id @default(uuid()) @db.Uuid
+  chatId       String          @map("chat_id") @db.Uuid
+  chat         DisputeChat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role         DisputeChatRole
+  content      String // 답변 본문. 근거 표시는 [1], [2]처럼 referenceIds 순서를 가리킨다.
+  referenceIds String[]        @map("reference_ids") @db.Uuid // 답변 근거로 쓴 DisputeReference id (USER 메시지는 빈 배열)
+  // Claude API 사용량. ASSISTANT 메시지에만 채운다(USER는 null) — 비용 추적용
+  inputTokens  Int?            @map("input_tokens")
+  outputTokens Int?            @map("output_tokens")
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([chatId, createdAt])
+  @@map("dispute_chat_messages")
+}
+// ===== C팀 끝 =====
