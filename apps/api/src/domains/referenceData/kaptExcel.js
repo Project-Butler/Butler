@@ -273,6 +273,7 @@ export const runKaptExcelImport = async ({ prisma, filePath, fileDate, readRows 
     await finishImport(prisma, run.id, {
       status: 'FAILED',
       error: error.reason ?? error.code ?? 'internal error',
+      rowsRead: error.stats?.rowsRead ?? 0,
       stats: error.stats ?? undefined,
     });
     throw error;

@@ -110,7 +110,7 @@ const defaultDeps = {
   refill: refillComplexKaptCodes,
   cleanupSearchResults: (prisma) =>
     prisma.$executeRaw`
-      DELETE FROM address_search_results WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS})`,
+      DELETE FROM address_search_results WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
 };
 
 // 실패는 단계마다 잡아서 결과에 남긴다(한 단계가 실패해도 다음 단계는 돈다). jobs에 REFERENCE_DATA_DAILY로 남긴다.
