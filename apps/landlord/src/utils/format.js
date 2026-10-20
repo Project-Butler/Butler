@@ -1,4 +1,6 @@
 // 화면 표기용 숫자·날짜 포맷 (design.md §7). 숫자는 쓰는 쪽에서 font-num tabular-nums로 감싼다.
+import { formatFloor } from './floor';
+
 const KST_DATE_FORMAT = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
@@ -12,8 +14,8 @@ export const formatDateKST = (isoString) => (isoString ? KST_DATE_FORMAT.format(
 // 1234567 → '1,234,567'
 export const formatNumber = (value) => (value == null ? null : Number(value).toLocaleString('ko-KR'));
 
-// 면적·층 한 줄 요약. 예: '전용 84.97㎡ · 12층'. 값이 없으면 빈 문자열.
+// 면적·층 한 줄 요약. 예: '전용 84.97㎡ · 12층', 지하는 'B1'. 면적은 받은 값 그대로(반올림·평 없음). 값이 없으면 빈 문자열.
 export const formatUnitSpec = ({ exclusiveArea, floor }) =>
-  [exclusiveArea != null ? `전용 ${exclusiveArea}㎡` : null, floor != null ? `${floor}층` : null]
+  [exclusiveArea != null ? `전용 ${exclusiveArea}㎡` : null, formatFloor(floor)]
     .filter(Boolean)
     .join(' · ');

@@ -13,5 +13,27 @@ export const normalizeBuildingNo = (value) => normalizeUnitPart(value, '동');
 
 export const normalizeUnitNo = (value) => normalizeUnitPart(value, '호');
 
-// buildingNo·unitNo는 normalize를 거친 값(끝의 '동'·'호'가 없음)만 받는다.
-export const formatDisplayName = (complexName, buildingNo, unitNo) => `${complexName} ${buildingNo}동 ${unitNo}호`;
+// 동·호만. 예: '101동 1203호', 동이 없는 건물(buildingNo '')은 '410호'.
+// '가동'처럼 이미 '동'으로 끝나는 동 이름에는 '동'을 한 번 더 붙이지 않는다('410호호'도 만들지 않음).
+export const formatUnitLabel = (buildingNo, unitNo) => {
+  const unit = unitNo.endsWith('호') ? unitNo : `${unitNo}호`;
+  if (!buildingNo) return unit;
+  const building = buildingNo.endsWith('동') ? buildingNo : `${buildingNo}동`;
+  return `${building} ${unit}`;
+};
+
+// 서버 displayName과 같은 모양: '단지명 101동 1203호' / '단지명 410호'
+export const formatDisplayName = (complexName, buildingNo, unitNo) => `${complexName} ${formatUnitLabel(buildingNo, unitNo)}`;
+
+// 화면 목록 정렬: (동, 호) 자연 정렬('2동' < '10동', '101호' < '1001호'). 동이 없는 호실이 앞.
+const collator = new Intl.Collator('ko', { numeric: true });
+
+export const compareUnits = (a, b) =>
+  collator.compare(a.buildingNo ?? '', b.buildingNo ?? '') || collator.compare(a.unitNo ?? '', b.unitNo ?? '');
+
+// 입력한 동(정규화한 값)이 단지의 상세건물명 목록에 있는지. 목록이 비어 있으면 검사하지 않는다(true).
+// 목록 값('101동')도 같은 정규화로 맞춰 비교한다.
+export const isKnownBuildingNo = (buildingNo, detailBuildingNames) => {
+  if (!buildingNo || !Array.isArray(detailBuildingNames) || detailBuildingNames.length === 0) return true;
+  return detailBuildingNames.some((name) => normalizeBuildingNo(name) === buildingNo);
+};
