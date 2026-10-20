@@ -81,6 +81,35 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 - data_api에는 테이블을 만들지 않는다
 
 
+## 참고 데이터 처음 적재 (A팀만)
+단지 검색의 K-apt 단지명·분양형태와 단지 `kaptCode`는 참고 데이터 표(`kapt_complexes`, `kapt_address_links`, `juso_building_links`)에서 나온다. 처음 한 번과 **분기마다 한 번(1·4·7·10월 첫 주)** A팀이 로컬에서 전체를 다시 적재하고, 그 사이에는 Vercel cron이 갱신한다(주간 `/api/cron/kapt-complexes` 목록 동기화, 매일 `/api/cron/reference-data` juso 변동분·새 K-apt 단지).
+
+### 준비 파일
+- K-apt 공동주택 기본정보 엑셀(k-apt.go.kr › 단지정보 › 기본정보 내려받기, `.xlsx`). 추출일을 `--file-date`로 넘긴다.
+- juso 건물DB 전체분 zip(business.juso.go.kr › 주소정보 다운로드 › 건물DB › 전체분, 예: `202609_건물DB_전체분.zip`, 약 150MB). 압축을 풀지 않아도 된다(풀어 둔 폴더도 됨). 레포에 넣지 않는다(`*.zip`은 `.gitignore`).
+
+### 순서 (이 순서를 지킨다)
+```bash
+npm run sync:kapt -w apps/api                                                # 1. K-apt 단지 목록(약 2.2만 건)
+npm run import:kapt-basis -w apps/api -- <엑셀.xlsx> --file-date 2026-10-16    # 2. 엑셀 → 기본정보 + 도로명 연결(KAPT_EXCEL)
+npm run backfill:kapt-basis -w apps/api                                      # 3. 엑셀에 없는 단지(약 600곳) 기본정보 API — 하루 한도 4,500, 남으면 다음 날 다시
+npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>               # 4. juso 건물DB → 건물별 K-apt 연결(약 20만 행, 로컬 약 3분)
+```
+- 2·4번은 소스별 품질 게이트(읽은 줄 수, 연결률, 규칙별 비율, 지난 성공 대비)를 넘지 못하면 아무것도 바꾸지 않고 실패한다(`reference_data_imports.error`에 사유). 잘린 파일로는 기존 데이터를 지우지 않는다.
+- 4번이 성공하면 juso 변동분 커서가 전체분 기준일로 옮겨지고, 매일 cron이 그다음 날부터 변동분을 적용한다. 4번은 변동분이 `RUNNING`·`PARTIAL`이면 시작하지 않는다(같은 잠금 키).
+- 변동분을 손으로 적용할 때(cron을 켜기 전·받기가 안 될 때): `npm run apply:juso-changes -w apps/api -- <YYYYMMDD_dailynoticedata.zip>`. 커서 다음 날짜만 받는다(`--allow-gap`은 빠진 날짜를 알고 일부러 건너뛸 때만).
+- 끝나면 `reference_data_imports`의 `stats`(연결률·규칙별 비율·행 수)를 확인한다.
+
+### Supabase에 적재할 때 접속 규칙
+- **세션 모드 pooler `aws-0-<region>.pooler.supabase.com:5432`**(IPv6가 되는 곳이면 직접 호스트 `db.<ref>.supabase.co:5432`)로, `postgres` 역할로 붙는다. **트랜잭션 모드 `:6543`은 쓰지 않는다**(적재는 몇 분짜리 트랜잭션 하나와 트랜잭션 잠금을 쓴다).
+- 접속 주소는 **명령 한 번에만** 넣고 `.env`에 쓰지 않는다. 스크립트는 Prisma Client라서 `DATABASE_URL`을 읽으므로 두 변수에 같은 세션 모드 주소를 넣는다.
+  ```powershell
+  $env:DATABASE_URL='postgresql://postgres.<ref>:<비밀번호>@aws-0-<region>.pooler.supabase.com:5432/postgres'; $env:DIRECT_URL=$env:DATABASE_URL
+  npm run import:juso-buildings -w apps/api -- C:\data609_건물DB_전체분.zip
+  Remove-Item Env:DATABASE_URL; Remove-Item Env:DIRECT_URL
+  ```
+- Supabase 적재는 마이그레이션 반영 뒤, 반영 전 `pg_dump`를 떠 둔다. 로컬 DB에서 먼저 같은 순서로 돌려 본다.
+
 ## 브랜치 · 커밋 · PR
 - `dev`에서 `feature/<팀>-<이슈번호>-<기능명>` 브랜치를 만들어 작업하고 `dev`로 PR을 올린다. `main`·`dev`에 직접 푸시하지 않는다.
 - 커밋 메시지는 `type: subject` 또는 `YYMMDD type: subject` (예: `261019 feat: 계약 등록 폼 추가`).
