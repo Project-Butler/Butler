@@ -6,9 +6,9 @@
 import '../src/loadEnv.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { applyJusoDeltaFile } from '../src/domains/referenceData/jusoDelta.js';
-import { refillComplexKaptCodes } from '../src/domains/referenceData/complexKaptCodes.js';
-import { createKeySet } from '../src/domains/referenceData/jusoLinks.js';
+import { applyJusoDeltaFile } from '../src/referenceData/jusoDelta.js';
+import { refillComplexKaptCodes } from '../src/referenceData/complexKaptCodes.js';
+import { createKeySet } from '../src/referenceData/jusoLinks.js';
 import { prisma } from '../src/platform/prismaClient.js';
 import { readOption, readPathArg, toUsageError } from './referenceDataArgs.js';
 

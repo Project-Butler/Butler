@@ -1,7 +1,7 @@
 // K-apt 기본정보 엑셀(공동주택 단지 기본정보, k-apt.go.kr 내려받기) → kapt_complexes 기본정보 칸 + kapt_address_links(KAPT_EXCEL).
 // 처음 적재·분기 재적재 전용(A팀 로컬). 1행은 안내문, 2행이 머리글. 같은 단지코드가 도로명주소만 달리 여러 줄 나온다.
 // 쓰기는 한 트랜잭션: 기본정보 칸 UPDATE + 연결 upsert(import_run_id = 이번 실행) → 게이트 → 이번 실행이 아닌 KAPT_EXCEL 행 sweep.
-import { parseJibunLots, parseRoadAddress } from '../complexes/kaptAddress.js';
+import { parseJibunLots, parseRoadAddress } from '../domains/complexes/kaptAddress.js';
 import { refillComplexKaptCodes } from './complexKaptCodes.js';
 import {
   findLastSucceeded,

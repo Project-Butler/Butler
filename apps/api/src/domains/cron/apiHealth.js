@@ -7,7 +7,7 @@ import { KAPT_BASIS_API, KAPT_BASIS_CRON_LIMIT, spendApiCall } from '../complexe
 import { fetchKaptBasis } from '../complexes/kaptBasis.js';
 import { ExternalServiceError } from '../complexes/provider/ExternalServiceError.js';
 import { healthProbes } from '../complexes/provider/publicProvider.js';
-import { findDeltaCursorDate } from '../referenceData/referenceImports.js';
+import { findDeltaCursorDate } from '../../referenceData/referenceImports.js';
 import { formatDateKST } from '../../platform/dateUtils.js';
 
 export const EXTERNAL_API_HEALTH_JOB_TYPE = 'EXTERNAL_API_HEALTH';

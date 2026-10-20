@@ -1,6 +1,6 @@
 // matchBuilding이 쓰는 K-apt 쪽 조회 묶음을 DB에서 읽는다. 전체분은 전부, 변동분은 파일에 나온 시군구·법정동만.
 // 목록에서 빠진 단지(is_active = false)는 후보에서 뺀다.
-import { parseJibunLots } from '../complexes/kaptAddress.js';
+import { parseJibunLots } from '../domains/complexes/kaptAddress.js';
 import { buildKaptLookup } from './jusoBuildingMatcher.js';
 
 // filter: { sigunguCodes, legalDongCodes } (없으면 전부)

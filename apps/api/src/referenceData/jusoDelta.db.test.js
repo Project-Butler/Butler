@@ -1,9 +1,9 @@
 // juso 변동분 적용(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다(testSupport/dbTest.js).
 // 지어낸 시군구(99999)·건물관리번호(9999910100…)·단지 코드(DBTK…)·2099년 날짜만 쓰고 끝에 지운다.
-import { createDbFixture, dbTestSkip } from '../../testSupport/dbTest.js';
+import { createDbFixture, dbTestSkip } from '../testSupport/dbTest.js';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { prisma } from '../../platform/prismaClient.js';
+import { prisma } from '../platform/prismaClient.js';
 import { applyJusoDeltaFile } from './jusoDelta.js';
 import { runJusoFullLoad } from './jusoFullLoad.js';
 import { refillComplexKaptCodes } from './complexKaptCodes.js';

@@ -4,7 +4,7 @@
 // 변동분이 RUNNING·PARTIAL이면 시작하지 않는다. 성공하면 변동분 커서를 기준일로 옮긴다(다음 변동분 = 기준일 다음 날).
 // 먼저 sync:kapt → import:kapt-basis → backfill:kapt-basis를 끝낸다(K-apt 쪽 도로명주소·번지가 있어야 맞춘다).
 import '../src/loadEnv.js';
-import { runJusoFullLoad } from '../src/domains/referenceData/jusoFullLoad.js';
+import { runJusoFullLoad } from '../src/referenceData/jusoFullLoad.js';
 import { prisma } from '../src/platform/prismaClient.js';
 import { readOption, readPathArg, toUsageError } from './referenceDataArgs.js';
 

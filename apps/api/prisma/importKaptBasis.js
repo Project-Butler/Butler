@@ -4,7 +4,7 @@
 import '../src/loadEnv.js';
 import { stat } from 'node:fs/promises';
 import { formatDateKST } from '../src/platform/dateUtils.js';
-import { runKaptExcelImport } from '../src/domains/referenceData/kaptExcel.js';
+import { runKaptExcelImport } from '../src/referenceData/kaptExcel.js';
 import { prisma } from '../src/platform/prismaClient.js';
 import { readOption, readPathArg, toUsageError } from './referenceDataArgs.js';
 

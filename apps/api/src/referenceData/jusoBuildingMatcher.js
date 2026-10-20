@@ -6,9 +6,9 @@
 //   LOT          공동주택 건물의 필지(건물관리번호 앞 19자리 = PNU) 또는 대표 지번이 K-apt 법정동+번지와 같음
 //   NON_APT_FLAG 공동주택 표시가 없는 건물의 도로명 키가 K-apt 쪽 도로명주소와 같음
 // 후보가 여럿이면 분양·혼합 > 임대 > 그 밖, 같으면 kaptCode 오름차순 하나(kaptLinks.pickBestKapt).
-import { toRoadNameKey } from '../complexes/kaptAddress.js';
-import { pickBestKapt } from '../complexes/kaptLinks.js';
-import { parsePnu } from '../complexes/provider/pnu.js';
+import { toRoadNameKey } from '../domains/complexes/kaptAddress.js';
+import { pickBestKapt } from '../domains/complexes/kaptLinks.js';
+import { parsePnu } from '../domains/complexes/provider/pnu.js';
 
 export const BUILDING_COLUMN_COUNT = 31;
 export const MATCH_RULES = ['ROAD_KEY', 'LOT', 'NON_APT_FLAG'];

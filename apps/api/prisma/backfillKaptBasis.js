@@ -9,7 +9,7 @@
 import '../src/loadEnv.js';
 import { getApiUsage, KAPT_BASIS_API, KAPT_BASIS_BACKFILL_LIMIT } from '../src/domains/complexes/apiUsage.js';
 import { fillKaptBasis } from '../src/domains/complexes/kaptBasis.js';
-import { refillComplexKaptCodes } from '../src/domains/referenceData/complexKaptCodes.js';
+import { refillComplexKaptCodes } from '../src/referenceData/complexKaptCodes.js';
 import { prisma } from '../src/platform/prismaClient.js';
 
 const PROGRESS_EVERY = 100;
