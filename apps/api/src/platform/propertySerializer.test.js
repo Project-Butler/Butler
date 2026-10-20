@@ -38,6 +38,37 @@ test('toPropertySummary: Decimal → number, displayName', () => {
   assert.deepEqual(summary.complex, complex);
 });
 
+test('toPropertySummary: 면적은 반올림하지 않는다(39.78 그대로), 동이 없으면 표시 이름에서 뺀다', () => {
+  const summary = toPropertySummary({
+    id: 'p1',
+    complex,
+    buildingNo: '',
+    unitNo: '410',
+    exclusiveArea: new Prisma.Decimal('39.78'),
+    floor: -1,
+  });
+  assert.equal(summary.exclusiveArea, 39.78);
+  assert.equal(JSON.stringify({ area: summary.exclusiveArea }), '{"area":39.78}');
+  assert.equal(summary.floor, -1);
+  assert.equal(summary.displayName, '잠실OO아파트 410호');
+});
+
+test('toOwnershipResponse: 방 구성·설비(C9), 없으면 null·빈 배열', () => {
+  const filled = toOwnershipResponse(
+    { ...baseOwnership, unitType: 'ONE_ROOM', equipment: ['TV'], equipmentEtc: '건조기' },
+    null,
+    NOW,
+  );
+  assert.equal(filled.unitType, 'ONE_ROOM');
+  assert.deepEqual(filled.equipment, ['TV']);
+  assert.equal(filled.equipmentEtc, '건조기');
+
+  const empty = toOwnershipResponse(baseOwnership, null, NOW);
+  assert.equal(empty.unitType, null);
+  assert.deepEqual(empty.equipment, []);
+  assert.equal(empty.equipmentEtc, null);
+});
+
 test('toPropertySummary: 값 없는 면적·층은 null', () => {
   const summary = toPropertySummary({ id: 'p1', complex, buildingNo: '101', unitNo: '1203', exclusiveArea: null, floor: null });
   assert.equal(summary.exclusiveArea, null);

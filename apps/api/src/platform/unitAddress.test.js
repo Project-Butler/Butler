@@ -99,6 +99,21 @@ test("호 칸 앞의 같은 동 표기('101동 303호')를 뗀다", () => {
   assert.equal(normalizeUnitNo('102동 303호', '101'), '102동303');
 });
 
+test('표시 이름: 동이 없으면 동을 빼고, 동·호 글자를 두 번 붙이지 않는다', () => {
+  assert.equal(formatDisplayName('중계그린', '', '410'), '중계그린 410호');
+  assert.equal(formatDisplayName('중계그린', '', '410호'), '중계그린 410호');
+  assert.equal(formatDisplayName('중계그린', '114', '410'), '중계그린 114동 410호');
+  assert.equal(formatDisplayName('중계그린', '가동', '410'), '중계그린 가동 410호');
+});
+
+test('빈 동이어도 호 칸에 동·호를 몰아 쓰면 한 칸 입력으로 본다', () => {
+  assert.equal(normalizeBuildingNo(''), '');
+  assert.equal(normalizeBuildingNo('동'), '');
+  assert.equal(isCombinedUnitAddress(normalizeUnitNo('101동 1203호', '')), true);
+  assert.equal(isCombinedUnitAddress(normalizeUnitNo('101-1203', '')), true);
+  assert.equal(isCombinedUnitAddress(normalizeUnitNo('410호', '')), false);
+});
+
 test('동·호를 한 칸에 적은 값을 알아본다', () => {
   assert.equal(isCombinedUnitAddress(normalizeBuildingNo('101-1203')), true);
   assert.equal(isCombinedUnitAddress(normalizeBuildingNo('101동1203호')), true);
