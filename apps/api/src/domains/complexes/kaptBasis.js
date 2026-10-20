@@ -1,7 +1,7 @@
-// K-apt 기본정보(getAphusBassInfoV5)로 kapt_complexes의 주소 칸(도로명·지번 원문과 번지)을 채운다.
-// 도로명 키는 kapt_complexes에 두지 않는다(단지 하나가 도로명주소 여럿 — 키는 연결 표 kapt_address_links에만).
-// 부르는 곳: 백필 스크립트(prisma/backfillKaptBasis.js), 주간 cron(동기화 뒤 남은 시간).
-// 모든 호출은 external_api_usage 카운터(apiUsage.js)를 거친다.
+// K-apt 기본정보(getAphusBassInfoV5)로 kapt_complexes의 기본정보 칸(도로명·지번 원문, 번지, 분양형태, 세대수·동수·사용승인일)을
+// 채우고, 도로명주소를 도로명 키로 바꿔 kapt_address_links(source KAPT_API)에 쓴다. 도로명 키는 kapt_complexes에 두지 않는다
+// (단지 하나가 도로명주소 여럿 — 키는 연결 표에만). 부르는 곳: 백필 스크립트(prisma/backfillKaptBasis.js, 엑셀에 없는 단지),
+// 매일 cron(/api/cron/reference-data 30~45초 구간, 새 단지). 모든 호출은 external_api_usage 카운터(apiUsage.js)를 거친다.
 import { KAPT_BASIS_API, spendApiCall } from './apiUsage.js';
 import { parseJibunLot, parseRoadAddress } from './kaptAddress.js';
 import { ExternalServiceError } from './provider/ExternalServiceError.js';
@@ -46,6 +46,20 @@ export const toRoadParseStatus = (roadAddress, parsed) => {
   return parsed ? 'OK' : 'UNPARSEABLE';
 };
 
+const toCountOrNull = (value) => {
+  const number = Number(value);
+  return value !== null && value !== undefined && value !== '' && Number.isInteger(number) && number >= 0 ? number : null;
+};
+
+// '20080829' → Date(UTC 자정, @db.Date). 날짜가 아니면 null.
+const toDateOrNull = (value) => {
+  const text = String(value ?? '');
+  if (!/^\d{8}$/.test(text)) return null;
+  const ymd = `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  const date = new Date(`${ymd}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== ymd ? null : date;
+};
+
 // 기본정보 item → kapt_complexes에 쓸 칸
 export const toKaptBasisColumns = (item, now) => {
   const roadAddress = trimOrNull(item.doroJuso);
@@ -54,13 +68,25 @@ export const toKaptBasisColumns = (item, now) => {
   return {
     roadAddress,
     jibunAddress,
-    // 산 번지는 juso 번지 키(산 제외)와 섞이지 않게 비워 둔다. 원문(jibunAddress)은 그대로 남아 PNU 계산에 쓴다.
+    // 산 번지는 juso 번지 키(산 제외)와 섞이지 않게 비워 둔다. 원문(jibunAddress)은 그대로 남는다.
     mainLot: lot && !lot.isMountain ? lot.mainLot : null,
     subLot: lot && !lot.isMountain ? lot.subLot : null,
+    saleType: trimOrNull(item.codeSaleNm),
+    householdCount: toCountOrNull(item.kaptdaCnt),
+    buildingCount: toCountOrNull(item.kaptDongCnt),
+    approvalDate: toDateOrNull(item.kaptUsedate),
+    basisSource: 'API',
     basisFetchedAt: now,
     basisError: null,
   };
 };
+
+// 도로명 키 → kapt_address_links(KAPT_API) 한 행. 이미 있으면 그대로(같은 키·같은 단지).
+const upsertApiLink = (prisma, kaptCode, key) =>
+  prisma.$executeRaw`
+    INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code, updated_at)
+    VALUES ('KAPT_API', ${key.sigunguCd}, ${key.roadNameKey}, ${key.underground}, ${key.mainNo}, ${key.subNo}, ${kaptCode}, now())
+    ON CONFLICT (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code) DO NOTHING`;
 
 // basis_error에 남길 짧은 사유. 원본 메시지(URL·키가 섞일 수 있음)는 넣지 않는다.
 const toFailureReason = (error) => {
@@ -119,6 +145,8 @@ export const fillKaptBasis = async ({
     road: { OK: 0, EMPTY: 0, UNPARSEABLE: 0 },
     unparseableBySido: {},
     noLot: 0,
+    // 새로 쓴 KAPT_API 연결의 도로명 키(호출하는 쪽이 단지 kaptCode 다시 채우기에 쓴다)
+    linkKeys: [],
     lastUsage: null,
     stopReason: null,
   };
@@ -206,9 +234,13 @@ export const fillKaptBasis = async ({
     await prisma.kaptComplex.update({ where: { kaptCode: row.kaptCode }, data: columns });
     summary.filled += 1;
 
-    // 도로명 파싱 결과는 저장하지 않고 품질 집계에만 쓴다.
-    const parsed = parseRoadAddress(columns.roadAddress, row.legalDongCode) !== null;
-    const status = toRoadParseStatus(columns.roadAddress, parsed);
+    // 도로명 키는 kapt_complexes가 아니라 연결 표(KAPT_API)에 쓴다.
+    const key = parseRoadAddress(columns.roadAddress, row.legalDongCode);
+    if (key?.sigunguCd) {
+      await upsertApiLink(prisma, row.kaptCode, key);
+      summary.linkKeys.push(key);
+    }
+    const status = toRoadParseStatus(columns.roadAddress, key !== null);
     summary.road[status] += 1;
     if (status === 'UNPARSEABLE') {
       const sido = row.sidoName ?? 'unknown';

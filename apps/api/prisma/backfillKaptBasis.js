@@ -1,4 +1,5 @@
-// K-apt 기본정보(도로명·지번주소)를 kapt_complexes 전체에 채우는 로컬 재개형 스크립트.
+// K-apt 기본정보(도로명·지번주소·분양형태 등)를 채우는 로컬 재개형 스크립트. 처음 적재에서는 엑셀(import:kapt-basis)에 없는
+// 단지만 남아 있다(basis_fetched_at IS NULL). 채운 단지의 도로명 키는 kapt_address_links(KAPT_API)에 쓰고, 끝에 단지 kaptCode를 다시 채운다.
 // K-apt 기본정보 API는 개발계정 하루 5,000회라 하루 4,500회(기본값)까지만 부르고 멈춘다.
 // 다음 날 다시 실행하면 채우지 않은 단지(basis_fetched_at IS NULL, 실패 3회 미만)부터 이어서 한다.
 // 실행: npm run backfill:kapt-basis -w apps/api -- --limit 4500 [--interval-ms 2000]
@@ -8,6 +9,7 @@
 import '../src/loadEnv.js';
 import { getApiUsage, KAPT_BASIS_API, KAPT_BASIS_BACKFILL_LIMIT } from '../src/domains/complexes/apiUsage.js';
 import { fillKaptBasis } from '../src/domains/complexes/kaptBasis.js';
+import { refillComplexKaptCodes } from '../src/domains/referenceData/complexKaptCodes.js';
 import { prisma } from '../src/platform/prismaClient.js';
 
 const PROGRESS_EVERY = 100;
@@ -47,6 +49,7 @@ const main = async () => {
     },
   });
 
+  const refilled = await refillComplexKaptCodes(prisma, summary.linkKeys);
   const [{ remaining }] = await prisma.$queryRaw`
     SELECT count(*)::int AS remaining FROM kapt_complexes
     WHERE basis_fetched_at IS NULL AND basis_attempts < 3 AND is_active`;
@@ -62,6 +65,7 @@ const main = async () => {
     `  도로명 OK ${summary.road.OK}, EMPTY ${summary.road.EMPTY}, UNPARSEABLE ${summary.road.UNPARSEABLE}(${unparseableRate}%), 번지 없음 ${summary.noLot}`,
   );
   if (summary.road.UNPARSEABLE > 0) console.info('  UNPARSEABLE 시도별', summary.unparseableBySido);
+  console.info(`  KAPT_API 연결 ${summary.linkKeys.length}행, 단지 kaptCode 바뀜 ${refilled}`);
   console.info(`  오늘 사용량 ${await getApiUsage(prisma, KAPT_BASIS_API)}`);
 };
 

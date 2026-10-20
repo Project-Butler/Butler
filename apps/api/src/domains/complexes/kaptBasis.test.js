@@ -10,17 +10,34 @@ const PARKRIO_ITEM = {
   kaptAddr: '서울특별시 송파구 신천동 17 잠실파크리오',
   doroJuso: '서울특별시 송파구 올림픽로 435',
   bjdCode: '1171010200',
+  codeSaleNm: '분양',
+  kaptdaCnt: 6864,
+  kaptDongCnt: '66',
+  kaptUsedate: '20080829',
 };
 
-test('기본정보 → kapt_complexes 칸(도로명 키 칸은 쓰지 않는다)', () => {
+test('기본정보 → kapt_complexes 칸(분양형태·세대수·동수·사용승인일 포함, 도로명 키 칸은 쓰지 않는다)', () => {
   assert.deepEqual(toKaptBasisColumns(PARKRIO_ITEM, NOW), {
     roadAddress: '서울특별시 송파구 올림픽로 435',
     jibunAddress: '서울특별시 송파구 신천동 17 잠실파크리오',
     mainLot: 17,
     subLot: 0,
+    saleType: '분양',
+    householdCount: 6864,
+    buildingCount: 66,
+    approvalDate: new Date('2008-08-29T00:00:00.000Z'),
+    basisSource: 'API',
     basisFetchedAt: NOW,
     basisError: null,
   });
+});
+
+test('기본정보: 날짜·수가 아니면 null', () => {
+  const columns = toKaptBasisColumns({ ...PARKRIO_ITEM, kaptUsedate: '2008', kaptdaCnt: '', kaptDongCnt: null, codeSaleNm: ' ' }, NOW);
+  assert.equal(columns.approvalDate, null);
+  assert.equal(columns.householdCount, null);
+  assert.equal(columns.buildingCount, null);
+  assert.equal(columns.saleType, null);
 });
 
 test('도로명주소가 없거나 못 읽어도 원문·지번은 저장한다', () => {
@@ -33,7 +50,7 @@ test('도로명주소가 없거나 못 읽어도 원문·지번은 저장한다'
 // ---------------------------------------------------------------- fillKaptBasis (가짜 prisma·fetch)
 
 const createFakePrisma = ({ rowCount, usage = 0 }) => {
-  const state = { usage, updates: [], findManyArgs: null };
+  const state = { usage, updates: [], findManyArgs: null, links: [] };
   const rows = Array.from({ length: rowCount }, (_, i) => ({
     kaptCode: `A${String(i).padStart(8, '0')}`,
     legalDongCode: '1171010200',
@@ -48,6 +65,11 @@ const createFakePrisma = ({ rowCount, usage = 0 }) => {
       update: async (args) => {
         state.updates.push(args);
       },
+    },
+    // KAPT_API 연결 upsert: VALUES 순서(시군구, 도로명 키, 지하, 본번, 부번, 단지 코드)
+    $executeRaw: async (strings, ...values) => {
+      state.links.push(values);
+      return 1;
     },
     // spendApiCall: limit 값은 마지막 파라미터
     $queryRaw: async (strings, ...values) => {
@@ -90,6 +112,10 @@ test('채우기: 실패 3회 미만·활성·미채움 단지만 kapt_code 순�
   assert.equal(summary.filled, 2);
   assert.equal(summary.road.OK, 2);
   assert.equal(summary.stopReason, 'no more rows');
+  // 도로명 키는 kapt_address_links(KAPT_API)로
+  assert.deepEqual(state.links[0], ['11710', '올림픽로', false, 435, 0, 'A00000000']);
+  assert.equal(summary.linkKeys.length, 2);
+  assert.equal(state.updates[0].data.saleType, '분양');
 });
 
 test('채우기: 오늘 사용량이 상한에 닿으면 더 부르지 않는다', async () => {
