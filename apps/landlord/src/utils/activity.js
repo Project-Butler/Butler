@@ -17,7 +17,12 @@ const FIELD_LABEL = {
 const formatFields = (fields) =>
   Array.isArray(fields) && fields.length > 0 ? ` (${fields.map((field) => FIELD_LABEL[field] ?? field).join(', ')})` : '';
 
-const unitOf = (params) => (params.unitNo ? formatUnitLabel(params.buildingNo ?? '', params.unitNo) : '호실');
+// 건물명이 기록돼 있으면 앞에 붙인다: '항여울 116동 712호'
+const unitOf = (params) => {
+  if (!params.unitNo) return params.buildingName ?? '호실';
+  const unit = formatUnitLabel(params.buildingNo ?? '', params.unitNo);
+  return params.buildingName ? `${params.buildingName} ${unit}` : unit;
+};
 
 export const formatActivity = ({ type, params = {} }) => {
   switch (type) {
@@ -30,7 +35,7 @@ export const formatActivity = ({ type, params = {} }) => {
     case 'LANDLORD_BUILDING_DELETED':
       return `'${params.buildingName}' 건물을 삭제했어요`;
     case 'PROPERTY_REGISTERED':
-      return `${params.buildingName ? `${params.buildingName} ` : ''}${unitOf(params)}를 등록했어요`;
+      return `${unitOf(params)}를 등록했어요`;
     case 'PROPERTY_UPDATED':
       return `${unitOf(params)} 정보를 수정했어요${formatFields(params.fields)}`;
     case 'OWNERSHIP_UPDATED':

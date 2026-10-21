@@ -12,7 +12,6 @@ import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
 import { SetupPage } from './pages/SetupPage';
-import { clearUserDrafts } from './utils/draftStorage';
 
 // 화면 전환은 라우터 없이 App의 view({ key, params }) + History API로 한다.
 // navigate = pushState(또는 replaceState) + setView, 브라우저 뒤로가기는 popstate로 view를 되살린다.
@@ -118,7 +117,6 @@ export const App = () => {
 
   const handleLogout = async () => {
     await postLogout();
-    clearUserDrafts(user.id);
     setUser(null);
     resetToHome();
   };
@@ -171,7 +169,7 @@ export const App = () => {
         return <PropertyDetailPage key={view.params.propertyId} propertyId={view.params.propertyId} {...pageProps} />;
       case 'propertyRegister':
         // 건물(complexId)이 바뀌면 화면 상태를 새로 시작한다(key).
-        return <PropertyRegisterPage key={view.params.complexId ?? 'pick'} user={user} params={view.params} {...pageProps} />;
+        return <PropertyRegisterPage key={view.params.complexId ?? 'pick'} params={view.params} {...pageProps} />;
       default:
         // 홈과 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리).
         return <LandlordDashboard {...pageProps} />;
