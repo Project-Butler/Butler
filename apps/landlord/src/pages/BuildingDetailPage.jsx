@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -9,17 +9,15 @@ import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatDetailBuildingRange } from '../utils/detailBuildingNames';
 import { formatFloor } from '../utils/floor';
 import { compareUnits, formatUnitLabel } from '../utils/unitAddress';
-import { getPropertyStatusBadge, getUnitTypeLabel } from '../utils/unitListing';
+import { formatEquipment, getPropertyStatusBadge, getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 const UNIT_PAGE_SIZE = 50;
 
-const InfoRow = ({ label, value, numeric = false }) => (
-  <div className="flex gap-4 py-2.5">
-    <dt className="w-28 shrink-0 text-body text-ink-3">{label}</dt>
-    <dd className={`min-w-0 flex-1 whitespace-pre-line text-body text-ink ${numeric ? 'font-num tabular-nums' : ''}`}>
-      {value ?? '—'}
-    </dd>
+const InfoItem = ({ label, value, numeric = false }) => (
+  <div className="min-w-0">
+    <dt className="text-sub text-ink-3">{label}</dt>
+    <dd className={`mt-0.5 whitespace-pre-line text-body text-ink ${numeric ? 'font-num tabular-nums' : ''}`}>{value ?? '—'}</dd>
   </div>
 );
 
@@ -32,27 +30,35 @@ const UnitTable = ({ complexId, onNavigate, onUnauthorized }) => {
   );
   const items = [...(data?.items ?? [])].sort(compareUnits);
 
-  if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
+  if (error && !data) return <NoticeBox className="mx-5 mb-5">{error.message}</NoticeBox>;
   if (isLoading && !data) {
     return (
-      <p role="status" className="py-6 text-center text-body text-ink-3">
+      <p role="status" className="py-8 text-center text-body text-ink-3">
         불러오는 중입니다
       </p>
     );
   }
-  if (items.length === 0) return <p className="px-5 pb-5 text-body text-ink-3">아직 등록한 호실이 없습니다</p>;
+  if (items.length === 0) {
+    return (
+      <div className="border-t border-line px-5 py-12 text-center">
+        <p className="text-body font-semibold text-ink">아직 등록한 호실이 없습니다</p>
+        <p className="mt-1 text-sub text-ink-2">오른쪽 위 [호실 추가]로 첫 호실을 등록해 보세요.</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <table className="w-full text-body">
         <thead>
-          <tr className="border-y border-line text-left text-chip text-ink-3">
-            <th className="px-5 py-2 font-medium">동·호</th>
-            <th className="px-3 py-2 font-medium">층</th>
-            <th className="px-3 py-2 font-medium">방 구성</th>
-            <th className="px-3 py-2 font-medium">면적</th>
-            <th className="px-3 py-2 font-medium">상태</th>
-            <th className="px-5 py-2 font-medium">인증</th>
+          <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
+            <th className="px-5 py-2.5 font-medium">동·호</th>
+            <th className="px-3 py-2.5 font-medium">층</th>
+            <th className="px-3 py-2.5 text-right font-medium">전용면적</th>
+            <th className="px-3 py-2.5 font-medium">방 구성</th>
+            <th className="px-3 py-2.5 font-medium">설비</th>
+            <th className="px-3 py-2.5 font-medium">상태</th>
+            <th className="px-5 py-2.5 font-medium">권리자 인증</th>
           </tr>
         </thead>
         <tbody>
@@ -65,16 +71,19 @@ const UnitTable = ({ complexId, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3 font-medium text-ink">{formatUnitLabel(property.buildingNo, property.unitNo)}</td>
-                <td className="px-3 py-3 font-num tabular-nums text-ink-2">{formatFloor(property.floor) ?? '—'}</td>
-                <td className="px-3 py-3 text-ink-2">{getUnitTypeLabel(property.myListing?.unitType) ?? '—'}</td>
-                <td className="px-3 py-3 font-num tabular-nums text-ink-2">
+                <td className="px-5 py-3.5 font-semibold text-ink">{formatUnitLabel(property.buildingNo, property.unitNo)}</td>
+                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{formatFloor(property.floor) ?? '—'}</td>
+                <td className="px-3 py-3.5 text-right font-num tabular-nums text-ink-2">
                   {property.exclusiveArea != null ? `${property.exclusiveArea}㎡` : '—'}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3.5 text-ink-2">{getUnitTypeLabel(property.myListing?.unitType) ?? '—'}</td>
+                <td className="max-w-[16rem] truncate px-3 py-3.5 text-ink-2">
+                  {formatEquipment(property.myListing?.equipment, property.myListing?.equipmentEtc) ?? '—'}
+                </td>
+                <td className="px-3 py-3.5">
                   <Badge tone={status.tone}>{status.label}</Badge>
                 </td>
-                <td className="px-5 py-3">
+                <td className="px-5 py-3.5">
                   <Badge tone={verification.tone}>{verification.label}</Badge>
                 </td>
               </tr>
@@ -84,13 +93,8 @@ const UnitTable = ({ complexId, onNavigate, onUnauthorized }) => {
       </table>
       {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
       {data.meta.hasNext && (
-        <div className="p-5">
-          <Button
-            variant="secondary"
-            className="w-full"
-            disabled={isLoading}
-            onClick={() => (error ? refetch() : setPage((prev) => prev + 1))}
-          >
+        <div className="border-t border-line p-4 text-center">
+          <Button variant="secondary" disabled={isLoading} onClick={() => (error ? refetch() : setPage((prev) => prev + 1))}>
             {isLoading ? '불러오는 중' : error ? '다시 시도' : '더 보기'}
           </Button>
         </div>
@@ -99,7 +103,7 @@ const UnitTable = ({ complexId, onNavigate, onUnauthorized }) => {
   );
 };
 
-// 건물 상세: 건물 설정 + 주소 + 내 호실 목록 + 호실 추가
+// 건물 상세: 건물 정보(주소·우편번호·동 목록·설명) + 내 호실 표 + [수정]·[호실 추가]
 export const BuildingDetailPage = ({ landlordBuildingId, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const buildingQuery = useGetLandlordBuilding(landlordBuildingId, hookOptions);
@@ -111,7 +115,7 @@ export const BuildingDetailPage = ({ landlordBuildingId, onNavigate, onUnauthori
 
   if (!building) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5">
+      <div className="w-full max-w-6xl space-y-6">
         <PageHeader title="건물 상세" onBack={goBack} />
         {buildingQuery.error ? (
           <NoticeBox>{buildingQuery.error.message}</NoticeBox>
@@ -125,44 +129,49 @@ export const BuildingDetailPage = ({ landlordBuildingId, onNavigate, onUnauthori
   const complexId = building.complex.id;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 pb-10">
-      <PageHeader title={building.name} onBack={goBack} />
+    <div className="w-full max-w-6xl space-y-6 pb-10">
+      <PageHeader
+        title={building.name}
+        description={building.complex.roadAddress ?? building.complex.name}
+        onBack={goBack}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => onNavigate('buildingEdit', { landlordBuildingId })}>
+              <Pencil size={14} className="-ml-0.5 mr-1.5 inline-block" />
+              수정
+            </Button>
+            <Button onClick={() => onNavigate('propertyRegister', { complexId })}>
+              <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
+              호실 추가
+            </Button>
+          </>
+        }
+      />
       {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
 
-      <Card className="space-y-3 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-section font-semibold text-ink">건물 정보</h2>
-            <Badge>등록중</Badge>
-          </div>
-          <Button variant="secondary" size="sm" onClick={() => onNavigate('buildingEdit', { landlordBuildingId })}>
-            수정
-          </Button>
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-section font-semibold text-ink">건물 정보</h2>
+          <Badge>등록중</Badge>
         </div>
-        <dl className="divide-y divide-line">
-          <InfoRow label="도로명" value={building.complex.roadAddress} />
-          <InfoRow label="지번" value={complex?.jibunAddress} />
-          <InfoRow label="우편번호" value={complex?.zipCode} numeric />
-          <InfoRow label="동 목록" value={formatDetailBuildingRange(complex?.detailBuildingNames)} />
-          <InfoRow
-            label="등록 호실"
-            value={building.capacity != null ? `${building.propertyCount} / ${building.capacity}개` : `${building.propertyCount}개`}
-            numeric
-          />
-          <InfoRow label="설명" value={building.memo} />
+        <dl className="grid grid-cols-4 gap-x-6 gap-y-4">
+          <div className="col-span-2">
+            <InfoItem label="도로명주소" value={building.complex.roadAddress} />
+          </div>
+          <div className="col-span-2">
+            <InfoItem label="지번" value={complex?.jibunAddress} />
+          </div>
+          <InfoItem label="우편번호" value={complex?.zipCode} numeric />
+          <InfoItem label="동 목록" value={formatDetailBuildingRange(complex?.detailBuildingNames)} />
+          <InfoItem label="등록 호실" value={`${building.propertyCount}개`} numeric />
+          <InfoItem label="설명" value={building.memo} />
         </dl>
-        {building.remainingCount > 0 && (
-          <p className="text-sub font-medium text-warn-ink">{building.remainingCount}개의 호실이 아직 등록되지 않았어요</p>
-        )}
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-between p-5">
+        <div className="flex items-center justify-between px-5 py-4">
           <h2 className="text-section font-semibold text-ink">호실</h2>
-          <Button size="sm" onClick={() => onNavigate('propertyRegister', { complexId })}>
-            <Plus size={14} className="-ml-0.5 mr-1 inline-block" />
-            호실 추가
-          </Button>
+          <span className="font-num text-sub tabular-nums text-ink-3">{building.propertyCount}개</span>
         </div>
         <UnitTable complexId={complexId} onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
       </Card>

@@ -1,117 +1,100 @@
-import { useCallback, useEffect, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { CheckCircle2, Circle, MapPin } from 'lucide-react';
 import { Button, Card, TextField } from '@butler/ui';
 import { AddressSearchDialog } from '../components/AddressSearchDialog/AddressSearchDialog';
-import { BottomActionBar } from '../components/BottomActionBar/BottomActionBar';
-import { DraftResumeNotice } from '../components/DraftResumeNotice/DraftResumeNotice';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { SegmentedControl } from '../components/SegmentedControl/SegmentedControl';
 import { usePostLandlordBuilding } from '../hooks/usePostLandlordBuilding';
 import { toFieldErrors } from '../utils/apiError';
-import { clearDraft, readDraft, toDraftKey, writeDraft } from '../utils/draftStorage';
-import { REGISTER_MODE_OPTIONS } from '../utils/registerMode';
+import { formatDetailBuildingRange } from '../utils/detailBuildingNames';
 
 // 서버 검증(apps/api landlordBuildings controller)과 같은 범위
 const MAX_NAME_LENGTH = 50;
 const MAX_MEMO_LENGTH = 500;
-const MAX_CAPACITY = 999;
+// 서버 400 details.field 중 이 화면에 칸이 있는 것
+const FORM_FIELDS = ['name', 'complexId', 'memo'];
 
-// 순서대로 모드 단계: 건물명 → 주소 → 전체 호실 수 → 설명
-const STEPS = ['name', 'address', 'capacity', 'memo'];
-const STEP_TITLE = {
-  name: '건물 이름을 알려 주세요',
-  address: '건물 주소를 찾아 주세요',
-  capacity: '전체 호실은 몇 개인가요?',
-  memo: '건물 설명을 남겨 주세요',
-};
-// 서버 400 details.field → 그 칸이 있는 단계
-const STEP_BY_FIELD = { name: 1, complexId: 2, capacity: 3, memo: 4 };
-
-const EMPTY_FORM = { name: '', capacity: '', memo: '' };
+const EMPTY_FORM = { name: '', memo: '' };
 
 const validateForm = (form) => {
   const errors = {};
   if (form.name.trim().length > MAX_NAME_LENGTH) errors.name = `${MAX_NAME_LENGTH}자 이하로 입력해 주세요.`;
-  if (form.capacity && (Number(form.capacity) < 1 || Number(form.capacity) > MAX_CAPACITY)) {
-    errors.capacity = `1~${MAX_CAPACITY} 사이로 입력해 주세요.`;
-  }
   if (form.memo.trim().length > MAX_MEMO_LENGTH) errors.memo = `${MAX_MEMO_LENGTH}자 이하로 입력해 주세요.`;
   return errors;
 };
 
 const toCreateBody = (address, form) => {
   const body = { complexId: address.complexId, name: form.name.trim() };
-  if (form.capacity) body.capacity = Number(form.capacity);
   if (form.memo.trim()) body.memo = form.memo.trim();
   return body;
 };
 
-// complex(resolve 응답) → 저장·표시용 주소. 임시 저장에는 이 두 칸만 남긴다(토큰 없음).
+// complex(resolve 응답) → 화면에 보여 줄 주소
 const toAddress = (complex) => ({
   complexId: complex.id,
-  displayAddress: complex.roadAddress ?? complex.jibunAddress ?? complex.name,
+  roadAddress: complex.roadAddress,
+  jibunAddress: complex.jibunAddress,
+  zipCode: complex.zipCode,
+  dongRange: formatDetailBuildingRange(complex.detailBuildingNames),
 });
 
 const AddressField = ({ address, onOpen, error, disabled }) => (
   <div className="flex flex-col gap-1.5">
     <p className="text-label font-semibold text-ink">주소</p>
     {address ? (
-      <div className="flex items-center justify-between gap-3 rounded-input border border-line px-3.5 py-3">
-        <p className="min-w-0 text-card text-ink">{address.displayAddress}</p>
+      <div className="flex items-start justify-between gap-4 rounded-input border border-line px-4 py-3">
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-card font-medium text-ink">{address.roadAddress ?? address.jibunAddress}</p>
+          {address.roadAddress && address.jibunAddress && <p className="text-sub text-ink-2">지번 {address.jibunAddress}</p>}
+          <p className="font-num text-sub tabular-nums text-ink-3">
+            {[address.zipCode && `우편번호 ${address.zipCode}`, address.dongRange].filter(Boolean).join(' · ')}
+          </p>
+        </div>
         <Button variant="secondary" size="sm" className="shrink-0" onClick={onOpen} disabled={disabled}>
           다시 검색
         </Button>
       </div>
     ) : (
-      <Button variant="secondary" className="h-12 w-full" onClick={onOpen} disabled={disabled}>
-        <MapPin size={16} className="-ml-0.5 mr-1.5 inline-block" />
-        주소 검색
-      </Button>
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={disabled}
+        className="flex h-12 items-center gap-2 rounded-input border border-line px-4 text-left text-card text-ink-3 transition-colors hover:border-accent hover:text-ink disabled:opacity-60"
+      >
+        <MapPin size={18} className="shrink-0" />
+        도로명, 건물명, 지번으로 주소를 검색해 주세요
+      </button>
     )}
     {error && <p className="text-chip text-crit-ink">{error}</p>}
   </div>
 );
 
-// 건물 등록(임대인 건물 설정, POST /landlord-buildings). 저장하면 그 건물의 호실 등록으로 간다.
-export const BuildingRegisterPage = ({ user, params, onNavigate, onUnauthorized }) => {
-  const register = usePostLandlordBuilding({ onUnauthorized });
-  const draftKey = toDraftKey(user.id, 'buildingRegister');
+const GuideStep = ({ done, title, desc }) => {
+  const Icon = done ? CheckCircle2 : Circle;
+  return (
+    <li className="flex gap-3">
+      <Icon size={20} className={`mt-0.5 shrink-0 ${done ? 'text-ok' : 'text-ink-3'}`} aria-hidden="true" />
+      <div>
+        <p className="text-body font-semibold text-ink">{title}</p>
+        <p className="text-sub text-ink-2">{desc}</p>
+      </div>
+    </li>
+  );
+};
 
-  const [pendingDraft, setPendingDraft] = useState(() => readDraft(draftKey));
-  const [mode, setMode] = useState(params.mode ?? 'sequential');
-  const [step, setStep] = useState(1);
+// 건물 등록(임대인 건물 설정, POST /landlord-buildings) — 한 화면에 한 번에 입력.
+// 호실 수는 받지 않는다: 등록한 뒤 건물 상세의 [호실 추가]로 하나씩 늘린다. 저장하면 그 건물의 호실 등록으로 간다.
+export const BuildingRegisterPage = ({ onNavigate, onUnauthorized }) => {
+  const register = usePostLandlordBuilding({ onUnauthorized });
   const [form, setForm] = useState(EMPTY_FORM);
   const [address, setAddress] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [serverFieldErrors, setServerFieldErrors] = useState({});
 
-  const isSequential = mode === 'sequential';
-  const currentStep = STEPS[step - 1];
   const clientErrors = validateForm(form);
   const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
   const isReady = Boolean(address && form.name.trim()) && Object.keys(clientErrors).length === 0;
   const isSubmitting = register.isLoading;
-
-  // 순서대로 모드에서만, "이어서 할까요?"에 답한 뒤부터 단계·입력을 임시 저장한다.
-  useEffect(() => {
-    if (!isSequential || pendingDraft) return;
-    if (!address && !form.name && !form.capacity && !form.memo) return;
-    writeDraft(draftKey, { mode, step, form, address });
-  }, [isSequential, pendingDraft, draftKey, mode, step, form, address]);
-
-  const resumeDraft = () => {
-    setMode(pendingDraft.mode ?? 'sequential');
-    setStep(pendingDraft.step ?? 1);
-    setForm({ ...EMPTY_FORM, ...pendingDraft.form });
-    setAddress(pendingDraft.address ?? null);
-    setPendingDraft(null);
-  };
-
-  const discardDraft = () => {
-    clearDraft(draftKey);
-    setPendingDraft(null);
-  };
 
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -129,100 +112,47 @@ export const BuildingRegisterPage = ({ user, params, onNavigate, onUnauthorized 
     setIsDialogOpen(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event) => {
+    event?.preventDefault();
     if (!isReady || isSubmitting) return;
     const { data, error } = await register.createBuilding(toCreateBody(address, form));
     if (data) {
-      clearDraft(draftKey);
       // 등록 화면 기록을 호실 등록으로 바꾼다 → 뒤로가기로 건물 등록이 다시 열리지 않는다.
-      onNavigate('propertyRegister', { complexId: data.complex.id, mode }, { replace: true });
+      onNavigate('propertyRegister', { complexId: data.complex.id }, { replace: true });
       return;
     }
-    if (error?.status === 400) {
-      const fieldErrors = toFieldErrors(error);
-      setServerFieldErrors(fieldErrors);
-      const firstStep = Math.min(...Object.keys(fieldErrors).map((field) => STEP_BY_FIELD[field] ?? STEPS.length));
-      if (isSequential && Number.isFinite(firstStep)) setStep(firstStep);
-    }
+    if (error?.status === 400) setServerFieldErrors(toFieldErrors(error));
   };
-
-  // 순서대로 모드의 [다음]: 이 단계 칸이 맞아야 넘어간다. 주소 단계는 주소를 골라야 한다.
-  const canGoNext = !clientErrors[currentStep] && (currentStep !== 'address' || Boolean(address));
 
   const submitError = register.error;
-  const hasMappedFieldError =
-    submitError?.status === 400 && submitError.details.some(({ field }) => field in STEP_BY_FIELD);
-
-  const showField = (name) => !isSequential || currentStep === name;
-
-  const goBack = () => {
-    if (isSequential && step > 1) {
-      setStep(step - 1);
-      return;
-    }
-    window.history.back();
-  };
+  const hasMappedFieldError = submitError?.status === 400 && submitError.details.some(({ field }) => FORM_FIELDS.includes(field));
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 pb-40">
-      <PageHeader
-        title="건물 등록"
-        onBack={goBack}
-        step={isSequential ? step : undefined}
-        totalSteps={isSequential ? STEPS.length : undefined}
-      />
+    <div className="w-full max-w-6xl space-y-6 pb-10">
+      <PageHeader title="건물 등록" description="건물명과 주소만 입력하면 등록돼요." onBack={() => window.history.back()} />
 
-      {pendingDraft && (
-        <DraftResumeNotice
-          description={pendingDraft.address?.displayAddress ?? pendingDraft.form?.name}
-          onResume={resumeDraft}
-          onDiscard={discardDraft}
-        />
-      )}
+      <form onSubmit={handleSubmit} className="grid grid-cols-3 items-start gap-6">
+        <Card className="col-span-2 space-y-6 p-6">
+          <div className="grid grid-cols-2 gap-5">
+            <TextField
+              label="건물명"
+              placeholder="예: 노원 그린아파트"
+              maxLength={MAX_NAME_LENGTH}
+              hint="비워 두면 주소를 고른 뒤 건물 이름으로 채워요"
+              value={form.name}
+              onChange={(event) => updateField('name', event.target.value)}
+              error={fieldError('name')}
+              disabled={isSubmitting}
+            />
+          </div>
 
-      <SegmentedControl label="입력 방식" options={REGISTER_MODE_OPTIONS} value={mode} onChange={setMode} disabled={isSubmitting} />
-
-      <Card className="space-y-5 p-5">
-        {isSequential && <h2 className="text-section font-semibold text-ink">{STEP_TITLE[currentStep]}</h2>}
-
-        {showField('name') && (
-          <TextField
-            label="건물명"
-            placeholder="예: 노원 그린아파트"
-            maxLength={MAX_NAME_LENGTH}
-            hint="비워 두면 주소를 고른 뒤 건물 이름으로 채워요"
-            value={form.name}
-            onChange={(event) => updateField('name', event.target.value)}
-            error={fieldError('name')}
-            disabled={isSubmitting}
-          />
-        )}
-
-        {showField('address') && (
           <AddressField
             address={address}
             onOpen={() => setIsDialogOpen(true)}
             error={serverFieldErrors.complexId}
             disabled={isSubmitting}
           />
-        )}
 
-        {showField('capacity') && (
-          <TextField
-            label="전체 호실 수 (선택)"
-            suffix="개"
-            numeric
-            inputMode="numeric"
-            placeholder="30"
-            hint="정하면 그 수를 넘게 호실을 등록할 수 없어요. 나중에 바꿀 수 있어요"
-            value={form.capacity}
-            onChange={(event) => updateField('capacity', event.target.value.replace(/\D/g, '').slice(0, 3))}
-            error={fieldError('capacity')}
-            disabled={isSubmitting}
-          />
-        )}
-
-        {showField('memo') && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="building-memo" className="text-label font-semibold text-ink">
               설명 (선택)
@@ -235,29 +165,33 @@ export const BuildingRegisterPage = ({ user, params, onNavigate, onUnauthorized 
               value={form.memo}
               onChange={(event) => updateField('memo', event.target.value)}
               disabled={isSubmitting}
-              className="rounded-input border border-line px-3.5 py-3 text-card text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+              className="rounded-input border border-line px-4 py-3 text-card text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             />
             {fieldError('memo') && <p className="text-chip text-crit-ink">{fieldError('memo')}</p>}
           </div>
-        )}
-      </Card>
 
-      {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
+          {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
 
-      <BottomActionBar>
-        {!isReady && (!isSequential || step === STEPS.length) && (
-          <p className="mb-3 text-sub text-ink-3">건물명과 주소를 입력하면 등록할 수 있어요</p>
-        )}
-        {isSequential && step < STEPS.length ? (
-          <Button size="lg" className="w-full" onClick={() => setStep(step + 1)} disabled={!canGoNext}>
-            다음
-          </Button>
-        ) : (
-          <Button size="lg" className="w-full" onClick={handleSubmit} disabled={!isReady || isSubmitting}>
-            {isSubmitting ? '등록 중' : '건물 등록 · 호실 등록으로'}
-          </Button>
-        )}
-      </BottomActionBar>
+          <div className="flex items-center justify-end gap-3 border-t border-line pt-5">
+            {!isReady && <p className="mr-auto text-sub text-ink-3">건물명과 주소를 입력하면 등록할 수 있어요</p>}
+            <Button type="button" variant="secondary" onClick={() => window.history.back()} disabled={isSubmitting}>
+              취소
+            </Button>
+            <Button type="submit" disabled={!isReady || isSubmitting}>
+              {isSubmitting ? '등록 중' : '건물 등록'}
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="space-y-4 p-6">
+          <h2 className="text-section font-semibold text-ink">등록 순서</h2>
+          <ol className="space-y-4">
+            <GuideStep done={Boolean(address)} title="주소 찾기" desc="도로명주소 하나가 건물 하나예요" />
+            <GuideStep done={false} title="건물 등록" desc="건물명은 내 목록에서만 보여요" />
+            <GuideStep done={false} title="호실 추가" desc="등록한 뒤 건물 상세에서 호실을 하나씩 추가해요" />
+          </ol>
+        </Card>
+      </form>
 
       {isDialogOpen && (
         <AddressSearchDialog onResolved={handleResolved} onClose={closeDialog} onUnauthorized={onUnauthorized} />

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
+import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetComplex } from '../hooks/useGetComplex';
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
@@ -90,7 +91,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
   const showErrorBox = patch.error && !(patch.error.status === 400 && (fieldErrors.exclusiveArea || fieldErrors.floor));
 
   return (
-    <Card className="space-y-3 p-5">
+    <Card className="space-y-4 p-6">
       <SectionTitle
         action={
           !isEditing && (
@@ -215,7 +216,7 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
     patch.error && !(patch.error.status === 400 && (fieldErrors.acquiredYearMonth || fieldErrors.purchasePrice));
 
   return (
-    <Card className="space-y-3 p-5">
+    <Card className="space-y-4 p-6">
       <SectionTitle action={<Badge tone={badge.tone}>{badge.label}</Badge>}>내 소유 정보</SectionTitle>
 
       {mode !== 'edit' && (
@@ -373,7 +374,7 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
   };
 
   return (
-    <Card className="space-y-3 p-5">
+    <Card className="space-y-4 p-6">
       <SectionTitle
         action={
           ownership.isActive &&
@@ -416,7 +417,7 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
           </div>
           <div className="space-y-2">
             <p className="text-label font-semibold text-ink">설비</p>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {EQUIPMENT_OPTIONS.map((option) => (
                 <label key={option.value} className="flex h-10 cursor-pointer items-center gap-2 rounded-input border border-line px-3 text-body text-ink-2 hover:bg-surface-2">
                   <input
@@ -454,7 +455,7 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
 
 // 임대 정보·임차인·계약 자리. TODO(#4 계약 관리): 계약 데이터가 생기면 채운다.
 const LeaseSection = () => (
-  <Card className="space-y-3 p-5">
+  <Card className="space-y-4 p-6">
     <SectionTitle>임대 정보</SectionTitle>
     <dl className="divide-y divide-line">
       <InfoRow label="계약 상태" value="계약 등록 전" />
@@ -465,18 +466,19 @@ const LeaseSection = () => (
 );
 
 // 호실 상세. 소유 정보·임대 조건은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
-export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) => {
+export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
   const property = propertyQuery.data;
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipQuery = useGetPropertyOwnership(property?.myRelation?.ownershipId, hookOptions);
+  const { getPropertyName } = useBuildingNames(hookOptions);
 
   const goBack = () => window.history.back();
 
   if (!property) {
     return (
-      <div className="mx-auto max-w-2xl space-y-5">
+      <div className="w-full max-w-6xl space-y-6">
         <PageHeader title="호실 상세" onBack={goBack} />
         {propertyQuery.error ? (
           <NoticeBox>{propertyQuery.error.message}</NoticeBox>
@@ -491,44 +493,54 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
   const verification = getVerificationBadge(property.myRelation?.verificationStatus);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 pb-10">
-      <PageHeader title={property.displayName} onBack={goBack} />
-      <div className="flex items-center gap-2">
-        <span className="text-sub text-ink-3">운영 상태</span>
-        <Badge tone={status.tone}>{status.label}</Badge>
-        {property.myRelation?.type === 'OWNER' && <Badge tone={verification.tone}>{verification.label}</Badge>}
-      </div>
+    <div className="w-full max-w-6xl space-y-6 pb-10">
+      <PageHeader
+        title={getPropertyName(property)}
+        description={complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress}
+        onBack={goBack}
+        actions={
+          <>
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {property.myRelation?.type === 'OWNER' && <Badge tone={verification.tone}>{verification.label}</Badge>}
+          </>
+        }
+      />
       {propertyQuery.error && <NoticeBox>{propertyQuery.error.message}</NoticeBox>}
       {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
-
-      <BasicInfoSection
-        property={property}
-        complex={complexQuery.data}
-        onSaved={propertyQuery.refetch}
-        onUnauthorized={onUnauthorized}
-      />
-
       {ownershipQuery.error && <NoticeBox>{ownershipQuery.error.message}</NoticeBox>}
-      {ownershipQuery.data && (
-        <ListingSection
-          key={`listing-${ownershipQuery.data.id}`}
-          ownership={ownershipQuery.data}
-          onSaved={ownershipQuery.refetch}
-          onUnauthorized={onUnauthorized}
-        />
-      )}
 
-      <LeaseSection />
+      <div className="grid grid-cols-2 items-start gap-6">
+        <div className="space-y-6">
+          <BasicInfoSection
+            property={property}
+            complex={complexQuery.data}
+            onSaved={propertyQuery.refetch}
+            onUnauthorized={onUnauthorized}
+          />
+          {ownershipQuery.data && (
+            <ListingSection
+              key={`listing-${ownershipQuery.data.id}`}
+              ownership={ownershipQuery.data}
+              onSaved={ownershipQuery.refetch}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
+        </div>
 
-      {ownershipQuery.data && (
-        <OwnershipSection
-          key={ownershipQuery.data.id}
-          ownership={ownershipQuery.data}
-          onSaved={ownershipQuery.refetch}
-          onEnded={() => onNavigate('buildingList', {}, { replace: true })}
-          onUnauthorized={onUnauthorized}
-        />
-      )}
+        <div className="space-y-6">
+          <LeaseSection />
+          {ownershipQuery.data && (
+            <OwnershipSection
+              key={ownershipQuery.data.id}
+              ownership={ownershipQuery.data}
+              onSaved={ownershipQuery.refetch}
+              // 들어온 화면(건물 상세·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
+              onEnded={goBack}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 };

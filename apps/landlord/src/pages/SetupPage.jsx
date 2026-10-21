@@ -1,6 +1,7 @@
-import { CheckCircle2, Circle, FileSpreadsheet, Lock } from 'lucide-react';
+import { CheckCircle2, Circle, Lock } from 'lucide-react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
+import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetActivityList } from '../hooks/useGetActivityList';
 import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { formatActivity } from '../utils/activity';
@@ -11,7 +12,7 @@ const ACTIVITY_SIZE = 10;
 // STEP 키(GET /dashboard/landlord/setup steps[].key) → 화면 문구와 이동할 곳
 const STEP_INFO = {
   BUILDING: { title: '건물 등록', desc: '도로명주소로 건물을 등록해요', action: { label: '건물 등록', view: 'buildingRegister' } },
-  PROPERTY: { title: '호실 등록', desc: '건물에 호실을 등록해요', action: { label: '호실 등록', view: 'propertyRegister' } },
+  PROPERTY: { title: '호실 등록', desc: '건물에 호실을 추가해요', action: { label: '호실 등록', view: 'propertyRegister' } },
   CONTRACT: { title: '계약 등록', desc: '임대차 계약을 등록해요' },
   TENANT_INVITE: { title: '임차인 초대', desc: '임차인을 버틀러로 초대해요' },
   OPERATION_CHECK: { title: '운영 점검', desc: '앞 단계를 마치면 열려요' },
@@ -49,7 +50,7 @@ const StepCard = ({ index, step, onNavigate }) => {
   );
 };
 
-// 초기 세팅(Landly /setup): 진행률, STEP 카드, 건물별 남은 호실, 최근 활동 10개.
+// 초기 세팅(Landly /setup): 진행률, STEP 카드, 건물별 등록 호실, 최근 활동 10개.
 // params.notice: 호실 저장 직후 안내(이미 등록된 면적·층을 썼을 때 등).
 export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
@@ -57,12 +58,15 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
   const data = setup.data;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 pb-10">
-      <h1 className="text-h1 font-semibold text-ink">초기 세팅</h1>
+    <div className="w-full max-w-6xl space-y-6 pb-10">
+      <PageHeader
+        title="초기 세팅"
+        description="건물과 호실을 등록하고, 계약·임차인 초대까지 마치면 운영을 시작할 수 있어요."
+      />
       {params.notice && <NoticeBox tone="info">{params.notice}</NoticeBox>}
       {setup.error && <NoticeBox>{setup.error.message}</NoticeBox>}
 
-      <Card className="space-y-3 p-5">
+      <Card className="space-y-3 p-6">
         <div className="flex items-end justify-between">
           <p className="text-body font-semibold text-ink">진행률</p>
           <p className="font-num text-kpi font-bold tabular-nums text-ink">
@@ -82,7 +86,7 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
       </Card>
 
       {data && (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-4">
           {data.steps.map((step, index) => (
             <StepCard key={step.key} index={index} step={step} onNavigate={onNavigate} />
           ))}
@@ -94,15 +98,9 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="space-y-3 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-body font-semibold text-ink">건물별 남은 호실</h2>
-            <Button variant="secondary" size="sm" disabled title="준비 중입니다">
-              <FileSpreadsheet size={14} className="-ml-0.5 mr-1 inline-block" />
-              엑셀로 한 번에 등록하기 (준비 중)
-            </Button>
-          </div>
+      <div className="grid grid-cols-2 gap-6">
+        <Card className="space-y-3 p-6">
+          <h2 className="text-section font-semibold text-ink">건물별 등록 호실</h2>
           {data?.buildings.length === 0 && <p className="text-body text-ink-3">등록한 건물이 없습니다</p>}
           <ul className="divide-y divide-line">
             {data?.buildings.map((building) => (
@@ -113,19 +111,15 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
                   className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:text-accent-strong"
                 >
                   <span className="min-w-0 truncate text-body font-medium text-ink">{building.name}</span>
-                  <span className="shrink-0 font-num text-sub tabular-nums text-ink-2">
-                    {building.propertyCount}
-                    {building.capacity != null ? ` / ${building.capacity}` : ''}개
-                    {building.remainingCount > 0 && <span className="ml-1.5 text-warn-ink">{building.remainingCount}개 남음</span>}
-                  </span>
+                  <span className="shrink-0 font-num text-sub tabular-nums text-ink-2">{building.propertyCount}개</span>
                 </button>
               </li>
             ))}
           </ul>
         </Card>
 
-        <Card className="space-y-3 p-5">
-          <h2 className="text-body font-semibold text-ink">최근 활동</h2>
+        <Card className="space-y-3 p-6">
+          <h2 className="text-section font-semibold text-ink">최근 활동</h2>
           {activities.error && <NoticeBox>{activities.error.message}</NoticeBox>}
           {activities.data?.length === 0 && <p className="text-body text-ink-3">아직 활동이 없습니다</p>}
           <ul className="space-y-3">
