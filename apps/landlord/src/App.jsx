@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LoginScreen } from '@butler/ui';
-import { postLogin, postLogout } from '@butler/api-client';
+import { getMe, postLogin, postLogout } from '@butler/api-client';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
@@ -41,6 +41,8 @@ const SUB_TITLE_BY_VIEW = {
 
 export const App = () => {
   const [user, setUser] = useState(null);
+  // 새로고침해도 로그인이 풀리지 않게, 처음 열 때 쿠키 세션(GET /auth/me)을 확인한다.
+  const [isRestoring, setIsRestoring] = useState(true);
   const [view, setView] = useState(HOME_VIEW);
   // 로그인마다 새로 만드는 세션 표식. history 항목에 같이 저장해, 이전 세션에서 쌓인 항목이
   // 재로그인 뒤 뒤로가기로 되살아나지 않게 한다(표식이 다르면 홈으로 본다).
@@ -73,6 +75,23 @@ export const App = () => {
     resetToHome();
   }, [resetToHome]);
 
+  useEffect(() => {
+    let isActive = true;
+    getMe()
+      .then(({ user: sessionUser }) => {
+        if (!isActive) return;
+        resetToHome();
+        setUser(sessionUser);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isActive) setIsRestoring(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [resetToHome]);
+
   // 로그아웃 상태에서는 뒤로가기로 보호 화면 state가 살아나지 않도록 popstate를 듣지 않는다.
   useEffect(() => {
     if (!user) return undefined;
@@ -103,6 +122,14 @@ export const App = () => {
     setUser(null);
     resetToHome();
   };
+
+  if (isRestoring) {
+    return (
+      <p role="status" className="flex min-h-screen items-center justify-center bg-ground text-body text-ink-3">
+        불러오는 중입니다
+      </p>
+    );
+  }
 
   if (!user) {
     return (
