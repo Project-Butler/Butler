@@ -1,7 +1,7 @@
 // juso 상세건물명 목록(detBdNmList) 처리(순수 함수, DB·외부 호출 없음).
 // juso는 목록을 순서 없이 준다('103동,117동,107동,…') — 자연 정렬('2동' < '10동')해서 보관한다.
 
-const collator = new Intl.Collator('ko', { numeric: true });
+import { compareNatural } from '../../platform/naturalSort.js';
 
 // '103동,101동, 102동' → ['101동', '102동', '103동'](공백 제거, 중복 제거, 자연 정렬)
 export const parseDetailBuildingNames = (value) =>
@@ -12,7 +12,7 @@ export const parseDetailBuildingNames = (value) =>
         .map((name) => name.replace(/\s+/g, ''))
         .filter(Boolean),
     ),
-  ].sort(collator.compare);
+  ].sort(compareNatural);
 
 const NUMBERED_DONG_PATTERN = /^(\d+)동$/;
 const PREVIEW_COUNT = 3;
@@ -24,7 +24,7 @@ const isConsecutive = (numbers) => numbers.every((number, index) => index === 0 
 // - 아니면 앞 3개 + ' 외 N개'.
 export const formatDetailBuildingRange = (names) => {
   if (!Array.isArray(names) || names.length === 0) return null;
-  const sorted = [...names].sort(collator.compare);
+  const sorted = [...names].sort(compareNatural);
 
   const numbered = sorted.filter((name) => NUMBERED_DONG_PATTERN.test(name));
   const numbers = numbered.map((name) => Number(NUMBERED_DONG_PATTERN.exec(name)[1]));
