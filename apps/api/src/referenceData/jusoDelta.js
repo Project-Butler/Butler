@@ -16,6 +16,7 @@ import { loadKaptLookup } from './kaptLookup.js';
 import {
   finishImport,
   findDeltaCursorDate,
+  ImportAlreadyRunningError,
   LOCK_KEYS,
   releaseStaleRunning,
   resumeImport,
@@ -161,16 +162,23 @@ export const applyJusoDeltaFile = async ({
   }
 
   const sameFile = partial && partial.fileSize === fileSize && partial.fileSha1 === fileSha1;
-  const run = partial
-    ? await resumeImport(prisma, partial.id, { fileSize, fileSha1, fileName, ...(sameFile ? {} : { cursorLine: 0 }) })
-    : await startImport(prisma, {
-        source: SOURCES.JUSO_DELTA,
-        lockKey: LOCK_KEYS.JUSO,
-        fileName,
-        fileDate: fileDateValue,
-        fileSize,
-        fileSha1,
-      });
+  let run;
+  try {
+    run = partial
+      ? await resumeImport(prisma, partial.id, { fileSize, fileSha1, fileName, ...(sameFile ? {} : { cursorLine: 0 }) })
+      : await startImport(prisma, {
+          source: SOURCES.JUSO_DELTA,
+          lockKey: LOCK_KEYS.JUSO,
+          fileName,
+          fileDate: fileDateValue,
+          fileSize,
+          fileSha1,
+        });
+  } catch (error) {
+    // 전체분이나 다른 변동분이 같은 표에 쓰는 중이면 실패가 아니라 건너뜀으로 남긴다.
+    if (error instanceof ImportAlreadyRunningError) return { status: 'SKIPPED', reason: 'already running', fileDate };
+    throw error;
+  }
   const startCursor = sameFile ? partial.cursorLine : 0;
   const stats = { fileDate, restartedFromZero: Boolean(partial && !sameFile), startCursor, batches: 0, maxBatchMs: 0 };
 

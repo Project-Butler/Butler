@@ -113,8 +113,14 @@ export const createPropertyWithOwnership = async (user, input) => {
         if (!complex) throw new AppError('COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
 
         stage = 'landlordBuilding';
-        const buildingCreated = await ensureLandlordBuilding(tx, user, complex);
-        const building = await lockLandlordBuilding(tx, { userId: user.id, complexId: complex.id });
+        let buildingCreated = await ensureLandlordBuilding(tx, user, complex);
+        let building = await lockLandlordBuilding(tx, { userId: user.id, complexId: complex.id });
+        if (!building) {
+          // 만든 직후 다른 요청(DELETE /landlord-buildings)이 지웠으면 한 번 더 만들고 잠근다.
+          buildingCreated = (await ensureLandlordBuilding(tx, user, complex)) || buildingCreated;
+          building = await lockLandlordBuilding(tx, { userId: user.id, complexId: complex.id });
+          if (!building) throw new AppError('LANDLORD_BUILDING_NOT_FOUND', 404, '건물 설정을 찾을 수 없습니다. 다시 시도해 주세요.');
+        }
         if (buildingCreated) {
           await recordActivity(tx, {
             userId: user.id,
