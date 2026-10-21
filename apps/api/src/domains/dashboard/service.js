@@ -6,7 +6,7 @@ import { buildSetupSteps } from './setupProgress.js';
 export const findLandlordSetup = async (user) => {
   const [buildings, propertyCount] = await Promise.all([
     prisma.landlordBuilding.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, deletedAt: null },
       select: { id: true, complexId: true, name: true, capacity: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     }),

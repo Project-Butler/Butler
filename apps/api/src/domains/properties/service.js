@@ -67,13 +67,15 @@ const isUniqueViolation = (error) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 
 // 그 단지에 내 건물 설정이 없으면 기본값(이름 = 단지 이름, 정원 없음)으로 만든다(명세 변경 C5).
-// 동시에 같은 단지로 등록해도 ON CONFLICT DO NOTHING이라 하나만 생긴다. 새로 만들었으면 true.
+// 숨긴(삭제한) 설정이 있으면 이름을 그대로 두고 되살린다. 동시에 같은 단지로 등록해도 행은 하나다.
+// 새로 만들었거나 되살렸으면 true.
 const ensureLandlordBuilding = async (tx, user, complex) => {
   const name = complex.name.slice(0, MAX_BUILDING_NAME_LENGTH);
   const inserted = await tx.$queryRaw`
     INSERT INTO landlord_buildings (id, user_id, complex_id, name, created_at, updated_at)
     VALUES (gen_random_uuid(), ${user.id}::uuid, ${complex.id}::uuid, ${name}, now(), now())
-    ON CONFLICT (user_id, complex_id) DO NOTHING
+    ON CONFLICT (user_id, complex_id) DO UPDATE SET deleted_at = NULL, updated_at = now()
+      WHERE landlord_buildings.deleted_at IS NOT NULL
     RETURNING id`;
   return inserted.length > 0;
 };

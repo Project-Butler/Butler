@@ -27,7 +27,7 @@ export const toRemainingCount = (capacity, propertyCount) =>
   capacity === null || capacity === undefined ? null : Math.max(capacity - propertyCount, 0);
 
 // 인터랙티브 트랜잭션 안에서 건물 설정 행을 잠근다(정원 검사와 등록·정원 수정이 줄을 서게).
-// 없으면 null.
+// 없거나 숨긴(삭제한) 행이면 null.
 export const lockLandlordBuilding = async (tx, where) => {
   const condition = where.id
     ? Prisma.sql`id = ${where.id}::uuid AND user_id = ${where.userId}::uuid`
@@ -35,7 +35,7 @@ export const lockLandlordBuilding = async (tx, where) => {
   const rows = await tx.$queryRaw`
     SELECT id::text AS id, complex_id::text AS "complexId", name, capacity
     FROM landlord_buildings
-    WHERE ${condition}
+    WHERE ${condition} AND deleted_at IS NULL
     FOR UPDATE`;
   return rows[0] ?? null;
 };

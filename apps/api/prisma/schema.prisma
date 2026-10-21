@@ -195,6 +195,9 @@ model LandlordBuilding {
   name      String   @db.VarChar(50)
   capacity  Int? // 전체 호실 수 1~999. null이면 정원 검사 안 함
   memo      String?  @db.VarChar(500)
+  // 건물 삭제는 숨김이다(행은 남김). 예전 소유 호실을 내가 붙인 이름으로 계속 보여 주고,
+  // 같은 주소로 다시 등록하면 이 행을 되살린다(@@unique userId+complexId는 그대로).
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

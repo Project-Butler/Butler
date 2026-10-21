@@ -29,6 +29,7 @@ export const toLandlordBuildingResponse = (building, propertyCount) => ({
   propertyCount,
   remainingCount: toRemainingCount(building.capacity, propertyCount),
   status: LANDLORD_BUILDING_STATUS,
+  deletedAt: building.deletedAt ? building.deletedAt.toISOString() : null,
   createdAt: building.createdAt.toISOString(),
   updatedAt: building.updatedAt.toISOString(),
 });
@@ -45,6 +46,10 @@ const throwCapacityBelowUnits = (propertyCount) => {
   );
 };
 
+const throwAlreadyExists = () => {
+  throw new AppError('LANDLORD_BUILDING_ALREADY_EXISTS', 409, '이 주소에는 이미 건물을 등록했습니다.');
+};
+
 const isUniqueViolation = (error) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 
@@ -52,6 +57,7 @@ const withCount = async (building) =>
   toLandlordBuildingResponse(building, await countActiveUnitsInComplex(prisma, building.userId, building.complexId));
 
 // POST /landlord-buildings
+// 같은 주소의 숨긴(삭제한) 건물 설정이 있으면 새로 만들지 않고 되살린다(이름·설명은 이번 입력으로).
 // P2002(@@unique userId+complexId)는 트랜잭션 밖에서 409로 바꾼다(실패한 트랜잭션 안에서는 다시 조회할 수 없음).
 export const createLandlordBuilding = async (user, input) => {
   try {
@@ -65,10 +71,23 @@ export const createLandlordBuilding = async (user, input) => {
         if (propertyCount > input.capacity) throwCapacityBelowUnits(propertyCount);
       }
 
-      const building = await tx.landlordBuilding.create({
-        data: { userId: user.id, ...input },
-        include: { complex: COMPLEX_SELECT },
+      const existing = await tx.landlordBuilding.findUnique({
+        where: { userId_complexId: { userId: user.id, complexId: input.complexId } },
+        select: { id: true, deletedAt: true },
       });
+      if (existing && !existing.deletedAt) throwAlreadyExists();
+
+      const { complexId, ...fields } = input;
+      const building = existing
+        ? await tx.landlordBuilding.update({
+            where: { id: existing.id },
+            data: { capacity: null, memo: null, ...fields, deletedAt: null },
+            include: { complex: COMPLEX_SELECT },
+          })
+        : await tx.landlordBuilding.create({
+            data: { userId: user.id, complexId, ...fields },
+            include: { complex: COMPLEX_SELECT },
+          });
       await recordActivity(tx, {
         userId: user.id,
         type: ACTIVITY_TYPES.LANDLORD_BUILDING_CREATED,
@@ -79,9 +98,7 @@ export const createLandlordBuilding = async (user, input) => {
     });
     return withCount(created);
   } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new AppError('LANDLORD_BUILDING_ALREADY_EXISTS', 409, '이 주소에는 이미 건물을 등록했습니다.');
-    }
+    if (isUniqueViolation(error)) throwAlreadyExists();
     throw error;
   }
 };
@@ -89,8 +106,9 @@ export const createLandlordBuilding = async (user, input) => {
 const toPageMeta = (page, size, total) => ({ page, size, total, hasNext: page * size < total });
 
 // GET /landlord-buildings — 본인 것, 만든 순서대로. 등록 수는 그룹 집계 1번.
-export const findMyLandlordBuildings = async (user, { page, size }) => {
-  const where = { userId: user.id };
+// includeDeleted: 숨긴(삭제한) 건물도 함께(예전 소유 호실을 내가 붙인 이름으로 보여 줄 때).
+export const findMyLandlordBuildings = async (user, { page, size, includeDeleted = false }) => {
+  const where = includeDeleted ? { userId: user.id } : { userId: user.id, deletedAt: null };
   const [buildings, total] = await prisma.$transaction([
     prisma.landlordBuilding.findMany({
       where,
@@ -119,7 +137,7 @@ export const findLandlordBuildingForUser = async (user, landlordBuildingId) => {
     where: { id: landlordBuildingId },
     include: { complex: COMPLEX_SELECT },
   });
-  if (!building) return null;
+  if (!building || building.deletedAt) return null;
   if (building.userId !== user.id && user.role !== 'ADMIN') return null;
   return withCount(building);
 };
@@ -151,7 +169,7 @@ export const updateLandlordBuilding = async (user, landlordBuildingId, data) => 
   return withCount(updated);
 };
 
-// DELETE — 그 단지에 내 활성 소유 관계가 있으면 409(호실을 먼저 정리).
+// DELETE — 숨김 처리(deletedAt). 그 단지에 내 활성 소유 관계가 있으면 409(호실을 먼저 정리).
 export const deleteLandlordBuilding = async (user, landlordBuildingId) => {
   await prisma.$transaction(async (tx) => {
     const locked = await lockLandlordBuilding(tx, { id: landlordBuildingId, userId: user.id });
@@ -166,7 +184,7 @@ export const deleteLandlordBuilding = async (user, landlordBuildingId) => {
       );
     }
 
-    await tx.landlordBuilding.delete({ where: { id: landlordBuildingId } });
+    await tx.landlordBuilding.update({ where: { id: landlordBuildingId }, data: { deletedAt: new Date() } });
     await recordActivity(tx, {
       userId: user.id,
       type: ACTIVITY_TYPES.LANDLORD_BUILDING_DELETED,

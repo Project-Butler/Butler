@@ -87,8 +87,15 @@ const parseListQuery = (query) => {
   assertSingleValues(query);
   const details = [];
   const { page, size } = parsePagination(query, details);
+  let includeDeleted = false;
+  if (query.includeDeleted !== undefined) {
+    if (query.includeDeleted !== 'true' && query.includeDeleted !== 'false') {
+      details.push({ field: 'includeDeleted', reason: 'true 또는 false여야 합니다.' });
+    }
+    includeDeleted = query.includeDeleted === 'true';
+  }
   throwIfInvalid(details);
-  return { page, size };
+  return { page, size, includeDeleted };
 };
 
 const throwNotFound = () => {
