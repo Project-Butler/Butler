@@ -77,7 +77,7 @@ export const AddressSearchDialog = ({ initialQuery = '', onResolved, onClose, on
           <TextField
             className="flex-1"
             aria-label="주소 검색어"
-            placeholder="도로명, 건물명, 지번으로 검색 (예: 중계그린)"
+            placeholder="도로명, 건물명, 지번으로 검색해 주세요"
             autoFocus
             value={query}
             onChange={(event) => {

@@ -136,9 +136,9 @@ export const BuildingRegisterPage = ({ onNavigate, onUnauthorized }) => {
           <div className="grid grid-cols-2 gap-5">
             <TextField
               label="건물명"
-              placeholder="예: 노원 그린아파트"
+              placeholder="건물명을 입력하세요"
               maxLength={MAX_NAME_LENGTH}
-              hint="비워 두면 주소를 고른 뒤 건물 이름으로 채워요"
+              hint="비워 두면 주소를 고른 뒤 건물 이름으로 대체됩니다."
               value={form.name}
               onChange={(event) => updateField('name', event.target.value)}
               error={fieldError('name')}
@@ -161,7 +161,7 @@ export const BuildingRegisterPage = ({ onNavigate, onUnauthorized }) => {
               id="building-memo"
               rows={4}
               maxLength={MAX_MEMO_LENGTH}
-              placeholder="관리 메모를 남겨 두세요"
+              placeholder="관리에 필요한 메모를 남겨 두세요"
               value={form.memo}
               onChange={(event) => updateField('memo', event.target.value)}
               disabled={isSubmitting}
