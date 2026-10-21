@@ -32,5 +32,9 @@ coverage/
 .claude/
 
 docs/
-# 대용량 원본 데이터 압축 파일 (juso 건물DB 등)
+# 대용량 원본 데이터 (juso 건물DB zip, K-apt 기본정보 엑셀 등). DB에 적재해 쓰고 레포에 넣지 않는다.
 *.zip
+*.xlsx
+*.xls
+# 테스트용 juso 변동분 샘플(1KB 미만)은 레포에 둔다 — 없으면 jusoFiles.test.js가 실패한다.
+!apps/api/src/referenceData/fixtures/*.zip
