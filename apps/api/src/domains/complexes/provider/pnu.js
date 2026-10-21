@@ -1,8 +1,8 @@
 // PNU(필지 고유번호, 19자리) 조립·분해와 법정동 코드 롤업. 순수 함수만 둔다(DB·외부 호출 없음).
 //
 // PNU 형식: 법정동 코드 10자리 + 산 구분 1자리(1 = 일반, 2 = 산) + 본번 4자리 + 부번 4자리.
-// 법정동 코드는 juso의 admCd를 **리 단위 10자리 그대로** 쓴다 — 리 지역 건축물대장은
-// 리 코드로만 찾을 수 있다. 읍면동 단위로 올리는(롤업) 건 Complex.legalDongCode에만 한다.
+// 법정동 코드는 juso의 admCd를 **리 단위 10자리 그대로** 쓴다. 읍면동 단위로 올리는(롤업) 건
+// Complex.legalDongCode에만 한다.
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const LOT_NUMBER_PATTERN = /^\d{1,4}$/;
@@ -36,21 +36,6 @@ export const parsePnu = (pnu) => {
     mtYn: mountainDigit === '2' ? '1' : '0',
     mainNo: value.slice(11, 15),
     subNo: value.slice(15, 19),
-  };
-};
-
-// 건축HUB(건축물대장) 요청 파라미터. 건축HUB의 대지 구분 코드는 PNU와 체계가 달라서
-// PNU 산 자리 '2'(산) → platGbCd '1', '1'(일반) → '0'으로 바꾼다.
-export const toBuildingRegisterParams = (pnu) => {
-  const parsed = parsePnu(pnu);
-  if (!parsed) return null;
-
-  return {
-    sigunguCd: parsed.admCd.slice(0, 5),
-    bjdongCd: parsed.admCd.slice(5, 10),
-    platGbCd: parsed.mtYn === '1' ? '1' : '0',
-    bun: parsed.mainNo,
-    ji: parsed.subNo,
   };
 };
 

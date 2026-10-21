@@ -11,7 +11,6 @@ import { pickBestKapt } from '../domains/complexes/kaptLinks.js';
 import { parsePnu } from '../domains/complexes/provider/pnu.js';
 
 export const BUILDING_COLUMN_COUNT = 31;
-export const MATCH_RULES = ['ROAD_KEY', 'LOT', 'NON_APT_FLAG'];
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const BUILDING_MGT_NO_PATTERN = /^\d{25}$/;

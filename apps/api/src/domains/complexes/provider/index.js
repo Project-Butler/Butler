@@ -10,15 +10,16 @@ import { publicProvider } from './publicProvider.js';
 
 const UNAVAILABLE_MESSAGE = '주소 검색 서비스에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
 
-const hasPublicKeys = () => Boolean(process.env.JUSO_API_KEY && process.env.DATA_GO_KR_SERVICE_KEY);
+// 단지 검색은 juso만 부르므로 juso 키만 본다(K-apt 키는 cron·참고 데이터 쪽에서 따로 검사).
+const hasJusoKey = () => Boolean(process.env.JUSO_API_KEY);
 
 // 모듈을 처음 불러올 때 한 번만 경고한다. 키 값은 출력하지 않는다.
-if (!hasPublicKeys()) {
-  console.warn('[complexes] 외부 단지 데이터 키 없음 — 단지 검색이 503을 반환합니다');
+if (!hasJusoKey()) {
+  console.warn('[complexes] JUSO_API_KEY 없음 — 단지 검색이 503을 반환합니다');
 }
 
 const getComplexProvider = () => {
-  if (!hasPublicKeys()) throw new ExternalServiceError('public provider keys missing');
+  if (!hasJusoKey()) throw new ExternalServiceError('JUSO_API_KEY missing');
   return publicProvider;
 };
 

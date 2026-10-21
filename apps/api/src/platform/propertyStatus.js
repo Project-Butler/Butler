@@ -5,8 +5,6 @@
 // "계약대기"의 정확한 조건은 계약(#4) 담당과 확정한다(계획 Q2) — 바뀌면 이 함수만 고친다.
 import { computeContractStatus } from './contractStatus.js';
 
-export const PROPERTY_STATUSES = Object.freeze(['VACANT', 'CONTRACT_PENDING', 'LEASED']);
-
 // contracts: [{ startDate, endDate, terminatedOn }] (Prisma Contract 일부)
 export const computePropertyStatus = (contracts, todayKST) => {
   const statuses = (contracts ?? []).map((contract) => computeContractStatus(contract, todayKST));
