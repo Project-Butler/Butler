@@ -7,16 +7,24 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@butler/api-client": "^1.0.0",
     "@butler/ui": "^1.0.0",
+    "@tanstack/react-query": "^5.104.5",
     "lucide-react": "^1.59.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
-    "vite-plugin-pwa": "^0.20.5"
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "jsdom": "^29.1.1",
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "~3.2.7"
   }
 }

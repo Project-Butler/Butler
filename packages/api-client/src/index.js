@@ -30,3 +30,9 @@ export { deleteLandlordBuilding } from './apis/landlordBuildings/deleteLandlordB
 
 export { getLandlordSetup } from './apis/dashboard/getLandlordSetup';
 export { getActivityList } from './apis/activities/getActivityList';
+
+export { getDisputeChatList } from './apis/disputes/getDisputeChatList';
+export { getDisputeChat } from './apis/disputes/getDisputeChat';
+export { postDisputeChat } from './apis/disputes/postDisputeChat';
+export { postDisputeChatMessage } from './apis/disputes/postDisputeChatMessage';
+export { deleteDisputeChat } from './apis/disputes/deleteDisputeChat';

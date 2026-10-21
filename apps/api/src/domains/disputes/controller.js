@@ -2,12 +2,26 @@ import { DisputeCategory, DisputePropertyKind, DisputeReferenceType } from '@pri
 import { AppError } from '../../platform/AppError.js';
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
-import { findReferenceById, findReferences, SORTABLE_FIELDS } from './service.js';
+import { askCounselor } from './chatbot.js';
+import { retrieveReferences } from './retriever.js';
+import {
+  appendChatMessages,
+  createChat,
+  deleteChat,
+  findChatHistory,
+  findChats,
+  findChatWithMessages,
+  findReferenceById,
+  findReferences,
+  MAX_CHAT_MESSAGES,
+  SORTABLE_FIELDS,
+} from './service.js';
 
 // api-contract.md 1장 "목록 조회": page는 1부터, size는 기본 20·최대 100
 const DEFAULT_SIZE = 20;
 const MAX_SIZE = 100;
 const MAX_KEYWORD_LENGTH = 100;
+const MAX_QUESTION_LENGTH = 2000;
 
 const parsePositiveInt = (value, field, details) => {
   const number = Number(value);
@@ -105,6 +119,110 @@ export const getReference = async (req, res, next) => {
     }
 
     sendData(res, reference);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===== 분쟁 상담 챗봇 =====
+
+const parsePageQuery = (query) => {
+  const details = [];
+  const { page, size } = query;
+
+  const pageNumber = page === undefined ? 1 : parsePositiveInt(page, 'page', details);
+
+  let pageSize = DEFAULT_SIZE;
+  if (size !== undefined) {
+    pageSize = parsePositiveInt(size, 'size', details);
+    if (pageSize !== null && pageSize > MAX_SIZE) {
+      details.push({ field: 'size', reason: `${MAX_SIZE} 이하여야 합니다.` });
+    }
+  }
+
+  if (details.length > 0) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', details);
+  }
+  return { page: pageNumber, size: pageSize };
+};
+
+const parseQuestion = (body) => {
+  const question = typeof body?.message === 'string' ? body.message.trim() : '';
+  if (question.length === 0 || question.length > MAX_QUESTION_LENGTH) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', [
+      { field: 'message', reason: `1자 이상 ${MAX_QUESTION_LENGTH}자 이하의 문자열이어야 합니다.` },
+    ]);
+  }
+  return question;
+};
+
+const chatNotFound = () => new AppError('DISPUTE_CHAT_NOT_FOUND', 404, '상담 대화를 찾을 수 없습니다.');
+
+// RAG: 질문과 비슷한 참고자료를 검색하고(retriever) 그 자료를 근거로 답변을 만든다(chatbot).
+// Claude 호출이 실패하면 질문도 저장하지 않는다 — 사용자는 같은 질문을 다시 보내면 된다.
+const ask = async (history, question) => {
+  const questionAt = new Date();
+  const references = await retrieveReferences({ history, question });
+  const answer = await askCounselor({ references, history, question });
+  return { question, questionAt, answer, answerAt: new Date() };
+};
+
+export const listChats = async (req, res, next) => {
+  try {
+    const { items, meta } = await findChats({ userId: req.user.id, ...parsePageQuery(req.query) });
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const startChat = async (req, res, next) => {
+  try {
+    const question = parseQuestion(req.body);
+    const chat = await createChat({ userId: req.user.id, ...(await ask([], question)) });
+    sendData(res, chat, { status: 201 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getChat = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const chat = isUuid(chatId) ? await findChatWithMessages({ chatId, userId: req.user.id }) : null;
+    if (!chat) throw chatNotFound();
+
+    sendData(res, chat);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sendChatMessage = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const question = parseQuestion(req.body);
+    const history = isUuid(chatId) ? await findChatHistory({ chatId, userId: req.user.id }) : null;
+    if (!history) throw chatNotFound();
+
+    if (history.length + 2 > MAX_CHAT_MESSAGES) {
+      throw new AppError('DISPUTE_CHAT_LIMIT_EXCEEDED', 422, '대화가 너무 길어졌습니다. 새 대화를 시작해주세요.');
+    }
+
+    const messages = await appendChatMessages({ chatId, ...(await ask(history, question)) });
+    sendData(res, messages, { status: 201 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeChat = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const deleted = isUuid(chatId) ? await deleteChat({ chatId, userId: req.user.id }) : 0;
+    if (deleted === 0) throw chatNotFound();
+
+    res.status(204).end();
   } catch (error) {
     next(error);
   }

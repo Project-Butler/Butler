@@ -9,4 +9,6 @@ export const queryKey = {
   PROPERTY_DETAIL: 'property',
   PROPERTY_OWNERSHIPS: 'property_ownerships',
   PROPERTY_OWNERSHIP_DETAIL: 'property_ownership',
+  DISPUTE_CHATS: 'dispute_chats',
+  DISPUTE_CHAT_DETAIL: 'dispute_chat',
 };
