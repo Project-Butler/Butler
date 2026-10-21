@@ -12,8 +12,18 @@ export const ACTIVITY_TYPES = Object.freeze({
 });
 
 // client: prisma 또는 인터랙티브 트랜잭션의 tx. params에는 건물명·동·호 원문처럼 화면 문장에 필요한 값만.
-export const recordActivity = (client, { userId, type, complexId = null, propertyId = null, params = {} }) =>
-  client.activityLog.create({ data: { userId, type, complexId, propertyId, params } });
+// 단지가 있고 건물명을 넘기지 않았으면 그 사용자의 건물 설정 이름을 붙인다("항여울 117동 516호를 삭제했어요").
+export const recordActivity = async (client, { userId, type, complexId = null, propertyId = null, params = {} }) => {
+  let finalParams = params;
+  if (complexId && params.buildingName === undefined && client.landlordBuilding) {
+    const building = await client.landlordBuilding.findUnique({
+      where: { userId_complexId: { userId, complexId } },
+      select: { name: true },
+    });
+    if (building) finalParams = { buildingName: building.name, ...params };
+  }
+  return client.activityLog.create({ data: { userId, type, complexId, propertyId, params: finalParams } });
+};
 
 export const toActivityResponse = (activity) => ({
   id: activity.id,

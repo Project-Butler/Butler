@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
+import { PageHeader } from '../components/PageHeader/PageHeader';
+import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
 import { getUnitTypeLabel } from '../utils/unitListing';
@@ -14,29 +15,11 @@ const RELATION_TABS = [
   { relation: 'FORMER_OWNER', label: '예전 소유' },
 ];
 
-const PropertyCard = ({ property, isFormer, onClick }) => {
-  const badge = isFormer ? { tone: 'default', label: '소유 종료' } : getVerificationBadge(property.myRelation?.verificationStatus);
-  const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
-
-  return (
-    <button type="button" onClick={onClick} className="block w-full text-left">
-      <Card className="p-5 transition-colors hover:bg-surface-2">
-        <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 text-card font-semibold text-ink">{property.displayName}</p>
-          <Badge tone={badge.tone} className="shrink-0">
-            {badge.label}
-          </Badge>
-        </div>
-        {spec && <p className="mt-1 font-num text-sub tabular-nums text-ink-2">{spec}</p>}
-      </Card>
-    </button>
-  );
-};
-
 // 한 탭(관계)의 목록. 탭이 바뀌면 key로 새로 시작해 page가 1로 돌아간다.
 const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetPropertyList({ relation, page, size: PAGE_SIZE }, { onUnauthorized });
+  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const isFormer = relation === 'FORMER_OWNER';
   const items = data?.items ?? [];
 
@@ -51,59 +34,72 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
 
   if (items.length === 0) {
     return (
-      <Card className="flex flex-col items-center gap-3 px-5 py-12 text-center">
+      <Card className="flex flex-col items-center gap-3 px-5 py-16 text-center">
         <p className="text-card font-semibold text-ink">
           {isFormer ? '예전에 소유했던 부동산이 없습니다' : '등록한 부동산이 없습니다'}
         </p>
         {!isFormer && (
-          <>
-            <p className="text-body text-ink-2">건물을 고르고 첫 호실을 등록해 보세요.</p>
-            <Button onClick={() => onNavigate('propertyRegister')}>
-              <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
-              부동산 등록
-            </Button>
-          </>
+          <Button onClick={() => onNavigate('buildingList')}>내 부동산으로</Button>
         )}
       </Card>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-sub text-ink-3">
-        전체 <span className="font-num tabular-nums">{data.meta.total}</span>건
-      </p>
-      {items.map((property) => (
-        <PropertyCard
-          key={property.id}
-          property={property}
-          isFormer={isFormer}
-          onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
-        />
-      ))}
-      {error && <NoticeBox>{error.message}</NoticeBox>}
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between px-5 py-4">
+        <h2 className="text-section font-semibold text-ink">{isFormer ? '예전 소유 호실' : '현재 소유 호실'}</h2>
+        <span className="font-num text-sub tabular-nums text-ink-3">{data.meta.total}건</span>
+      </div>
+      <table className="w-full text-body">
+        <thead>
+          <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
+            <th className="px-5 py-2.5 font-medium">호실</th>
+            <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
+            <th className="px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((property) => {
+            const badge = isFormer
+              ? { tone: 'default', label: '소유 종료' }
+              : getVerificationBadge(property.myRelation?.verificationStatus);
+            const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
+            return (
+              <tr
+                key={property.id}
+                onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
+                className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
+              >
+                <td className="px-5 py-3.5 font-semibold text-ink">{getPropertyName(property)}</td>
+                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                <td className="px-5 py-3.5">
+                  <Badge tone={badge.tone}>{badge.label}</Badge>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
       {data.meta.hasNext && (
         // 다음 페이지 로드가 실패했으면 page는 이미 N이므로 N+1로 건너뛰지 않고 같은 페이지를 다시 불러온다.
-        <Button variant="secondary" className="w-full" disabled={isLoading} onClick={() => (error ? refetch() : setPage((prev) => prev + 1))}>
-          {isLoading ? '불러오는 중' : error ? '다시 시도' : '더 보기'}
-        </Button>
+        <div className="border-t border-line p-4 text-center">
+          <Button variant="secondary" disabled={isLoading} onClick={() => (error ? refetch() : setPage((prev) => prev + 1))}>
+            {isLoading ? '불러오는 중' : error ? '다시 시도' : '더 보기'}
+          </Button>
+        </div>
       )}
-    </div>
+    </Card>
   );
 };
 
-// 내 부동산 목록: 현재 소유 / 예전 소유. 선택한 탭은 view params(relation)에 두어 뒤로가기로 돌아와도 유지된다.
+// 호실 목록: 현재 소유 / 예전 소유. 선택한 탭은 view params(relation)에 두어 뒤로가기로 돌아와도 유지된다.
 export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => (
-  <div className="mx-auto max-w-2xl space-y-5">
-    <div className="flex items-center justify-between gap-4">
-      <h1 className="text-h1 font-semibold text-ink">호실 목록</h1>
-      <Button onClick={() => onNavigate('propertyRegister')}>
-        <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
-        부동산 등록
-      </Button>
-    </div>
+  <div className="w-full max-w-6xl space-y-6 pb-10">
+    <PageHeader title="호실 목록" onBack={() => window.history.back()} />
 
-    <div role="tablist" aria-label="소유 구분" className="flex gap-1 rounded-btn border border-line bg-surface-2 p-1">
+    <div role="tablist" aria-label="소유 구분" className="flex w-80 gap-1 rounded-btn border border-line bg-surface-2 p-1">
       {RELATION_TABS.map((tab) => {
         const isSelected = tab.relation === relation;
         return (

@@ -1,4 +1,5 @@
 import { Badge, Button, Card, StatCard } from '@butler/ui';
+import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
@@ -55,23 +56,19 @@ const getVerificationHint = ({ verified, total, error }) => {
   return unverified > 0 ? { hint: `인증 필요 ${unverified}건`, tone: 'crit' } : { hint: '모두 인증 완료', tone: 'ok' };
 };
 
-// 아직 등록하지 않은 호실 수 = 건물마다 (정원 − 등록 수)의 합. 정원이 없는 건물은 세지 않는다.
-const sumRemaining = (buildings) => buildings.reduce((sum, building) => sum + (building.remainingCount ?? 0), 0);
-
-// 초기 세팅 안내(Landly 홈 "N개의 호실이 아직 등록되지 않았어요")
+// 초기 세팅 안내: 진행률 + 등록한 건물·호실 수
 const SetupCard = ({ setup, onNavigate }) => {
   const { data, error } = setup;
   if (error) return <Card className="p-5 text-body text-crit-ink">{error.message}</Card>;
   if (!data) return null;
 
-  const remaining = sumRemaining(data.buildings);
   const buildingCount = data.buildings.length;
   const propertyCount = data.buildings.reduce((sum, building) => sum + building.propertyCount, 0);
   const message =
     buildingCount === 0
       ? '첫 건물을 등록하고 호실을 추가해 보세요'
-      : remaining > 0
-        ? `${remaining}개의 호실이 아직 등록되지 않았어요`
+      : propertyCount === 0
+        ? '건물에 첫 호실을 추가해 보세요'
         : `건물 ${buildingCount}개 · 호실 ${propertyCount}개를 등록했어요`;
 
   return (
@@ -80,7 +77,7 @@ const SetupCard = ({ setup, onNavigate }) => {
         <p className="text-chip font-medium text-ink-3">
           초기 세팅 <span className="font-num tabular-nums">{data.progress}%</span>
         </p>
-        <p className={`mt-1 text-card font-semibold ${remaining > 0 ? 'text-warn-ink' : 'text-ink'}`}>{message}</p>
+        <p className="mt-1 text-card font-semibold text-ink">{message}</p>
       </div>
       <Button className="shrink-0" onClick={() => onNavigate(buildingCount === 0 ? 'buildingRegister' : 'setup')}>
         {buildingCount === 0 ? '건물 등록' : '초기 세팅 보기'}
@@ -93,6 +90,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: TABLE_SIZE }, { onUnauthorized });
   const properties = propertyList.data?.items ?? [];
+  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const propertyTotal = propertyList.data?.meta.total ?? null;
   const ownershipList = useGetPropertyOwnershipList({ active: 'true', size: OWNERSHIP_COUNT_SIZE }, { onUnauthorized });
   const verification = {
@@ -209,7 +207,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
                         onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                         className="text-left font-medium text-ink hover:text-accent-strong"
                       >
-                        {property.displayName}
+                        {getPropertyName(property)}
                       </button>
                       {spec && <p className="font-num text-chip tabular-nums text-ink-3">{spec}</p>}
                     </td>
