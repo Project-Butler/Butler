@@ -46,7 +46,7 @@ export const AppShell = ({
 }) => {
   return (
     <div className="flex min-h-screen bg-ground font-sans text-ink">
-      <aside className="flex w-64 flex-col border-r border-line bg-surface">
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col self-start border-r border-line bg-surface">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-btn bg-accent text-white">
             <Home size={18} strokeWidth={2.25} />
