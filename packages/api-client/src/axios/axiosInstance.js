@@ -13,6 +13,9 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const errorCode = error.response?.data?.error?.code;
+    // 앱을 열 때 로그인 상태를 확인하는 GET /auth/me는 실패해도 페이지를 옮기지 않는다
+    // (로그인 화면을 보여 주는 건 호출부 몫이고, 여기서 /login으로 보내면 새로고침이 반복된다).
+    const isSessionProbe = originalRequest?.url === '/auth/me';
 
     // AUTH_TOKEN_EXPIRED일 때만 자동 refresh를 시도한다.
     if (errorCode === 'AUTH_TOKEN_EXPIRED' && !originalRequest._retry) {
@@ -21,7 +24,7 @@ axiosInstance.interceptors.response.use(
         await axiosInstance.post('/auth/refresh');
         return axiosInstance(originalRequest);
       } catch (refreshError) {
-        window.location.href = '/login';
+        if (!isSessionProbe) window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
@@ -29,7 +32,7 @@ axiosInstance.interceptors.response.use(
     // UNAUTHENTICATED(토큰 자체가 없음)이거나 refresh가 무효화된 경우만 세션이
     // 끊긴 것으로 보고 로그인 화면으로 보낸다. AUTH_INVALID_CREDENTIALS 같은
     // 401(예: 로그인 폼에서 비밀번호 틀림)은 호출부가 직접 처리하게 그대로 둔다.
-    if (errorCode === 'UNAUTHENTICATED' || errorCode === 'AUTH_REFRESH_INVALID') {
+    if (!isSessionProbe && (errorCode === 'UNAUTHENTICATED' || errorCode === 'AUTH_REFRESH_INVALID')) {
       window.location.href = '/login';
     }
 

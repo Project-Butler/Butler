@@ -7,9 +7,16 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "lint": "eslint .",
+    "test": "node --test \"src/**/*.test.js\"",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js",
+    "sync:kapt": "node prisma/syncKaptComplexes.js",
+    "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
+    "import:kapt-basis": "node prisma/importKaptBasis.js",
+    "import:juso-buildings": "node --max-old-space-size=4096 prisma/importJusoBuildings.js",
+    "apply:juso-changes": "node prisma/applyJusoChanges.js",
+    "test:e2e": "node --test --test-concurrency=1 e2e/*.e2e.mjs",
     "embed:disputes": "node prisma/embedDisputes.js"
   },
   "dependencies": {
@@ -20,9 +27,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
+    "exceljs": "^4.4.0",
     "nodemon": "^3.1.7",
     "prisma": "^5.20.0"
   },

@@ -7,3 +7,4 @@ export { PropertySwitcher } from './PropertySwitcher/PropertySwitcher';
 export { UserMenu } from './UserMenu/UserMenu';
 export { LoggedOutScreen } from './LoggedOutScreen/LoggedOutScreen';
 export { LoginScreen } from './LoginScreen/LoginScreen';
+export { RequiredMark, TextField } from './TextField/TextField';
