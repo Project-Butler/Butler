@@ -1,5 +1,5 @@
 import { AppShell } from '@butler/ui';
-import { Bot, Building2, ClipboardList, FileSignature, FolderOpen, Home, Plus, Settings, Users, Wrench } from 'lucide-react';
+import { Bot, Building2, ClipboardList, FileSignature, FolderOpen, Home, Settings, Users, Wrench } from 'lucide-react';
 
 const NAV_ITEMS = [
   { key: 'home', label: '홈', icon: Home },
@@ -27,7 +27,6 @@ export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate
       breadcrumb={breadcrumb}
       notificationCount={2}
       user={{ name: `${user?.name}님`, role: '임대인', onLogout }}
-      primaryAction={{ label: '부동산 등록', icon: Plus, onClick: () => onNavigate('propertyRegister') }}
       nav={NAV_ITEMS.map((item) => ({
         ...item,
         active: item.key === activeKey,
