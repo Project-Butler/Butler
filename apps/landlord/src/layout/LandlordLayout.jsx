@@ -14,7 +14,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };
 
-// 선택된 메뉴(activeKey)와 화면 이동(onNavigate)은 App의 view 상태가 가진다.
+// 선택된 메뉴(activeKey)와 화면 이동(onNavigate)은 App이 URL(react-router)에서 구해 넘긴다.
 // subTitle은 하위 화면(상세·등록)일 때 breadcrumb 끝에 붙는다.
 export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate, subTitle }) => {
   const active = [...NAV_ITEMS, SETTINGS_ITEM].find((item) => item.key === activeKey);
