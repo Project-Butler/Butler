@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { Badge, Button, Card, TextField } from '@butler/ui';
+import { Badge, Button, Card, RequiredMark, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useBuildingNames } from '../hooks/useBuildingNames';
@@ -21,7 +21,12 @@ const BUILDING_PICKER_SIZE = 50;
 // 서버 400 details.field 중 이 화면에 칸이 있는 것
 const FORM_FIELDS = ['buildingNo', 'unitNo', 'floor', 'unitType', 'exclusiveArea', 'equipment', 'equipmentEtc'];
 
+// 동 목록(juso 상세건물명)이 있을 때 동 드롭다운의 목록 밖 선택지
+const DONG_NONE = '__none__';
+const DONG_CUSTOM = '__custom__';
+
 const EMPTY_FORM = {
+  dongChoice: '',
   noDong: false,
   buildingNo: '',
   unitNo: '',
@@ -76,9 +81,10 @@ const toSavedValueNotice = (body, property) => {
   return `${property.displayName}: 이미 등록된 값이 있어 그 값을 보여 줍니다(${differs.join(', ')}). 권리자 인증 뒤 수정할 수 있어요.`;
 };
 
-const FieldLabel = ({ children, htmlFor }) => (
+const FieldLabel = ({ children, htmlFor, required = false }) => (
   <label htmlFor={htmlFor} className="text-label font-semibold text-ink">
     {children}
+    {required && <RequiredMark />}
   </label>
 );
 
@@ -158,14 +164,24 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
 
   const buildingNo = form.noDong ? '' : normalizeBuildingNo(form.buildingNo);
   const unitNo = normalizeUnitNo(form.unitNo);
-  const isReady = Boolean(complex && unitNo) && Object.keys(clientErrors).length === 0;
-  const isSubmitting = register.isLoading;
   const detailBuildingNames = complex?.detailBuildingNames ?? [];
+  const hasDongList = detailBuildingNames.length > 0;
+  // 동 목록이 있으면 동을 고르거나 '동이 없음'·'직접 입력'(값 입력)까지 해야 등록할 수 있다.
+  const isDongChosen = !hasDongList || (form.dongChoice !== '' && (form.dongChoice !== DONG_CUSTOM || Boolean(buildingNo)));
+  const isReady = Boolean(complex && unitNo) && isDongChosen && Object.keys(clientErrors).length === 0;
+  const isSubmitting = register.isLoading;
   const showUnknownDongWarning = Boolean(buildingNo) && !isKnownBuildingNo(buildingNo, detailBuildingNames);
 
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
     setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  // 목록의 동을 고르면 그 이름을 그대로 동으로 쓴다('101동' → 서버가 '101'로 정규화).
+  const chooseDong = (choice) => {
+    const isListName = choice !== DONG_NONE && choice !== DONG_CUSTOM;
+    setForm((prev) => ({ ...prev, dongChoice: choice, noDong: choice === DONG_NONE, buildingNo: isListName ? choice : '' }));
+    setServerFieldErrors((prev) => ({ ...prev, buildingNo: undefined }));
   };
 
   const toggleEquipment = (code) =>
@@ -211,21 +227,67 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
           <Card className="space-y-6 p-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <TextField
-                  label="동 (선택)"
-                  suffix="동"
-                  placeholder={detailBuildingNames[0] ? normalizeBuildingNo(detailBuildingNames[0]) : '101'}
-                  value={form.noDong ? '' : form.buildingNo}
-                  onChange={(event) => updateField('buildingNo', event.target.value)}
-                  error={fieldError('buildingNo')}
-                  disabled={disabled || form.noDong}
-                />
-                <CheckboxChip
-                  label="동이 없는 건물이에요"
-                  checked={form.noDong}
-                  onChange={(event) => updateField('noDong', event.target.checked)}
-                  disabled={disabled}
-                />
+                {hasDongList ? (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel htmlFor="dong-choice" required>
+                        동
+                      </FieldLabel>
+                      <select
+                        id="dong-choice"
+                        aria-required="true"
+                        value={form.dongChoice}
+                        onChange={(event) => chooseDong(event.target.value)}
+                        disabled={disabled}
+                        className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
+                      >
+                        <option value="" disabled>
+                          동을 선택해 주세요
+                        </option>
+                        {detailBuildingNames.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                        <option disabled>──────────</option>
+                        <option value={DONG_NONE}>동이 없음</option>
+                        <option value={DONG_CUSTOM}>직접 입력</option>
+                      </select>
+                      {form.dongChoice !== DONG_CUSTOM && fieldError('buildingNo') && (
+                        <p className="text-chip text-crit-ink">{fieldError('buildingNo')}</p>
+                      )}
+                    </div>
+                    {form.dongChoice === DONG_CUSTOM && (
+                      <TextField
+                        aria-label="동 직접 입력"
+                        suffix="동"
+                        placeholder={normalizeBuildingNo(detailBuildingNames[0])}
+                        value={form.buildingNo}
+                        onChange={(event) => updateField('buildingNo', event.target.value)}
+                        error={fieldError('buildingNo')}
+                        disabled={disabled}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <TextField
+                      label="동 (선택)"
+                      suffix="동"
+                      placeholder="101"
+                      value={form.noDong ? '' : form.buildingNo}
+                      onChange={(event) => updateField('buildingNo', event.target.value)}
+                      error={fieldError('buildingNo')}
+                      disabled={disabled || form.noDong}
+                    />
+                    <CheckboxChip
+                      label="동이 없는 건물이에요"
+                      checked={form.noDong}
+                      onChange={(event) => updateField('noDong', event.target.checked)}
+                      disabled={disabled}
+                    />
+                  </>
+                )}
                 {showUnknownDongWarning && (
                   <NoticeBox tone="warn">
                     이 주소의 동 목록({dongRange})에 없는 동이에요. 맞는지 확인해 주세요. 그대로 등록할 수도 있어요.
@@ -234,6 +296,7 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
               </div>
               <TextField
                 label="호"
+                required
                 suffix="호"
                 placeholder="1203"
                 value={form.unitNo}
@@ -322,7 +385,7 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
             <div>
               <dt className="text-sub text-ink-3">호실</dt>
               <dd className="mt-0.5 flex items-center gap-2 text-body font-semibold text-ink">
-                {unitNo ? formatUnitLabel(buildingNo, unitNo) : '호를 입력해 주세요'}
+                {!isDongChosen ? '동을 선택해 주세요' : unitNo ? formatUnitLabel(buildingNo, unitNo) : '호를 입력해 주세요'}
                 {unitNo && <Badge tone="pending">미인증</Badge>}
               </dd>
             </div>

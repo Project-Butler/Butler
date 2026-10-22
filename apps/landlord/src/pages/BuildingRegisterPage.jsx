@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { CheckCircle2, Circle, MapPin } from 'lucide-react';
-import { Button, Card, TextField } from '@butler/ui';
+import { Button, Card, RequiredMark, TextField } from '@butler/ui';
 import { AddressSearchDialog } from '../components/AddressSearchDialog/AddressSearchDialog';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -40,7 +40,10 @@ const toAddress = (complex) => ({
 
 const AddressField = ({ address, onOpen, error, disabled }) => (
   <div className="flex flex-col gap-1.5">
-    <p className="text-label font-semibold text-ink">주소</p>
+    <p className="text-label font-semibold text-ink">
+      주소
+      <RequiredMark />
+    </p>
     {address ? (
       <div className="flex items-start justify-between gap-4 rounded-input border border-line px-4 py-3">
         <div className="min-w-0 space-y-0.5">

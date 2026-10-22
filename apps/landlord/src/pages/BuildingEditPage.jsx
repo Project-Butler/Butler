@@ -77,6 +77,7 @@ const BuildingEditForm = ({ building, onNavigate, onUnauthorized }) => {
           <div className="grid grid-cols-2 gap-5">
             <TextField
               label="건물명"
+              required
               maxLength={MAX_NAME_LENGTH}
               value={draft.name}
               onChange={(event) => updateField('name', event.target.value)}
