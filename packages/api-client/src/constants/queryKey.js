@@ -4,6 +4,8 @@ export const queryKey = {
   USER_PROFILE: 'user_profile',
   DISPUTE_REFERENCES: 'dispute_references',
   DISPUTE_REFERENCE_DETAIL: 'dispute_reference',
+  DISPUTE_REFERENCE_RELATED: 'dispute_reference_related',
+  DISPUTE_FAQS: 'dispute_faqs',
   COMPLEX_SEARCH: 'complex_search',
   PROPERTIES: 'properties',
   PROPERTY_DETAIL: 'property',

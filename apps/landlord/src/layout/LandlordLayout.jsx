@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { key: 'log', label: '관리 로그', icon: ClipboardList },
   { key: 'documents', label: '문서', icon: FolderOpen },
   { key: 'community', label: '커뮤니티', icon: Users },
-  { key: 'ai', label: 'AI 상담', icon: Bot },
+  { key: 'disputes', label: 'AI 상담', icon: Bot },
 ];
 
 const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };

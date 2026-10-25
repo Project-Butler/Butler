@@ -7,6 +7,8 @@ export { getMe } from './apis/auth/getMe';
 
 export { getDisputeReferenceList } from './apis/disputes/getDisputeReferenceList';
 export { getDisputeReference } from './apis/disputes/getDisputeReference';
+export { getDisputeRelatedReferences } from './apis/disputes/getDisputeRelatedReferences';
+export { getDisputeFaqList } from './apis/disputes/getDisputeFaqList';
 
 export { getComplexSearchList } from './apis/complexes/getComplexSearchList';
 export { postComplexResolve } from './apis/complexes/postComplexResolve';

@@ -1,0 +1,170 @@
+[
+  {
+    "key": "deposit-new-tenant-delay",
+    "category": "DEPOSIT_RETURN",
+    "question": "계약이 끝났는데 새 세입자를 못 구했어요. 보증금 반환을 미뤄도 되나요?",
+    "answer": "판례는 보증금 반환과 집을 돌려받는 것을 동시이행 관계로 봐요. 새 세입자를 못 구했다는 사정만으로 반환을 미룰 근거가 되긴 어려워요. 조정 사례에서는 반환 시기를 3개월 늦추는 대신 연 5% 지연이자를 붙이고, 매매가 성사되면 일부를 먼저 돌려주기로 합의했어요.",
+    "referenceKeys": ["casebook-2025-P-87daka98", "casebook-2025-H-03-3"]
+  },
+  {
+    "key": "deposit-deduct-proof",
+    "category": "DEPOSIT_RETURN",
+    "question": "보증금에서 수리비를 빼려면 무엇이 필요한가요?",
+    "answer": "보증금에서 뺄 손해가 실제로 생겼다는 것은 임대인이 주장하고 증명해야 한다는 판례가 있어요. 조정 사례에서도 현장조사로 손상 정도를 확인한 뒤, 감가상각을 고려해 견적의 약 40%만 공제를 인정했어요. 입주·퇴거 때의 상태를 기록해 두면 증명에 도움이 돼요.",
+    "referenceKeys": ["casebook-2025-P-95da14664", "casebook-2025-C-02-2"]
+  },
+  {
+    "key": "deposit-unpaid-rent",
+    "category": "DEPOSIT_RETURN",
+    "question": "밀린 월세를 보증금에서 빼고 돌려줘도 되나요?",
+    "answer": "판례는 보증금 반환의무가 계약이 끝난 뒤 집을 돌려받을 때까지 생긴 임차인의 채무를 뺀 나머지 금액에 대해 생긴다고 봐요. 조정 사례들에서도 미납 차임과 확인된 손해배상금을 공제한 나머지를 반환하기로 했어요.",
+    "referenceKeys": ["casebook-2025-P-87daka98", "casebook-2025-C-02-2", "casebook-2025-C-06-1"]
+  },
+  {
+    "key": "deposit-occupy-without-use",
+    "category": "DEPOSIT_RETURN",
+    "question": "계약이 끝났는데 세입자가 짐만 두고 열쇠를 안 줘요. 그 기간 월세를 받을 수 있나요?",
+    "answer": "상가 판례에서는 계약이 끝난 뒤 점유만 계속하고 본래 목적대로 사용하지 않아 실질적인 이득이 없었다면, 그 기간의 차임 상당액을 부당이득으로 돌려받을 수 없다고 봤어요. 실제로 사용했는지가 중요해요.",
+    "referenceKeys": ["casebook-2025-P-98da8554"]
+  },
+  {
+    "key": "restore-normal-wear",
+    "category": "DAMAGES",
+    "question": "세입자가 나가면서 벽에 못 자국이 많아요. 도배비를 보증금에서 빼도 되나요?",
+    "answer": "통상적인 사용으로 생긴 마모(통상의 손모)는 특약이 없으면 임차인이 원상회복할 의무가 없다는 판례가 있어요. 통상 마모를 넘는 파손이라면 공제할 수 있지만, 조정 사례들은 감가상각을 고려해 청구액의 30~40% 정도만 인정했어요.",
+    "referenceKeys": ["casebook-2025-P-2005gahap100279", "casebook-2025-H-03-1", "casebook-2025-C-02-2"]
+  },
+  {
+    "key": "restore-full-replacement",
+    "category": "DAMAGES",
+    "question": "벽지·장판 전체 교체 비용을 세입자에게 받을 수 있나요?",
+    "answer": "조정 사례에서 임대인이 벽지·장판 교체비 220만 원을 공제하려 했지만, 현장조사 뒤 세입자 부담을 75만 원으로 합의했어요. 상가 사례에서도 7천만 원 청구가 900만 원으로 조정됐어요. 사용 기간에 따른 감가와 통상 마모를 뺀 부분만 인정되는 경우가 많아요.",
+    "referenceKeys": ["casebook-2025-H-07-3", "casebook-2025-C-06-1"]
+  },
+  {
+    "key": "restore-realuse-then-lease",
+    "category": "DAMAGES",
+    "question": "실거주한다고 갱신을 거절했는데, 사정이 바뀌어 다른 사람에게 세를 놓으면 어떻게 되나요?",
+    "answer": "판례는 직계존속의 갑작스러운 사망이나 해외 발령처럼 거절 당시 예측할 수 없던 사정이 아니면, 제3자에게 임대했을 때 손해배상책임이 생긴다고 봤어요. 조정 사례에서는 임대인이 849만 원, 200만 원을 배상하기로 했어요.",
+    "referenceKeys": ["casebook-2025-P-2022gaso1067836", "casebook-2025-H-07-1", "casebook-2025-H-07-2"]
+  },
+  {
+    "key": "restore-wrongful-refusal-amount",
+    "category": "DAMAGES",
+    "question": "갱신을 부당하게 거절하면 손해배상은 얼마나 되나요?",
+    "answer": "판례는 부당한 갱신거절을 임차권을 침해한 불법행위로 보고, 보증금 차액에 대한 2년간 대출이자 상당액을 통상손해로 봤어요. 이사하며 쓴 중개수수료·이사비도 손해로 인정한 판결이 있어요.",
+    "referenceKeys": ["casebook-2025-P-2021gadan108009", "casebook-2025-P-2022gadan5113218"]
+  },
+  {
+    "key": "repair-who-fixes",
+    "category": "REPAIR_DUTY",
+    "question": "누수나 곰팡이처럼 집에 문제가 생기면 누가 고쳐야 하나요?",
+    "answer": "판례는 세입자가 쉽게 고칠 수 있는 사소한 파손은 임대인의 수선 대상이 아니지만, 집을 쓰기 어려울 정도라면 임대인 잘못이 없어도 임대인이 수선해야 한다고 봤어요. 누수로 벽지에 곰팡이가 핀 사례에서는 임대인이 비용을 들여 벽지를 교체하기로 했어요.",
+    "referenceKeys": ["casebook-2025-P-2009da96984", "casebook-2025-H-04-1"]
+  },
+  {
+    "key": "repair-waiver-clause",
+    "category": "REPAIR_DUTY",
+    "question": "'수리는 세입자가 한다'는 특약을 넣으면 모든 수리를 맡길 수 있나요?",
+    "answer": "판례는 수선의무 면제 특약이 소규모 수선에만 적용된다고 봐요. 큰 파손, 주요 구성부분의 대수선, 기본 설비 교체는 특약이 있어도 임대인이 부담해요.",
+    "referenceKeys": ["casebook-2025-P-94da34692", "casebook-2025-H-04-1"]
+  },
+  {
+    "key": "renewal-refuse-realuse",
+    "category": "RENEWAL_TERMINATION",
+    "question": "제가 들어가 살려고 하는데, 세입자가 갱신을 요구하면 거절할 수 있나요?",
+    "answer": "실거주를 이유로 한 갱신 거절은 조정에서 자주 다뤄져요. 다만 거절 후 실제로 살지 않으면 손해배상 문제가 생길 수 있어요. 한 사례에서는 실거주하지 않으면 2천만 원을 배상하기로 미리 정해 두고 합의했고, 다른 사례에서는 합의금 300만 원을 주고 계약을 끝냈어요.",
+    "referenceKeys": ["casebook-2025-H-06-3", "casebook-2025-H-03-2", "casebook-2025-P-2022gaso1067836"]
+  },
+  {
+    "key": "renewal-waiver-promise",
+    "category": "RENEWAL_TERMINATION",
+    "question": "계약할 때 '갱신 안 하겠다'고 약속받았는데 효력이 있나요?",
+    "answer": "판례는 세입자가 갱신요구권을 쓰지 않겠다는 뜻을 명시적이고 종국적으로 밝힌 경우에만 포기를 인정해요. 상가에서 세입자에게 불리한 포기 약정은 원칙적으로 무효라는 판결도 있어요. '3년만 하겠다'는 구두 약속을 근거로 한 거절이 받아들여지지 않은 조정 사례가 있어요.",
+    "referenceKeys": ["casebook-2025-P-2020gadan137798", "casebook-2025-P-2014da207498", "casebook-2025-C-05-2"]
+  },
+  {
+    "key": "renewal-implicit-request",
+    "category": "RENEWAL_TERMINATION",
+    "question": "세입자가 '갱신하겠다'고 분명히 말하지 않았는데도 갱신요구로 보나요?",
+    "answer": "판례는 갱신요구가 꼭 명시적일 필요는 없고, 묵시적으로 표시되어 기간 안에 임대인에게 도달하면 유효하다고 봤어요.",
+    "referenceKeys": ["casebook-2025-P-2022gadan6858"]
+  },
+  {
+    "key": "renewal-auto-expiry-clause",
+    "category": "RENEWAL_TERMINATION",
+    "question": "'협의가 안 되면 자동 만료된다'는 특약으로 계약을 끝낼 수 있나요?",
+    "answer": "상가 조정 사례에서 이런 특약은 강행규정에 어긋날 소지가 있다고 보고, 세입자의 갱신요구로 계약이 이미 갱신된 사실을 확인했어요. 임대인은 한 번 더 갱신하고 증액분 소급분도 돌려주기로 합의했어요.",
+    "referenceKeys": ["casebook-2025-C-05-3"]
+  },
+  {
+    "key": "renewal-implicit-termination",
+    "category": "RENEWAL_TERMINATION",
+    "question": "묵시적으로 갱신된 계약에 해지를 통보했는데, 언제 끝나나요?",
+    "answer": "조정 사례에서 해지 효력이 생기는 시기(통지 후 3개월)를 두고 다툼이 있었어요. 임대인이 세입자에게 30만 원을 주는 조건으로 종료일을 앞당기고, 집을 넘겨받을 때 보증금을 돌려주기로 합의했어요.",
+    "referenceKeys": ["casebook-2025-H-06-1"]
+  },
+  {
+    "key": "lease-term-one-year",
+    "category": "LEASE_TERM",
+    "question": "1년으로 계약했는데 세입자가 2년을 살겠다고 해요.",
+    "answer": "집을 사서 임대인이 된 뒤 1년짜리 계약을 다시 맺은 사례에서, 2년 보장 여부가 쟁점이 됐어요. 조정에서는 임대차 기간을 2년으로 서로 확인하는 것으로 합의했어요.",
+    "referenceKeys": ["casebook-2025-H-02-1"]
+  },
+  {
+    "key": "rent-increase-cap",
+    "category": "RENT_ADJUSTMENT",
+    "question": "갱신할 때 월세를 얼마까지 올릴 수 있나요?",
+    "answer": "세입자가 갱신요구권을 행사해 갱신되는 경우, 5%를 넘는 증액 요구가 쟁점이 된 조정 사례가 있어요. 결국 보증금과 차임을 각각 5% 올리고, 세입자가 24개월분 월세를 미리 내기로 합의했어요.",
+    "referenceKeys": ["casebook-2025-H-01-1"]
+  },
+  {
+    "key": "rent-decrease-request",
+    "category": "RENT_ADJUSTMENT",
+    "question": "상가 세입자가 오히려 월세를 깎아 달라고 해요.",
+    "answer": "임대인은 증액, 세입자는 감액을 요구한 상가 조정 사례에서 인근 지역 차임과 비교해 양쪽 사정을 설명했고, 1년 갱신하면서 약 3% 올리는 것으로 합의했어요.",
+    "referenceKeys": ["casebook-2025-C-01-1"]
+  },
+  {
+    "key": "other-brokerage-fee",
+    "category": "BROKERAGE_FEE",
+    "question": "세입자가 중간에 나가면 새 세입자 중개보수는 누가 내나요?",
+    "answer": "판례는 특별한 약정이 없으면 새 세입자와 계약하며 낸 중개료는 기존 세입자가 부담할 것이 아니라고 봤어요. 갱신 기간 중 해지한 조정 사례에서는 중개보수를 절반씩 나누기로 합의했어요.",
+    "referenceKeys": ["casebook-2025-P-97na55316", "casebook-2025-H-08-1"]
+  },
+  {
+    "key": "other-premium-direct-use",
+    "category": "PREMIUM",
+    "question": "상가를 제가 직접 쓰려고 새 세입자를 거절하면 권리금 문제가 되나요?",
+    "answer": "판례는 임대인이 직접 쓰겠다고 밝혀 신규 세입자를 받지 않겠다는 뜻이 명백하면, 세입자가 실제로 새 세입자를 주선하지 않았어도 권리금 회수 방해로 손해배상을 청구할 수 있다고 봤어요. 조정 사례에서는 임대인이 1천만 원을 지급하기로 했어요.",
+    "referenceKeys": ["casebook-2025-P-2018da284226", "casebook-2025-C-03-1"]
+  },
+  {
+    "key": "other-contract-document",
+    "category": "CONTRACT_INTERPRETATION",
+    "question": "계약서에 적힌 내용과 다르게 말하면 어떻게 판단하나요?",
+    "answer": "판례는 계약서 같은 처분문서가 진짜로 작성된 것이 인정되면, 분명한 반대 증거가 없는 한 적힌 내용대로 의사표시를 인정해야 한다고 봐요. 특약은 구체적으로 적어 두는 것이 좋아요.",
+    "referenceKeys": ["casebook-2025-P-2020da253430", "casebook-2025-C-04-1"]
+  },
+  {
+    "key": "other-mediation-apply",
+    "category": "GENERAL",
+    "question": "분쟁조정은 어떻게 신청하고, 얼마나 걸리나요?",
+    "answer": "방문뿐 아니라 온라인·우편·팩스로도 신청할 수 있어요. 신청받은 날부터 60일 안에 절차가 끝나고, 부득이하면 30일 범위에서 연장돼요. 수수료는 조정목적의 값에 따라 1만~10만 원이에요.",
+    "referenceKeys": ["casebook-2025-G-faq-03", "casebook-2025-G-faq-05", "casebook-2025-G-faq-06"]
+  },
+  {
+    "key": "other-mediation-effect",
+    "category": "GENERAL",
+    "question": "조정이 성립하면 어떤 효력이 있나요?",
+    "answer": "성립된 조정은 민사상 합의의 효력이 있어요. 강제집행 승낙이 적힌 조정서 정본은 집행권원과 같은 효력을 가져요.",
+    "referenceKeys": ["casebook-2025-G-faq-09"]
+  },
+  {
+    "key": "other-mediation-respond",
+    "category": "GENERAL",
+    "question": "세입자가 조정을 신청했다는 서류를 받았어요. 어떻게 해야 하나요?",
+    "answer": "조정신청서를 받은 날부터 7일 안에 조정참여의사확인과 답변서를 내야 해요. 내지 않아도 신청이 각하되지 않고 절차는 계속돼요. 다만 피신청인이 조정에 응하지 않으면 각하될 수 있어요.",
+    "referenceKeys": ["casebook-2025-G-faq-08", "casebook-2025-G-faq-10"]
+  }
+]
