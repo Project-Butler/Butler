@@ -36,20 +36,27 @@ export const findTopic = (key) => DISPUTE_TOPICS.find((topic) => topic.key === k
 
 // 조정사례 본문은 "[사실관계] … [임대인 주장] … [쟁점] … [검토] …"처럼 구간 제목이 붙어 있다.
 // 구간마다 카드로 나눠 보여 주고, 구간 제목이 없는 본문(판례·가이드라인)은 한 덩어리로 둔다.
+// 국가법령정보센터 판례 원문에는 "[다수의견]", "[별표 1]" 같은 대괄호가 있어서 사례집 구간 제목만 나눈다.
+const SECTION_MARKER = /\[(사실관계|쟁점|검토|[^\]\n]{0,6}주장)\]/;
 const SECTION_TITLE_ALIASES = { 사실관계: '상황' };
 const DEFAULT_SECTION_TITLE = { CASE: '상황', PRECEDENT: '판시 내용', GUIDELINE: '안내' };
 
-export const splitSections = (content, type) => {
-  const parts = content.split(/\[([^\]\n]{2,12})\]/);
+// 사례집 판례는 본문이 판시 내용이고 요지가 outcome에 따로 있다. 국가법령정보센터 판례는 outcome 없이 본문이 판결요지다.
+export const splitSections = (content, type, { hasOutcome = true } = {}) => {
+  const parts = content.split(SECTION_MARKER);
   const sections = [];
   const lead = parts[0].trim();
-  if (lead) sections.push({ title: DEFAULT_SECTION_TITLE[type] ?? '내용', body: lead });
+  const leadTitle = type === 'PRECEDENT' && !hasOutcome ? OUTCOME_TITLE.PRECEDENT : DEFAULT_SECTION_TITLE[type];
+  if (lead) sections.push({ title: leadTitle ?? '내용', body: lead });
   for (let i = 1; i < parts.length; i += 2) {
     const body = parts[i + 1]?.trim();
     if (body) sections.push({ title: SECTION_TITLE_ALIASES[parts[i]] ?? parts[i], body });
   }
   return sections;
 };
+
+// 판례 원문의 판시사항은 "[1] … [2] …"가 한 줄로 이어져 있어서 번호마다 줄을 바꾼다.
+export const breakNumberedItems = (text) => text.replace(/\s+(?=\[\d+\])/g, '\n');
 
 export const OUTCOME_TITLE = { CASE: '조정 결과', PRECEDENT: '판결 요지' };
 

@@ -110,7 +110,11 @@ export const DisputeSearchPage = () => {
   const totalPages = meta ? Math.ceil(meta.total / PAGE_SIZE) : 0;
   const hasNoResult = !isCounting && faqItems.length + referenceTotal === 0;
 
-  const selectTopic = (key) => updateParams({ topic: topic?.key === key ? null : key, tab: null }, { push: true });
+  // 검색어가 있으면 고른 칩을 다시 눌러 풀 수 있다. 검색어 없이 풀면 처음 화면으로 넘어가 버려서 그대로 둔다.
+  const selectTopic = (key) => {
+    if (topic?.key === key && !q) return;
+    updateParams({ topic: topic?.key === key ? null : key, tab: null }, { push: true });
+  };
   const resetToTiles = () => {
     setKeyword('');
     updateParams({ topic: null, q: null, tab: null }, { push: true });

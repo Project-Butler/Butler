@@ -8,6 +8,7 @@ import { useGetDisputeRelatedReferences } from '../hooks/useGetDisputeRelatedRef
 import {
   CATEGORY_LABELS,
   OUTCOME_TITLE,
+  breakNumberedItems,
   splitSections,
   toApplyQuestion,
   TYPE_LABELS,
@@ -69,10 +70,10 @@ export const DisputeReferenceDetailPage = () => {
               <Badge>{CATEGORY_LABELS[reference.category]}</Badge>
             </div>
             <h2 className="break-keep text-page-sm font-bold text-ink">{reference.title}</h2>
-            <p className="text-body text-ink-2">{reference.summary}</p>
+            <p className="whitespace-pre-line text-body text-ink-2">{breakNumberedItems(reference.summary)}</p>
           </div>
 
-          {splitSections(reference.content, reference.type).map(({ title, body }, i) => (
+          {splitSections(reference.content, reference.type, { hasOutcome: Boolean(reference.outcome) }).map(({ title, body }, i) => (
             <Section key={`${title}-${i}`} title={title}>
               {body}
             </Section>

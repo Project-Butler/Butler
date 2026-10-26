@@ -7,7 +7,7 @@ import { DisputePage } from '../src/pages/DisputePage';
 import { DisputeReferenceDetailPage } from '../src/pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from '../src/pages/DisputeSearchPage';
 import { buildLocation } from '../src/routes';
-import { splitSections } from '../src/utils/disputeReference';
+import { breakNumberedItems, splitSections } from '../src/utils/disputeReference';
 
 const api = vi.hoisted(() => ({
   getDisputeReferenceList: vi.fn(),
@@ -283,7 +283,7 @@ describe('분쟁 해결사', () => {
     expect(screen.queryByText(CASE_ITEM.summary)).not.toBeInTheDocument();
   });
 
-  it('여러 유형을 묶은 상황은 쉼표로 함께 거르고, 칩으로 바로 다른 상황으로 바꾼다', async () => {
+  it('여러 유형을 묶은 상황은 쉼표로 함께 거르고, 칩으로 바로 다른 상황으로 바꾸며, 검색어 없이 고른 칩을 다시 눌러도 처음 화면으로 가지 않는다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes?topic=renewal');
 
@@ -294,7 +294,8 @@ describe('분쟁 해결사', () => {
     await waitFor(() => expect(lastListParams()).toMatchObject({ category: 'DEPOSIT_RETURN' }));
 
     await user.click(screen.getByRole('button', { name: '보증금 반환' }));
-    expect(await screen.findByText('어떤 상황인가요?')).toBeInTheDocument();
+    expect(screen.queryByText('어떤 상황인가요?')).not.toBeInTheDocument();
+    expect(lastListParams()).toMatchObject({ category: 'DEPOSIT_RETURN' });
   });
 
   it('질문의 근거 자료를 누르면 사례 상세(구간별 카드·결과·관련 자료)로 가고, 뒤로 가면 보던 상황으로 돌아온다', async () => {
@@ -367,5 +368,21 @@ describe('splitSections', () => {
     expect(splitSections('통상의 손모는 원상회복 대상이 아니다.', 'PRECEDENT')).toEqual([
       { title: '판시 내용', body: '통상의 손모는 원상회복 대상이 아니다.' },
     ]);
+  });
+
+  it('요지가 따로 없는 판례 원문은 본문을 "판결 요지"로 두고, 원문 대괄호에서 나누지 않는다', () => {
+    expect(splitSections('[다수의견] 가 [별표 1] 나', 'PRECEDENT', { hasOutcome: false })).toEqual([
+      { title: '판결 요지', body: '[다수의견] 가 [별표 1] 나' },
+    ]);
+  });
+
+  it('[임대인 측 주장]도 구간 제목으로 나눈다', () => {
+    expect(splitSections('[임대인 측 주장] 가', 'CASE')).toEqual([{ title: '임대인 측 주장', body: '가' }]);
+  });
+});
+
+describe('breakNumberedItems', () => {
+  it('[1] [2] 번호 앞에서 줄을 바꾸고, 맨 앞 번호는 그대로 둔다', () => {
+    expect(breakNumberedItems('[1] 가 [2] 나  [3] 다')).toBe('[1] 가\n[2] 나\n[3] 다');
   });
 });
