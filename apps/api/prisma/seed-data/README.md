@@ -31,6 +31,16 @@ node prisma/seed-data/convertLegalDongCodes.mjs "prisma/seed-data/국토교통�
 
 적용: `npm run seed:disputes -w apps/api`(다시 실행해도 건수는 늘지 않는다).
 
+## 판례 (precedents.json)
+
+`precedents.json`은 국가법령정보센터에서 모은 임대차 판례 7,448건 중 **민사사건이면서 판결요지가 있고, 판시사항·판결요지에 임대차 관련 단어(임대·임차·보증금·차임·전세·권리금·월세)가 있는 1,177건**이다. 형식은 `disputes.json`과 같고, `seedDisputes.js`가 두 파일을 함께 넣는다.
+
+- 출처: 국가법령정보센터(https://www.law.go.kr) 판례. `sourceTitle`은 "국가법령정보센터 판례", `sourcePage`는 `null`.
+- 사람이 요약하지 않고 원문 필드를 규칙대로 옮겼다: 판시사항 → `summary`, 판결요지 → `content`, 참조조문 → `relatedLaws`, 법원·선고일·사건번호 → `caseNumber`. `outcome`은 `null`.
+- `title`은 판시사항 중 임대차 관련 쟁점 하나(60자까지)이고, `category`·`propertyKind`·`keywords`는 사건명·판시사항의 단어로 자동 판정했다. 분류가 틀린 항목이 있을 수 있다.
+- `sourceKey` 규칙: `lawgo-prec-<precSeq>`(국가법령정보센터 판례 일련번호).
+- 변환 스크립트는 원본 자료와 함께 저장소 밖(`자료수집/_work/to_seed.py`)에 있다.
+
 # K-apt 전국 단지 목록 (kapt_complexes)
 
 단지 검색(`GET /complexes/search`)은 juso 결과를 K-apt 단지와 이름으로 맞춘다. 검색마다 K-apt 목록 API를 부르지 않도록 전국 목록을 `kapt_complexes` 테이블에 캐시한다. 파일로 커밋하지 않고 API에서 바로 받는다.
