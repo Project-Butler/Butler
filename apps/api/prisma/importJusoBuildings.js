@@ -1,4 +1,4 @@
-// juso 건물DB 전체분 → juso_building_links 전체 적재(mark-and-sweep). 처음 적재·분기 재적재(A팀 로컬).
+// juso 건물DB 전체분 → juso_building_links 전체 적재(mark-and-sweep). 처음 적재·사고 복구·드리프트 재동기화(A팀 로컬). 분기 재적재는 하지 않는다(매일 변동 적용).
 // 실행: npm run import:juso-buildings -w apps/api -- <전체분 zip 또는 압축 푼 폴더> [--file-date YYYY-MM-DD]
 // --file-date: 전체분 기준일(기본: zip 안 안내 파일 "…년 …월 …일 기준" 또는 zip 이름 YYYYMM의 말일).
 // 변동분이 RUNNING·PARTIAL이면 시작하지 않는다. 성공하면 변동분 커서를 기준일로 옮긴다(다음 변동분 = 기준일 다음 날).
