@@ -1,4 +1,4 @@
-// juso 건물DB 전체분 → juso_building_links 전체 적재(A팀 로컬, 처음 한 번·분기 재적재).
+// juso 건물DB 전체분 → juso_building_links 전체 적재(A팀 로컬, 처음 한 번·사고 복구·드리프트 재동기화).
 // 파일 읽기·맞추기는 트랜잭션 밖에서 끝내고(메모리), 게이트를 넘으면 한 트랜잭션에서 묶음 upsert + sweep.
 // 실행 단위 잠금은 RUNNING 행(lock_key juso_building_links — 변동분과 같은 키), 쓰기 트랜잭션은 xact lock을 한 번 더.
 import { inferFullFileDate, decodeLines, openFullSource } from './jusoFiles.js';
@@ -10,6 +10,7 @@ import {
   findLastSucceeded,
   finishImport,
   ImportGateError,
+  JUSO_CURSOR_SOURCES,
   LOCK_KEYS,
   moveDeltaCursorToBaseline,
   releaseStaleRunning,
@@ -121,12 +122,13 @@ const toChunks = (items, size) => {
 export const runJusoFullLoad = async ({ prisma, sourcePath, fileDate = null, log = () => {} }) => {
   const startedAt = Date.now();
   const deltaInFlight = await prisma.referenceDataImport.findFirst({
-    where: { source: SOURCES.JUSO_DELTA, status: { in: ['RUNNING', 'PARTIAL'] } },
-    select: { id: true, status: true, fileDate: true },
+    where: { source: { in: JUSO_CURSOR_SOURCES }, status: { in: ['RUNNING', 'PARTIAL'] } },
+    select: { id: true, status: true, source: true, fileDate: true },
   });
   if (deltaInFlight) {
+    const label = deltaInFlight.source === SOURCES.JUSO_LINK ? 'juso link' : 'juso delta';
     throw new ImportGateError(
-      `juso delta ${deltaInFlight.status} (${deltaInFlight.fileDate?.toISOString().slice(0, 10)}) — finish it or mark it FAILED first`,
+      `${label} ${deltaInFlight.status} (${deltaInFlight.fileDate?.toISOString().slice(0, 10)}) — finish it or mark it FAILED first`,
     );
   }
 
