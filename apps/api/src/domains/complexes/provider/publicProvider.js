@@ -119,6 +119,11 @@ const searchComplexes = async (query, size) => {
 export const publicProvider = { searchComplexes };
 
 // 주간 cron 외부 API 상태 점검(cron/apiHealth.js)용: 캐시·재시도 없이 한 번씩만 부른다.
+// 참고 데이터 갱신(공식 연계 cron)이 도로명 원문·공동주택 여부를 모를 때 건물 하나를 찾는 데 쓴다. juso 행 원본을 돌려준다.
+export const jusoReferenceSearch = {
+  searchJuso: (keyword) => searchJuso(keyword, 20),
+};
+
 export const healthProbes = {
   searchJuso: (keyword) => searchJuso(keyword, 5),
 };

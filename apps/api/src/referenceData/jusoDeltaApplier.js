@@ -62,6 +62,8 @@ export const evaluateDeltaGate = ({ lineCount, invalidCount, unknownCodes, exist
 
 // 줄 묶음 → 한 트랜잭션에 쓸 목록. 같은 건물관리번호가 여러 번 나오면 뒤의 줄이 이긴다(줄 순서대로 적용한 것과 같음).
 // addressRows: 추가·변동 줄의 건물 행(단지 대표 건물관리번호의 주소 칸 고치기용, 마지막 줄만).
+// 도로명 원문이 없거나(키만 앎) 주소 글자를 다 만들 수 없는 행(skipAddress)은 주소 칸을 고치지 않는다.
+// upsert·delete가 아닌 연산(공식 연계의 unresolved 등)은 쓰지 않는다 — 기존 연결을 그대로 둔다.
 export const collapseDeltaOps = (ops) => {
   const last = new Map();
   for (const op of ops) {
@@ -76,7 +78,8 @@ export const collapseDeltaOps = (ops) => {
   for (const [buildingMgtNo, op] of last) {
     if (op.kind === 'upsert') upserts.push(op.link);
     else deletes.push(buildingMgtNo);
-    if (CHANGE_REASONS[op.row.changeReasonCode] !== 'DELETE' && toBuildingRoadKey(op.row)) addressRows.push(op.row);
+    const isDelete = CHANGE_REASONS[op.row.changeReasonCode] === 'DELETE';
+    if (!isDelete && op.row.roadName && !op.row.skipAddress && toBuildingRoadKey(op.row)) addressRows.push(op.row);
   }
   return { upserts, deletes, addressRows };
 };

@@ -61,8 +61,9 @@ export const parseBuildingLine = (line) => {
 
 // 건물 행 → 텍스트 도로명 키(kapt_address_links·complexes와 같은 모양). 도로명이 없거나 지하여부가 0/1이 아니면 null.
 // 시군구는 법정동 코드 앞 5자리(juso 검색 admCd·K-apt bjdCode와 같은 방식).
+// 공식 연계 행은 도로명 원문 없이 키만 알 때가 있다(같은 도로명코드의 기존 연결) — row.roadNameKey가 있으면 그 값을 쓴다.
 export const toBuildingRoadKey = (row) => {
-  const roadNameKey = toRoadNameKey(row.roadName);
+  const roadNameKey = row.roadNameKey ?? toRoadNameKey(row.roadName);
   if (!roadNameKey || row.underground === null) return null;
   return {
     sigunguCd: row.legalDongCode.slice(0, 5),
