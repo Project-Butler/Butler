@@ -12,7 +12,7 @@ const { findComplexById, resolveComplex, searchComplexes } = await import('./ser
 
 const ROAD_KEY = 'ROAD:117103123006-0-435-0';
 const REGION = {
-  legalDongCode: '1171010200',
+  id: '1171010200',
   sidoName: '서울특별시',
   sigunguName: '송파구',
   dongName: '신천동',
@@ -51,7 +51,7 @@ const createFakeDb = () => {
       id: `c${nextId++}`,
       sourceKey,
       name: '잠실파크리오',
-      legalDongCode: REGION.legalDongCode,
+      regionId: REGION.id,
       buildingMgtNo: null,
       kaptCode: null,
       createdAt: new Date(),
@@ -84,10 +84,10 @@ const createFakeDb = () => {
         return withRegion(complex);
       },
     },
-    addressSearchResult: {
+    addressCache: {
       findUnique: async ({ where }) => db.saved.get(where.sourceKey) ?? null,
     },
-    region: { findUnique: async ({ where }) => (where.legalDongCode === REGION.legalDongCode ? { legalDongCode: where.legalDongCode } : null) },
+    region: { findUnique: async ({ where }) => (where.id === REGION.id ? { id: where.id } : null) },
     kaptComplex: { findUnique: async () => db.kaptBasis ?? null },
     $executeRaw: async (strings, ...values) => {
       db.rawWrites.push(values);
@@ -110,7 +110,7 @@ beforeEach(() => {
       name: '잠실파크리오',
       jibunAddress: PAYLOAD.jibunAddr,
       roadAddress: '서울특별시 송파구 올림픽로 435',
-      legalDongCode: REGION.legalDongCode,
+      legalDongCode: REGION.id,
       zipCode: '05507',
       officialBuildingName: '잠실파크리오',
       detailBuildingNames: ['101동', '102동'],
@@ -123,7 +123,7 @@ beforeEach(() => {
       name: '서울특별시 송파구 올림픽로 300',
       jibunAddress: '서울특별시 송파구 신천동 29',
       roadAddress: '서울특별시 송파구 올림픽로 300',
-      legalDongCode: REGION.legalDongCode,
+      legalDongCode: REGION.id,
       zipCode: '05551',
       officialBuildingName: null,
       detailBuildingNames: [],
@@ -248,7 +248,7 @@ test('resolve: 24시간 안의 검색 저장본으로 단지를 만든다', asyn
   assert.equal(created.buildingMainNo, 435);
   assert.equal(created.buildingSubNo, 0);
   assert.equal(created.buildingMgtNo, PAYLOAD.bdMgtSn);
-  assert.deepEqual(created.detailBuildingNames, ['101동', '102동']);
+  assert.deepEqual(created.dongNames, ['101동', '102동']);
 });
 
 test('resolve: 저장본의 건물관리번호가 기존 단지와 같으면 새로 만들지 않고 그 단지', async () => {

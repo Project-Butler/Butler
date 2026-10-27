@@ -66,7 +66,7 @@ export const toRoadSourceKey = (juso) => {
   return `ROAD:${roadCode}-${underground}-${mainNo}-${subNo}`;
 };
 
-// 검색 저장본(address_search_results.payload)에 남길 juso 칸. 단지를 만드는 데 필요한 것만.
+// 검색 저장본(address_caches.payload)에 남길 juso 칸. 단지를 만드는 데 필요한 것만.
 const PAYLOAD_FIELDS = [
   'roadAddr',
   'jibunAddr',

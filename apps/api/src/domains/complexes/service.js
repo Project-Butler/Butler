@@ -8,7 +8,7 @@ import { callProvider } from './provider/index.js';
 import { rollUpLegalDongCode } from './provider/pnu.js';
 
 const REGION_SELECT = {
-  legalDongCode: true,
+  id: true,
   sidoName: true,
   sigunguName: true,
   dongName: true,
@@ -55,14 +55,14 @@ const toComplexResponse = (complex, kaptBasis = null) => ({
   id: complex.id,
   sourceKey: complex.sourceKey,
   name: complex.name,
-  legalDongCode: complex.legalDongCode,
+  legalDongCode: complex.regionId,
   roadAddress: complex.roadAddress,
   jibunAddress: complex.jibunAddress,
   zipCode: complex.zipCode ?? null,
   kaptCode: complex.kaptCode ?? null,
-  detailBuildingNames: complex.detailBuildingNames ?? [],
+  detailBuildingNames: complex.dongNames ?? [],
   region: {
-    legalDongCode: complex.region.legalDongCode,
+    legalDongCode: complex.region.id,
     sidoName: complex.region.sidoName,
     sigunguName: complex.region.sigunguName,
     dongName: complex.region.dongName,
@@ -80,12 +80,12 @@ const saveSearchResults = async (items) => {
   const keys = items.map((item) => item.sourceKey);
   const payloads = items.map((item) => JSON.stringify(item.payload));
   await prisma.$executeRaw`
-    INSERT INTO address_search_results (source_key, payload, fetched_at)
+    INSERT INTO address_caches (source_key, payload, fetched_at)
     SELECT key, payload::jsonb, now()
     FROM unnest(${keys}::text[], ${payloads}::text[]) AS t(key, payload)
     ON CONFLICT (source_key) DO UPDATE
       SET payload = EXCLUDED.payload, fetched_at = EXCLUDED.fetched_at
-      WHERE address_search_results.fetched_at < now() - interval '1 hour'`;
+      WHERE address_caches.fetched_at < now() - interval '1 hour'`;
 };
 
 const isKaptEnrichmentOn = () => String(process.env.ADDRESS_KAPT_ENRICHMENT ?? 'on').toLowerCase() !== 'off';
@@ -186,10 +186,10 @@ const toComplexData = (sourceKey, payload, legalDongCode, kapt) => {
     name: trimOrNull(payload.bdNm) ?? trimOrNull(kapt?.name) ?? roadAddress ?? sourceKey,
     jibunAddress: trimOrNull(payload.jibunAddr),
     roadAddress,
-    legalDongCode,
+    regionId: legalDongCode,
     zipCode: trimOrNull(payload.zipNo),
-    officialBuildingName: trimOrNull(payload.bdNm),
-    detailBuildingNames: parseDetailBuildingNames(payload.detBdNmList),
+    buildingName: trimOrNull(payload.bdNm),
+    dongNames: parseDetailBuildingNames(payload.detBdNmList),
     roadCode: trimOrNull(payload.rnMgtSn),
     isUnderground: String(payload.udrtYn) === '1',
     buildingMainNo: toIntOrNull(payload.buldMnnm),
@@ -228,7 +228,7 @@ const resolveComplexOnce = async (sourceKey) => {
   const existing = await findComplexBySourceKey(sourceKey);
   if (existing) return existing;
 
-  const saved = await prisma.addressSearchResult.findUnique({ where: { sourceKey } });
+  const saved = await prisma.addressCache.findUnique({ where: { sourceKey } });
   if (!saved || saved.fetchedAt.getTime() < Date.now() - SEARCH_RESULT_TTL_MS) throwSourceNotFound();
 
   // 만들기 전에 한 번 더: 같은 대표 건물관리번호의 단지가 있으면(도로명이 바뀐 주소) 그 단지를 돌려준다.
@@ -245,7 +245,7 @@ const resolveComplexOnce = async (sourceKey) => {
   // regions는 읍면동 단위만 있어서 리 단위 코드는 올려서 저장한다.
   const legalDongCode = rollUpLegalDongCode(saved.payload.admCd);
   const region = legalDongCode
-    ? await prisma.region.findUnique({ where: { legalDongCode }, select: { legalDongCode: true } })
+    ? await prisma.region.findUnique({ where: { id: legalDongCode }, select: { id: true } })
     : null;
   if (!region) {
     console.error('[complexes] region missing', legalDongCode);

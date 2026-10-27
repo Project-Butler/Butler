@@ -1,4 +1,4 @@
-// reference_data_imports(참고 데이터 가져오기 실행 기록)와 잠금.
+// data_imports(참고 데이터 가져오기 실행 기록)와 잠금.
 // 실행 단위 잠금 = RUNNING 행(lock_key 부분 유니크라 같은 표에 쓰는 실행은 동시에 하나만 RUNNING).
 // 쓰기 트랜잭션 안에서는 pg_try_advisory_xact_lock을 한 번 더 잡는다(트랜잭션이 끝나면 풀려서 pgbouncer 트랜잭션 모드에서도 됨).
 import { Prisma } from '@prisma/client';
@@ -27,7 +27,7 @@ export class ImportAlreadyRunningError extends Error {
   }
 }
 
-// 게이트·형식 문제로 멈춘 실행. reason은 그대로 reference_data_imports.error에 남는다.
+// 게이트·형식 문제로 멈춘 실행. reason은 그대로 data_imports.error에 남는다.
 export class ImportGateError extends Error {
   constructor(reason, stats = null) {
     super(reason);
@@ -50,12 +50,12 @@ export const toDateValue = (ymd) => (ymd ? new Date(`${ymd}T00:00:00.000Z`) : nu
 // 오래된 RUNNING 정리. JUSO_DELTA는 커서가 의미 있으므로 PARTIAL로(같은 파일이면 이어서), 그 밖은 FAILED.
 export const releaseStaleRunning = async (prisma, lockKey, now = new Date()) => {
   const before = new Date(now.getTime() - STALE_RUNNING_MS);
-  const stale = await prisma.referenceDataImport.findMany({
+  const stale = await prisma.dataImport.findMany({
     where: { lockKey, status: 'RUNNING', startedAt: { lt: before } },
     select: { id: true, source: true },
   });
   for (const row of stale) {
-    await prisma.referenceDataImport.update({
+    await prisma.dataImport.update({
       where: { id: row.id },
       data:
         row.source === SOURCES.JUSO_DELTA
@@ -69,7 +69,7 @@ export const releaseStaleRunning = async (prisma, lockKey, now = new Date()) => 
 // RUNNING 행을 넣는다. 같은 lock_key의 RUNNING이 있으면 ImportAlreadyRunningError.
 export const startImport = async (prisma, data) => {
   try {
-    return await prisma.referenceDataImport.create({ data: { ...data, status: 'RUNNING' } });
+    return await prisma.dataImport.create({ data: { ...data, status: 'RUNNING' } });
   } catch (error) {
     if (isUniqueViolation(error)) throw new ImportAlreadyRunningError(data.lockKey);
     throw error;
@@ -79,12 +79,12 @@ export const startImport = async (prisma, data) => {
 // PARTIAL 행을 다시 RUNNING으로(이어서 하기). 다른 RUNNING이 있으면 ImportAlreadyRunningError.
 export const resumeImport = async (prisma, id, data) => {
   try {
-    const { count } = await prisma.referenceDataImport.updateMany({
+    const { count } = await prisma.dataImport.updateMany({
       where: { id, status: 'PARTIAL' },
       data: { ...data, status: 'RUNNING', error: null },
     });
     if (count === 0) throw new ImportAlreadyRunningError('partial row taken');
-    return prisma.referenceDataImport.findUnique({ where: { id } });
+    return prisma.dataImport.findUnique({ where: { id } });
   } catch (error) {
     if (isUniqueViolation(error)) throw new ImportAlreadyRunningError('juso_building_links');
     throw error;
@@ -92,7 +92,7 @@ export const resumeImport = async (prisma, id, data) => {
 };
 
 export const finishImport = (prisma, id, { status, error = null, ...data }) =>
-  prisma.referenceDataImport.update({
+  prisma.dataImport.update({
     where: { id },
     data: {
       ...data,
@@ -110,14 +110,14 @@ export const takeXactLock = async (tx, name) => {
 
 // 같은 소스의 지난 성공(게이트의 "지난 성공 대비" 비교용)
 export const findLastSucceeded = (prisma, source) =>
-  prisma.referenceDataImport.findFirst({
+  prisma.dataImport.findFirst({
     where: { source, status: 'SUCCEEDED' },
     orderBy: { finishedAt: 'desc' },
   });
 
 // 변동분 커서: 마지막 JUSO_DELTA SUCCEEDED의 file_date('YYYY-MM-DD') 또는 null
 export const findDeltaCursorDate = async (prisma) => {
-  const row = await prisma.referenceDataImport.findFirst({
+  const row = await prisma.dataImport.findFirst({
     where: { source: SOURCES.JUSO_DELTA, status: 'SUCCEEDED', fileDate: { not: null } },
     orderBy: { fileDate: 'desc' },
     select: { fileDate: true },
@@ -129,17 +129,17 @@ export const findDeltaCursorDate = async (prisma) => {
 // FAILED('superseded by full load')로 바꿔 다음 실행이 그 날짜부터 다시 적용하게 한다.
 export const moveDeltaCursorToBaseline = async (prisma, baselineDate, stats) => {
   const fileDate = toDateValue(baselineDate);
-  const superseded = await prisma.referenceDataImport.updateMany({
+  const superseded = await prisma.dataImport.updateMany({
     where: { source: SOURCES.JUSO_DELTA, status: 'SUCCEEDED', fileDate: { gt: fileDate } },
     data: { status: 'FAILED', error: `superseded by full load ${baselineDate}` },
   });
-  const existing = await prisma.referenceDataImport.findFirst({
+  const existing = await prisma.dataImport.findFirst({
     where: { source: SOURCES.JUSO_DELTA, status: 'SUCCEEDED', fileDate },
     select: { id: true },
   });
   if (!existing) {
     try {
-      await prisma.referenceDataImport.create({
+      await prisma.dataImport.create({
         data: {
           source: SOURCES.JUSO_DELTA,
           lockKey: LOCK_KEYS.JUSO,

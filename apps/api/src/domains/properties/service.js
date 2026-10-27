@@ -46,7 +46,7 @@ const toPageMeta = (page, size, total) => ({ page, size, total, hasNext: page * 
 // 다른 사람의 소유 관계는 조회하지 않는다 — 어떤 응답에도 드러나지 않아야 한다(api-contract.md 3장).
 const loadRelationRows = async (user, propertyId) => {
   const [ownerships, tenantContracts] = await Promise.all([
-    prisma.propertyOwnership.findMany({
+    prisma.ownership.findMany({
       where: { propertyId, userId: user.id },
       include: { contracts: CONTRACT_SELECT },
     }),
@@ -72,10 +72,10 @@ const isUniqueViolation = (error) =>
 const ensureLandlordBuilding = async (tx, user, complex) => {
   const name = complex.name.slice(0, MAX_BUILDING_NAME_LENGTH);
   const inserted = await tx.$queryRaw`
-    INSERT INTO landlord_buildings (id, user_id, complex_id, name, created_at, updated_at)
+    INSERT INTO my_buildings (id, user_id, complex_id, name, created_at, updated_at)
     VALUES (gen_random_uuid(), ${user.id}::uuid, ${complex.id}::uuid, ${name}, now(), now())
     ON CONFLICT (user_id, complex_id) DO UPDATE SET deleted_at = NULL, updated_at = now()
-      WHERE landlord_buildings.deleted_at IS NOT NULL
+      WHERE my_buildings.deleted_at IS NOT NULL
     RETURNING id`;
   return inserted.length > 0;
 };
@@ -85,7 +85,7 @@ const resolveListing = async (tx, user, propertyId, listing) => {
   const missing = LISTING_FIELDS.filter((field) => listing[field] === undefined);
   if (missing.length === 0) return listing;
 
-  const previous = await tx.propertyOwnership.findFirst({
+  const previous = await tx.ownership.findFirst({
     where: { propertyId, userId: user.id, endedAt: { not: null } },
     orderBy: [{ endedAt: 'desc' }, { id: 'asc' }],
     select: { unitType: true, equipment: true, equipmentEtc: true },
@@ -168,7 +168,7 @@ export const createPropertyWithOwnership = async (user, input) => {
         // 채운 뒤 다시 읽어서 201 응답이 최신 값을 담게 한다.
         const filled = await tx.property.findUnique({ where: { id: upserted.id }, include: { complex: true } });
 
-        const existing = await tx.propertyOwnership.findFirst({
+        const existing = await tx.ownership.findFirst({
           where: { propertyId: upserted.id, userId: user.id, endedAt: null },
           select: { id: true },
         });
@@ -188,7 +188,7 @@ export const createPropertyWithOwnership = async (user, input) => {
         const listing = await resolveListing(tx, user, upserted.id, input.listing);
 
         stage = 'ownershipCreate';
-        const created = await tx.propertyOwnership.create({
+        const created = await tx.ownership.create({
           data: {
             propertyId: upserted.id,
             userId: user.id,
@@ -245,7 +245,7 @@ export const createPropertyWithOwnership = async (user, input) => {
 // relation=OWNER — 내 활성 소유 관계 전부를 (단지, 동, 호) 자연 정렬한 뒤 한 페이지.
 // 자연 정렬은 DB가 못 하므로 JS에서 한다(임대인 한 명의 활성 호실 수 규모라 전부 읽어도 된다).
 const findOwnerProperties = async (user, { page, size, complexId }) => {
-  const ownerships = await prisma.propertyOwnership.findMany({
+  const ownerships = await prisma.ownership.findMany({
     where: { userId: user.id, endedAt: null, ...(complexId ? { property: { complexId } } : {}) },
     include: { property: { include: { complex: true } }, contracts: CONTRACT_SELECT },
   });
@@ -270,11 +270,11 @@ const complexFilter = (complexId) =>
 const formerOwnerCte = (userId, complexId) => Prisma.sql`
   WITH latest AS (
     SELECT DISTINCT ON (o.property_id) o.property_id, o.id AS ownership_id, o.ended_at AS relation_at
-    FROM property_ownerships o
+    FROM ownerships o
     WHERE o.user_id = ${userId}::uuid
       AND o.ended_at IS NOT NULL
       AND NOT EXISTS (
-        SELECT 1 FROM property_ownerships a
+        SELECT 1 FROM ownerships a
         WHERE a.property_id = o.property_id AND a.user_id = ${userId}::uuid AND a.ended_at IS NULL
       )
       ${complexFilter(complexId)}
@@ -286,7 +286,7 @@ const tenantCte = (userId, complexId) => Prisma.sql`
   WITH latest AS (
     SELECT DISTINCT ON (o.property_id) o.property_id, c.start_date AS relation_at
     FROM contracts c
-    JOIN property_ownerships o ON o.id = c.ownership_id
+    JOIN ownerships o ON o.id = c.ownership_id
     WHERE c.tenant_id = ${userId}::uuid
       ${complexFilter(complexId)}
     ORDER BY o.property_id, c.start_date DESC
@@ -310,7 +310,7 @@ const findFormerOwnerProperties = async (user, { page, size, complexId }) => {
 
   const [properties, ownerships] = await Promise.all([
     prisma.property.findMany({ where: { id: { in: propertyIds } }, include: { complex: true } }),
-    prisma.propertyOwnership.findMany({
+    prisma.ownership.findMany({
       where: { userId: user.id, propertyId: { in: propertyIds } },
       include: { contracts: CONTRACT_SELECT },
     }),

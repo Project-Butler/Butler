@@ -9,7 +9,7 @@ import { isUuid } from './uuid.js';
 export const getActiveOwnership = async (userId, propertyId) => {
   if (!isUuid(userId) || !isUuid(propertyId)) return null;
 
-  return prisma.propertyOwnership.findFirst({
+  return prisma.ownership.findFirst({
     where: { userId, propertyId, endedAt: null },
   });
 };

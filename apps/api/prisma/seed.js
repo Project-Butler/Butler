@@ -1,5 +1,5 @@
 // 법정동(Region) 테이블 시딩. 외부 API로 lazy 생성하지 않고 셋업 시점에 한 번에 채운다
-// (docs/api-contract.md 2장 "구현 참고" 참고). 데이터 출처/교체 방법은 seed-data/README.md.
+// (노션 6번 Prisma 스키마 참고). 데이터 출처/교체 방법은 seed-data/README.md.
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { readFileSync } from 'fs';
@@ -40,38 +40,39 @@ const isChanged = (existing, row) =>
   !existing.isActive || NAME_FIELDS.some((field) => existing[field] !== row[field]);
 
 const main = async () => {
-  const rows = parseCsv(readFileSync(CSV_PATH, 'utf-8'));
+  // CSV 머리글은 legalDongCode, DB 칸은 regions.id(법정동코드)
+  const rows = parseCsv(readFileSync(CSV_PATH, 'utf-8')).map(({ legalDongCode, ...names }) => ({ id: legalDongCode, ...names }));
   if (rows.length < MIN_EXPECTED_ROWS) {
     throw new Error(`legal-dong-codes.csv가 ${rows.length}건뿐입니다. seed-data/README.md 절차로 전체 자료를 다시 만드세요.`);
   }
-  const csvCodes = new Set(rows.map((row) => row.legalDongCode));
+  const csvCodes = new Set(rows.map((row) => row.id));
 
   const existingRows = await prisma.region.findMany();
-  const existingByCode = new Map(existingRows.map((region) => [region.legalDongCode, region]));
+  const existingByCode = new Map(existingRows.map((region) => [region.id, region]));
 
   // 5천 건 넘게 행마다 upsert하면 느려서, 새 코드는 묶어서 넣고 바뀐 행만 고친다.
-  const newRows = rows.filter((row) => !existingByCode.has(row.legalDongCode));
+  const newRows = rows.filter((row) => !existingByCode.has(row.id));
   for (let i = 0; i < newRows.length; i += BATCH_SIZE) {
     await prisma.region.createMany({ data: newRows.slice(i, i + BATCH_SIZE), skipDuplicates: true });
   }
 
   const changedRows = rows.filter((row) => {
-    const existing = existingByCode.get(row.legalDongCode);
+    const existing = existingByCode.get(row.id);
     return existing && isChanged(existing, row);
   });
   for (const row of changedRows) {
-    const { legalDongCode, ...names } = row;
-    await prisma.region.update({ where: { legalDongCode }, data: { ...names, isActive: true } });
+    const { id, ...names } = row;
+    await prisma.region.update({ where: { id }, data: { ...names, isActive: true } });
   }
 
   // 새 CSV에서 빠진(폐지된) 코드는 지우지 않는다 — complexes가 FK로 참조할 수 있어서
   // isActive만 false로 바꾼다.
   const removedCodes = existingRows
-    .filter((region) => region.isActive && !csvCodes.has(region.legalDongCode))
-    .map((region) => region.legalDongCode);
+    .filter((region) => region.isActive && !csvCodes.has(region.id))
+    .map((region) => region.id);
   if (removedCodes.length > 0) {
     await prisma.region.updateMany({
-      where: { legalDongCode: { in: removedCodes } },
+      where: { id: { in: removedCodes } },
       data: { isActive: false },
     });
   }

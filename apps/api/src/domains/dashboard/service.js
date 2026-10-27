@@ -5,12 +5,12 @@ import { buildSetupSteps } from './setupProgress.js';
 // GET /dashboard/landlord/setup — 집계 쿼리 3개(건물 설정, 활성 소유 관계 수, 단지별 등록 수).
 export const findLandlordSetup = async (user) => {
   const [buildings, propertyCount] = await Promise.all([
-    prisma.landlordBuilding.findMany({
+    prisma.myBuilding.findMany({
       where: { userId: user.id, deletedAt: null },
       select: { id: true, complexId: true, name: true, capacity: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     }),
-    prisma.propertyOwnership.count({ where: { userId: user.id, endedAt: null } }),
+    prisma.ownership.count({ where: { userId: user.id, endedAt: null } }),
   ]);
   const counts = await countActiveUnitsByComplex(
     prisma,
