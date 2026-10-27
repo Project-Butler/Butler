@@ -26,8 +26,9 @@ const createFakePrisma = ({ cursor = '2026-10-17', partial = null } = {}) => {
 
 const NOW = () => new Date('2026-10-20T19:00:00Z'); // 2026-10-21 04:00 KST
 
-// 성공한 파일은 커서를 그 날짜로 옮긴다(실제 applyJusoDeltaFile처럼).
+// 성공한 파일은 커서를 그 날짜로 옮긴다(실제 applyJusoDeltaFile처럼). 모드는 off(공식 연계 안 씀).
 const fakeDeps = (calls, state) => ({
+  mode: 'off',
   download: async (date) => {
     calls.download.push(date);
     return date <= '2026-10-19' ? { found: true, buffer: Buffer.from('x'), fileName: `${date}.zip` } : { found: false };
