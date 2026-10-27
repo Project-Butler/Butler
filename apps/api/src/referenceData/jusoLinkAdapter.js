@@ -279,12 +279,13 @@ export const evaluateLinkGate = ({ tables, ops, existingDeleteCount, totalLinks 
   return { ok: true };
 };
 
-// 도로명 원문을 못 구한 신규·변동 줄 중 검색해 볼 건물(판단 대상만, 최대 limit개).
-// 반환: [{ buildingMgtNo, keyword }] — 검색어는 시도·시군구·읍면동 이름 + 건물관리번호의 지번(PNU 본번-부번).
+// 도로명 원문을 못 구한 신규·변동 줄 중 검색해 볼 건물(판단 대상만, 검색어 기준 최대 limit개).
+// 반환: [{ buildingMgtNo, roadCode, underground, mainNo, subNo, keyword }] — 검색어는 시도·시군구·읍면동 이름 +
+// 건물관리번호의 지번(PNU 본번-부번). 같은 검색어(같은 필지의 여러 동)는 한 번만 부르도록 호출하는 쪽에서 묶는다.
 export const pickSearchTargets = (lines, ctx, lookup, limit) => {
   const targets = [];
+  const keywords = new Set();
   for (const line of lines) {
-    if (targets.length >= limit) break;
     const dong = parseDongLine(line);
     if (!dong || !['ADD', 'CHANGE'].includes(LINK_CHANGE_REASONS[dong.changeReasonCode])) continue;
     const row = toLinkBuildingRow(dong, ctx);
@@ -299,17 +300,34 @@ export const pickSearchTargets = (lines, ctx, lookup, limit) => {
     const mountain = pnu.slice(10, 11) === '2' ? '산' : '';
     const lot = `${mountain}${mainLot}${subLot ? `-${subLot}` : ''}`;
     if (targets.some((target) => target.buildingMgtNo === dong.buildingMgtNo)) continue;
+    const keyword = [row.sidoName, row.sigunguName, row.eupmyeondongName, lot].filter(Boolean).join(' ');
+    if (!keywords.has(keyword) && keywords.size >= limit) continue;
+    keywords.add(keyword);
     targets.push({
       buildingMgtNo: dong.buildingMgtNo,
-      keyword: [row.sidoName, row.sigunguName, row.eupmyeondongName, lot].filter(Boolean).join(' '),
+      roadCode: dong.roadCode,
+      underground: dong.underground,
+      mainNo: dong.mainNo,
+      subNo: dong.subNo,
+      keyword,
     });
   }
   return targets;
 };
 
-// juso 검색 행들 → 건물관리번호가 정확히 같은 행의 { roadName, isApartment } 또는 null
-export const pickSearchedBuilding = (rows, buildingMgtNo) => {
-  const row = rows.find((item) => item.bdMgtSn === buildingMgtNo);
+// juso 검색 행들 → 그 건물의 { roadName, isApartment } 또는 null.
+// juso 검색은 도로명주소 하나에 대표 건물 한 행만 돌려주므로(단지의 다른 동은 안 나옴), 건물관리번호가 같거나
+// 도로명코드·지하여부·건물 본번·부번이 같은(= 같은 도로명주소) 행을 채택한다. 지번만 같은 다른 주소는 쓰지 않는다.
+export const pickSearchedBuilding = (rows, target) => {
+  const row =
+    rows.find((item) => item.bdMgtSn === target.buildingMgtNo) ??
+    rows.find(
+      (item) =>
+        item.rnMgtSn === target.roadCode &&
+        Number(item.buldMnnm) === target.mainNo &&
+        Number(item.buldSlno ?? 0) === target.subNo &&
+        (item.udrtYn === '1') === (target.underground === true),
+    );
   if (!row) return null;
   return {
     roadName: trimOrNull(row.rn),

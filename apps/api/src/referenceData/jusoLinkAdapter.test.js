@@ -186,12 +186,22 @@ test('검색 대상 고르기와 결과 고르기: 판단 대상만, 건물관�
   const existing = new Map([[mgt(1), existingLink(1)]]);
   const lines = [dongLine({ n: 1 }), dongLine({ n: 2, lot: '09990000' }), dongLine({ n: 3, code: '63' })];
   const targets = pickSearchTargets(lines, ctxWith({ existing }), lookup, 3);
-  assert.deepEqual(targets, [{ buildingMgtNo: mgt(1), keyword: '서울특별시 노원구 중계동 500' }]);
+  assert.deepEqual(targets, [
+    { buildingMgtNo: mgt(1), roadCode: ROAD_CODE, underground: false, mainNo: 285, subNo: 0, keyword: '서울특별시 노원구 중계동 500' },
+  ]);
   assert.equal(pickSearchTargets(lines, ctxWith({ existing }), lookup, 0).length, 0);
+  // 같은 필지의 여러 동은 검색어가 같아서 한도(1)를 하나만 쓴다
+  const sameLot = new Map([[mgt(1), existingLink(1)], [mgt(4), existingLink(4)]]);
+  assert.equal(pickSearchTargets([dongLine({ n: 1 }), dongLine({ n: 4 })], ctxWith({ existing: sameLot }), lookup, 1).length, 2);
 
-  const rows = [{ bdMgtSn: mgt(9), rn: '다른로', bdKdcd: '1' }, { bdMgtSn: mgt(1), rn: '섬밭로', bdKdcd: '1' }];
-  assert.deepEqual(pickSearchedBuilding(rows, mgt(1)), { roadName: '섬밭로', isApartment: true });
-  assert.equal(pickSearchedBuilding(rows, mgt(2)), null);
+  const target = targets[0];
+  const juso = (extra) => ({ bdMgtSn: mgt(9), rnMgtSn: ROAD_CODE, rn: '섬밭로', buldMnnm: '285', buldSlno: '0', udrtYn: '0', bdKdcd: '1', ...extra });
+  // 대표 건물(다른 건물관리번호)이라도 같은 도로명주소면 채택
+  assert.deepEqual(pickSearchedBuilding([juso({})], target), { roadName: '섬밭로', isApartment: true });
+  assert.deepEqual(pickSearchedBuilding([juso({ bdMgtSn: mgt(1), rnMgtSn: 'x', rn: '정확로' })], target), { roadName: '정확로', isApartment: true });
+  // 번호나 도로명코드가 다르면(지번만 같은 다른 주소) 쓰지 않는다
+  assert.equal(pickSearchedBuilding([juso({ buldMnnm: '286' })], target), null);
+  assert.equal(pickSearchedBuilding([juso({ rnMgtSn: '113504000077' })], target), null);
 });
 
 test('도로명(100005) 21칸 줄', () => {

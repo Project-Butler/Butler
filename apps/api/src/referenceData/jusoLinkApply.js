@@ -143,13 +143,16 @@ export const planJusoLinkDay = async ({ prisma, tables, search = null, searchLim
   const { lookup, ctx } = await loadLinkContext(prisma, dongLines, renames);
   ctx.roadAddresses = indexRoadAddresses(tables.TH_SGCO_RNADR_MST ?? []);
 
-  let searched = 0;
+  // 같은 검색어(같은 필지의 여러 동)는 한 번만 부른다. searched = 실제 호출 수
+  const results = new Map();
   for (const target of pickSearchTargets(dongLines, ctx, lookup, searchLimit)) {
-    searched += 1;
-    const rows = await (search ?? ((keyword) => defaultSearch(prisma, keyword)))(target.keyword);
-    const found = pickSearchedBuilding(rows ?? [], target.buildingMgtNo);
+    if (!results.has(target.keyword)) {
+      results.set(target.keyword, (await (search ?? ((keyword) => defaultSearch(prisma, keyword)))(target.keyword)) ?? []);
+    }
+    const found = pickSearchedBuilding(results.get(target.keyword), target);
     if (found) ctx.searched.set(target.buildingMgtNo, found);
   }
+  const searched = results.size;
 
   const ops = dongLines.map((line) => planLinkLine(line, lookup, ctx));
   const { upserts, deletes } = collapseDeltaOps(ops);
