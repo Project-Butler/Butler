@@ -1,6 +1,7 @@
 // 법정동(Region) 테이블 시딩. 외부 API로 lazy 생성하지 않고 셋업 시점에 한 번에 채운다
 // (docs/api-contract.md 2장 "구현 참고" 참고). 데이터 출처/교체 방법은 seed-data/README.md.
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -80,7 +81,42 @@ const main = async () => {
   );
 };
 
+// 로컬 확인용 계정(README의 fixture 계정). 비밀번호가 모두 같아서 로컬 DB에만 넣는다 —
+// DATABASE_URL이 localhost가 아니면(Supabase 등) 건너뛴다. 이미 있는 계정은 건드리지 않는다.
+const DEV_PASSWORD = 'password123';
+const DEV_USERS = [
+  { id: '00000000-0000-4000-8000-000000000001', email: 'landlord@butler.test', name: '김집주', phone: '01011112222', role: 'LANDLORD' },
+  { id: '00000000-0000-4000-8000-000000000002', email: 'tenant@butler.test', name: '이세입', phone: '01033334444', role: 'TENANT' },
+  { id: '00000000-0000-4000-8000-000000000003', email: 'admin@butler.test', name: '박운영', phone: '01055556666', role: 'ADMIN' },
+];
+
+const isLocalDatabase = () => {
+  try {
+    return ['localhost', '127.0.0.1'].includes(new URL(process.env.DATABASE_URL).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const seedDevUsers = async () => {
+  if (!isLocalDatabase()) {
+    console.info('[seed] 로컬 DB가 아니라 로컬 확인용 계정은 건너뜁니다.');
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
+  for (const user of DEV_USERS) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      update: {},
+      create: { ...user, passwordHash },
+    });
+  }
+  console.info(`[seed] 로컬 확인용 계정 ${DEV_USERS.length}개 확인.`);
+};
+
 main()
+  .then(seedDevUsers)
   .catch((error) => {
     console.error('[seed] 실패:', error);
     process.exitCode = 1;

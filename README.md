@@ -55,7 +55,7 @@ npm run dev -w apps/landlord     # 필요한 프론트만 (tenant, admin도 같�
 ```
 
 ### 5. 확인
-fixture 계정으로 로그인한다. 비밀번호는 모두 `password123`이다.
+로컬 확인용 계정으로 로그인한다(`prisma db seed`가 만든다). 비밀번호는 모두 `password123`이다.
 
 | 역할 | 이메일 |
 |---|---|
@@ -63,7 +63,7 @@ fixture 계정으로 로그인한다. 비밀번호는 모두 `password123`이다
 | TENANT | `tenant@butler.test` |
 | ADMIN | `admin@butler.test` |
 
-fixture 계정은 코드(`apps/api/src/domains/auth/service.js`)에만 있고 DB `users`에는 없다. 그래서 `users`를 참조하는 데이터는 아직 저장할 수 없다(Step 1에서 DB 로그인으로 바뀐다).
+이 계정들은 `prisma db seed`가 로컬 DB `users`에 넣는다(비밀번호는 bcrypt 해시로 저장). `DATABASE_URL`이 localhost가 아니면 넣지 않는다. 로그인은 `users` 테이블을 조회하므로 이 계정으로 만든 데이터도 저장된다.
 
 ```bash
 curl -c cookie.txt -H "Content-Type: application/json" -H "X-Requested-With: butler-web" \

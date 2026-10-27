@@ -13,6 +13,16 @@ const redirectToLogin = () => {
   if (window.location.pathname !== '/login') window.location.href = '/login';
 };
 
+// 토큰 교체(rotation) 방식이라 refresh를 동시에 여러 번 부르면 먼저 쓴 토큰이 무효가 되어 나머지가 실패한다.
+// 요청 여러 개가 한꺼번에 만료돼도 refresh는 한 번만 부르고 결과를 같이 기다린다.
+let refreshPromise = null;
+const refreshOnce = () => {
+  refreshPromise ??= axiosInstance.post('/auth/refresh').finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+};
+
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -27,7 +37,7 @@ axiosInstance.interceptors.response.use(
     if (errorCode === 'AUTH_TOKEN_EXPIRED' && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        await axiosInstance.post('/auth/refresh');
+        await refreshOnce();
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         if (!isSessionProbe) redirectToLogin();
