@@ -241,16 +241,22 @@ const lastOpByBuilding = (ops) => {
   return last;
 };
 
-// unresolved 집계: 분모 = 신규·변동 건물 중 판단 대상(기존 연결 있음 또는 K-apt 후보 있음), 분자 = 그중 unresolved
+// unresolved 집계: 분모 = 신규·변동 건물 중 판단 대상(기존 연결 있음 또는 K-apt 후보 있음), 분자 = 그중 unresolved.
+// ignored = 판단 대상이 아닌 unresolved(단지와 상관없는 건물이라 몰라도 잃는 것이 없음)
 export const summarizeUnresolved = (ops) => {
   let considered = 0;
+  let ignored = 0;
   const unresolved = [];
   for (const [buildingMgtNo, op] of lastOpByBuilding(ops)) {
-    if (LINK_CHANGE_REASONS[op.row.changeReasonCode] === 'DELETE' || !op.relevant) continue;
+    if (LINK_CHANGE_REASONS[op.row.changeReasonCode] === 'DELETE') continue;
+    if (!op.relevant) {
+      if (op.kind === 'unresolved') ignored += 1;
+      continue;
+    }
     considered += 1;
     if (op.kind === 'unresolved') unresolved.push({ buildingMgtNo, reason: op.reason });
   }
-  return { considered, unresolved };
+  return { considered, unresolved, ignored };
 };
 
 // 하루치 검사(쓰기 전). tables: { 표 이름: 줄[] }, ops: 동 표시 연산, existingDeleteCount·totalLinks: 삭제 상한용

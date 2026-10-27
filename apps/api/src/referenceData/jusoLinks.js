@@ -81,6 +81,41 @@ export const writeLinkBatch = async (
   return { upserted, deleted };
 };
 
+// 도로명 변경(공식 연계 100005): 같은 도로명코드의 연결 행 road_name_key와 단지(complexes)의 도로명·키·주소 글자를 함께 고친다.
+// 단지 kapt_code 다시 채우기가 연결 표와 단지의 키를 맞춰 보므로 한쪽만 고치면 단지 코드가 지워진다(옛 키·새 키 모두 keySet에).
+// renames: [{ roadCode, roadName, roadNameKey }]. 값이 같은 행은 고치지 않는다(이어 하기에서 다시 돌아도 바뀌는 행 0).
+export const applyRoadRenames = async (tx, renames, keySet = null) => {
+  if (renames.length === 0) return { renamedLinks: 0, renamedComplexes: 0 };
+  const codes = renames.map((rename) => rename.roadCode);
+  const names = renames.map((rename) => rename.roadName);
+  const keys = renames.map((rename) => rename.roadNameKey);
+  if (keySet) {
+    const before = await tx.$queryRaw`
+      SELECT DISTINCT l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.road_underground AS "roadUnderground",
+             l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo"
+      FROM juso_building_links l JOIN unnest(${codes}::varchar[], ${keys}::text[]) AS u(rc, rnk) ON l.road_code = u.rc
+      WHERE l.road_name_key IS DISTINCT FROM u.rnk`;
+    for (const row of before) keySet.add(keyOf(row));
+  }
+  const links = await tx.$queryRaw`
+    UPDATE juso_building_links l SET road_name_key = u.rnk, updated_at = now()
+    FROM unnest(${codes}::varchar[], ${keys}::text[]) AS u(rc, rnk)
+    WHERE l.road_code = u.rc AND l.road_name_key IS DISTINCT FROM u.rnk
+    RETURNING l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.road_underground AS "roadUnderground",
+      l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo"`;
+  if (keySet) for (const row of links) keySet.add(keyOf(row));
+  // 주소 글자는 옛 도로명 부분만 새 이름으로 바꾼다(SET 식의 c.road_name은 바꾸기 전 값).
+  const complexes = await tx.$queryRaw`
+    UPDATE complexes c SET road_name = u.rn, road_name_key = u.rnk,
+      road_address = CASE WHEN c.road_name IS NULL THEN c.road_address ELSE replace(c.road_address, c.road_name, u.rn) END
+    FROM unnest(${codes}::varchar[], ${names}::varchar[], ${keys}::text[]) AS u(rc, rn, rnk)
+    WHERE c.road_code = u.rc AND c.road_name_key IS DISTINCT FROM u.rnk
+    RETURNING c.sigungu_code AS "sigunguCd", c.road_name_key AS "roadNameKey", c.is_underground AS underground,
+      c.building_main_no AS "mainNo", c.building_sub_no AS "subNo"`;
+  if (keySet) for (const key of complexes) keySet.add(key);
+  return { renamedLinks: links.length, renamedComplexes: complexes.length };
+};
+
 // 단지 주소 칸에 쓸 값(변동분 줄 → complexes 칸)
 export const toComplexAddressColumns = (row) => {
   const key = toBuildingRoadKey(row);
