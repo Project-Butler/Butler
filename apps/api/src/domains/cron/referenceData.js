@@ -335,6 +335,59 @@ const defaultDeps = {
       DELETE FROM address_search_results WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
 };
 
+export const JUSO_REFRESH_JOB_TYPE = 'JUSO_REFRESH_MANUAL';
+// 관리자 즉시 갱신을 연달아 누를 때 겹치지 않게: 이 시간 안의 PROCESSING 즉시 갱신이 있으면 거부한다.
+export const JUSO_REFRESH_BUSY_MS = 2 * 60 * 1000;
+
+export class JusoRefreshBusyError extends Error {
+  constructor() {
+    super('juso refresh already running');
+    this.name = 'JusoRefreshBusyError';
+  }
+}
+
+// 관리자 즉시 갱신(POST /api/v1/admin/reference-data/juso/refresh). 매일 cron의 juso 단계만 지금 한 번 돌린다.
+// 모드(JUSO_LINK_MODE)는 cron과 같다: apply면 공식 연계, off·shadow면 건물DB 일변동분(표에 쓰는 경로만 — shadow 비교는 cron에서만).
+// 커서 다음 날짜부터 어제(KST)까지 밀린 날을 적용하고, 바뀐 도로명 키의 단지 kaptCode를 다시 채운다.
+// 같은 표 잠금·날짜별 성공 기록을 그대로 쓰므로 cron과 겹쳐도 같은 날을 두 번 적용하지 않는다(겹치면 'already running').
+// jobs에 JUSO_REFRESH_MANUAL(요청한 관리자 id)로 남긴다.
+export const runJusoRefreshNow = async ({ prisma, requestedBy = null, now = () => new Date(), deps = {} }) => {
+  const { download, downloadLinkDays, readLinkDay, applyLinkDay, applyFile, refill } = { ...defaultDeps, ...deps };
+  const mode = deps.mode ?? getJusoLinkMode();
+  const busy = await prisma.job.findFirst({
+    where: { type: JUSO_REFRESH_JOB_TYPE, status: 'PROCESSING', lockedAt: { gt: new Date(Date.now() - JUSO_REFRESH_BUSY_MS) } },
+    select: { id: true },
+  });
+  if (busy) throw new JusoRefreshBusyError();
+
+  const base = Date.now();
+  const today = formatDateKST(now());
+  const keySet = createKeySet();
+  const job = await prisma.job.create({
+    data: { type: JUSO_REFRESH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: new Date(), requestedByUserId: requestedBy, payload: { mode } },
+    select: { id: true },
+  });
+  let status = 'FAILED';
+  const result = { mode, today, juso: null, complexKaptCodesChanged: 0 };
+  try {
+    try {
+      result.juso =
+        mode === 'apply'
+          ? await runLinkPhase({ prisma, base, today, keySet, downloadLinkDays, readLinkDay, applyLinkDay })
+          : await runDeltaPhase({ prisma, base, today, keySet, download, applyFile });
+    } catch (error) {
+      console.error('[juso-refresh] 갱신 실패', toReason(error));
+      result.juso = { error: toReason(error) };
+    }
+    if (keySet.size > 0) result.complexKaptCodesChanged = await refill(prisma, keySet.values());
+    result.totalMs = Date.now() - base;
+    status = result.juso?.error ? 'FAILED' : 'SUCCEEDED';
+    return { jobId: job.id, ...result };
+  } finally {
+    await prisma.job.update({ where: { id: job.id }, data: { status, result, lockedAt: null } });
+  }
+};
+
 // 실패는 단계마다 잡아서 결과에 남긴다(한 단계가 실패해도 다음 단계는 돈다). jobs에 REFERENCE_DATA_DAILY로 남긴다.
 export const runReferenceDataCron = async ({ prisma, t0, bootAt, coldStart, now = () => new Date(), deps = {} }) => {
   const { download, downloadLinkDays, readLinkDay, applyLinkDay, search, applyFile, fillBasis, refill, cleanupSearchResults } = {

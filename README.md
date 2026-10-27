@@ -120,6 +120,7 @@ npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>           
   npm run juso-link:cutover -w apps/api -- --revert  # 되돌리기(일변동분 기준점 = 공식 연계 커서 - 1), 그 뒤 모드를 shadow·off로
   ```
 - 손으로 하루치를 보거나 적용할 때: `npm run apply:juso-link -w apps/api -- --date YYYY-MM-DD [--dry-run]`(`--dry-run`은 쓰지 않고 계획만).
+- **관리자 즉시 갱신**: 매일 cron을 기다리지 않고 지금 갱신하려면 `ADMIN` 계정으로 `POST /api/v1/admin/reference-data/juso/refresh`(본문 없음, `X-Requested-With: butler-web`)를 부른다. 지금 모드 그대로(apply면 공식 연계, off·shadow면 일변동분) 밀린 날짜를 적용하고 결과 요약을 돌려준다. 같은 날을 두 번 적용하지 않으며, 즉시 갱신이 이미 돌고 있으면 `409 REFERENCE_DATA_REFRESH_IN_PROGRESS`. 실행 기록은 `jobs`(type `JUSO_REFRESH_MANUAL`, 요청한 관리자).
 - **드리프트 점검(월 1회, 선택)**: 공식 연계는 건물DB에만 있는 일부 변경(공동주택 여부만 바뀐 경우 등)을 못 본다. 그달 건물DB 전체분 zip으로 지금 표와 비교해서, 차이가 0.5%를 넘으면 4번(전체분 적재)으로 다시 맞춘다. 쓰기는 하지 않는다.
   ```bash
   npm run juso-link:drift -w apps/api -- <건물DB_전체분.zip>
