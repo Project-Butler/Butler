@@ -48,6 +48,12 @@ describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
     });
     await assert.rejects(cutoverToJusoLink(prisma), /juso delta PARTIAL \(2099-07-02\)/);
     await prisma.referenceDataImport.update({ where: { id: partial.id }, data: { status: 'FAILED' } });
+    // 손으로 돌린 공식 연계가 PARTIAL로 남아 있어도 거부(기준점보다 옛 날짜를 이어 쓰지 않게)
+    const linkPartial = await prisma.referenceDataImport.create({
+      data: { source: SOURCES.JUSO_LINK, lockKey: LOCK_KEYS.JUSO, fileDate: day('2099-06-20'), status: 'PARTIAL' },
+    });
+    await assert.rejects(cutoverToJusoLink(prisma), /juso link PARTIAL \(2099-06-20\)/);
+    await prisma.referenceDataImport.update({ where: { id: linkPartial.id }, data: { status: 'FAILED' } });
 
     const result = await cutoverToJusoLink(prisma);
     assert.equal(result.deltaCursor, '2099-07-01');

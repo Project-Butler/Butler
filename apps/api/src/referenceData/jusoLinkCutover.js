@@ -22,8 +22,10 @@ const assertNoneInFlight = async (prisma, source, label) => {
   }
 };
 
+// 두 출처 모두 진행 중인 날이 없어야 한다(손으로 돌린 apply:juso-link의 PARTIAL이 기준점보다 옛 날짜를 이어 쓰지 않게).
 export const cutoverToJusoLink = async (prisma) => {
   await assertNoneInFlight(prisma, SOURCES.JUSO_DELTA, 'juso delta');
+  await assertNoneInFlight(prisma, SOURCES.JUSO_LINK, 'juso link');
   const deltaCursor = await findDeltaCursorDate(prisma, SOURCES.JUSO_DELTA);
   if (!deltaCursor) throw new ImportGateError('no juso delta cursor — run import:juso-buildings first');
   const linkDate = toLinkDate(deltaCursor);
@@ -36,6 +38,7 @@ export const cutoverToJusoLink = async (prisma) => {
 
 export const revertToJusoDelta = async (prisma) => {
   await assertNoneInFlight(prisma, SOURCES.JUSO_LINK, 'juso link');
+  await assertNoneInFlight(prisma, SOURCES.JUSO_DELTA, 'juso delta');
   const linkCursor = await findDeltaCursorDate(prisma, SOURCES.JUSO_LINK);
   if (!linkCursor) throw new ImportGateError('no juso link cursor — nothing to revert');
   const deltaDate = toDeltaDate(linkCursor);

@@ -137,7 +137,8 @@ const loadLinkContext = async (prisma, dongLines, renames) => {
 
 // 하루치 계획(쓰기 없음). search(keyword) → juso 행 배열. searchLimit 0이면 검색하지 않는다.
 // 결과: { ops, renames, rowsRead, planned(통계), gate }
-export const planJusoLinkDay = async ({ prisma, tables, search = null, searchLimit = LINK_SEARCH_MAX_CALLS }) => {
+// deadlineAt: 검색 대체 조회는 마감까지 한 번 제한 시간보다 많이 남았을 때만 부른다(계획이 마감을 넘기지 않게).
+export const planJusoLinkDay = async ({ prisma, tables, search = null, searchLimit = LINK_SEARCH_MAX_CALLS, deadlineAt = Infinity }) => {
   const dongLines = tables.TH_RNSPBD_DONG ?? [];
   const renames = toRoadRenames(tables.TI_SPRD_RDNM ?? []);
   const { lookup, ctx } = await loadLinkContext(prisma, dongLines, renames);
@@ -147,6 +148,7 @@ export const planJusoLinkDay = async ({ prisma, tables, search = null, searchLim
   const results = new Map();
   for (const target of pickSearchTargets(dongLines, ctx, lookup, searchLimit)) {
     if (!results.has(target.keyword)) {
+      if (deadlineAt - Date.now() < LINK_SEARCH_TIMEOUT_MS * 2) break;
       results.set(target.keyword, (await (search ?? ((keyword) => defaultSearch(prisma, keyword)))(target.keyword)) ?? []);
     }
     const found = pickSearchedBuilding(results.get(target.keyword), target);
@@ -197,7 +199,7 @@ export const applyJusoLinkDay = async ({ prisma, linkDate, tables, fileSize, fil
     fileSha1,
     noBaselineReason: 'no baseline (run juso-link:cutover first)',
     prepare: async () => {
-      const plan = await planJusoLinkDay({ prisma, tables, search });
+      const plan = await planJusoLinkDay({ prisma, tables, search, deadlineAt: options.deadlineAt ?? Infinity });
       renames = plan.renames;
       return plan;
     },

@@ -6,7 +6,8 @@
 import { createHash } from 'node:crypto';
 import { decodeCp949, readZipBuffer } from './jusoFiles.js';
 
-export const LINK_UPDATE_URL = 'http://update.juso.go.kr/updateInfo.do';
+// 가이드 예시는 http지만 https도 같은 응답을 준다(2026-10-27 확인) — 승인키가 평문으로 다니지 않게 https를 쓴다.
+export const LINK_UPDATE_URL = 'https://update.juso.go.kr/updateInfo.do';
 export const LINK_DOWNLOAD_TIMEOUT_MS = 10_000;
 // 한 번 요청에 받을 수 있는 최대 기간(가이드 E1004). 처리량이 아니라 API 한도다.
 export const LINK_MAX_RANGE_DAYS = 10;

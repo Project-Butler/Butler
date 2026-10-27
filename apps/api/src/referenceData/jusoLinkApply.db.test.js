@@ -56,7 +56,7 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
       roadName: 'linkro',
       roadNameKey: 'linkro',
       roadCode: ROAD,
-      roadAddress: 'TestDo TestSi linkro 1',
+      roadAddress: 'TestDo TestSi linkro 1 (linkro)',
       isUnderground: false,
       buildingMainNo: 1,
       buildingSubNo: 0,
@@ -116,7 +116,7 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
     const renamed = await prisma.complex.findUnique({ where: { id: complex.id } });
     assert.equal(renamed.roadName, 'renamedro');
     assert.equal(renamed.roadNameKey, 'renamedro');
-    assert.equal(renamed.roadAddress, 'TestDo TestSi renamedro 1');
+    assert.equal(renamed.roadAddress, 'TestDo TestSi renamedro 1 (linkro)'); // 처음 나오는 한 곳만
 
     await refillComplexKaptCodes(prisma, keySet.values());
     assert.equal((await prisma.complex.findUnique({ where: { id: complex.id } })).kaptCode, 'DBTL00001');

@@ -104,12 +104,16 @@ export const applyRoadRenames = async (tx, renames, keySet = null) => {
     RETURNING l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.road_underground AS "roadUnderground",
       l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo"`;
   if (keySet) for (const row of links) keySet.add(keyOf(row));
-  // 주소 글자는 옛 도로명 부분만 새 이름으로 바꾼다(SET 식의 c.road_name은 바꾸기 전 값).
+  // 주소 글자는 옛 도로명이 처음 나오는 한 곳만 새 이름으로 바꾼다(건물명 괄호 안 같은 글자는 그대로).
+  // SET 식의 c.road_name은 바꾸기 전 값. 키는 같고 이름만 바뀐 경우(띄어쓰기 등)도 고친다.
   const complexes = await tx.$queryRaw`
     UPDATE complexes c SET road_name = u.rn, road_name_key = u.rnk,
-      road_address = CASE WHEN c.road_name IS NULL THEN c.road_address ELSE replace(c.road_address, c.road_name, u.rn) END
+      road_address = CASE
+        WHEN c.road_name IS NULL OR c.road_address IS NULL OR position(c.road_name IN c.road_address) = 0 THEN c.road_address
+        ELSE overlay(c.road_address PLACING u.rn FROM position(c.road_name IN c.road_address) FOR char_length(c.road_name))
+      END
     FROM unnest(${codes}::varchar[], ${names}::varchar[], ${keys}::text[]) AS u(rc, rn, rnk)
-    WHERE c.road_code = u.rc AND c.road_name_key IS DISTINCT FROM u.rnk
+    WHERE c.road_code = u.rc AND (c.road_name_key IS DISTINCT FROM u.rnk OR c.road_name IS DISTINCT FROM u.rn)
     RETURNING c.sigungu_code AS "sigunguCd", c.road_name_key AS "roadNameKey", c.is_underground AS underground,
       c.building_main_no AS "mainNo", c.building_sub_no AS "subNo"`;
   if (keySet) for (const key of complexes) keySet.add(key);

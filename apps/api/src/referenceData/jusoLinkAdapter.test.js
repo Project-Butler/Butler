@@ -146,6 +146,16 @@ test('도로명이 바뀐 뒤 34: 주소 번호가 기존 연결과 같고 도�
   assert.equal(moved.kind, 'delete');
 });
 
+test('같은 날 63 뒤에 unresolved(도로명 모르는 31)가 오면 그 건물은 아예 쓰지 않는다(shadow 비교와 같은 뜻)', () => {
+  const existing = new Map([[mgt(1), existingLink(1)]]);
+  const removal = planLinkLine(dongLine({ code: '63' }), lookup, ctxWith({ existing }));
+  const readded = planLinkLine(dongLine({ code: '31' }), lookup, ctxWith({ existing }));
+  assert.equal(readded.kind, 'unresolved');
+  assert.deepEqual(collapseDeltaOps([removal, readded]), { upserts: [], deletes: [], addressRows: [] });
+  // 순서가 반대면(뒤가 63) 지운다
+  assert.deepEqual(collapseDeltaOps([readded, removal]).deletes, [mgt(1)]);
+});
+
 test('모르는 이동사유코드·형식 오류는 게이트 실패', () => {
   const ops = [planLinkLine(dongLine({ code: '72' }), lookup, ctxWith())];
   assert.deepEqual(evaluateLinkGate({ tables: {}, ops, existingDeleteCount: 0, totalLinks: 100 }), {

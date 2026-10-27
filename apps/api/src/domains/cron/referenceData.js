@@ -31,6 +31,7 @@ import {
   evaluateLinkDay,
   groupLinkFilesByDate,
   LINK_CODES,
+  LINK_DOWNLOAD_TIMEOUT_MS,
   LINK_MAX_RANGE_DAYS,
 } from '../../referenceData/jusoLinkResponse.js';
 import { compareShadowPlans } from '../../referenceData/jusoLinkShadow.js';
@@ -46,6 +47,9 @@ export const PHASES = {
   basisEndMs: 45_000,
   hardStopMs: 50_000,
 };
+// 공식 연계 한 번 받기에 남아 있어야 할 최소 시간, shadow에서 일변동분 받기를 시작할 최소 시간
+const LINK_MIN_DOWNLOAD_MS = 1_000;
+const SHADOW_MIN_DELTA_DOWNLOAD_MS = 2_000;
 // 모듈 로드와 첫 호출 사이가 이보다 길면 콜드 스타트 직후로 보지 않는다.
 export const COLD_START_MAX_MS = 15_000;
 
@@ -142,6 +146,7 @@ const recordLinkFailure = (prisma, date, error) =>
 // 세 자료가 다 있는 날만 적용하고, 하나라도 아직이면 그 날짜에서 멈춘다(최근 이틀은 실패로 치지 않음).
 export const runLinkPhase = async ({ prisma, base, today, keySet, downloadLinkDays, readLinkDay = readJusoLinkDay, applyLinkDay }) => {
   const days = [];
+  const ignoredDates = [];
   let stopReason = null;
   const deltaCursor = await findDeltaCursorDate(prisma, SOURCES.JUSO_DELTA);
   while (!stopReason) {
@@ -175,11 +180,13 @@ export const runLinkPhase = async ({ prisma, base, today, keySet, downloadLinkDa
 
     let byDate;
     try {
-      byDate = await downloadLinkDays(from, to);
+      byDate = await downloadLinkDays(from, to, { deadlineAt: base + PHASES.deltaDownloadCutoffMs });
     } catch (error) {
       stopReason = `download failed: ${toReason(error)}`;
       break;
     }
+    // 범위보다 앞 날짜로 온 파일(늦게 온 재반영 등)은 지금 적용하지 않는다 — 결과에 남겨 사람이 보게 한다.
+    for (const date of byDate.keys()) if (date < from && !ignoredDates.includes(date)) ignoredDates.push(date);
 
     for (let date = from; date <= to && !stopReason; date = addDays(date, 1)) {
       const state = evaluateLinkDay(byDate.get(date));
@@ -209,7 +216,7 @@ export const runLinkPhase = async ({ prisma, base, today, keySet, downloadLinkDa
       }
     }
   }
-  return { days, stopReason };
+  return { days, stopReason, ...(ignoredDates.length ? { ignoredDates } : {}) };
 };
 
 // shadow 모드: 일변동분이 이번에 처음 적용할 날짜(stdde S)와 같은 변동(연계 기준일 S+1)을 두 경로로 계획만 해서 비교한다.
@@ -249,18 +256,20 @@ export const runShadowPhase = async ({ prisma, base, today, downloadLinkDays, do
   if (partial) return incomplete('juso delta PARTIAL');
 
   try {
-    const byDate = await downloadLinkDays(linkDate, linkDate);
+    // 받기 제한 시간도 비교 마감(8초) 안으로 줄인다 — 서버가 느려도 일변동분의 받기 시간(20초까지)을 먹지 않게.
+    const byDate = await downloadLinkDays(linkDate, linkDate, { deadlineAt: deadline });
     const state = evaluateLinkDay(byDate.get(linkDate));
     if (state.status !== 'complete') return incomplete(`link ${state.status}${state.reason ? `: ${state.reason}` : ''}`);
-    if (Date.now() >= deadline) return incomplete('time budget');
-    const deltaFile = await downloadDelta(deltaDate);
+    const left = deadline - Date.now();
+    if (left < SHADOW_MIN_DELTA_DOWNLOAD_MS) return incomplete('time budget');
+    const deltaFile = await downloadDelta(deltaDate, { timeoutMs: left });
     if (!deltaFile.found) return incomplete('delta not published');
     if (Date.now() >= deadline) return incomplete('time budget');
 
     const deltaLines = splitDeltaLines(await extractDeltaBuildingText(deltaFile.buffer));
     const deltaPlan = await planDeltaFile(prisma, deltaLines);
     const { tables } = await readJusoLinkDay(byDate.get(linkDate));
-    const linkPlan = await planJusoLinkDay({ prisma, tables, search });
+    const linkPlan = await planJusoLinkDay({ prisma, tables, search, deadlineAt: deadline });
     if (Date.now() >= deadline) return incomplete('time budget');
 
     const touched = [
@@ -294,21 +303,26 @@ export const runShadowPhase = async ({ prisma, base, today, downloadLinkDays, do
   }
 };
 
-// 세 자료요청 구분을 차례로 받아 날짜별로 묶는다. 승인키 오류는 날짜와 상관없이 실패로 던진다.
-const downloadLinkDaysWithKey = async (from, to) => {
+// 세 자료요청 구분을 차례로 받아 날짜별로 묶는다. 호출마다 제한 시간을 마감까지 남은 시간으로 줄인다.
+// 승인키 오류와 날짜가 없는 오류 응답은 날짜별로 묶을 수 없으므로 범위 전체 실패로 던진다(원래 응답코드를 남기려고).
+const downloadLinkDaysWithKey = async (from, to, { deadlineAt = Infinity } = {}) => {
   const appKey = getJusoLinkApiKey();
   if (!appKey) throw Object.assign(new Error('no key'), { reason: 'JUSO_LINK_API_KEY missing' });
   const filesByCode = {};
   for (const cntcCode of [LINK_CODES.ROAD_NAME, LINK_CODES.ROAD_ADDRESS, LINK_CODES.BUILDING_DONG]) {
-    filesByCode[cntcCode] = await downloadJusoLink({ appKey, cntcCode, from, to });
+    const left = deadlineAt - Date.now();
+    if (left < LINK_MIN_DOWNLOAD_MS) throw Object.assign(new Error('time budget'), { reason: 'time budget' });
+    filesByCode[cntcCode] = await downloadJusoLink({ appKey, cntcCode, from, to, timeoutMs: Math.min(LINK_DOWNLOAD_TIMEOUT_MS, left) });
     const keyError = filesByCode[cntcCode].find((file) => classifyLinkResCode(file.resCode) === 'keyError');
     if (keyError) throw Object.assign(new Error('key error'), { reason: `key error ${keyError.resCode}` });
+    const undated = filesByCode[cntcCode].find((file) => !file.fileDate && classifyLinkResCode(file.resCode) === 'error');
+    if (undated) throw Object.assign(new Error('link error'), { reason: `${cntcCode} ${undated.resCode}` });
   }
   return groupLinkFilesByDate(filesByCode);
 };
 
 const defaultDeps = {
-  download: (date) => downloadJusoDelta(date),
+  download: (date, options) => downloadJusoDelta(date, options),
   downloadLinkDays: downloadLinkDaysWithKey,
   applyLinkDay: applyJusoLinkDay,
   readLinkDay: readJusoLinkDay,

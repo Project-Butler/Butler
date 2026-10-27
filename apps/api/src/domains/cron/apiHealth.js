@@ -9,7 +9,7 @@ import { fetchKaptBasis } from '../complexes/kaptBasis.js';
 import { ExternalServiceError } from '../complexes/provider/ExternalServiceError.js';
 import { healthProbes } from '../complexes/provider/publicProvider.js';
 import { activeJusoSource, getJusoLinkMode } from '../../referenceData/jusoLinkMode.js';
-import { findDeltaCursorDate } from '../../referenceData/referenceImports.js';
+import { findDeltaCursorDate, SOURCES, toDeltaDate } from '../../referenceData/referenceImports.js';
 import { formatDateKST } from '../../platform/dateUtils.js';
 
 export const EXTERNAL_API_HEALTH_JOB_TYPE = 'EXTERNAL_API_HEALTH';
@@ -50,7 +50,9 @@ export const isDeltaStale = (lastFileDate, today) => {
 export const checkDeltaFreshness = async (prisma, mode = getJusoLinkMode()) => {
   const source = activeJusoSource(mode);
   const lastFileDate = await findDeltaCursorDate(prisma, source);
-  const stale = isDeltaStale(lastFileDate, formatDateKST(new Date()));
+  // 공식 연계 날짜는 일변동분 stdde + 1이라, 같은 기준(3일)으로 재려면 stdde로 되돌려 비교한다.
+  const comparable = lastFileDate && source === SOURCES.JUSO_LINK ? toDeltaDate(lastFileDate) : lastFileDate;
+  const stale = isDeltaStale(comparable, formatDateKST(new Date()));
   if (stale) console.error('[health] juso delta STALE', source, lastFileDate ?? 'none');
   return { source, lastFileDate, status: stale ? 'STALE' : 'OK' };
 };
