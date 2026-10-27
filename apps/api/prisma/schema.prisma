@@ -10,7 +10,8 @@ datasource db {
 
 // id·FK는 uuid 타입(@db.Uuid), 시각은 timestamptz(UTC, @db.Timestamptz(3))로 저장한다.
 // Prisma로 표현하지 못하는 부분 인덱스(uq_ownership_active_user, ix_jobs_pending)는
-// 마이그레이션 SQL에 직접 넣었다(ERD 20p).
+// 마이그레이션 SQL에 직접 넣었다(노션 6번 16장).
+// 이름 규칙은 노션 6번 2장을 따른다.
 
 enum Role {
   LANDLORD
@@ -30,20 +31,20 @@ enum UserStatus {
 
 // 소유 관계 인증 상태. EXPIRED는 여기 없다 — verificationExpiresAt이 지나면
 // 응답을 만들 때 계산해서 EXPIRED로 내려준다 (src/platform/ownershipStatus.js)
-enum OwnershipVerificationStatus {
+enum VerificationStatus {
   UNVERIFIED
   VERIFIED
   REVOKED
 
-  @@map("ownership_verification_status")
+  @@map("verification_status")
 }
 
-enum OwnershipEndReason {
+enum EndReason {
   SELF_ENDED
   SUPERSEDED
   ADMIN_ENDED
 
-  @@map("ownership_end_reason")
+  @@map("end_reason")
 }
 
 enum LeaseType {
@@ -57,11 +58,12 @@ enum TicketStatus {
   OPEN
   IN_PROGRESS
   DONE
+  CANCELED
 
   @@map("ticket_status")
 }
 
-// 오래 걸리는 작업 상태 (api-contract.md 8장 Job 조회)
+// 오래 걸리는 작업 상태 (노션 5번 API Spec)
 enum JobStatus {
   PENDING
   PROCESSING
@@ -88,17 +90,17 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions          Session[]
-  requestedJobs     Job[]
-  ownerships        PropertyOwnership[]
-  tenantContracts   Contract[]          @relation("TenantContracts")
-  landlordBuildings LandlordBuilding[]
-  activityLogs      ActivityLog[]
+  sessions        Session[]
+  requestedJobs   Job[]
+  ownerships      Ownership[]
+  tenantContracts Contract[]   @relation("TenantContracts")
+  myBuildings     MyBuilding[]
+  activities      Activity[]
 
   @@map("users")
 }
 
-// 로그인 세션. refresh token은 해시만 저장하고 갱신할 때마다 교체한다(rotation, 계약 1장).
+// 로그인 세션. refresh token은 해시만 저장하고 갱신할 때마다 교체한다(rotation, 노션 4번 인증 방식).
 // 로그아웃·비밀번호 변경·계정 정지 시 revokedAt을 채운다.
 model Session {
   id               String    @id @default(uuid()) @db.Uuid
@@ -119,12 +121,12 @@ model Session {
 // 법정동. 행정안전부 "법정동코드 전체자료"로 셋업 시점에 시딩한다(prisma/seed.js).
 // 조회 API에서 Region을 만드는 경로는 없다 — lazy 생성하지 않는다.
 model Region {
-  legalDongCode String  @id @map("legal_dong_code")
-  sidoName      String  @map("sido_name")
-  sigunguName   String  @map("sigungu_name")
-  dongName      String  @map("dong_name")
-  fullName      String  @map("full_name")
-  isActive      Boolean @default(true) @map("is_active") // 폐지된 동은 false
+  id          String  @id // 법정동코드 10자리
+  sidoName    String  @map("sido_name")
+  sigunguName String  @map("sigungu_name")
+  dongName    String  @map("dong_name")
+  fullName    String  @map("full_name")
+  isActive    Boolean @default(true) @map("is_active") // 폐지된 동은 false
 
   complexes Complex[]
 
@@ -132,35 +134,35 @@ model Region {
 }
 
 model Complex {
-  id            String  @id @default(uuid()) @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
   // juso 도로명주소에서 만든 결정적 키 "ROAD:<도로명코드12>-<지하0/1>-<건물본번>-<건물부번>".
   // 불투명 값이라 도로명이 바뀌어도 고치지 않는다(대표 건물관리번호로 다시 찾는다).
-  sourceKey     String? @unique @map("source_key")
-  name          String
-  jibunAddress  String? @map("jibun_address")
-  roadAddress   String? @map("road_address")
-  legalDongCode String  @map("legal_dong_code")
-  region        Region  @relation(fields: [legalDongCode], references: [legalDongCode])
+  sourceKey    String? @unique @map("source_key")
+  name         String
+  jibunAddress String? @map("jibun_address")
+  roadAddress  String? @map("road_address")
+  regionId     String  @map("region_id")
+  region       Region  @relation(fields: [regionId], references: [id])
 
   // juso 검색 결과에서 온 주소 칸. 관리자가 만든 단지는 비어 있을 수 있다.
-  zipCode              String?  @map("zip_code") @db.VarChar(5)
-  officialBuildingName String?  @map("official_building_name") @db.VarChar(100) // juso bdNm
-  detailBuildingNames  String[] @default([]) @map("detail_building_names") // juso detBdNmList(예: 101동~105동)
-  roadCode             String?  @map("road_code") @db.VarChar(12) // 도로명코드(rnMgtSn)
-  isUnderground        Boolean? @map("is_underground")
-  buildingMainNo       Int?     @map("building_main_no")
-  buildingSubNo        Int?     @map("building_sub_no")
-  sigunguCode          String?  @map("sigungu_code") @db.VarChar(5)
-  roadName             String?  @map("road_name") @db.VarChar(80) // rn 원문
+  zipCode        String?  @map("zip_code") @db.VarChar(5)
+  buildingName   String?  @map("building_name") @db.VarChar(100) // juso bdNm
+  dongNames      String[] @default([]) @map("dong_names") // juso detBdNmList(예: 101동~105동)
+  roadCode       String?  @map("road_code") @db.VarChar(12) // 도로명코드(rnMgtSn)
+  isUnderground  Boolean? @map("is_underground")
+  buildingMainNo Int?     @map("building_main_no")
+  buildingSubNo  Int?     @map("building_sub_no")
+  sigunguCode    String?  @map("sigungu_code") @db.VarChar(5)
+  roadName       String?  @map("road_name") @db.VarChar(80) // rn 원문
   // toRoadNameKey(roadName). 앱이 채우는 일반 칸(생성 칸 아님). K-apt 연결 표와 비교하는 텍스트 키.
-  roadNameKey          String?  @map("road_name_key")
-  isMountain           Boolean? @map("is_mountain")
-  mainLot              Int?     @map("main_lot")
-  subLot               Int?     @map("sub_lot")
+  roadNameKey    String?  @map("road_name_key")
+  isMountain     Boolean? @map("is_mountain")
+  mainLot        Int?     @map("main_lot")
+  subLot         Int?     @map("sub_lot")
   // 대표 건물관리번호(bdMgtSn). 도로명이 바뀐 주소를 기존 단지로 다시 찾을 때 쓴다.
-  buildingMgtNo        String?  @map("building_mgt_no") @db.VarChar(25)
+  buildingMgtNo  String?  @map("building_mgt_no") @db.VarChar(25)
   // 연결 표(kapt_address_links·juso_building_links)에서만 정해진다. 사용자 입력 아님.
-  kaptCode             String?  @map("kapt_code") @db.VarChar(20)
+  kaptCode       String?  @map("kapt_code") @db.VarChar(20)
 
   // buildingInfo — 외부 데이터에 없으면 전부 null. AMI 등 나중 기능이 입력으로 씀.
   // 응답의 buildingInfo 객체로 묶어 내려주고, 다섯 값이 모두 null이면 buildingInfo: null.
@@ -175,8 +177,8 @@ model Complex {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  properties        Property[]
-  landlordBuildings LandlordBuilding[]
+  properties  Property[]
+  myBuildings MyBuilding[]
 
   @@index([sigunguCode, roadNameKey, isUnderground, buildingMainNo, buildingSubNo])
   @@index([buildingMgtNo])
@@ -186,29 +188,29 @@ model Complex {
 
 // 임대인 개인 건물 설정(임대인 × 단지). 건물명·정원·메모. 상태는 저장하지 않는다.
 // 한 임대인이 같은 단지(도로명주소)에 설정을 두 개 만들 수 없다(정원을 단지 단위로 센다).
-model LandlordBuilding {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  user      User     @relation(fields: [userId], references: [id])
-  complexId String   @map("complex_id") @db.Uuid
-  complex   Complex  @relation(fields: [complexId], references: [id])
-  name      String   @db.VarChar(50)
+model MyBuilding {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id])
+  complexId String    @map("complex_id") @db.Uuid
+  complex   Complex   @relation(fields: [complexId], references: [id])
+  name      String    @db.VarChar(50)
   capacity  Int? // 전체 호실 수 1~999. null이면 정원 검사 안 함
-  memo      String?  @db.VarChar(500)
+  memo      String?   @db.VarChar(500)
   // 건물 삭제는 숨김이다(행은 남김). 예전 소유 호실을 내가 붙인 이름으로 계속 보여 주고,
   // 같은 주소로 다시 등록하면 이 행을 되살린다(@@unique userId+complexId는 그대로).
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([userId, complexId])
   @@index([complexId])
-  @@map("landlord_buildings")
+  @@map("my_buildings")
 }
 
 // 최근 활동(사용자별). 문장은 저장하지 않고 화면이 type + params로 만든다.
 // complexId·propertyId는 FK 없이 값만 둔다(대상이 지워져도 기록은 남김).
-model ActivityLog {
+model Activity {
   id         String   @id @default(uuid()) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
   user       User     @relation(fields: [userId], references: [id])
@@ -219,17 +221,17 @@ model ActivityLog {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId, createdAt(sort: Desc)])
-  @@map("activity_logs")
+  @@map("activities")
 }
 
 // 외부 API 하루 호출 수(KST 날짜). K-apt 목록·기본정보 API만 센다(juso는 세지 않음).
-model ExternalApiUsage {
+model ApiUsage {
   api       String   @db.VarChar(30)
   usageDate DateTime @map("usage_date") @db.Date
   count     Int      @default(0)
 
   @@id([api, usageDate])
-  @@map("external_api_usage")
+  @@map("api_usages")
 }
 
 // K-apt(공동주택관리정보시스템) 전국 단지 목록 캐시. 매주 Vercel Cron(GET /api/cron/kapt-complexes)과
@@ -316,7 +318,7 @@ model JusoBuildingLink {
 // 참고 데이터 가져오기 실행 기록이자 실행 단위 잠금.
 // 부분 유니크 (lock_key) WHERE status='RUNNING', (source, file_date) WHERE status='SUCCEEDED'
 // AND source='JUSO_DELTA'는 마이그레이션 SQL에 있다.
-model ReferenceDataImport {
+model DataImport {
   id          String    @id @default(uuid()) @db.Uuid
   source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_DELTA / KAPT_API_BASIS
   lockKey     String    @map("lock_key") @db.VarChar(100)
@@ -334,17 +336,17 @@ model ReferenceDataImport {
   finishedAt  DateTime? @map("finished_at") @db.Timestamptz(3)
 
   @@index([source, status, fileDate])
-  @@map("reference_data_imports")
+  @@map("data_imports")
 }
 
 // 단지 검색 결과 저장본(아직 단지가 없는 결과만). resolve가 24시간 안의 행으로 단지를 만든다.
-model AddressSearchResult {
+model AddressCache {
   sourceKey String   @id @map("source_key") @db.VarChar(50)
   payload   Json
   fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
 
   @@index([fetchedAt])
-  @@map("address_search_results")
+  @@map("address_caches")
 }
 
 model Property {
@@ -357,7 +359,7 @@ model Property {
   floor         Int?
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  ownerships PropertyOwnership[]
+  ownerships Ownership[]
   tickets    Ticket[]
   documents  Document[]
 
@@ -366,7 +368,7 @@ model Property {
   @@map("properties")
 }
 
-model PropertyOwnership {
+model Ownership {
   id         String   @id @default(uuid()) @db.Uuid
   propertyId String   @map("property_id") @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
@@ -376,20 +378,20 @@ model PropertyOwnership {
   acquiredYearMonth String? @map("acquired_year_month")
   purchasePrice     BigInt? @map("purchase_price")
 
-  verificationStatus    OwnershipVerificationStatus @default(UNVERIFIED) @map("verification_status")
-  verifiedAt            DateTime?                   @map("verified_at") @db.Timestamptz(3)
-  verificationExpiresAt DateTime?                   @map("verification_expires_at") @db.Timestamptz(3)
+  verificationStatus    VerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verifiedAt            DateTime?          @map("verified_at") @db.Timestamptz(3)
+  verificationExpiresAt DateTime?          @map("verification_expires_at") @db.Timestamptz(3)
 
   // 등기부 증빙 문서. Document는 Step 4에서 다시 설계하므로 FK는 그때 건다.
-  evidenceDocumentId    String? @map("evidence_document_id") @db.Uuid
-  // 권리자 인증 피처의 시도 ID. 피처 테이블이라 FK 없이 값만 둔다.
-  verificationAttemptId String? @map("verification_attempt_id")
+  evidenceDocumentId String? @map("evidence_document_id") @db.Uuid
+  // 권리자 인증 피처의 OwnershipCheck.id. 피처 테이블이라 FK 없이 값만 둔다.
+  checkId            String? @map("check_id")
 
   // 같은 호실에 내 활성 소유 관계(endedAt null)는 1개 — uq_ownership_active_user (마이그레이션 SQL)
-  startedAt DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
-  endedAt   DateTime?           @map("ended_at") @db.Timestamptz(3)
-  endReason OwnershipEndReason? @map("end_reason")
-  endNote   String?             @map("end_note")
+  startedAt DateTime   @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt   DateTime?  @map("ended_at") @db.Timestamptz(3)
+  endReason EndReason? @map("end_reason")
+  endNote   String?    @map("end_note")
 
   // 내 임대 조건(사용자별). 값은 JS 상수 UNIT_TYPES·EQUIPMENT_CODES로 검사한다(enum 아님).
   unitType     String?  @map("unit_type") @db.VarChar(20)
@@ -400,13 +402,13 @@ model PropertyOwnership {
 
   @@index([propertyId])
   @@index([userId])
-  @@map("property_ownerships")
+  @@map("ownerships")
 }
 
 model Contract {
-  id          String            @id @default(uuid()) @db.Uuid
-  ownershipId String            @map("ownership_id") @db.Uuid
-  ownership   PropertyOwnership @relation(fields: [ownershipId], references: [id])
+  id          String    @id @default(uuid()) @db.Uuid
+  ownershipId String    @map("ownership_id") @db.Uuid
+  ownership   Ownership @relation(fields: [ownershipId], references: [id])
 
   // 임차인이 초대를 수락하기 전까지 tenantId는 null. tenantName/tenantPhone은
   // 임대인이 등록 시점에 입력하는 값이라 계정과 별개로 항상 저장한다.
@@ -456,50 +458,51 @@ model Document {
   property   Property @relation(fields: [propertyId], references: [id])
   fileUrl    String   @map("file_url")
   type       String
-  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("documents")
 }
 
-// 오래 걸리는 작업 (계약 8장 Job 조회·재시도, 9장 jobs.enqueue()).
+// 오래 걸리는 작업 (노션 5번 API Spec 6장 jobs.enqueue()).
 // type은 등록형 문자열(MARKET_COLLECT 등, 피처는 접두어)이라 enum이 아니다.
 // 대기 작업 조회용 부분 인덱스 ix_jobs_pending은 마이그레이션 SQL에 있다.
 model Job {
-  id                String    @id @default(uuid()) @db.Uuid
-  type              String
-  status            JobStatus @default(PENDING)
-  payload           Json?
-  result            Json?
-  error             Json?
+  id            String    @id @default(uuid()) @db.Uuid
+  type          String
+  status        JobStatus @default(PENDING)
+  payload       Json?
+  result        Json?
+  error         Json?
   // 시스템이 만든 작업은 null
-  requestedByUserId String?   @map("requested_by_user_id") @db.Uuid
-  requestedBy       User?     @relation(fields: [requestedByUserId], references: [id])
-  attempts          Int       @default(0)
-  runAfter          DateTime  @default(now()) @map("run_after") @db.Timestamptz(3)
-  lockedAt          DateTime? @map("locked_at") @db.Timestamptz(3) // 워커 중복 실행 방지
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  requestedById String?   @map("requested_by_id") @db.Uuid
+  requestedBy   User?     @relation(fields: [requestedById], references: [id])
+  attempts      Int       @default(0)
+  runAfter      DateTime  @default(now()) @map("run_after") @db.Timestamptz(3)
+  lockedAt      DateTime? @map("locked_at") @db.Timestamptz(3) // 워커 중복 실행 방지
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@index([requestedByUserId])
+  @@index([requestedById])
   @@map("jobs")
 }
 
 // 요청 한도(rate limit) 카운터. 서버리스 환경이라 메모리에 못 두고 DB에 둔다
-// (api-contract.md 1장 "요청 한도"). key 예: "login:user@example.com:203.0.113.10".
+// (노션 4번 인증 방식 4장). id 예: "login:user@example.com:203.0.113.10".
 // 고정 윈도우(fixed window) 방식 — src/middlewares/rateLimiter.js가 읽고 쓴다.
-model RateLimitCounter {
-  key         String   @id
+model RateLimit {
+  id          String   @id
   count       Int      @default(0)
   windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
-  @@map("rate_limit_counters")
+  @@map("rate_limits")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
 
 // ===== C팀: 임대차 분쟁 해결사 (disputes) =====
 // 분쟁 참고자료(조정사례·판례·가이드라인). 시드로만 채운다(prisma/seedDisputes.js).
-// Core 모델과 relation 없음 (api-contract.md 9장 "임대차 분쟁 해결사").
+// Core 모델과 relation 없음 (노션 5번 API Spec 6장).
 
 enum DisputeReferenceType {
   CASE // 분쟁조정 사례
@@ -557,7 +560,7 @@ model DisputeReference {
   @@map("dispute_references")
 }
 
-// 분쟁 상담 챗봇 대화 기록 (api-contract.md 9장 "챗봇 대화 기록은 피처 소유").
+// 분쟁 상담 챗봇 대화 기록 (챗봇 대화 기록은 피처 소유).
 // userId는 User와 relation을 걸지 않는다 — 걸면 A팀 User 모델에 반대쪽 필드를 추가해야 하고,
 // 지금 로그인 유저는 fixture라 users에 없어서 FK를 걸면 저장이 실패한다.
 
@@ -595,4 +598,5 @@ model DisputeChatMessage {
   @@index([chatId, createdAt])
   @@map("dispute_chat_messages")
 }
+
 // ===== C팀 끝 =====

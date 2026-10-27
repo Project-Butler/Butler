@@ -3,7 +3,7 @@
 // provider 인터페이스(없으면 null):
 // - searchComplexes(query, size) → [{ sourceKey, name, jibunAddress, roadAddress, legalDongCode, zipCode,
 //     officialBuildingName, detailBuildingNames, isApartment, buildingMgtNo, payload }]
-//     payload: 검색 저장본(address_search_results)에 남길 juso 칸(응답에는 내보내지 않음)
+//     payload: 검색 저장본(address_caches)에 남길 juso 칸(응답에는 내보내지 않음)
 import { AppError } from '../../../platform/AppError.js';
 import { ExternalServiceError } from './ExternalServiceError.js';
 import { publicProvider } from './publicProvider.js';

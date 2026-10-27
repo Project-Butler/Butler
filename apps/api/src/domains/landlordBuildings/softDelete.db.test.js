@@ -39,7 +39,7 @@ describe('건물 설정 숨김 삭제', { skip: dbTestSkip }, () => {
 
     await deleteLandlordBuilding(user, building.id);
 
-    const row = await prisma.landlordBuilding.findUnique({ where: { id: building.id } });
+    const row = await prisma.myBuilding.findUnique({ where: { id: building.id } });
     assert.ok(row.deletedAt);
     assert.equal((await findMyLandlordBuildings(user, LIST)).items.length, 0);
     assert.equal(await findLandlordBuildingForUser(user, building.id), null);
@@ -62,7 +62,7 @@ describe('건물 설정 숨김 삭제', { skip: dbTestSkip }, () => {
     assert.equal(again.name, '새 이름');
     assert.equal(again.memo, null);
     assert.equal(again.deletedAt, null);
-    assert.equal(await prisma.landlordBuilding.count({ where: { userId: user.id, complexId: complex.id } }), 1);
+    assert.equal(await prisma.myBuilding.count({ where: { userId: user.id, complexId: complex.id } }), 1);
 
     await assert.rejects(
       createLandlordBuilding(user, { complexId: complex.id, name: '또', capacity: null, memo: null }),
@@ -78,7 +78,7 @@ describe('건물 설정 숨김 삭제', { skip: dbTestSkip }, () => {
 
     await createPropertyWithOwnership(user, unitInput(complex.id, '1002'));
 
-    const row = await prisma.landlordBuilding.findUnique({ where: { id: building.id } });
+    const row = await prisma.myBuilding.findUnique({ where: { id: building.id } });
     assert.equal(row.deletedAt, null);
     assert.equal(row.name, '되살릴 이름');
   });

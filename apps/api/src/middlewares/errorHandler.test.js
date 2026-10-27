@@ -49,7 +49,7 @@ test('지워진 사용자의 토큰으로 쓰기(user_id 외래키 위반) → 4
 test('$queryRaw의 user_id 외래키 위반(P2010 23503)도 401', async () => {
   const rawFk = Object.assign(new Error('raw'), {
     code: 'P2010',
-    meta: { code: '23503', message: 'insert or update on table "landlord_buildings" violates foreign key constraint "landlord_buildings_user_id_fkey"' },
+    meta: { code: '23503', message: 'insert or update on table "my_buildings" violates foreign key constraint "landlord_buildings_user_id_fkey"' },
   });
   const res = await run(rawFk, { user: { id: 'gone' }, userExists: async () => false });
   assert.equal(res.statusCode, 401);

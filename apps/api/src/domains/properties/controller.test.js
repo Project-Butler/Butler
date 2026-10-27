@@ -18,7 +18,7 @@ beforeEach(() => {
     // ensureLandlordBuilding(INSERT … RETURNING) → [], lockLandlordBuilding(SELECT … FOR UPDATE) → 행 1개
     $queryRaw: async (strings) =>
       strings.join('').includes('FOR UPDATE') ? [{ id: 'b1', complexId: COMPLEX_ID, name: '중계그린', capacity: null }] : [],
-    activityLog: { create: async () => ({}) },
+    activity: { create: async () => ({}) },
     property: {
       upsert: async (args) => {
         upserts.push(args);

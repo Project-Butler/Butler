@@ -47,12 +47,12 @@ export const toPublicUser = (user) => ({
 // POST /auth/login, POST /auth/register, GET /auth/me가 공통으로 쓰는 응답 모양(AuthMe).
 // 끝나지 않은 소유 관계(endedAt null)만 세고, 법정동은 권리자 인증이 유효한(VERIFIED) 소유 관계만 모은다.
 export const buildAuthMe = async (user) => {
-  const ownerships = await prisma.propertyOwnership.findMany({
+  const ownerships = await prisma.ownership.findMany({
     where: { userId: user.id, endedAt: null },
     select: {
       verificationStatus: true,
       verificationExpiresAt: true,
-      property: { select: { complex: { select: { legalDongCode: true } } } },
+      property: { select: { complex: { select: { regionId: true } } } },
     },
   });
 
@@ -60,7 +60,7 @@ export const buildAuthMe = async (user) => {
     ...new Set(
       ownerships
         .filter((ownership) => computeOwnershipVerificationStatus(ownership) === 'VERIFIED')
-        .map((ownership) => ownership.property.complex.legalDongCode),
+        .map((ownership) => ownership.property.complex.regionId),
     ),
   ];
 

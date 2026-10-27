@@ -38,7 +38,7 @@ export const createDbFixture = () => {
   // regions에 있는 법정동(서울 노원구 중계동)으로 단지를 만든다. 키는 테스트마다 새로.
   const createComplex = async (extra = {}) => {
     const complex = await prisma.complex.create({
-      data: { sourceKey: `DBTEST:${randomUUID()}`, name: 'DB 테스트 단지', legalDongCode: '1135010600', ...extra },
+      data: { sourceKey: `DBTEST:${randomUUID()}`, name: 'DB 테스트 단지', regionId: '1135010600', ...extra },
     });
     complexIds.push(complex.id);
     return complex;
@@ -55,12 +55,12 @@ export const createDbFixture = () => {
     const properties = await prisma.property.findMany({ where: { complexId: { in: allComplexIds } }, select: { id: true } });
     const propertyIds = properties.map((property) => property.id);
 
-    await prisma.activityLog.deleteMany({ where: { userId: { in: userIds } } });
-    await prisma.propertyOwnership.deleteMany({ where: { propertyId: { in: propertyIds } } });
+    await prisma.activity.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.ownership.deleteMany({ where: { propertyId: { in: propertyIds } } });
     await prisma.property.deleteMany({ where: { id: { in: propertyIds } } });
-    await prisma.landlordBuilding.deleteMany({ where: { complexId: { in: allComplexIds } } });
+    await prisma.myBuilding.deleteMany({ where: { complexId: { in: allComplexIds } } });
     await prisma.complex.deleteMany({ where: { id: { in: allComplexIds } } });
-    await prisma.addressSearchResult.deleteMany({ where: { sourceKey: { in: sourceKeys } } });
+    await prisma.addressCache.deleteMany({ where: { sourceKey: { in: sourceKeys } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.$disconnect();
   };

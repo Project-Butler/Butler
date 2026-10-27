@@ -46,7 +46,7 @@ export const runDeltaPhase = async ({ prisma, base, today, keySet, download, app
       stopReason = 'download cutoff';
       break;
     }
-    const partial = await prisma.referenceDataImport.findFirst({
+    const partial = await prisma.dataImport.findFirst({
       where: { source: SOURCES.JUSO_DELTA, status: 'PARTIAL' },
       orderBy: { startedAt: 'desc' },
       select: { fileDate: true },
@@ -74,7 +74,7 @@ export const runDeltaPhase = async ({ prisma, base, today, keySet, download, app
         stopReason = `not published yet: ${date}`;
       } else {
         // 날짜를 건너뛰지 않는다 — 기록을 남기고 멈춘다(A팀 확인).
-        await prisma.referenceDataImport.create({
+        await prisma.dataImport.create({
           data: {
             source: SOURCES.JUSO_DELTA,
             lockKey: LOCK_KEYS.JUSO,
@@ -110,7 +110,7 @@ const defaultDeps = {
   refill: refillComplexKaptCodes,
   cleanupSearchResults: (prisma) =>
     prisma.$executeRaw`
-      DELETE FROM address_search_results WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
+      DELETE FROM address_caches WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
 };
 
 // 실패는 단계마다 잡아서 결과에 남긴다(한 단계가 실패해도 다음 단계는 돈다). jobs에 REFERENCE_DATA_DAILY로 남긴다.

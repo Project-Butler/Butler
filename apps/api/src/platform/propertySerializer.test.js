@@ -8,7 +8,7 @@ const NOW = new Date('2026-10-19T00:00:00Z');
 const PAST = new Date('2026-10-18T00:00:00Z');
 const FUTURE = new Date('2027-10-19T00:00:00Z');
 
-const complex = { id: 'c1', name: '잠실OO아파트', legalDongCode: '1171010100' };
+const complex = { id: 'c1', name: '잠실OO아파트', regionId: '1171010100' };
 
 const baseOwnership = {
   id: 'o1',
@@ -35,7 +35,7 @@ test('toPropertySummary: Decimal → number, displayName', () => {
   assert.equal(summary.exclusiveArea, 84.97);
   assert.equal(typeof summary.exclusiveArea, 'number');
   assert.equal(summary.displayName, '잠실OO아파트 101동 1203호');
-  assert.deepEqual(summary.complex, complex);
+  assert.deepEqual(summary.complex, { id: complex.id, name: complex.name, legalDongCode: complex.regionId });
 });
 
 test('toPropertySummary: 면적은 반올림하지 않는다(39.78 그대로), 동이 없으면 표시 이름에서 뺀다', () => {

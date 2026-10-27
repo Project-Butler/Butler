@@ -9,7 +9,7 @@ export const countActiveUnitsByComplex = async (client, userId, complexIds) => {
 
   const rows = await client.$queryRaw`
     SELECT p.complex_id::text AS "complexId", COUNT(*)::int AS count
-    FROM property_ownerships o
+    FROM ownerships o
     JOIN properties p ON p.id = o.property_id
     WHERE o.user_id = ${userId}::uuid
       AND o.ended_at IS NULL
@@ -34,7 +34,7 @@ export const lockLandlordBuilding = async (tx, where) => {
     : Prisma.sql`user_id = ${where.userId}::uuid AND complex_id = ${where.complexId}::uuid`;
   const rows = await tx.$queryRaw`
     SELECT id::text AS id, complex_id::text AS "complexId", name, capacity
-    FROM landlord_buildings
+    FROM my_buildings
     WHERE ${condition} AND deleted_at IS NULL
     FOR UPDATE`;
   return rows[0] ?? null;

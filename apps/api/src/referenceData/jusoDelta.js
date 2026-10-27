@@ -137,13 +137,13 @@ export const applyJusoDeltaFile = async ({
 
   await releaseStaleRunning(prisma, LOCK_KEYS.JUSO, now());
   const fileDateValue = toDateValue(fileDate);
-  const succeeded = await prisma.referenceDataImport.findFirst({
+  const succeeded = await prisma.dataImport.findFirst({
     where: { source: SOURCES.JUSO_DELTA, status: 'SUCCEEDED', fileDate: fileDateValue },
     select: { id: true },
   });
   if (succeeded) return { status: 'SKIPPED', reason: 'already applied', fileDate };
 
-  const partials = await prisma.referenceDataImport.findMany({
+  const partials = await prisma.dataImport.findMany({
     where: { source: SOURCES.JUSO_DELTA, status: 'PARTIAL' },
     orderBy: { startedAt: 'desc' },
   });
@@ -217,7 +217,7 @@ export const applyJusoDeltaFile = async ({
           const result = await writeLinkBatch(tx, { ...batch, runId: run.id, fileDate, keySet });
           const complexes = await updateComplexAddresses(tx, batch.addressRows, keySet);
           const changed = result.upserted + result.deleted;
-          await tx.referenceDataImport.update({
+          await tx.dataImport.update({
             where: { id: run.id },
             data: { cursorLine: end, rowsWritten: { increment: changed } },
           });

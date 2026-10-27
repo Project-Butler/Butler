@@ -13,7 +13,7 @@ describe('resolve 동시성', { skip: dbTestSkip }, () => {
     // 지어낸 도로명코드(999…)라 실제 검색 결과와 겹치지 않는다. 건물관리번호도 지어낸 값.
     const sourceKey = `ROAD:99999${String(Date.now()).slice(-7)}-0-1-0`;
     fixture.trackSourceKey(sourceKey);
-    await prisma.addressSearchResult.create({
+    await prisma.addressCache.create({
       data: {
         sourceKey,
         payload: {

@@ -59,14 +59,14 @@ const startServer = async (port, overrides) => {
   try { await waitPort(`http://127.0.0.1:${port}/api/v1/auth/me`,child); } catch(e) { throw new Error(`${e.message}; ${output.slice(-1000)}`); }
   return `http://127.0.0.1:${port}/api/v1`;
 };
-const baselineCounts = async () => ({ users: await db.user.count(), complexes: await db.complex.count(), landlord_buildings: await db.landlordBuilding.count(), properties: await db.property.count(), property_ownerships: await db.propertyOwnership.count(), activity_logs: await db.activityLog.count(), address_search_results: await db.addressSearchResult.count() });
+const baselineCounts = async () => ({ users: await db.user.count(), complexes: await db.complex.count(), my_buildings: await db.myBuilding.count(), properties: await db.property.count(), ownerships: await db.ownership.count(), activities: await db.activity.count(), address_caches: await db.addressCache.count() });
 
 before(async () => {
   for(let i=0;i<8&&!available;i++){ try { const r=await fetch(`${base}/auth/me`,{signal:AbortSignal.timeout(2000)}); available=r.status>0; } catch { await new Promise(r=>setTimeout(r,500)); } }
   if(!available) return;
   baseline=await baselineCounts();
-  for(const x of await db.rateLimitCounter.findMany({select:{key:true}})) countersBefore.add(x.key);
-  await db.rateLimitCounter.deleteMany({where:{OR:[{key:{startsWith:'login:landlord@butler.test:'}},{key:{startsWith:'login:tenant@butler.test:'}},{key:{startsWith:'login:admin@butler.test:'}}]}});
+  for(const x of await db.rateLimit.findMany({select:{id:true}})) countersBefore.add(x.id);
+  await db.rateLimit.deleteMany({where:{OR:[{id:{startsWith:'login:landlord@butler.test:'}},{id:{startsWith:'login:tenant@butler.test:'}},{id:{startsWith:'login:admin@butler.test:'}}]}});
   const users=await db.user.findMany({where:{email:{in:['landlord@butler.test','tenant@butler.test','admin@butler.test']}},select:{id:true,email:true}});
   landlordId=users.find(x=>x.email==='landlord@butler.test').id;
   fixtureCookie=await login('landlord@butler.test');
@@ -79,32 +79,32 @@ after(async () => {
   await Promise.all(children.map(child=>new Promise(resolve=>{ if(child.exitCode!==null)return resolve(); const t=setTimeout(resolve,3000); child.once('exit',()=>{clearTimeout(t);resolve();}); })));
   if(available) {
     try {
-      await db.activityLog.deleteMany({where:{userId}});
-      const allOwned=await db.propertyOwnership.findMany({where:{userId},select:{id:true,propertyId:true}});
+      await db.activity.deleteMany({where:{userId}});
+      const allOwned=await db.ownership.findMany({where:{userId},select:{id:true,propertyId:true}});
       allOwned.forEach(x=>{ownershipIds.add(x.id);propertyIds.add(x.propertyId)});
       const ownedIds=[...ownershipIds];
       if(ownedIds.length) await db.$executeRaw`DELETE FROM contracts WHERE ownership_id = ANY(${ownedIds}::uuid[])`;
-      if(ownershipIds.size) await db.propertyOwnership.deleteMany({where:{userId}});
-      if(propertyIds.size) { await db.activityLog.deleteMany({where:{propertyId:{in:[...propertyIds]}}}); await db.propertyOwnership.deleteMany({where:{propertyId:{in:[...propertyIds]}}}); await db.property.deleteMany({where:{id:{in:[...propertyIds]}}}); }
-      if(complexIds.size) await db.activityLog.deleteMany({where:{complexId:{in:[...complexIds]}}});
-      await db.landlordBuilding.deleteMany({where:{userId}});
+      if(ownershipIds.size) await db.ownership.deleteMany({where:{userId}});
+      if(propertyIds.size) { await db.activity.deleteMany({where:{propertyId:{in:[...propertyIds]}}}); await db.ownership.deleteMany({where:{propertyId:{in:[...propertyIds]}}}); await db.property.deleteMany({where:{id:{in:[...propertyIds]}}}); }
+      if(complexIds.size) await db.activity.deleteMany({where:{complexId:{in:[...complexIds]}}});
+      await db.myBuilding.deleteMany({where:{userId}});
       if(complexIds.size) {
         const ids=[...complexIds];
-        await db.landlordBuilding.deleteMany({where:{complexId:{in:ids}}});
+        await db.myBuilding.deleteMany({where:{complexId:{in:ids}}});
         const props=await db.property.findMany({where:{complexId:{in:ids}},select:{id:true}});
         const pids=props.map(x=>x.id);
         if(pids.length) {
-          await db.activityLog.deleteMany({where:{propertyId:{in:pids}}});
-          await db.propertyOwnership.deleteMany({where:{propertyId:{in:pids}}});
+          await db.activity.deleteMany({where:{propertyId:{in:pids}}});
+          await db.ownership.deleteMany({where:{propertyId:{in:pids}}});
           await db.property.deleteMany({where:{id:{in:pids}}});
         }
         await db.complex.deleteMany({where:{id:{in:ids}}});
       }
-      if(keys.size) await db.addressSearchResult.deleteMany({where:{sourceKey:{in:[...keys]}}});
+      if(keys.size) await db.addressCache.deleteMany({where:{sourceKey:{in:[...keys]}}});
       await db.user.deleteMany({where:{id:userId}});
       const fixtureUsers=await db.user.findMany({where:{email:{in:['landlord@butler.test','tenant@butler.test','admin@butler.test']}},select:{id:true,email:true}});
       const testUserKeys=[`complex-search:${userId}`,`general:${userId}`,...fixtureUsers.flatMap(u=>[`complex-search:${u.id}`,`general:${u.id}`])];
-      await db.$executeRaw`DELETE FROM rate_limit_counters WHERE key = ANY(${testUserKeys}::text[])`;
+      await db.$executeRaw`DELETE FROM rate_limits WHERE key = ANY(${testUserKeys}::text[])`;
       const remaining=await baselineCounts();
       console.log('CLEANUP_BASELINE',JSON.stringify(baseline),'CLEANUP_REMAINING',JSON.stringify(remaining),'MATCH',JSON.stringify(baseline)===JSON.stringify(remaining));
       console.log('CHILD_SERVERS',JSON.stringify(children.map(c=>({pid:c.pid,exitCode:c.exitCode,killed:c.exitCode!==null}))));
@@ -119,14 +119,14 @@ test('A-12 round 2 production risks', async (t) => {
   const run=async(name,fn)=>{ try { const result=await fn(); log(name,true,result??{}); } catch(e) { failures.push({name,error:e.message}); log(name,false,{error:e.message}); } };
   await run('ownership VERIFIED permits PATCH and expired VERIFIED is forbidden',async()=>{
     const key=`ROAD:991234567890-0-1-${Math.floor(Math.random()*9000)+1000}`; keys.add(key);
-    const created=await db.addressSearchResult.create({data:{sourceKey:key,payload:{roadAddr:'Round2 Verified test street 1',rnMgtSn:'991234567890',buldMnnm:'1',buldSlno:'0',admCd:'1135010400',zipNo:'00000',bdMgtSn:'R2-VERIFIED'}}});
+    const created=await db.addressCache.create({data:{sourceKey:key,payload:{roadAddr:'Round2 Verified test street 1',rnMgtSn:'991234567890',buldMnnm:'1',buldSlno:'0',admCd:'1135010400',zipNo:'00000',bdMgtSn:'R2-VERIFIED'}}});
     const resolved=await call(base,fixtureCookie,'POST','/complexes/resolve',{sourceKey:key},postHeaders); assert.equal(resolved.status,200);
     const id=resolved.data.data.id;complexIds.add(id);
     const prop=await call(base,cookie,'POST','/properties',{complexId:id,buildingNo:'1동',unitNo:'101호'},{...postHeaders}); assert.equal(prop.status,201);
     const own=prop.data.data.ownership.id; ownershipIds.add(own); propertyIds.add(prop.data.data.property.id);
-    await db.$executeRaw`UPDATE property_ownerships SET verification_status='VERIFIED', verified_at=now(), verification_expires_at=now()+interval '1 day' WHERE id=${own}::uuid`;
-    const rows=await db.propertyOwnership.findMany({where:{propertyId:prop.data.data.property.id,userId},select:{id:true,userId:true,endedAt:true,verificationStatus:true,verificationExpiresAt:true}}); const ok=await call(base,cookie,'PATCH','/properties/'+prop.data.data.property.id,{floor:3},postHeaders); if(ok.status!==200) throw new Error(JSON.stringify({status:ok.status,error:ok.data?.error,who:jwt.decode(cookie.slice(12)),propertyId:prop.data.data.property.id,own,rows}));
-    await db.$executeRaw`UPDATE property_ownerships SET verification_status='VERIFIED', verified_at=now()-interval '31 days', verification_expires_at=now()-interval '1 millisecond' WHERE id=${own}::uuid`;
+    await db.$executeRaw`UPDATE ownerships SET verification_status='VERIFIED', verified_at=now(), verification_expires_at=now()+interval '1 day' WHERE id=${own}::uuid`;
+    const rows=await db.ownership.findMany({where:{propertyId:prop.data.data.property.id,userId},select:{id:true,userId:true,endedAt:true,verificationStatus:true,verificationExpiresAt:true}}); const ok=await call(base,cookie,'PATCH','/properties/'+prop.data.data.property.id,{floor:3},postHeaders); if(ok.status!==200) throw new Error(JSON.stringify({status:ok.status,error:ok.data?.error,who:jwt.decode(cookie.slice(12)),propertyId:prop.data.data.property.id,own,rows}));
+    await db.$executeRaw`UPDATE ownerships SET verification_status='VERIFIED', verified_at=now()-interval '31 days', verification_expires_at=now()-interval '1 millisecond' WHERE id=${own}::uuid`;
     const expired=await call(base,cookie,'PATCH',`/properties/${prop.data.data.property.id}`,{floor:4},postHeaders); assert.equal(expired.status,403);
     return {verified:ok.status,expired:expired.status,expiredError:expired.data.error?.code};
   });
@@ -136,30 +136,30 @@ test('A-12 round 2 production risks', async (t) => {
   });
   await run('resolve fetched 23h59 succeeds and 24h01 expires',async()=>{
     const fresh=`ROAD:991234567891-0-1-${Math.floor(Math.random()*9000)+1000}`, stale=`ROAD:991234567892-0-1-${Math.floor(Math.random()*9000)+1000}`; keys.add(fresh);keys.add(stale);
-    const now=new Date(); await db.addressSearchResult.createMany({data:[{sourceKey:fresh,payload:{roadAddr:'Boundary fresh 1',rnMgtSn:'991234567891',buldMnnm:'1',admCd:'1135010400'},fetchedAt:new Date(now.getTime()-23*3600000-59*60000)},{sourceKey:stale,payload:{roadAddr:'Boundary stale 1',rnMgtSn:'991234567892',buldMnnm:'1',admCd:'1135010400'},fetchedAt:new Date(now.getTime()-24*3600000-60000)}]});
+    const now=new Date(); await db.addressCache.createMany({data:[{sourceKey:fresh,payload:{roadAddr:'Boundary fresh 1',rnMgtSn:'991234567891',buldMnnm:'1',admCd:'1135010400'},fetchedAt:new Date(now.getTime()-23*3600000-59*60000)},{sourceKey:stale,payload:{roadAddr:'Boundary stale 1',rnMgtSn:'991234567892',buldMnnm:'1',admCd:'1135010400'},fetchedAt:new Date(now.getTime()-24*3600000-60000)}]});
     const a=await call(base,cookie,'POST','/complexes/resolve',{sourceKey:fresh},postHeaders);const b=await call(base,cookie,'POST','/complexes/resolve',{sourceKey:stale},postHeaders);
     assert.equal(a.status,200);assert.equal(b.status,404);complexIds.add(a.data.data.id);return {fresh:a.status,stale:b.status};
   });
   await run('20 concurrent resolves create one complex',async()=>{
     const key=`ROAD:991234567893-0-1-${Math.floor(Math.random()*9000)+1000}`;keys.add(key);
-    await db.addressSearchResult.create({data:{sourceKey:key,payload:{roadAddr:'Concurrency resolve 1',rnMgtSn:'991234567893',buldMnnm:'1',admCd:'1135010400'}}});
+    await db.addressCache.create({data:{sourceKey:key,payload:{roadAddr:'Concurrency resolve 1',rnMgtSn:'991234567893',buldMnnm:'1',admCd:'1135010400'}}});
     const ts=performance.now();const rs=await Promise.all(Array.from({length:20},()=>call(base,cookie,'POST','/complexes/resolve',{sourceKey:key},postHeaders)));const ms=performance.now()-ts;
     assert.ok(rs.every(r=>r.status===200));const ids=new Set(rs.map(r=>r.data.data.id));assert.equal(ids.size,1);complexIds.add([...ids][0]);
     return {statuses:statusDistribution(rs),uniqueComplexes:ids.size,elapsedMs:+ms.toFixed(1)};
   });
   await run('50 parallel property registrations respect capacity 40',async()=>{
     const key=`ROAD:991234567894-0-1-${Math.floor(Math.random()*9000)+1000}`;keys.add(key);
-    await db.addressSearchResult.create({data:{sourceKey:key,payload:{roadAddr:'Capacity test 1',rnMgtSn:'991234567894',buldMnnm:'1',admCd:'1135010400'}}});
+    await db.addressCache.create({data:{sourceKey:key,payload:{roadAddr:'Capacity test 1',rnMgtSn:'991234567894',buldMnnm:'1',admCd:'1135010400'}}});
     const r=await call(base,cookie,'POST','/complexes/resolve',{sourceKey:key},postHeaders);assert.equal(r.status,200);const id=r.data.data.id;complexIds.add(id);
     const building=await call(base,cookie,'POST','/landlord-buildings',{complexId:id,name:`${tag} capacity`,capacity:40},postHeaders);assert.equal(building.status,201);
     const start=performance.now();const rs=await Promise.all(Array.from({length:50},(_,i)=>call(base,cookie,'POST','/properties',{complexId:id,buildingNo:'1',unitNo:`${i+1}호`},postHeaders)));const ms=performance.now()-start;
     const counts=statusDistribution(rs);const expected=rs.filter(x=>x.data?.error?.code==='LANDLORD_BUILDING_CAPACITY_EXCEEDED').length;
-    const rows=await db.propertyOwnership.findMany({where:{userId,property:{complexId:id}},select:{id:true,propertyId:true}});rows.forEach(x=>{ownershipIds.add(x.id);propertyIds.add(x.propertyId)});
+    const rows=await db.ownership.findMany({where:{userId,property:{complexId:id}},select:{id:true,propertyId:true}});rows.forEach(x=>{ownershipIds.add(x.id);propertyIds.add(x.propertyId)});
     assert.equal(counts[201],40);assert.equal(expected,10);assert.equal(rows.length,40);
     return {statuses:counts,capacityErrors:expected,dbCount:rows.length,elapsedMs:+ms.toFixed(1)};
   });
   await run('30 parallel same-keyword searches from three users with limiter metrics',async()=>{
-    await db.rateLimitCounter.deleteMany({where:{key:{in:[`complex-search:${userId}`,`complex-search:${landlordId}`,`complex-search:00000000-0000-4000-8000-000000000002`]}}});
+    await db.rateLimit.deleteMany({where:{id:{in:[`complex-search:${userId}`,`complex-search:${landlordId}`,`complex-search:00000000-0000-4000-8000-000000000002`]}}});
     const users=[cookie,fixtureCookie,await login('tenant@butler.test')];
     const start=performance.now();const samples=await Promise.all(Array.from({length:30},(_,i)=>timed(()=>call(base,users[i%3],'GET','/complexes/search?query=중계그린'))));const wall=performance.now()-start;const lat=samples.map(x=>x.ms);const results=samples.map(x=>x.value);const dist=statusDistribution(results);
     assert.equal(results.length,30);assert.equal(Object.values(dist).reduce((a,b)=>a+b,0),30);
@@ -178,7 +178,7 @@ test('A-12 round 2 production risks', async (t) => {
     return {invalidKey:search.status,error:search.data.error.code,envelope:envelope(search),resolveExisting:resolved.status,registration:reg.status,timeout:timeout.status,timeoutError:timeout.data.error.code,timeoutEnvelope:envelope(timeout)};
   });
   await run('landlord building input fuzz and pagination validation',async()=>{
-    const key=`ROAD:991234567895-0-1-${Math.floor(Math.random()*9000)+1000}`;keys.add(key);await db.addressSearchResult.create({data:{sourceKey:key,payload:{roadAddr:'Fuzz test 1',rnMgtSn:'991234567895',buldMnnm:'1',admCd:'1135010400'}}});
+    const key=`ROAD:991234567895-0-1-${Math.floor(Math.random()*9000)+1000}`;keys.add(key);await db.addressCache.create({data:{sourceKey:key,payload:{roadAddr:'Fuzz test 1',rnMgtSn:'991234567895',buldMnnm:'1',admCd:'1135010400'}}});
     const resolved=await call(base,cookie,'POST','/complexes/resolve',{sourceKey:key},postHeaders);assert.equal(resolved.status,200);complexIds.add(resolved.data.data.id);
     const outcomes=[];
     for(const [field,value] of [['name',null],['name',12],['name',''],['name','x'.repeat(51)],['capacity',0],['capacity',-1],['capacity',1000],['capacity','9'],['memo',12],['memo','x'.repeat(501)]]) { const body={complexId:resolved.data.data.id,name:`${tag} fuzz`};body[field]=value;const x=await call(base,cookie,'POST','/landlord-buildings',body,postHeaders);outcomes.push({field,valueType:typeof value,status:x.status});assert.equal(x.status,400); }

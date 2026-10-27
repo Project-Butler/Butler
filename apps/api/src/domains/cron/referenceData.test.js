@@ -13,7 +13,7 @@ const createFakePrisma = ({ cursor = '2026-10-17', partial = null } = {}) => {
       },
       update: async ({ where, data }) => Object.assign(state.jobs.find((job) => job.id === where.id), data),
     },
-    referenceDataImport: {
+    dataImport: {
       findFirst: async ({ where }) => {
         if (where.status === 'PARTIAL') return state.partial;
         return state.cursor ? { fileDate: new Date(`${state.cursor}T00:00:00Z`) } : null;
