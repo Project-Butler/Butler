@@ -5,7 +5,9 @@ import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
   getChat,
   getReference,
+  getRelatedReferences,
   listChats,
+  listDisputeFaqs,
   listReferences,
   removeChat,
   sendChatMessage,
@@ -27,6 +29,8 @@ router.use(authGuard, roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), generalRateLim
 
 router.get('/references', listReferences);
 router.get('/references/:referenceId', getReference);
+router.get('/references/:referenceId/related', getRelatedReferences);
+router.get('/faqs', listDisputeFaqs);
 
 // 상담 챗봇은 분쟁 당사자인 임대인·임차인만 쓴다. 대화는 본인 것만 보인다.
 const chatRoleGuard = roleGuard(['LANDLORD', 'TENANT']);

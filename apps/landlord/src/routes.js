@@ -15,6 +15,9 @@ export const ROUTE_TABLE = [
   { key: 'propertyRegister', path: '/properties/new' },
   { key: 'propertyDetail', path: '/properties/:propertyId' },
   { key: 'setup', path: '/setup' },
+  { key: 'disputes', path: '/disputes' },
+  { key: 'disputeChat', path: '/disputes/chat' },
+  { key: 'disputeReference', path: '/disputes/references/:referenceId' },
 ];
 
 // 현재 경로가 어느 화면 key인지. 표에 없는 경로(아직 화면이 없는 메뉴)는 첫 구간을 key로 쓴다.
@@ -42,6 +45,14 @@ const BUILDERS = {
   propertyDetail: ({ propertyId }) => ({ pathname: `/properties/${propertyId}` }),
   // 안내 문구(notice)는 주소에 남기지 않고 history state로만 넘긴다(새로고침하면 사라진다).
   setup: ({ notice }) => ({ pathname: '/setup', state: notice ? { notice } : undefined }),
+  // 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
+  disputes: ({ topic, q, tab } = {}) => {
+    const search = new URLSearchParams(Object.entries({ topic, q, tab }).filter(([, value]) => value)).toString();
+    return { pathname: '/disputes', search: search ? `?${search}` : '' };
+  },
+  disputeReference: ({ referenceId }) => ({ pathname: `/disputes/references/${referenceId}` }),
+  // 사례 상세에서 넘어온 질문(draft)은 setup의 notice처럼 history state로만 넘긴다.
+  disputeChat: ({ draft }) => ({ pathname: '/disputes/chat', state: draft ? { draft } : undefined }),
 };
 
 export const buildLocation = (key, params = {}) => {
