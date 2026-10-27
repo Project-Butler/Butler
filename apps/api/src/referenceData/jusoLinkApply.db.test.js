@@ -75,9 +75,11 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
   const apply = (linkDate, tables, extra = {}) =>
     applyJusoLinkDay({ prisma, linkDate, tables, fileSize: 1n, fileSha1: `sha-${linkDate}`.padEnd(40, '0'), search: noSearch, ...extra });
 
-  test('기준점(cutover)이 없으면 적용하지 않는다', async () => {
+  test('커서 다음 날짜가 아니면(기준점 없음 또는 날짜 건너뜀) 적용하지 않는다', async () => {
+    // 로컬 DB에 실제 공식 연계 기준점이 이미 있을 수 있어서 둘 중 하나로 확인한다.
     const result = await apply('2099-06-01', tablesOf({ dongs: [dong({ n: 1, code: '31' })] }));
-    assert.deepEqual(result, { status: 'SKIPPED', reason: 'no baseline (run juso-link:cutover first)', fileDate: '2099-06-01' });
+    assert.equal(result.status, 'SKIPPED');
+    assert.match(result.reason, /^(no baseline \(run juso-link:cutover first\)|gap: expected \d{4}-\d{2}-\d{2})$/);
   });
 
   test('신규(도로명은 같은 날 100001) → ROAD_KEY, 도로명 모르는 34는 기존 연결 유지, 63은 삭제, 같은 날짜 다시 → SKIPPED', async () => {
