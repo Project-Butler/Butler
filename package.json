@@ -2,6 +2,9 @@
   "name": "butler",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
