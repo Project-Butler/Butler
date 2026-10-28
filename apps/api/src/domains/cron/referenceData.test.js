@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { COLD_START_MAX_MS, PHASES, resolveBudgetBase, runReferenceDataCron } from './referenceData.js';
 
-// jobs·reference_data_imports만 흉내 내는 가짜 prisma. cursor: 마지막 변동분 성공 날짜
+// jobs·data_imports만 흉내 내는 가짜 prisma. cursor: 마지막 변동분 성공 날짜
 const createFakePrisma = ({ cursor = '2026-10-17', partial = null } = {}) => {
   const state = { jobs: [], createdImports: [], cursor, partial };
   const prisma = {

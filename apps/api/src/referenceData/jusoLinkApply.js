@@ -23,7 +23,7 @@ import { applyRoadRenames } from './jusoLinks.js';
 import { loadKaptLookup } from './kaptLookup.js';
 import { SOURCES } from './referenceImports.js';
 
-// 검색 대체 조회: 실행(하루치)당 최대 횟수·한 번 제한 시간, 하루 상한(external_api_usage)
+// 검색 대체 조회: 실행(하루치)당 최대 횟수·한 번 제한 시간, 하루 상한(api_usages)
 export const LINK_SEARCH_MAX_CALLS = 3;
 export const LINK_SEARCH_TIMEOUT_MS = 2000;
 export const LINK_SEARCH_API = 'juso-reference-search';
