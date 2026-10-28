@@ -44,7 +44,7 @@ node -e "console.info(require('crypto').randomBytes(32).toString('hex'))"
 docker compose up -d                                   # 레포 루트. postgres 16, localhost:5432
 npm exec -w apps/api -- prisma migrate deploy          # 마이그레이션 적용
 npm exec -w apps/api -- prisma db seed                 # 법정동 (샘플)
-npm run seed:disputes -w apps/api                      # 분쟁 참고자료 1,236건 (사례집 59 + 판례 1,177)
+npm run seed:disputes -w apps/api                      # 분쟁 참고자료 1,752건 (사례집 171 + 판례 1,152 + 법령 130 + 서울시 가이드북 30 + 상담사례집 211 + 국토부 사례집 58)
 ```
 시드는 다시 실행해도 건수가 늘지 않는다.
 
@@ -68,7 +68,7 @@ npm run dev -w apps/landlord     # 필요한 프론트만 (tenant, admin도 같�
 ```bash
 curl -c cookie.txt -H "Content-Type: application/json" -H "X-Requested-With: butler-web" \
   -d '{"email":"landlord@butler.test","password":"password123"}' http://localhost:4000/api/v1/auth/login
-curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.total 1236
+curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.total 1752
 ```
 
 ## DB 작업 규칙
