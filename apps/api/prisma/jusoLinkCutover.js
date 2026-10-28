@@ -17,7 +17,7 @@ const main = async () => {
     return;
   }
 
-  const rows = await prisma.referenceDataImport.findMany({
+  const rows = await prisma.dataImport.findMany({
     where: { source: SOURCES.JUSO_LINK_SHADOW },
     orderBy: { fileDate: 'desc' },
     take: 30,

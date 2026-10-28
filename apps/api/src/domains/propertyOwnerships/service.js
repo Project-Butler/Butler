@@ -24,14 +24,14 @@ export const findMyOwnerships = async (user, { active, page, size }) => {
   if (active === false) where.endedAt = { not: null };
 
   const [ownerships, total] = await prisma.$transaction([
-    prisma.propertyOwnership.findMany({
+    prisma.ownership.findMany({
       where,
       include: PROPERTY_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'asc' }],
       skip: (page - 1) * size,
       take: size,
     }),
-    prisma.propertyOwnership.count({ where }),
+    prisma.ownership.count({ where }),
   ]);
 
   const now = new Date();
@@ -43,7 +43,7 @@ export const findMyOwnerships = async (user, { active, page, size }) => {
 
 // 본인 또는 ADMIN만 볼 수 있다. 그 밖은 null → controller가 404.
 export const findOwnershipForUser = async (user, ownershipId) => {
-  const ownership = await prisma.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+  const ownership = await prisma.ownership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
   if (!ownership) return null;
   if (ownership.userId !== user.id && user.role !== 'ADMIN') return null;
 
@@ -58,11 +58,11 @@ const toActivityParams = (ownership) => ({
 // PATCH /property-ownerships/:ownershipId — 본인의 활성 소유 관계만.
 export const updateOwnership = async (user, ownershipId, data) => {
   const { count, ownership } = await prisma.$transaction(async (tx) => {
-    const result = await tx.propertyOwnership.updateMany({
+    const result = await tx.ownership.updateMany({
       where: { id: ownershipId, userId: user.id, endedAt: null },
       data,
     });
-    const row = await tx.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+    const row = await tx.ownership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
     if (result.count > 0) {
       await recordActivity(tx, {
         userId: user.id,
@@ -85,7 +85,7 @@ export const updateOwnership = async (user, ownershipId, data) => {
 // POST /property-ownerships/:ownershipId/end — 조회·활성 계약 확인·종료를 한 트랜잭션으로 한다.
 export const endOwnership = async (user, ownershipId, { reason }) => {
   const ended = await prisma.$transaction(async (tx) => {
-    const ownership = await tx.propertyOwnership.findUnique({ where: { id: ownershipId } });
+    const ownership = await tx.ownership.findUnique({ where: { id: ownershipId } });
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
     if (ownership.endedAt) throwOwnershipEnded();
 
@@ -109,13 +109,13 @@ export const endOwnership = async (user, ownershipId, { reason }) => {
     }
 
     // 동시에 종료 요청이 와도 한 번만 종료되도록 endedAt null 조건을 건다.
-    const { count } = await tx.propertyOwnership.updateMany({
+    const { count } = await tx.ownership.updateMany({
       where: { id: ownershipId, endedAt: null },
       data: { endedAt: new Date(), endReason: 'SELF_ENDED', endNote: reason },
     });
     if (count === 0) throwOwnershipEnded();
 
-    const endedRow = await tx.propertyOwnership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
+    const endedRow = await tx.ownership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
     await recordActivity(tx, {
       userId: user.id,
       type: ACTIVITY_TYPES.OWNERSHIP_ENDED,

@@ -18,7 +18,7 @@ const unitInput = (complexId, unitNo) => ({
 });
 
 const activeCount = (userId, complexId) =>
-  prisma.propertyOwnership.count({ where: { userId, endedAt: null, property: { complexId } } });
+  prisma.ownership.count({ where: { userId, endedAt: null, property: { complexId } } });
 
 describe('호실 등록 동시성', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
@@ -53,7 +53,7 @@ describe('호실 등록 동시성', { skip: dbTestSkip }, () => {
         createPropertyWithOwnership(user, unitInput(complex.id, '102')),
       ]);
 
-      const saved = await prisma.landlordBuilding.findUnique({ where: { id: building.id } });
+      const saved = await prisma.myBuilding.findUnique({ where: { id: building.id } });
       const count = await activeCount(user.id, complex.id);
       assert.ok(count <= saved.capacity, `round ${round}: count ${count} > capacity ${saved.capacity}`);
       // 둘 중 정확히 하나만 성공한다(먼저 잠금을 잡은 쪽)
@@ -81,7 +81,7 @@ describe('호실 등록 동시성', { skip: dbTestSkip }, () => {
     assert.equal(rejected[0].reason.httpStatus, 409);
     assert.equal(await activeCount(user.id, complex.id), 1);
     // 건물 설정은 하나만 자동으로 생긴다
-    assert.equal(await prisma.landlordBuilding.count({ where: { userId: user.id, complexId: complex.id } }), 1);
+    assert.equal(await prisma.myBuilding.count({ where: { userId: user.id, complexId: complex.id } }), 1);
   });
 
   test('다른 임대인 둘이 같은 호실을 동시에 → 호실 하나, 소유 관계 둘', async () => {
@@ -94,6 +94,6 @@ describe('호실 등록 동시성', { skip: dbTestSkip }, () => {
     ]);
 
     assert.equal(results[0].property.id, results[1].property.id);
-    assert.equal(await prisma.propertyOwnership.count({ where: { propertyId: results[0].property.id } }), 2);
+    assert.equal(await prisma.ownership.count({ where: { propertyId: results[0].property.id } }), 2);
   });
 });

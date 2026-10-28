@@ -3,7 +3,7 @@ import { Badge } from '@butler/ui';
 const TYPE_LABELS = { CASE: '분쟁조정 사례', PRECEDENT: '판례', GUIDELINE: '제도 안내' };
 
 // 답변의 [1], [2]가 가리키는 근거 자료. 번호는 references 순서(1부터)와 같다.
-export const ReferenceList = ({ messageId, references }) => {
+export const ReferenceList = ({ messageId, references, onOpenReference }) => {
   if (references.length === 0) return null;
 
   return (
@@ -16,7 +16,17 @@ export const ReferenceList = ({ messageId, references }) => {
               {i + 1}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-body font-medium text-ink">{reference.title}</p>
+              {onOpenReference ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenReference(reference.id)}
+                  className="text-left text-body font-medium text-accent hover:text-accent-strong hover:underline"
+                >
+                  {reference.title}
+                </button>
+              ) : (
+                <p className="text-body font-medium text-ink">{reference.title}</p>
+              )}
               <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sub text-ink-2">
                 <Badge>{TYPE_LABELS[reference.type] ?? '참고자료'}</Badge>
                 <span>{reference.sourceTitle}</span>

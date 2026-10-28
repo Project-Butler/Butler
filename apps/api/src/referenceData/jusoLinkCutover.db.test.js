@@ -13,7 +13,7 @@ import { findDeltaCursorDate, LOCK_KEYS, SOURCES } from './referenceImports.js';
 const day = (ymd) => new Date(`${ymd}T00:00:00Z`);
 const future = { fileDate: { gte: day('2099-01-01') } };
 const succeeded = (source, ymd) =>
-  prisma.referenceDataImport.create({ data: { source, lockKey: LOCK_KEYS.JUSO, fileDate: day(ymd), status: 'SUCCEEDED' } });
+  prisma.dataImport.create({ data: { source, lockKey: LOCK_KEYS.JUSO, fileDate: day(ymd), status: 'SUCCEEDED' } });
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
 
@@ -38,22 +38,22 @@ const tableFingerprint = async () => {
 
 describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
   after(async () => {
-    await prisma.referenceDataImport.deleteMany({ where: future });
+    await prisma.dataImport.deleteMany({ where: future });
   });
 
   test('전환: 일변동분 커서 X → 공식 연계 기준점 X+1(다음 적용 X+2), 일변동분 PARTIAL이 있으면 거부', async () => {
     await succeeded(SOURCES.JUSO_DELTA, '2099-07-01');
-    const partial = await prisma.referenceDataImport.create({
+    const partial = await prisma.dataImport.create({
       data: { source: SOURCES.JUSO_DELTA, lockKey: LOCK_KEYS.JUSO, fileDate: day('2099-07-02'), status: 'PARTIAL' },
     });
     await assert.rejects(cutoverToJusoLink(prisma), /juso delta PARTIAL \(2099-07-02\)/);
-    await prisma.referenceDataImport.update({ where: { id: partial.id }, data: { status: 'FAILED' } });
+    await prisma.dataImport.update({ where: { id: partial.id }, data: { status: 'FAILED' } });
     // 손으로 돌린 공식 연계가 PARTIAL로 남아 있어도 거부(기준점보다 옛 날짜를 이어 쓰지 않게)
-    const linkPartial = await prisma.referenceDataImport.create({
+    const linkPartial = await prisma.dataImport.create({
       data: { source: SOURCES.JUSO_LINK, lockKey: LOCK_KEYS.JUSO, fileDate: day('2099-06-20'), status: 'PARTIAL' },
     });
     await assert.rejects(cutoverToJusoLink(prisma), /juso link PARTIAL \(2099-06-20\)/);
-    await prisma.referenceDataImport.update({ where: { id: linkPartial.id }, data: { status: 'FAILED' } });
+    await prisma.dataImport.update({ where: { id: linkPartial.id }, data: { status: 'FAILED' } });
 
     const result = await cutoverToJusoLink(prisma);
     assert.equal(result.deltaCursor, '2099-07-01');
@@ -70,7 +70,7 @@ describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
     assert.equal(result.deltaBaseline, '2099-07-03');
     assert.equal(result.nextDeltaDate, '2099-07-04');
     assert.equal(await findDeltaCursorDate(prisma, SOURCES.JUSO_DELTA), '2099-07-03');
-    await prisma.referenceDataImport.deleteMany({ where: future });
+    await prisma.dataImport.deleteMany({ where: future });
   });
 
   test('shadow: 실제 파일 두 경로를 계획만 해서 비교 기록을 남기고, 표(연결·단지)에는 쓰지 않는다', async () => {
@@ -91,7 +91,7 @@ describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
     assert.ok(result.link.codes['31'] >= 1);
     assert.deepEqual(await tableFingerprint(), before);
 
-    const rows = await prisma.referenceDataImport.findMany({ where: { source: SOURCES.JUSO_LINK_SHADOW, ...future } });
+    const rows = await prisma.dataImport.findMany({ where: { source: SOURCES.JUSO_LINK_SHADOW, ...future } });
     assert.equal(rows.length, 1);
     assert.equal(rows[0].lockKey, LOCK_KEYS.JUSO_SHADOW);
     assert.equal(rows[0].status, 'SUCCEEDED');
@@ -108,8 +108,8 @@ describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
   });
 
   test('shadow: 일변동분이 그 날짜를 PARTIAL로 갖고 있으면 incomplete', async () => {
-    await prisma.referenceDataImport.deleteMany({ where: { source: SOURCES.JUSO_LINK_SHADOW, ...future } });
-    await prisma.referenceDataImport.create({
+    await prisma.dataImport.deleteMany({ where: { source: SOURCES.JUSO_LINK_SHADOW, ...future } });
+    await prisma.dataImport.create({
       data: { source: SOURCES.JUSO_DELTA, lockKey: LOCK_KEYS.JUSO, fileDate: day('2099-08-02'), status: 'PARTIAL' },
     });
     const result = await runShadowPhase({
@@ -121,6 +121,6 @@ describe('공식 연계 전환·shadow', { skip: dbTestSkip }, () => {
     });
     assert.equal(result.incomplete, true);
     assert.equal(result.reason, 'juso delta PARTIAL');
-    await prisma.referenceDataImport.deleteMany({ where: future });
+    await prisma.dataImport.deleteMany({ where: future });
   });
 });

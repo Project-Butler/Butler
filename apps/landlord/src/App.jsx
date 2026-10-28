@@ -13,6 +13,10 @@ import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
 import { SetupPage } from './pages/SetupPage';
+import { DisputeChatPage } from './pages/DisputeChatPage';
+import { DisputePage } from './pages/DisputePage';
+import { DisputeReferenceDetailPage } from './pages/DisputeReferenceDetailPage';
+import { DisputeSearchPage } from './pages/DisputeSearchPage';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
 
 // 화면 전환은 react-router(BrowserRouter)로 하고, 경로 표는 routes.js에 있다.
@@ -27,6 +31,8 @@ const NAV_KEY_BY_VIEW = {
   buildingEdit: 'buildingList',
   buildingDetail: 'buildingList',
   setup: 'home',
+  disputeReference: 'disputes',
+  disputeChat: 'disputes',
 };
 const SUB_TITLE_BY_VIEW = {
   properties: '호실 목록',
@@ -36,6 +42,8 @@ const SUB_TITLE_BY_VIEW = {
   buildingEdit: '건물 수정',
   buildingDetail: '건물 상세',
   setup: '초기 세팅',
+  disputes: '분쟁 해결사',
+  disputeReference: '사례 상세',
 };
 
 const LOGIN_PATH = '/login';
@@ -181,6 +189,12 @@ export const App = () => {
           <Route path="/properties/new" element={<PropertyRegisterRoute {...pageProps} />} />
           <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
           <Route path="/setup" element={<SetupRoute {...pageProps} />} />
+          {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
+          <Route path="/disputes/chat" element={<DisputeChatPage />} />
+          <Route path="/disputes" element={<DisputePage {...pageProps} />}>
+            <Route index element={<DisputeSearchPage />} />
+            <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
+          </Route>
           {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
           <Route path="*" element={<LandlordDashboard {...pageProps} />} />
         </Routes>

@@ -1,4 +1,4 @@
-// 하루 한도가 있는 외부 API의 호출 수 카운터(external_api_usage, KST 날짜별).
+// 하루 한도가 있는 외부 API의 호출 수 카운터(api_usages, KST 날짜별).
 // K-apt 기본정보(개발계정 하루 5,000회)는 백필 스크립트·resolve·주간 cron이 나눠 쓰므로
 // 모든 호출이 이 카운터를 거친다. 경로마다 상한을 달리 둬서 실서비스(resolve) 몫을 남긴다.
 import { formatDateKST } from '../../platform/dateUtils.js';
@@ -15,7 +15,7 @@ const toUsageDate = (now) => formatDateKST(now);
 
 export const getApiUsage = async (prisma, api, now = new Date()) => {
   const rows = await prisma.$queryRaw`
-    SELECT count FROM external_api_usage WHERE api = ${api} AND usage_date = ${toUsageDate(now)}::date`;
+    SELECT count FROM api_usages WHERE api = ${api} AND usage_date = ${toUsageDate(now)}::date`;
   return rows[0]?.count ?? 0;
 };
 
@@ -24,10 +24,10 @@ export const getApiUsage = async (prisma, api, now = new Date()) => {
 export const spendApiCall = async (prisma, api, limit, now = new Date()) => {
   if (limit < 1) return null;
   const rows = await prisma.$queryRaw`
-    INSERT INTO external_api_usage (api, usage_date, count)
+    INSERT INTO api_usages (api, usage_date, count)
     VALUES (${api}, ${toUsageDate(now)}::date, 1)
-    ON CONFLICT (api, usage_date) DO UPDATE SET count = external_api_usage.count + 1
-    WHERE external_api_usage.count < ${limit}
+    ON CONFLICT (api, usage_date) DO UPDATE SET count = api_usages.count + 1
+    WHERE api_usages.count < ${limit}
     RETURNING count`;
   return rows[0]?.count ?? null;
 };

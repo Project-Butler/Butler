@@ -30,7 +30,8 @@ const MARKDOWN_COMPONENTS = {
     ),
 };
 
-export const ChatMessage = ({ message }) => {
+// onOpenReference(referenceId): 주면 근거 자료 제목을 눌러 사례 상세를 열 수 있다.
+export const ChatMessage = ({ message, onOpenReference }) => {
   if (message.role === 'USER') {
     return (
       <div className="flex justify-end">
@@ -51,7 +52,7 @@ export const ChatMessage = ({ message }) => {
       <div className="space-y-2">
         <Markdown components={MARKDOWN_COMPONENTS}>{linkCitations(message.content, message.id)}</Markdown>
       </div>
-      <ReferenceList messageId={message.id} references={message.references} />
+      <ReferenceList messageId={message.id} references={message.references} onOpenReference={onOpenReference} />
       <p className="mt-2 font-num text-chip tabular-nums text-ink-3">{formatShortDateTime(message.createdAt)}</p>
     </div>
   );

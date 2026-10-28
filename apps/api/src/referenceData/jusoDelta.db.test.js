@@ -67,7 +67,7 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     await prisma.$executeRaw`DELETE FROM juso_building_links WHERE building_mgt_no LIKE ${`${MGT_PREFIX}%`}`;
     await prisma.kaptAddressLink.deleteMany({ where: { roadSigunguCd: '99999' } });
     await prisma.kaptComplex.deleteMany({ where: { kaptCode: { startsWith: 'DBTK' } } });
-    await prisma.referenceDataImport.deleteMany({ where: { fileDate: { gte: new Date('2099-01-01T00:00:00Z') } } });
+    await prisma.dataImport.deleteMany({ where: { fileDate: { gte: new Date('2099-01-01T00:00:00Z') } } });
     await fixture.cleanup();
   });
 
@@ -106,7 +106,7 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     );
     const again = await apply('2099-01-02', buffer);
     assert.deepEqual(again, { status: 'SKIPPED', reason: 'already applied', fileDate: '2099-01-02' });
-    assert.equal(await prisma.referenceDataImport.count({ where: { fileDate: new Date('2099-01-02T00:00:00Z'), status: 'SUCCEEDED' } }), 1);
+    assert.equal(await prisma.dataImport.count({ where: { fileDate: new Date('2099-01-02T00:00:00Z'), status: 'SUCCEEDED' } }), 1);
   });
 
   test('PARTIAL → 같은 파일(SHA-1 같음)은 cursor_line부터, 내용이 바뀌면 0줄부터', async () => {
@@ -119,7 +119,7 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     const partial = await apply('2099-01-03', file(lines), { batchSize: 2, deadlineAt: 1, clock: firstCallOnly() });
     assert.equal(partial.status, 'PARTIAL');
     assert.equal(partial.cursorLine, 2);
-    const row = await prisma.referenceDataImport.findFirst({ where: { fileDate: new Date('2099-01-03T00:00:00Z'), status: 'PARTIAL' } });
+    const row = await prisma.dataImport.findFirst({ where: { fileDate: new Date('2099-01-03T00:00:00Z'), status: 'PARTIAL' } });
     assert.equal(row.cursorLine, 2);
     assert.equal(row.fileSha1.length, 40);
 
@@ -177,6 +177,6 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     const results = await Promise.allSettled([startImport(prisma, data), startImport(prisma, { ...data, source: SOURCES.JUSO_FULL })]);
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
     assert.ok(results.find((result) => result.status === 'rejected').reason instanceof ImportAlreadyRunningError);
-    await prisma.referenceDataImport.updateMany({ where: { fileDate: data.fileDate }, data: { status: 'FAILED' } });
+    await prisma.dataImport.updateMany({ where: { fileDate: data.fileDate }, data: { status: 'FAILED' } });
   });
 });

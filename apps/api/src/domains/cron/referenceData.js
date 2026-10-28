@@ -74,7 +74,7 @@ export const runDeltaPhase = async ({ prisma, base, today, keySet, download, app
       stopReason = 'download cutoff';
       break;
     }
-    const partial = await prisma.referenceDataImport.findFirst({
+    const partial = await prisma.dataImport.findFirst({
       where: { source: SOURCES.JUSO_DELTA, status: 'PARTIAL' },
       orderBy: { startedAt: 'desc' },
       select: { fileDate: true },
@@ -108,7 +108,7 @@ export const runDeltaPhase = async ({ prisma, base, today, keySet, download, app
         stopReason = `not published yet: ${date}`;
       } else {
         // 날짜를 건너뛰지 않는다 — 기록을 남기고 멈춘다(A팀 확인).
-        await prisma.referenceDataImport.create({
+        await prisma.dataImport.create({
           data: {
             source: SOURCES.JUSO_DELTA,
             lockKey: LOCK_KEYS.JUSO,
@@ -138,7 +138,7 @@ export const runDeltaPhase = async ({ prisma, base, today, keySet, download, app
 };
 
 const recordLinkFailure = (prisma, date, error) =>
-  prisma.referenceDataImport.create({
+  prisma.dataImport.create({
     data: { source: SOURCES.JUSO_LINK, lockKey: LOCK_KEYS.JUSO, fileDate: toDateValue(date), status: 'FAILED', error, finishedAt: new Date() },
   });
 
@@ -154,7 +154,7 @@ export const runLinkPhase = async ({ prisma, base, today, keySet, downloadLinkDa
       stopReason = 'download cutoff';
       break;
     }
-    const partial = await prisma.referenceDataImport.findFirst({
+    const partial = await prisma.dataImport.findFirst({
       where: { source: SOURCES.JUSO_LINK, status: 'PARTIAL' },
       orderBy: { startedAt: 'desc' },
       select: { fileDate: true },
@@ -225,7 +225,7 @@ export const runShadowPhase = async ({ prisma, base, today, downloadLinkDays, do
   const deadline = base + PHASES.shadowEndMs;
   const deltaCursor = await findDeltaCursorDate(prisma, SOURCES.JUSO_DELTA);
   if (!deltaCursor) return { skipped: 'no baseline' };
-  const partial = await prisma.referenceDataImport.findFirst({
+  const partial = await prisma.dataImport.findFirst({
     where: { source: SOURCES.JUSO_DELTA, status: 'PARTIAL' },
     orderBy: { startedAt: 'desc' },
     select: { fileDate: true },
@@ -233,14 +233,14 @@ export const runShadowPhase = async ({ prisma, base, today, downloadLinkDays, do
   const deltaDate = partial ? partial.fileDate.toISOString().slice(0, 10) : addDays(deltaCursor, 1);
   if (deltaDate > addDays(today, -1)) return { skipped: 'up to date' };
   const linkDate = toLinkDate(deltaDate);
-  const compared = await prisma.referenceDataImport.findMany({
+  const compared = await prisma.dataImport.findMany({
     where: { source: SOURCES.JUSO_LINK_SHADOW, fileDate: toDateValue(linkDate) },
     select: { stats: true },
   });
   if (compared.some((row) => row.stats && row.stats.incomplete === false)) return { skipped: 'already compared', linkDate };
 
   const record = async (stats) => {
-    await prisma.referenceDataImport.create({
+    await prisma.dataImport.create({
       data: {
         source: SOURCES.JUSO_LINK_SHADOW,
         lockKey: LOCK_KEYS.JUSO_SHADOW,
@@ -332,7 +332,7 @@ const defaultDeps = {
   refill: refillComplexKaptCodes,
   cleanupSearchResults: (prisma) =>
     prisma.$executeRaw`
-      DELETE FROM address_search_results WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
+      DELETE FROM address_caches WHERE fetched_at < now() - make_interval(hours => ${SEARCH_RESULT_RETENTION_HOURS}::int)`,
 };
 
 export const JUSO_REFRESH_JOB_TYPE = 'JUSO_REFRESH_MANUAL';
@@ -364,7 +364,7 @@ export const runJusoRefreshNow = async ({ prisma, requestedBy = null, now = () =
   const today = formatDateKST(now());
   const keySet = createKeySet();
   const job = await prisma.job.create({
-    data: { type: JUSO_REFRESH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: new Date(), requestedByUserId: requestedBy, payload: { mode } },
+    data: { type: JUSO_REFRESH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: new Date(), requestedById: requestedBy, payload: { mode } },
     select: { id: true },
   });
   let status = 'FAILED';

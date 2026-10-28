@@ -16,7 +16,7 @@ const createPrisma = ({ linkCursor = '2026-10-17', deltaCursor = '2026-10-16' } 
       },
       update: async ({ where, data }) => Object.assign(state.jobs.find((job) => job.id === where.id), data),
     },
-    referenceDataImport: {
+    dataImport: {
       findFirst: async ({ where }) => {
         if (where.status === 'PARTIAL') return null;
         const ymd = where.source === 'JUSO_LINK' ? state.linkCursor : state.deltaCursor;

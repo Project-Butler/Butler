@@ -1,3 +1,4 @@
+import { DisputeCategory, DisputeReferenceType } from '@prisma/client';
 import { prisma } from '../../platform/prismaClient.js';
 
 export const SORTABLE_FIELDS = ['createdAt', 'title', 'sourcePage'];
@@ -33,15 +34,24 @@ const buildKeywordWhere = (keyword) => ({
   ],
 });
 
-export const findReferences = async ({ filters, keyword, page, size, orderBy }) => {
-  const { propertyKind, ...exactFilters } = filters;
+const buildWhere = ({ propertyKind, ...exactFilters }, keyword) => {
   const conditions = [exactFilters];
   // propertyKind가 null인 자료(FAQ 등)는 주택·상가 공통이라 어느 쪽으로 걸러도 함께 보여준다.
   if (propertyKind) conditions.push({ OR: [{ propertyKind }, { propertyKind: null }] });
   if (keyword) conditions.push(buildKeywordWhere(keyword));
-  const where = { AND: conditions };
+  return { AND: conditions };
+};
 
-  const [items, total] = await prisma.$transaction([
+const toCounts = (values, groups, field) =>
+  Object.fromEntries(values.map((value) => [value, groups.find((group) => group[field] === value)?._count._all ?? 0]));
+
+export const findReferences = async ({ filters, keyword, page, size, orderBy }) => {
+  const where = buildWhere(filters, keyword);
+  const { type: _type, category, ...baseFilters } = filters;
+
+  // 화면 숫자용 개수. 종류 탭(countsByType)은 고른 종류만 빼고, 상황 타일(countsByCategory)은
+  // 종류·유형을 둘 다 빼고 같은 검색 조건으로 센다.
+  const [items, total, typeGroups, categoryGroups] = await prisma.$transaction([
     prisma.disputeReference.findMany({
       where,
       select: LIST_SELECT,
@@ -50,11 +60,30 @@ export const findReferences = async ({ filters, keyword, page, size, orderBy }) 
       take: size,
     }),
     prisma.disputeReference.count({ where }),
+    prisma.disputeReference.groupBy({
+      by: ['type'],
+      where: buildWhere(category ? { ...baseFilters, category } : baseFilters, keyword),
+      _count: { _all: true },
+      orderBy: { type: 'asc' },
+    }),
+    prisma.disputeReference.groupBy({
+      by: ['category'],
+      where: buildWhere(baseFilters, keyword),
+      _count: { _all: true },
+      orderBy: { category: 'asc' },
+    }),
   ]);
 
   return {
     items,
-    meta: { page, size, total, hasNext: page * size < total },
+    meta: {
+      page,
+      size,
+      total,
+      hasNext: page * size < total,
+      countsByType: toCounts(Object.values(DisputeReferenceType), typeGroups, 'type'),
+      countsByCategory: toCounts(Object.values(DisputeCategory), categoryGroups, 'category'),
+    },
   };
 };
 
@@ -70,6 +99,39 @@ export const findReferenceById = async (referenceId) => {
     updatedAt: reference.updatedAt.toISOString(),
   };
 };
+
+// 자주 묻는 질문의 근거 자료(sourceKey → 요약). faqs.js가 쓴다.
+export const findReferenceSummariesBySourceKeys = async (sourceKeys) => {
+  if (sourceKeys.length === 0) return new Map();
+  const references = await prisma.disputeReference.findMany({
+    where: { sourceKey: { in: sourceKeys } },
+    select: { sourceKey: true, id: true, type: true, category: true, title: true },
+  });
+  return new Map(references.map(({ sourceKey, ...reference }) => [sourceKey, reference]));
+};
+
+// 관련 자료를 고를 때 쓰는 기준 자료의 임베딩과 분쟁 유형. 없는 자료면 null.
+export const findReferenceForRelated = (referenceId) =>
+  prisma.disputeReference.findUnique({
+    where: { id: referenceId },
+    select: { id: true, category: true, embedding: true },
+  });
+
+// 관련 자료 후보(기준 자료 제외). 목록과 같은 필드에 유사도 계산용 임베딩을 더한다.
+export const findRelatedCandidates = (excludeId) =>
+  prisma.disputeReference.findMany({
+    where: { id: { not: excludeId }, embedding: { isEmpty: false } },
+    select: { ...LIST_SELECT, embedding: true },
+  });
+
+// 임베딩이 아직 없을 때(embed:disputes 실행 전) 쓰는 대체: 같은 분쟁 유형의 최근 자료.
+export const findSameCategoryReferences = ({ excludeId, category, limit }) =>
+  prisma.disputeReference.findMany({
+    where: { id: { not: excludeId }, category },
+    select: LIST_SELECT,
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    take: limit,
+  });
 
 // ===== 분쟁 상담 챗봇 =====
 

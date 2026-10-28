@@ -34,7 +34,7 @@ test('juso 변동 STALE은 모드에 맞는 출처의 커서를 본다(apply면 
   const { checkDeltaFreshness } = await import('./apiHealth.js');
   const sources = [];
   const prisma = {
-    referenceDataImport: {
+    dataImport: {
       findFirst: async ({ where }) => {
         sources.push(where.source);
         return null;

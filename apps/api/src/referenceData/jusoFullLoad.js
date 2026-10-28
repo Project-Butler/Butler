@@ -121,7 +121,7 @@ const toChunks = (items, size) => {
 
 export const runJusoFullLoad = async ({ prisma, sourcePath, fileDate = null, log = () => {} }) => {
   const startedAt = Date.now();
-  const deltaInFlight = await prisma.referenceDataImport.findFirst({
+  const deltaInFlight = await prisma.dataImport.findFirst({
     where: { source: { in: JUSO_CURSOR_SOURCES }, status: { in: ['RUNNING', 'PARTIAL'] } },
     select: { id: true, status: true, source: true, fileDate: true },
   });

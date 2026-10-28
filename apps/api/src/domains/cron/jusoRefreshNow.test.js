@@ -16,7 +16,7 @@ const createPrisma = ({ busy = false, deltaCursor = '2026-10-18', linkCursor = '
       },
       update: async ({ where, data }) => Object.assign(state.jobs.find((job) => job.id === where.id), data),
     },
-    referenceDataImport: {
+    dataImport: {
       findFirst: async ({ where }) => {
         if (where.status === 'PARTIAL') return null;
         const ymd = where.source === 'JUSO_LINK' ? state.linkCursor : state.deltaCursor;
@@ -57,7 +57,7 @@ test('즉시 갱신: 모드가 off·shadow면 일변동분으로 밀린 날을 �
   assert.deepEqual(calls.link, []);
   assert.equal(result.complexKaptCodesChanged, 1);
   assert.equal(state.jobs[0].type, JUSO_REFRESH_JOB_TYPE);
-  assert.equal(state.jobs[0].requestedByUserId, 'admin-1');
+  assert.equal(state.jobs[0].requestedById, 'admin-1');
   assert.equal(state.jobs[0].status, 'SUCCEEDED');
   assert.equal(result.jobId, 'job-0');
 });

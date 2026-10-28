@@ -68,7 +68,7 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
     await prisma.$executeRaw`DELETE FROM juso_building_links WHERE building_mgt_no LIKE ${`${LEGAL}%`}`;
     await prisma.kaptAddressLink.deleteMany({ where: { roadSigunguCd: '99998' } });
     await prisma.kaptComplex.deleteMany({ where: { kaptCode: { startsWith: 'DBTL' } } });
-    await prisma.referenceDataImport.deleteMany({ where: { fileDate: { gte: new Date('2099-01-01T00:00:00Z') } } });
+    await prisma.dataImport.deleteMany({ where: { fileDate: { gte: new Date('2099-01-01T00:00:00Z') } } });
     await fixture.cleanup();
   });
 
@@ -141,6 +141,6 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
     const result = await apply('2099-06-06', tablesOf({ dongs }));
     assert.equal(result.status, 'FAILED');
     assert.equal(result.reason, 'too many unresolved 5/5');
-    assert.equal(await prisma.referenceDataImport.count({ where: { source: SOURCES.JUSO_LINK, fileDate: new Date('2099-06-06T00:00:00Z'), status: 'FAILED' } }), 1);
+    assert.equal(await prisma.dataImport.count({ where: { source: SOURCES.JUSO_LINK, fileDate: new Date('2099-06-06T00:00:00Z'), status: 'FAILED' } }), 1);
   });
 });

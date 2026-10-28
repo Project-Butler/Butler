@@ -13,7 +13,7 @@ import {
 } from './referenceImports.js';
 
 const assertNoneInFlight = async (prisma, source, label) => {
-  const inFlight = await prisma.referenceDataImport.findFirst({
+  const inFlight = await prisma.dataImport.findFirst({
     where: { source, status: { in: ['RUNNING', 'PARTIAL'] } },
     select: { status: true, fileDate: true },
   });

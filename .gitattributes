@@ -1,0 +1,2 @@
+# git hook은 sh로 실행되므로 Windows에서도 LF를 유지해야 한다
+.githooks/* text eol=lf

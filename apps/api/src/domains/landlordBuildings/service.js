@@ -13,7 +13,7 @@ import {
 // 이번 PR에서는 항상 등록중. 운영 시작은 계약(#4)과 함께.
 export const LANDLORD_BUILDING_STATUS = 'SETUP';
 
-const COMPLEX_SELECT = { select: { id: true, name: true, roadAddress: true, legalDongCode: true } };
+const COMPLEX_SELECT = { select: { id: true, name: true, roadAddress: true, regionId: true } };
 
 export const toLandlordBuildingResponse = (building, propertyCount) => ({
   id: building.id,
@@ -21,7 +21,7 @@ export const toLandlordBuildingResponse = (building, propertyCount) => ({
     id: building.complex.id,
     name: building.complex.name,
     roadAddress: building.complex.roadAddress ?? null,
-    legalDongCode: building.complex.legalDongCode,
+    legalDongCode: building.complex.regionId,
   },
   name: building.name,
   capacity: building.capacity ?? null,
@@ -71,7 +71,7 @@ export const createLandlordBuilding = async (user, input) => {
         if (propertyCount > input.capacity) throwCapacityBelowUnits(propertyCount);
       }
 
-      const existing = await tx.landlordBuilding.findUnique({
+      const existing = await tx.myBuilding.findUnique({
         where: { userId_complexId: { userId: user.id, complexId: input.complexId } },
         select: { id: true, deletedAt: true },
       });
@@ -79,12 +79,12 @@ export const createLandlordBuilding = async (user, input) => {
 
       const { complexId, ...fields } = input;
       const building = existing
-        ? await tx.landlordBuilding.update({
+        ? await tx.myBuilding.update({
             where: { id: existing.id },
             data: { capacity: null, memo: null, ...fields, deletedAt: null },
             include: { complex: COMPLEX_SELECT },
           })
-        : await tx.landlordBuilding.create({
+        : await tx.myBuilding.create({
             data: { userId: user.id, complexId, ...fields },
             include: { complex: COMPLEX_SELECT },
           });
@@ -110,14 +110,14 @@ const toPageMeta = (page, size, total) => ({ page, size, total, hasNext: page * 
 export const findMyLandlordBuildings = async (user, { page, size, includeDeleted = false }) => {
   const where = includeDeleted ? { userId: user.id } : { userId: user.id, deletedAt: null };
   const [buildings, total] = await prisma.$transaction([
-    prisma.landlordBuilding.findMany({
+    prisma.myBuilding.findMany({
       where,
       include: { complex: COMPLEX_SELECT },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       skip: (page - 1) * size,
       take: size,
     }),
-    prisma.landlordBuilding.count({ where }),
+    prisma.myBuilding.count({ where }),
   ]);
 
   const counts = await countActiveUnitsByComplex(
@@ -133,7 +133,7 @@ export const findMyLandlordBuildings = async (user, { page, size, includeDeleted
 
 // 본인 또는 ADMIN(조회만). 그 밖은 null → controller가 404.
 export const findLandlordBuildingForUser = async (user, landlordBuildingId) => {
-  const building = await prisma.landlordBuilding.findUnique({
+  const building = await prisma.myBuilding.findUnique({
     where: { id: landlordBuildingId },
     include: { complex: COMPLEX_SELECT },
   });
@@ -153,7 +153,7 @@ export const updateLandlordBuilding = async (user, landlordBuildingId, data) => 
       if (propertyCount > data.capacity) throwCapacityBelowUnits(propertyCount);
     }
 
-    const building = await tx.landlordBuilding.update({
+    const building = await tx.myBuilding.update({
       where: { id: landlordBuildingId },
       data,
       include: { complex: COMPLEX_SELECT },
@@ -184,7 +184,7 @@ export const deleteLandlordBuilding = async (user, landlordBuildingId) => {
       );
     }
 
-    await tx.landlordBuilding.update({ where: { id: landlordBuildingId }, data: { deletedAt: new Date() } });
+    await tx.myBuilding.update({ where: { id: landlordBuildingId }, data: { deletedAt: new Date() } });
     await recordActivity(tx, {
       userId: user.id,
       type: ACTIVITY_TYPES.LANDLORD_BUILDING_DELETED,

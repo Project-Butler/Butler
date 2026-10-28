@@ -105,8 +105,8 @@ const loadLinkContext = async (prisma, dongLines, renames) => {
     : [];
   const regionRows = rolledCodes.length
     ? await prisma.region.findMany({
-        where: { legalDongCode: { in: rolledCodes } },
-        select: { legalDongCode: true, sidoName: true, sigunguName: true, dongName: true },
+        where: { id: { in: rolledCodes } },
+        select: { id: true, sidoName: true, sigunguName: true, dongName: true },
       })
     : [];
   const kaptCodes = [...new Set(existingRows.map((row) => row.kaptCode))];
@@ -127,7 +127,7 @@ const loadLinkContext = async (prisma, dongLines, renames) => {
     lookup,
     ctx: {
       roadKeyByCode,
-      regions: new Map(regionRows.map((row) => [row.legalDongCode, row])),
+      regions: new Map(regionRows.map((row) => [row.id, row])),
       existing: new Map(existingRows.map((row) => [row.buildingMgtNo, row])),
       inactiveKaptCodes: new Set(inactive.map((row) => row.kaptCode)),
       searched: new Map(),

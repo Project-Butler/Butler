@@ -1,4 +1,4 @@
-// 최근 활동(activity_logs) 기록·응답. 문장은 저장하지 않고 화면이 type + params로 만든다.
+// 최근 활동(activities) 기록·응답. 문장은 저장하지 않고 화면이 type + params로 만든다.
 // 쓰기는 호출하는 쪽 트랜잭션(tx) 안에서 해서, 본 작업이 롤백되면 활동도 남지 않게 한다.
 
 export const ACTIVITY_TYPES = Object.freeze({
@@ -15,14 +15,14 @@ export const ACTIVITY_TYPES = Object.freeze({
 // 단지가 있고 건물명을 넘기지 않았으면 그 사용자의 건물 설정 이름을 붙인다("항여울 117동 516호를 삭제했어요").
 export const recordActivity = async (client, { userId, type, complexId = null, propertyId = null, params = {} }) => {
   let finalParams = params;
-  if (complexId && params.buildingName === undefined && client.landlordBuilding) {
-    const building = await client.landlordBuilding.findUnique({
+  if (complexId && params.buildingName === undefined && client.myBuilding) {
+    const building = await client.myBuilding.findUnique({
       where: { userId_complexId: { userId, complexId } },
       select: { name: true },
     });
     if (building) finalParams = { buildingName: building.name, ...params };
   }
-  return client.activityLog.create({ data: { userId, type, complexId, propertyId, params: finalParams } });
+  return client.activity.create({ data: { userId, type, complexId, propertyId, params: finalParams } });
 };
 
 export const toActivityResponse = (activity) => ({

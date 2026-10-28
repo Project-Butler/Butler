@@ -1,0 +1,4 @@
+#!/bin/sh
+# 푸시될 커밋 전체에서 비밀값을 검사한다 (--no-verify로 pre-commit을 건너뛴 경우의 안전망).
+# git이 stdin으로 넘겨주는 ref 목록을 그대로 스크립트에 전달한다.
+exec node "$(git rev-parse --show-toplevel)/scripts/secret-guard.mjs" push

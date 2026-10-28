@@ -57,56 +57,56 @@ const login = async (email) => {
 const dbCounts = async () => db.$queryRaw`SELECT
   (SELECT count(*)::int FROM users WHERE email LIKE 'codex-e2e-%') AS users,
   (SELECT count(*)::int FROM complexes WHERE source_key LIKE 'ROAD:%' AND id = ANY(${[...createdComplexIds]}::uuid[])) AS complexes,
-  (SELECT count(*)::int FROM landlord_buildings WHERE user_id = ${tempUserId}::uuid) AS buildings,
+  (SELECT count(*)::int FROM my_buildings WHERE user_id = ${tempUserId}::uuid) AS buildings,
   (SELECT count(*)::int FROM properties WHERE id = ANY(${[...createdPropertyIds]}::uuid[])) AS properties,
-  (SELECT count(*)::int FROM property_ownerships WHERE user_id = ${tempUserId}::uuid) AS ownerships,
-  (SELECT count(*)::int FROM activity_logs WHERE user_id = ${tempUserId}::uuid) AS activities,
-  (SELECT count(*)::int FROM address_search_results WHERE source_key = ANY(${[...createdSearchKeys]}::text[])) AS saved`;
+  (SELECT count(*)::int FROM ownerships WHERE user_id = ${tempUserId}::uuid) AS ownerships,
+  (SELECT count(*)::int FROM activities WHERE user_id = ${tempUserId}::uuid) AS activities,
+  (SELECT count(*)::int FROM address_caches WHERE source_key = ANY(${[...createdSearchKeys]}::text[])) AS saved`;
 
 before(async () => {
   try { const r = await fetch(`${BASE}/auth/me`, { signal: AbortSignal.timeout(2500) }); apiAvailable = r.status > 0; }
   catch (error) { apiAvailable = false; console.log(`API probe failed: ${error.cause?.code ?? error.name}`); }
-  if (apiAvailable) for (const row of await db.addressSearchResult.findMany({ select: { sourceKey: true } })) baselineSearchKeys.add(row.sourceKey);
+  if (apiAvailable) for (const row of await db.addressCache.findMany({ select: { sourceKey: true } })) baselineSearchKeys.add(row.sourceKey);
   if (!apiAvailable) console.log('SKIP: local API is unreachable at http://localhost:4000/api/v1');
 });
 
 after(async () => {
   if (apiAvailable) {
     try {
-      for (const row of await db.addressSearchResult.findMany({ select: { sourceKey: true } })) if (!baselineSearchKeys.has(row.sourceKey)) createdSearchKeys.add(row.sourceKey);
-      const activityRows = await db.$queryRaw`SELECT count(*)::int AS n FROM activity_logs WHERE user_id IN (${tempUserId}::uuid, ${fixtureLandlordId}::uuid) AND (complex_id = ANY(${[...createdComplexIds]}::uuid[]) OR params->>'buildingName' LIKE ${`${tag}%`})`;
-      const legacySearchCount = await db.addressSearchResult.count({ where: { sourceKey: { in: legacySearchKeys } } });
+      for (const row of await db.addressCache.findMany({ select: { sourceKey: true } })) if (!baselineSearchKeys.has(row.sourceKey)) createdSearchKeys.add(row.sourceKey);
+      const activityRows = await db.$queryRaw`SELECT count(*)::int AS n FROM activities WHERE user_id IN (${tempUserId}::uuid, ${fixtureLandlordId}::uuid) AND (complex_id = ANY(${[...createdComplexIds]}::uuid[]) OR params->>'buildingName' LIKE ${`${tag}%`})`;
+      const legacySearchCount = await db.addressCache.count({ where: { sourceKey: { in: legacySearchKeys } } });
       const fixedUserIds = await db.user.findMany({ where: { email: { in: ['landlord@butler.test', 'tenant@butler.test', 'admin@butler.test'] } }, select: { id: true, email: true } });
       const rateKeys = [`complex-search:${tempUserId}`, `general:${tempUserId}`, ...fixedUserIds.flatMap((u) => [`complex-search:${u.id}`, `general:${u.id}`])];
-      const rateCounterRows = await db.$queryRaw`SELECT count(*)::int AS n FROM rate_limit_counters WHERE key = ANY(${rateKeys}::text[]) OR key LIKE 'login:landlord@butler.test:%' OR key LIKE 'login:tenant@butler.test:%' OR key LIKE 'login:admin@butler.test:%'`;
+      const rateCounterRows = await db.$queryRaw`SELECT count(*)::int AS n FROM rate_limits WHERE key = ANY(${rateKeys}::text[]) OR key LIKE 'login:landlord@butler.test:%' OR key LIKE 'login:tenant@butler.test:%' OR key LIKE 'login:admin@butler.test:%'`;
       const createdCounts = {
         users: await db.user.count({ where: { id: tempUserId, email: { startsWith: 'codex-e2e-' } } }),
         complexes: createdComplexIds.size,
-        landlord_buildings: await db.landlordBuilding.count({ where: { name: { startsWith: tag } } }),
+        my_buildings: await db.myBuilding.count({ where: { name: { startsWith: tag } } }),
         properties: createdPropertyIds.size,
         ownerships: createdOwnershipIds.size,
-        activity_logs: activityRows[0]?.n ?? 0,
-        address_search_results: createdSearchKeys.size + legacySearchCount,
+        activities: activityRows[0]?.n ?? 0,
+        address_caches: createdSearchKeys.size + legacySearchCount,
         contracts: await db.contract.count({ where: { tenantName: 'Codex E2E tenant' } }),
         kapt_address_links: insertedKaptTestLinks ? await db.kaptAddressLink.count({ where: { source: 'KAPT_API', roadSigunguCd: '11350', roadNameKey: '동일로207길', roadMainNo: 186, roadSubNo: 0 } }) : 0,
-        rate_limit_counters: rateCounterRows[0]?.n ?? 0,
+        rate_limits: rateCounterRows[0]?.n ?? 0,
       };
       console.log('CREATED_ROW_COUNTS', JSON.stringify(createdCounts));
       const propIds = [...createdPropertyIds];
-      if (propIds.length) await db.$executeRaw`DELETE FROM contracts WHERE ownership_id IN (SELECT id FROM property_ownerships WHERE property_id = ANY(${propIds}::uuid[]))`;
-      await db.$executeRaw`DELETE FROM activity_logs WHERE user_id = ${tempUserId}::uuid`;
-      if (propIds.length) await db.$executeRaw`DELETE FROM activity_logs WHERE property_id = ANY(${propIds}::uuid[]) OR complex_id = ANY(${[...createdComplexIds]}::uuid[])`;
-      if (createdOwnershipIds.size) await db.$executeRaw`DELETE FROM property_ownerships WHERE id = ANY(${[...createdOwnershipIds]}::uuid[])`;
+      if (propIds.length) await db.$executeRaw`DELETE FROM contracts WHERE ownership_id IN (SELECT id FROM ownerships WHERE property_id = ANY(${propIds}::uuid[]))`;
+      await db.$executeRaw`DELETE FROM activities WHERE user_id = ${tempUserId}::uuid`;
+      if (propIds.length) await db.$executeRaw`DELETE FROM activities WHERE property_id = ANY(${propIds}::uuid[]) OR complex_id = ANY(${[...createdComplexIds]}::uuid[])`;
+      if (createdOwnershipIds.size) await db.$executeRaw`DELETE FROM ownerships WHERE id = ANY(${[...createdOwnershipIds]}::uuid[])`;
       if (propIds.length) await db.$executeRaw`DELETE FROM properties WHERE id = ANY(${propIds}::uuid[])`;
-      await db.$executeRaw`DELETE FROM landlord_buildings WHERE user_id = ${tempUserId}::uuid OR name LIKE ${`${tag}%`}`;
+      await db.$executeRaw`DELETE FROM my_buildings WHERE user_id = ${tempUserId}::uuid OR name LIKE ${`${tag}%`}`;
       if (createdComplexIds.size) await db.$executeRaw`DELETE FROM complexes WHERE id = ANY(${[...createdComplexIds]}::uuid[])`;
       if (insertedKaptTestLinks) await db.$executeRaw`DELETE FROM kapt_address_links WHERE source = 'KAPT_API' AND road_sigungu_cd = '11350' AND road_name_key = '동일로207길' AND road_main_no = 186 AND road_sub_no = 0 AND kapt_code IN ('A13987305','A13993901')`;
-      if (createdSearchKeys.size) await db.$executeRaw`DELETE FROM address_search_results WHERE source_key = ANY(${[...createdSearchKeys]}::text[])`;
-      if (legacySearchKeys.length) await db.addressSearchResult.deleteMany({ where: { sourceKey: { in: legacySearchKeys } } });
+      if (createdSearchKeys.size) await db.$executeRaw`DELETE FROM address_caches WHERE source_key = ANY(${[...createdSearchKeys]}::text[])`;
+      if (legacySearchKeys.length) await db.addressCache.deleteMany({ where: { sourceKey: { in: legacySearchKeys } } });
       await db.$executeRaw`DELETE FROM users WHERE id = ${tempUserId}::uuid AND email LIKE 'codex-e2e-%'`;
-      await db.$executeRaw`DELETE FROM rate_limit_counters WHERE key IN (${`complex-search:${tempUserId}`}, ${`general:${tempUserId}`})`;
+      await db.$executeRaw`DELETE FROM rate_limits WHERE key IN (${`complex-search:${tempUserId}`}, ${`general:${tempUserId}`})`;
       for (const user of fixedUserIds) {
-        await db.$executeRaw`DELETE FROM rate_limit_counters WHERE key IN (${`general:${user.id}`}, ${`complex-search:${user.id}`}) OR key LIKE ${`login:${user.email}:%`}`;
+        await db.$executeRaw`DELETE FROM rate_limits WHERE key IN (${`general:${user.id}`}, ${`complex-search:${user.id}`}) OR key LIKE ${`login:${user.email}:%`}`;
       }
       const remaining = await dbCounts();
       console.log('CLEANUP remaining created rows', JSON.stringify(remaining[0]));
@@ -133,7 +133,7 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   assert.ok(s0.status === 200 && s0.body.data?.length);
   const target = s0.body.data.find((x) => /섬밭로 285|동일로207길 17|동일로207길 18/.test(x.roadAddress ?? '')) ?? s0.body.data[0];
   const oldComplex = target.complexId ? await db.complex.findUnique({ where: { id: target.complexId } }) : null;
-  const preExisting = new Set((await db.addressSearchResult.findMany({ select: { sourceKey: true } })).map((x) => x.sourceKey));
+  const preExisting = new Set((await db.addressCache.findMany({ select: { sourceKey: true } })).map((x) => x.sourceKey));
   const resolveUnsearched = await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: 'ROAD:999999999999-0-1-0' }, { 'X-Requested-With': 'butler-web' });
   absent('UC1 resolve without search -> 404', resolveUnsearched, 404);
   const resolved = await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: target.sourceKey }, { 'X-Requested-With': 'butler-web' });
@@ -142,7 +142,7 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   const complexId = resolved.body.data.id;
   for (const row of await db.property.findMany({ where: { complexId }, select: { id: true } })) baselinePropertyIds.add(row.id);
   if (!oldComplex) createdComplexIds.add(complexId);
-  for (const row of await db.addressSearchResult.findMany({ select: { sourceKey: true } })) if (!preExisting.has(row.sourceKey)) createdSearchKeys.add(row.sourceKey);
+  for (const row of await db.addressCache.findMany({ select: { sourceKey: true } })) if (!preExisting.has(row.sourceKey)) createdSearchKeys.add(row.sourceKey);
   absent('UC1 tampered sourceKey format -> 400', await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: 'not-a-road-key' }, { 'X-Requested-With': 'butler-web' }), 400);
   const same = await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: target.sourceKey }, { 'X-Requested-With': 'butler-web' });
   mark('UC1 resolve twice returns same id; second landlord shares complex', same.status === 200 && same.body.data.id === complexId && (await apiCall(second, 'POST', '/complexes/resolve', { sourceKey: target.sourceKey }, { 'X-Requested-With': 'butler-web' })).body.data.id === complexId, { status: same.status, id: same.body.data?.id });
@@ -171,10 +171,10 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   let ownershipId = u1.body.data.ownership.id;
   createdOwnershipIds.add(ownershipId);
   const normalizedTwin = await createUnit({ buildingNo: '제101동', unitNo: '101동 410호', exclusiveArea: 40, floor: 99 }, second);
-  mark('UC2/3 alternate dong spelling and second landlord share property; area/floor retained', normalizedTwin.status === 201 && normalizedTwin.body.data.property.id === propertyId && normalizedTwin.body.data.property.exclusiveArea === 39.78 && normalizedTwin.body.data.property.floor === -10, { status: normalizedTwin.status, error: normalizedTwin.body?.error, property: normalizedTwin.body.data?.property, ownershipCount: await db.propertyOwnership.count({ where: { propertyId } }) });
+  mark('UC2/3 alternate dong spelling and second landlord share property; area/floor retained', normalizedTwin.status === 201 && normalizedTwin.body.data.property.id === propertyId && normalizedTwin.body.data.property.exclusiveArea === 39.78 && normalizedTwin.body.data.property.floor === -10, { status: normalizedTwin.status, error: normalizedTwin.body?.error, property: normalizedTwin.body.data?.property, ownershipCount: await db.ownership.count({ where: { propertyId } }) });
   assert.equal(normalizedTwin.status, 201);
   createdOwnershipIds.add(normalizedTwin.body.data.ownership.id);
-  mark('UC3 two ownerships share one property', await db.propertyOwnership.count({ where: { propertyId } }) === 2, { count: await db.propertyOwnership.count({ where: { propertyId } }) });
+  mark('UC3 two ownerships share one property', await db.ownership.count({ where: { propertyId } }) === 2, { count: await db.ownership.count({ where: { propertyId } }) });
   const sameDongPrefix = await createUnit({ buildingNo: '114', unitNo: '114동 410호' });
   mark('UC2 matching dong prefix in unit field normalizes away', sameDongPrefix.status === 201 && sameDongPrefix.body.data.property.unitNo === '410', { status: sameDongPrefix.status, unitNo: sameDongPrefix.body.data?.property.unitNo, error: sameDongPrefix.body?.error });
   if (sameDongPrefix.status === 201) { if (!baselinePropertyIds.has(sameDongPrefix.body.data.property.id)) createdPropertyIds.add(sameDongPrefix.body.data.property.id); createdOwnershipIds.add(sameDongPrefix.body.data.ownership.id); }
@@ -229,10 +229,10 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   mark('UC5 building list counts/capacity', buildingList.status === 200 && buildingList.body.data?.some((x) => x.id === buildingId && x.propertyCount >= 3), { rows: buildingList.body.data?.filter((x) => x.id === buildingId) });
   const setup = await apiCall(landlord, 'GET', '/dashboard/landlord/setup');
   const activities = await apiCall(landlord, 'GET', '/activities?size=50');
-  const ownCount = await db.propertyOwnership.count({ where: { userId: fixtureLandlordId, endedAt: null } });
+  const ownCount = await db.ownership.count({ where: { userId: fixtureLandlordId, endedAt: null } });
   mark('UC6 setup progress counts match database', setup.status === 200 && setup.body.data?.steps?.find((x) => x.key === 'PROPERTY')?.count === ownCount, { status: setup.status, activeOwnerships: ownCount, steps: setup.body.data?.steps });
-  const e2eActivities = await db.activityLog.findMany({ where: { userId: fixtureLandlordId, complexId }, orderBy: { createdAt: 'desc' }, take: 20 });
-  const expectedActivityCount = await db.activityLog.count({ where: { userId: fixtureLandlordId } });
+  const e2eActivities = await db.activity.findMany({ where: { userId: fixtureLandlordId, complexId }, orderBy: { createdAt: 'desc' }, take: 20 });
+  const expectedActivityCount = await db.activity.count({ where: { userId: fixtureLandlordId } });
   mark('UC6 activities consistency, params include unit/building fields; no duplicated 호', activities.status === 200 && activities.body.data?.length === expectedActivityCount && activities.body.data?.some((x) => x.type === 'PROPERTY_REGISTERED' && x.params?.unitNo && x.params?.buildingName) && !activities.body.data.some((x) => /호호/.test(JSON.stringify(x.params))), { status: activities.status, returned: activities.body.data?.length, database: expectedActivityCount, sample: e2eActivities.slice(0, 4).map((x) => ({ type: x.type, params: x.params })) });
 
   const ended = await apiCall(landlord, 'POST', `/property-ownerships/${ownershipId}/end`, {}, { 'X-Requested-With': 'butler-web' });
@@ -275,20 +275,20 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   const rankedRows = ranked186.body.data?.filter((x) => (x.roadAddress ?? '').endsWith('186')) ?? [];
   mark('search 186 K-apt enrichment ranks sale complex ahead of rental', ranked186.status === 200 && rankedRows[0]?.kapt?.kaptCode === 'A13987305' && rankedRows[0]?.kapt?.saleType === '분양', { status: ranked186.status, rows: rankedRows.map((x) => ({ name: x.name, kapt: x.kapt, complexId: x.complexId })) });
   const refSample = await db.$queryRaw`SELECT road_name_key, road_main_no, road_sub_no, kapt_code FROM kapt_address_links WHERE kapt_code = 'A13986306' AND source = 'KAPT_EXCEL'`;
-  const imports = await db.$queryRaw`SELECT status, source, file_date FROM reference_data_imports ORDER BY started_at DESC LIMIT 100`;
-  const runningImportCount = await db.referenceDataImport.count({ where: { status: 'RUNNING' } });
+  const imports = await db.$queryRaw`SELECT status, source, file_date FROM data_imports ORDER BY started_at DESC LIMIT 100`;
+  const runningImportCount = await db.dataImport.count({ where: { status: 'RUNNING' } });
   const deltaRows = imports.filter((x) => x.source === 'JUSO_DELTA');
   mark('reference data read-only: 중계그린 has three road links and no RUNNING import', refSample.length === 3 && new Set(refSample.map((x) => x.kapt_code)).size === 1 && runningImportCount === 0, { middleGreenLinkCount: refSample.length, links: refSample, runningImports: runningImportCount, deltaRecent: deltaRows.slice(0, 5).map((x) => x.status) });
 
   // Search persistence write throttling and TTL behavior.
-  const beforeSaved = await db.$queryRaw`SELECT source_key, fetched_at FROM address_search_results ORDER BY source_key`;
+  const beforeSaved = await db.$queryRaw`SELECT source_key, fetched_at FROM address_caches ORDER BY source_key`;
   for (let i = 0; i < 10; i += 1) { await pause(); await apiCall(second, 'GET', `/complexes/search?query=${encodeURIComponent('중계그린')}`); }
-  const afterSaved = await db.$queryRaw`SELECT source_key, fetched_at FROM address_search_results ORDER BY source_key`;
+  const afterSaved = await db.$queryRaw`SELECT source_key, fetched_at FROM address_caches ORDER BY source_key`;
   mark('search persistence 10 identical calls are throttled to stable saved rows', JSON.stringify(beforeSaved) === JSON.stringify(afterSaved), { rowsBefore: beforeSaved.length, rowsAfter: afterSaved.length });
   const alternate = s0.body.data.find((x) => x.sourceKey !== target.sourceKey && x.isApartment);
-  const staleKey = (await db.addressSearchResult.findFirst({ where: { sourceKey: { notIn: [target.sourceKey, ...(alternate ? [alternate.sourceKey] : [])] } }, select: { sourceKey: true } }))?.sourceKey;
+  const staleKey = (await db.addressCache.findFirst({ where: { sourceKey: { notIn: [target.sourceKey, ...(alternate ? [alternate.sourceKey] : [])] } }, select: { sourceKey: true } }))?.sourceKey;
   if (staleKey) {
-    await db.$executeRaw`UPDATE address_search_results SET fetched_at = now() - interval '25 hours' WHERE source_key = ${staleKey}`;
+    await db.$executeRaw`UPDATE address_caches SET fetched_at = now() - interval '25 hours' WHERE source_key = ${staleKey}`;
     await absent('search cache >24h new key resolve -> 404', await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: staleKey }, { 'X-Requested-With': 'butler-web' }), 404);
     mark('search cache expiry does not affect existing complex resolve', (await apiCall(landlord, 'POST', '/complexes/resolve', { sourceKey: target.sourceKey }, { 'X-Requested-With': 'butler-web' })).status === 200);
   }
