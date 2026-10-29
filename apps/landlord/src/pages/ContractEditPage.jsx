@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card } from '@butler/ui';
 import {
   CONTRACT_FORM_FIELDS,
-  ContractFormFields,
+  ContractForm,
   isContractFormComplete,
   toContractFields,
   toContractForm,
@@ -81,7 +81,7 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
           <NoticeBox tone="warn">진행 중인 계약은 조건을 바꿀 수 없어요. 해지 후 새로 등록하거나 갱신하세요</NoticeBox>
         )}
 
-        <ContractFormFields
+        <ContractForm
           form={form}
           onChange={updateField}
           fieldError={fieldError}

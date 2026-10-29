@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, RequiredMark } from '@butler/ui';
 import {
   CONTRACT_FORM_FIELDS,
-  ContractFormFields,
+  ContractForm,
   EMPTY_CONTRACT_FORM,
   isContractFormComplete,
   toContractFields,
@@ -105,7 +105,7 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
           )}
         </div>
 
-        <ContractFormFields form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} />
+        <ContractForm form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} />
       </Card>
 
       <Card className="sticky top-6 space-y-4 p-6">

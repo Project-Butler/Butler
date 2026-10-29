@@ -113,7 +113,7 @@ export const toContractFields = (form) => ({
 });
 
 // 계약 입력 칸(S-02 ②~⑥, S-04). lockedFields에 든 칸은 보기만 한다(진행 중 계약, D-13).
-export const ContractFormFields = ({ form, onChange, fieldError, disabled = false, lockedFields = [] }) => {
+export const ContractForm = ({ form, onChange, fieldError, disabled = false, lockedFields = [] }) => {
   const isLocked = (name) => disabled || lockedFields.includes(name);
   const isJeonse = form.leaseType === 'JEONSE';
   const moneyHint = (value) => (value ? formatManwon(Number(value)) : undefined);
