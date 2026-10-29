@@ -3,9 +3,10 @@ import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useBuildingNames } from '../hooks/useBuildingNames';
+import { useFindCurrentContract } from '../hooks/useFindCurrentContract';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
-import { getUnitTypeLabel } from '../utils/unitListing';
+import { getPropertyStatusBadge, getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 const PAGE_SIZE = 20;
@@ -15,13 +16,41 @@ const RELATION_TABS = [
   { relation: 'FORMER_OWNER', label: '예전 소유' },
 ];
 
+// 계약 칸(S-07): 공실이면 [계약 등록], 계약이 있으면 상태 칩(누르면 그 계약 상세)
+const PropertyContractCell = ({ property, isOpening, onRegister, onOpen }) => {
+  const badge = getPropertyStatusBadge(property.status);
+  if (property.status === 'VACANT') {
+    return (
+      <Button variant="secondary" size="sm" onClick={onRegister}>
+        계약 등록
+      </Button>
+    );
+  }
+  return (
+    <button type="button" onClick={onOpen} disabled={isOpening} aria-label={`${badge.label} 계약 보기`} className="disabled:opacity-60">
+      <Badge tone={badge.tone}>{badge.label}</Badge>
+    </button>
+  );
+};
+
 // 한 탭(관계)의 목록. 탭이 바뀌면 key로 새로 시작해 page가 1로 돌아간다.
 const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetPropertyList({ relation, page, size: PAGE_SIZE }, { onUnauthorized });
   const { getPropertyName } = useBuildingNames({ onUnauthorized });
+  const currentContract = useFindCurrentContract({ onUnauthorized });
+  const [contractNotice, setContractNotice] = useState(null);
   const isFormer = relation === 'FORMER_OWNER';
   const items = data?.items ?? [];
+
+  // 계약 있는 행의 상태 칩: 누를 때 지금 계약을 찾아 상세로 간다(D-09).
+  const openCurrentContract = async (propertyId) => {
+    setContractNotice(null);
+    const { data: contract, error: findError } = await currentContract.findContract(propertyId);
+    if (contract) onNavigate('contractDetail', { contractId: contract.id });
+    else if (findError) setContractNotice(findError.message);
+    else setContractNotice('진행 중이거나 시작 전인 계약을 찾지 못했어요.');
+  };
 
   if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
   if (isLoading && !data) {
@@ -56,6 +85,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
           <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
             <th className="px-5 py-2.5 font-medium">호실</th>
             <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
+            {!isFormer && <th className="px-3 py-2.5 font-medium">계약</th>}
             <th className="px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
           </tr>
         </thead>
@@ -73,6 +103,16 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
               >
                 <td className="px-5 py-3.5 font-semibold text-ink">{getPropertyName(property)}</td>
                 <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                {!isFormer && (
+                  <td className="px-3 py-3.5" onClick={(event) => event.stopPropagation()}>
+                    <PropertyContractCell
+                      property={property}
+                      isOpening={currentContract.isLoading}
+                      onRegister={() => onNavigate('contractRegister', { propertyId: property.id })}
+                      onOpen={() => openCurrentContract(property.id)}
+                    />
+                  </td>
+                )}
                 <td className="px-5 py-3.5">
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                 </td>
@@ -81,6 +121,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
           })}
         </tbody>
       </table>
+      {contractNotice && <NoticeBox className="m-5">{contractNotice}</NoticeBox>}
       {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
       {data.meta.hasNext && (
         // 다음 페이지 로드가 실패했으면 page는 이미 N이므로 N+1로 건너뛰지 않고 같은 페이지를 다시 불러온다.

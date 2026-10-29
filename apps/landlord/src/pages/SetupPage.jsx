@@ -13,7 +13,7 @@ const ACTIVITY_SIZE = 10;
 const STEP_INFO = {
   BUILDING: { title: '건물 등록', desc: '도로명주소로 건물을 등록해요', action: { label: '건물 등록', view: 'buildingRegister' } },
   PROPERTY: { title: '호실 등록', desc: '건물에 호실을 추가해요', action: { label: '호실 등록', view: 'propertyRegister' } },
-  CONTRACT: { title: '계약 등록', desc: '임대차 계약을 등록해요' },
+  CONTRACT: { title: '계약 등록', desc: '임대차 계약을 등록해요', action: { label: '계약 등록', view: 'contractRegister' } },
   TENANT_INVITE: { title: '임차인 초대', desc: '임차인을 버틀러로 초대해요' },
   OPERATION_CHECK: { title: '운영 점검', desc: '앞 단계를 마치면 열려요' },
 };
