@@ -1,6 +1,7 @@
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { getTodayKST } from '../../platform/dateUtils.js';
+import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
 
@@ -85,7 +86,8 @@ export const updateOwnership = async (user, ownershipId, data) => {
 // POST /property-ownerships/:ownershipId/end — 조회·활성 계약 확인·종료를 한 트랜잭션으로 한다.
 export const endOwnership = async (user, ownershipId, { reason }) => {
   const ended = await prisma.$transaction(async (tx) => {
-    const ownership = await tx.ownership.findUnique({ where: { id: ownershipId } });
+    // 계약 등록·수정·해지와 같은 행 잠금으로 줄을 세운다(종료된 소유 관계에 진행 중 계약이 붙지 않게).
+    const ownership = await lockOwnershipRow(tx, ownershipId);
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
     if (ownership.endedAt) throwOwnershipEnded();
 

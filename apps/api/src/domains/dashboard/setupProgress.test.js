@@ -20,9 +20,15 @@ test('진행률: 건물만 있으면 20%, 호실이 1개 이상이면 STEP2 완�
   assert.deepEqual(steps[1], { key: 'PROPERTY', done: true, count: 1 });
 });
 
-test('STEP3·4는 아직 쓸 수 없고 STEP5는 잠김', () => {
+test('계약이 1건 이상이면 STEP3 완료 60%', () => {
+  const { progress, steps } = buildSetupSteps({ buildingCount: 1, propertyCount: 1, contractCount: 2 });
+  assert.equal(progress, 60);
+  assert.deepEqual(steps[2], { key: 'CONTRACT', done: true, count: 2 });
+});
+
+test('STEP4는 아직 쓸 수 없고 STEP5는 잠김', () => {
   const { steps } = buildSetupSteps({ buildingCount: 1, propertyCount: 1 });
-  assert.deepEqual(steps[2], { key: 'CONTRACT', done: false, count: 0, available: false });
+  assert.deepEqual(steps[2], { key: 'CONTRACT', done: false, count: 0 });
   assert.deepEqual(steps[3], { key: 'TENANT_INVITE', done: false, count: 0, available: false });
   assert.deepEqual(steps[4], { key: 'OPERATION_CHECK', done: false, locked: true });
 });

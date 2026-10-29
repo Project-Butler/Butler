@@ -2,7 +2,7 @@
 // - LEASED: 진행 중 계약(ACTIVE·EXPIRING_SOON)이 있음
 // - CONTRACT_PENDING: 진행 중 계약은 없고 시작 전 계약(UPCOMING)이 있음
 // - VACANT: 그 밖(계약 없음, 해지·만료만 있음)
-// "계약대기"의 정확한 조건은 계약(#4) 담당과 확정한다(계획 Q2) — 바뀌면 이 함수만 고친다.
+// "계약대기" 조건은 4) 계약 관리 명세 D-01로 확정했다 — 바뀌면 이 함수만 고친다.
 import { computeContractStatus } from './contractStatus.js';
 
 // contracts: [{ startDate, endDate, terminatedOn }] (Prisma Contract 일부)

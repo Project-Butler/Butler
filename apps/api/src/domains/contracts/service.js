@@ -1,0 +1,252 @@
+// 계약(api-contract.md 4장). 쓰기는 모두 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
+// 검사 순서는 docs/4. 계약 관리 개발/명세.md 3-3을 따른다(형식 R-01은 컨트롤러).
+import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
+import { AppError } from '../../platform/AppError.js';
+import {
+  isContractReadOnly,
+  isValidAmount,
+  isValidPeriod,
+  isValidTermination,
+  lockedFieldsForStatus,
+  statusToWhere,
+} from '../../platform/contractRules.js';
+import { CONTRACT_INCLUDE, resolveContractViewer, toContractResponse } from '../../platform/contractSerializer.js';
+import { computeContractStatus } from '../../platform/contractStatus.js';
+import { compareDateStrings, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
+import { lockOwnershipRow } from '../../platform/ownershipLock.js';
+import { prisma } from '../../platform/prismaClient.js';
+
+const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
+
+const throwContractNotFound = () => {
+  throw new AppError('CONTRACT_NOT_FOUND', 404, '계약을 찾을 수 없습니다.');
+};
+
+const throwOwnershipNotFound = () => {
+  throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
+};
+
+const throwReadOnly = (details = []) => {
+  throw new AppError(
+    'CONTRACT_READ_ONLY',
+    422,
+    '진행 중이거나 끝난 계약이라 이 내용을 바꿀 수 없습니다. 해지 후 새로 등록하거나 갱신해 주세요.',
+    details,
+  );
+};
+
+const assertAmount = (contract) => {
+  if (!isValidAmount(contract)) {
+    throw new AppError(
+      'CONTRACT_INVALID_AMOUNT',
+      422,
+      '계약 유형과 금액이 맞지 않습니다. 월세는 월세 1원 이상, 전세는 월세 0원·보증금 1원 이상이어야 합니다.',
+    );
+  }
+};
+
+const assertPeriod = (contract) => {
+  if (!isValidPeriod(contract)) {
+    throw new AppError('CONTRACT_INVALID_PERIOD', 422, '종료일은 시작일보다 뒤여야 합니다.');
+  }
+};
+
+// R-07: 같은 소유 관계 안에서 해지 안 된 계약과 기간이 겹치면 안 된다(양끝 포함).
+const assertNoOverlap = async (tx, { ownershipId, startDate, endDate, excludeId = null }) => {
+  const overlapping = await tx.contract.findFirst({
+    where: {
+      ownershipId,
+      terminatedOn: null,
+      startDate: { lte: toDbDate(endDate) },
+      endDate: { gte: toDbDate(startDate) },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (overlapping) {
+    throw new AppError('CONTRACT_PERIOD_OVERLAP', 409, '같은 기간에 이미 등록한 계약이 있습니다.');
+  }
+};
+
+// R-05(D-05): 같은 소유 관계의 계약이고, 그 계약이 끝난 날(해지일 또는 종료일) ≤ 새 시작일.
+const assertPreviousContract = async (tx, { ownershipId, previousContractId, startDate }) => {
+  if (!previousContractId) return;
+  const previous = await tx.contract.findFirst({
+    where: { id: previousContractId, ownershipId },
+    select: { endDate: true, terminatedOn: true },
+  });
+  const previousEnd = previous ? toDateOnlyString(previous.terminatedOn ?? previous.endDate) : null;
+  if (!previousEnd || compareDateStrings(previousEnd, startDate) > 0) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', [
+      { field: 'previousContractId', reason: 'INVALID_PREVIOUS_CONTRACT' },
+    ]);
+  }
+};
+
+const activityParams = (contract) => ({
+  buildingNo: contract.ownership.property.buildingNo,
+  unitNo: contract.ownership.property.unitNo,
+  tenantName: contract.tenantName,
+});
+
+const recordContractActivity = (tx, user, type, contract, extra = {}) =>
+  recordActivity(tx, {
+    userId: user.id,
+    type,
+    complexId: contract.ownership.property.complexId,
+    propertyId: contract.ownership.propertyId,
+    params: { ...activityParams(contract), ...extra },
+  });
+
+const respond = (contract, user, todayKST = getTodayKST()) =>
+  toContractResponse(contract, { viewer: resolveContractViewer(contract, user), todayKST });
+
+// POST /contracts
+export const createContract = async (user, input) => {
+  const created = await prisma.$transaction(async (tx) => {
+    const ownership = await lockOwnershipRow(tx, input.ownershipId);
+    if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
+    assertAmount(input);
+    assertPeriod(input);
+    await assertPreviousContract(tx, input);
+    if (ownership.endedAt) {
+      throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
+    }
+    await assertNoOverlap(tx, input);
+
+    const contract = await tx.contract.create({
+      data: {
+        ownershipId: input.ownershipId,
+        leaseType: input.leaseType,
+        deposit: input.deposit,
+        monthlyRent: input.monthlyRent,
+        startDate: toDbDate(input.startDate),
+        endDate: toDbDate(input.endDate),
+        tenantName: input.tenantName,
+        tenantPhone: input.tenantPhone,
+        previousContractId: input.previousContractId,
+        memo: input.memo,
+      },
+      include: CONTRACT_INCLUDE,
+    });
+    await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_CREATED, contract);
+    return contract;
+  });
+
+  // TODO(audit): CONTRACT_CREATED — audit.record()가 생기면 여기서 기록한다.
+  // TODO(schedule): 종료일 SYSTEM 일정 생성 — 일정 기능이 생기면 연결한다.
+  return respond(created, user);
+};
+
+const SORT_FIELDS = { endDate: 'endDate', startDate: 'startDate', createdAt: 'createdAt' };
+
+// GET /contracts — 내 소유 관계(활성·종료)의 계약 + 내가 임차인인 계약.
+export const findContracts = async (user, { propertyId, ownershipId, statuses, sort, page, size }) => {
+  const todayKST = getTodayKST();
+  const filters = [{ OR: [{ ownership: { userId: user.id } }, { tenantId: user.id }] }];
+  if (propertyId) filters.push({ ownership: { propertyId } });
+  if (ownershipId) filters.push({ ownershipId });
+  if (statuses.length > 0) filters.push(statusToWhere(statuses, todayKST));
+  const where = { AND: filters };
+
+  const [total, rows] = await Promise.all([
+    prisma.contract.count({ where }),
+    prisma.contract.findMany({
+      where,
+      include: CONTRACT_INCLUDE,
+      orderBy: [{ [SORT_FIELDS[sort.field]]: sort.direction }, { id: 'asc' }],
+      skip: (page - 1) * size,
+      take: size,
+    }),
+  ]);
+
+  return {
+    items: rows.map((contract) => respond(contract, user, todayKST)),
+    meta: { page, size, total, hasNext: page * size < total },
+  };
+};
+
+// GET /contracts/:contractId — 볼 수 없으면 null(컨트롤러가 404).
+export const findContractForUser = async (user, contractId) => {
+  const contract = await prisma.contract.findUnique({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+  if (!contract || !resolveContractViewer(contract, user)) return null;
+  return respond(contract, user);
+};
+
+// 쓰기 공통: 계약을 찾고 그 소유 관계를 잠근다. 요청자가 그 소유자가 아니면 404(R-10).
+const lockContractForOwner = async (tx, user, contractId) => {
+  const found = await tx.contract.findUnique({ where: { id: contractId }, select: { ownershipId: true } });
+  if (!found) throwContractNotFound();
+  const ownership = await lockOwnershipRow(tx, found.ownershipId);
+  if (ownership.userId !== user.id) throwContractNotFound();
+  // 잠근 뒤 다시 읽어 그 사이 바뀐 값을 본다.
+  const contract = await tx.contract.findUnique({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+  return { contract, ownership };
+};
+
+// PATCH /contracts/:contractId — data는 컨트롤러가 검증·변환한 값(보낸 칸만).
+export const updateContract = async (user, contractId, data) => {
+  const updated = await prisma.$transaction(async (tx) => {
+    const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
+    const status = computeContractStatus(contract, getTodayKST());
+    if (isContractReadOnly(status, Boolean(ownership.endedAt))) throwReadOnly();
+    const locked = lockedFieldsForStatus(status, Object.keys(data));
+    if (locked.length > 0) throwReadOnly(locked.map((field) => ({ field, reason: 'LOCKED_WHILE_ACTIVE' })));
+
+    // 보낸 칸과 저장된 값을 합친 결과로 다시 검사한다.
+    const merged = {
+      leaseType: data.leaseType ?? contract.leaseType,
+      deposit: data.deposit ?? contract.deposit,
+      monthlyRent: data.monthlyRent ?? contract.monthlyRent,
+      startDate: data.startDate ?? toDateOnlyString(contract.startDate),
+      endDate: data.endDate ?? toDateOnlyString(contract.endDate),
+    };
+    assertAmount(merged);
+    assertPeriod(merged);
+    if (data.startDate || data.endDate) {
+      await assertNoOverlap(tx, { ...merged, ownershipId: contract.ownershipId, excludeId: contract.id });
+    }
+
+    const row = await tx.contract.update({
+      where: { id: contract.id },
+      data: {
+        ...data,
+        ...(data.startDate ? { startDate: toDbDate(data.startDate) } : {}),
+        ...(data.endDate ? { endDate: toDbDate(data.endDate) } : {}),
+      },
+      include: CONTRACT_INCLUDE,
+    });
+    await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_UPDATED, row, { fields: Object.keys(data) });
+    return row;
+  });
+
+  // TODO(audit): CONTRACT_UPDATED / TODO(schedule): endDate가 바뀌면 SYSTEM 일정도 옮긴다.
+  return respond(updated, user);
+};
+
+// POST /contracts/:contractId/terminate
+export const terminateContract = async (user, contractId, { terminatedOn, reason }) => {
+  const terminated = await prisma.$transaction(async (tx) => {
+    const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
+    const todayKST = getTodayKST();
+    const status = computeContractStatus(contract, todayKST);
+    if (status === 'EXPIRED' || status === 'TERMINATED') {
+      throw new AppError('CONTRACT_NOT_TERMINABLE', 422, '이미 만료되었거나 해지된 계약입니다.');
+    }
+    if (ownership.endedAt) throwReadOnly();
+    if (!isValidTermination({ endDate: toDateOnlyString(contract.endDate), terminatedOn, todayKST })) {
+      throw new AppError('CONTRACT_INVALID_PERIOD', 422, '해지일은 오늘과 계약 종료일 중 이른 날 이전이어야 합니다.');
+    }
+
+    const row = await tx.contract.update({
+      where: { id: contract.id },
+      data: { terminatedOn: toDbDate(terminatedOn), terminationReason: reason },
+      include: CONTRACT_INCLUDE,
+    });
+    await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_TERMINATED, row);
+    return row;
+  });
+
+  // TODO(audit): CONTRACT_TERMINATED / TODO(schedule): 종료일 SYSTEM 일정 삭제.
+  return respond(terminated, user);
+};
