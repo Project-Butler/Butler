@@ -100,26 +100,23 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
   const verificationHint = getVerificationHint(verification);
 
   const today = getTodayKST();
-  // 진행 중(ACTIVE·EXPIRING_SOON) 계약: 총 보증금(D-16)·계약 중·오늘 할 일·내 부동산 표
-  const currentContracts = useGetContractList(
-    { status: 'ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE },
-    { onUnauthorized },
-  );
-  // 시작 전 계약까지: 예정 일정
-  const scheduleContracts = useGetContractList(
+  // 시작 전·진행 중 계약을 한 번에 받는다. 예정 일정은 전부, 나머지(총 보증금 D-16·계약 중·오늘 할 일·
+  // 내 부동산 표)는 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다.
+  const liveContracts = useGetContractList(
     { status: 'UPCOMING,ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE },
     { onUnauthorized },
   );
-  const contracts = currentContracts.data?.items ?? [];
-  const contractTotal = currentContracts.data?.meta.total ?? null;
-  const isContractCapped = contractTotal != null && contractTotal > CONTRACT_SUM_SIZE;
+  const liveItems = liveContracts.data?.items ?? [];
+  const contracts = liveItems.filter((contract) => contract.status !== 'UPCOMING');
+  const contractTotal = liveContracts.data ? contracts.length : null;
+  const isContractCapped = (liveContracts.data?.meta.total ?? 0) > CONTRACT_SUM_SIZE;
   const depositSum = contracts.reduce((sum, contract) => sum + contract.deposit, 0);
   // 종료일 오름차순으로 받았으므로 그대로 쓴다.
   const expiringContracts = contracts.filter((contract) => contract.status === 'EXPIRING_SOON');
   const contractByPropertyId = new Map(contracts.map((contract) => [contract.property.id, contract]));
-  const schedules = toScheduleEvents(scheduleContracts.data?.items ?? [], today);
-  const depositHint = currentContracts.error
-    ? currentContracts.error.message
+  const schedules = toScheduleEvents(liveItems, today);
+  const depositHint = liveContracts.error
+    ? liveContracts.error.message
     : contractTotal == null
       ? '불러오는 중'
       : isContractCapped
@@ -148,7 +145,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
           value={contractTotal != null ? formatNumber(depositSum) : '—'}
           unit="원"
           hint={depositHint}
-          hintTone={currentContracts.error ? 'crit' : isContractCapped ? 'warn' : 'neutral'}
+          hintTone={liveContracts.error ? 'crit' : isContractCapped ? 'warn' : 'neutral'}
         />
         <StatCard
           label="보유 부동산"
@@ -181,8 +178,8 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
             <span className="font-num text-chip tabular-nums text-ink-3">{expiringContracts.length}건</span>
           </div>
           <div className="mt-4 space-y-3">
-            {currentContracts.error && <p className="text-body text-crit-ink">{currentContracts.error.message}</p>}
-            {currentContracts.data && expiringContracts.length === 0 && (
+            {liveContracts.error && <p className="text-body text-crit-ink">{liveContracts.error.message}</p>}
+            {liveContracts.data && expiringContracts.length === 0 && (
               <p className="py-4 text-center text-body text-ink-3">종료가 가까운 계약이 없습니다</p>
             )}
             {expiringContracts.map((contract) => (
@@ -216,8 +213,8 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
             <span className="text-chip text-ink-3">30일 이내</span>
           </div>
           <div className="mt-4 space-y-3">
-            {scheduleContracts.error && <p className="text-body text-crit-ink">{scheduleContracts.error.message}</p>}
-            {scheduleContracts.data && schedules.length === 0 && (
+            {liveContracts.error && <p className="text-body text-crit-ink">{liveContracts.error.message}</p>}
+            {liveContracts.data && schedules.length === 0 && (
               <p className="py-4 text-center text-body text-ink-3">30일 안의 일정이 없습니다</p>
             )}
             {schedules.map((event) => {

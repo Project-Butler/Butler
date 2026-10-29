@@ -109,8 +109,18 @@ const ContractEditRoute = (pageProps) => {
 };
 
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
+// 계약 메뉴 배지 = 만료 임박 건수. 화면을 옮길 때마다 다시 세어 등록·해지 뒤에도 맞게 한다.
 const LayoutWithBadges = ({ onUnauthorized, ...layoutProps }) => {
+  const { pathname } = useLocation();
   const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1 }, { onUnauthorized });
+  const { refetch } = expiringSoon;
+  const visitedPathRef = useRef(pathname);
+  useEffect(() => {
+    // 처음 그릴 때는 훅이 이미 불러오므로 경로가 바뀔 때만 다시 센다.
+    if (visitedPathRef.current === pathname) return;
+    visitedPathRef.current = pathname;
+    refetch();
+  }, [pathname, refetch]);
   return <LandlordLayout navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }} {...layoutProps} />;
 };
 
