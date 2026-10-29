@@ -1,0 +1,58 @@
+// 계약 응답 직렬화(DB 의존 없음). 목록·상세·대시보드가 모두 이 함수를 쓴다(api-contract.md 4장).
+import { isContractReadOnly } from './contractRules.js';
+import { computeContractStatus, computeDaysUntilEnd } from './contractStatus.js';
+import { toDateOnlyString } from './dateUtils.js';
+import { toMoney } from './money.js';
+import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
+import { toPropertySummary } from './propertySerializer.js';
+
+// 계약 조회 때 같이 읽을 관계. 응답을 만들려면 이 include가 있어야 한다.
+export const CONTRACT_INCLUDE = {
+  ownership: {
+    include: {
+      user: { select: { id: true, name: true, role: true } },
+      property: { include: { complex: true } },
+    },
+  },
+};
+
+// 요청자와 계약의 관계. 볼 수 없으면 null(호출하는 쪽이 404로 숨긴다).
+export const resolveContractViewer = (contract, user) => {
+  const { ownership } = contract;
+  if (ownership.userId === user.id) return ownership.endedAt ? 'FORMER_OWNER' : 'OWNER';
+  if (contract.tenantId === user.id) return 'TENANT';
+  if (user.role === 'ADMIN') return 'ADMIN';
+  return null;
+};
+
+// contract: Prisma Contract + CONTRACT_INCLUDE. viewer: resolveContractViewer 결과.
+export const toContractResponse = (contract, { viewer, todayKST, now = new Date() }) => {
+  const { ownership } = contract;
+  const status = computeContractStatus(contract, todayKST);
+  const isOwner = viewer === 'OWNER';
+
+  return {
+    id: contract.id,
+    property: toPropertySummary(ownership.property),
+    tenantName: contract.tenantName,
+    leaseType: contract.leaseType,
+    deposit: toMoney(contract.deposit),
+    monthlyRent: toMoney(contract.monthlyRent),
+    startDate: toDateOnlyString(contract.startDate),
+    endDate: toDateOnlyString(contract.endDate),
+    status,
+    daysUntilEnd: computeDaysUntilEnd(contract, todayKST, status),
+    ownershipId: contract.ownershipId,
+    landlord: ownership.user,
+    landlordVerified: computeOwnershipVerificationStatus(ownership, now) === 'VERIFIED',
+    // 초대(invitationStatus)는 보류(명세 D-18) — 초대 기능이 생기면 최신 초대 상태를 넣는다.
+    tenant: { name: contract.tenantName, phone: contract.tenantPhone, userId: contract.tenantId, invitationStatus: null },
+    terminatedOn: toDateOnlyString(contract.terminatedOn),
+    terminationReason: contract.terminationReason ?? null,
+    previousContractId: contract.previousContractId ?? null,
+    memo: viewer === 'TENANT' ? null : (contract.memo ?? null),
+    isReadOnly: isOwner ? isContractReadOnly(status, Boolean(ownership.endedAt)) : true,
+    createdAt: contract.createdAt.toISOString(),
+    updatedAt: contract.updatedAt.toISOString(),
+  };
+};
