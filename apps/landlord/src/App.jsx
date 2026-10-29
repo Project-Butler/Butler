@@ -9,6 +9,10 @@ import { BuildingDetailPage } from './pages/BuildingDetailPage';
 import { BuildingEditPage } from './pages/BuildingEditPage';
 import { BuildingListPage } from './pages/BuildingListPage';
 import { BuildingRegisterPage } from './pages/BuildingRegisterPage';
+import { ContractDetailPage } from './pages/ContractDetailPage';
+import { ContractEditPage } from './pages/ContractEditPage';
+import { ContractListPage } from './pages/ContractListPage';
+import { ContractRegisterPage } from './pages/ContractRegisterPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
@@ -17,6 +21,7 @@ import { DisputeChatPage } from './pages/DisputeChatPage';
 import { DisputePage } from './pages/DisputePage';
 import { DisputeReferenceDetailPage } from './pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from './pages/DisputeSearchPage';
+import { useGetContractList } from './hooks/useGetContractList';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
 
 // 화면 전환은 react-router(BrowserRouter)로 하고, 경로 표는 routes.js에 있다.
@@ -30,6 +35,10 @@ const NAV_KEY_BY_VIEW = {
   buildingRegister: 'buildingList',
   buildingEdit: 'buildingList',
   buildingDetail: 'buildingList',
+  contracts: 'leases',
+  contractRegister: 'leases',
+  contractEdit: 'leases',
+  contractDetail: 'leases',
   setup: 'home',
   disputeReference: 'disputes',
   disputeChat: 'disputes',
@@ -41,6 +50,10 @@ const SUB_TITLE_BY_VIEW = {
   buildingRegister: '건물 등록',
   buildingEdit: '건물 수정',
   buildingDetail: '건물 상세',
+  contracts: '계약 목록',
+  contractRegister: '계약 등록',
+  contractEdit: '계약 수정',
+  contractDetail: '계약 상세',
   setup: '초기 세팅',
   disputes: '분쟁 해결사',
   disputeReference: '사례 상세',
@@ -75,6 +88,30 @@ const PropertyRegisterRoute = (pageProps) => {
   const complexId = searchParams.get('complexId') ?? undefined;
   // 건물(complexId)이 바뀌면 화면 상태를 새로 시작한다(key).
   return <PropertyRegisterPage key={complexId ?? 'pick'} params={{ complexId }} {...pageProps} />;
+};
+
+const ContractRegisterRoute = (pageProps) => {
+  const [searchParams] = useSearchParams();
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  const renewFrom = searchParams.get('renewFrom') ?? undefined;
+  // 미리 채울 값(호실·이전 계약)이 바뀌면 화면 상태를 새로 시작한다(key).
+  return <ContractRegisterPage key={`${propertyId}-${renewFrom}`} params={{ propertyId, renewFrom }} {...pageProps} />;
+};
+
+const ContractDetailRoute = (pageProps) => {
+  const { contractId } = useParams();
+  return <ContractDetailPage key={contractId} contractId={contractId} {...pageProps} />;
+};
+
+const ContractEditRoute = (pageProps) => {
+  const { contractId } = useParams();
+  return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
+};
+
+// 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
+const LayoutWithBadges = ({ onUnauthorized, ...layoutProps }) => {
+  const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1 }, { onUnauthorized });
+  return <LandlordLayout navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }} {...layoutProps} />;
 };
 
 const SetupRoute = (pageProps) => {
@@ -171,7 +208,8 @@ export const App = () => {
   return (
     <>
       <InstallBanner />
-      <LandlordLayout
+      <LayoutWithBadges
+        onUnauthorized={handleUnauthorized}
         user={user}
         onLogout={handleLogout}
         activeKey={NAV_KEY_BY_VIEW[viewKey] ?? viewKey}
@@ -188,6 +226,10 @@ export const App = () => {
           <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
           <Route path="/properties/new" element={<PropertyRegisterRoute {...pageProps} />} />
           <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
+          <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
+          <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
+          <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
+          <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
           <Route path="/setup" element={<SetupRoute {...pageProps} />} />
           {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
           <Route path="/disputes/chat" element={<DisputeChatPage />} />
@@ -198,7 +240,7 @@ export const App = () => {
           {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
           <Route path="*" element={<LandlordDashboard {...pageProps} />} />
         </Routes>
-      </LandlordLayout>
+      </LayoutWithBadges>
     </>
   );
 };
