@@ -68,7 +68,7 @@ function parseMoney(field, value, details) {
 
 function parseDate(field, value, details) {
   if (isValidDateString(value)) return value;
-  details.push({ field, reason: 'YYYY-MM-DD 형식이어야 합니다.' });
+  details.push({ field, reason: '2000-01-01~2099-12-31 사이의 YYYY-MM-DD 날짜여야 합니다.' });
   return undefined;
 }
 

@@ -112,5 +112,13 @@ export const getRenewalPeriod = (previousEndDate) => {
 // 오늘(한국 시간) 'YYYY-MM-DD'
 export const getTodayKST = () => formatDateKST(new Date().toISOString());
 
+// 계약 날짜 칸이 고를 수 있는 범위. 날짜 칸에 min·max를 둘 다 걸어야 Chrome에서 방향키로 연도를 넘길 때
+// 275760년이나 0001년 같은 끝값으로 튀지 않는다.
+export const CONTRACT_DATE_MIN = '2000-01-01';
+export const CONTRACT_DATE_MAX = '2099-12-31';
+export const isContractDateInRange = (dateString) =>
+  Boolean(dateString) && dateString >= CONTRACT_DATE_MIN && dateString <= CONTRACT_DATE_MAX;
+export const CONTRACT_DATE_RANGE_MESSAGE = '2000년부터 2099년 사이 날짜를 골라 주세요.';
+
 // 해지일 최대(D-15): 오늘과 종료일 중 이른 날
 export const getMaxTerminationDate = (endDate, today = getTodayKST()) => (endDate < today ? endDate : today);

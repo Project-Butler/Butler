@@ -32,6 +32,11 @@ test('날짜 문자열: 없는 날짜는 거부', () => {
   assert.equal(isValidDateString('2026-02-28'), true);
   assert.equal(isValidDateString('2026-02-30'), false);
   assert.equal(isValidDateString('2026-2-1'), false);
+  // 날짜 칸 방향키로 넘어간 끝값은 받지 않는다
+  assert.equal(isValidDateString('0001-11-01'), false);
+  assert.equal(isValidDateString('1999-12-31'), false);
+  assert.equal(isValidDateString('2100-01-01'), false);
+  assert.equal(isValidDateString('2099-12-31'), true);
 });
 
 test('금액: 유형과 맞아야 한다', () => {

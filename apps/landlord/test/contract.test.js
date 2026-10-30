@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EMPTY_CONTRACT_FORM, validateContractForm } from '../src/components/ContractForm/ContractForm';
 import { buildLocation, resolveViewKey } from '../src/routes';
 import {
   formatContractAmount,
@@ -11,6 +12,7 @@ import {
   getDdayTone,
   getMaxTerminationDate,
   getRenewalPeriod,
+  isContractDateInRange,
   isValidPhone,
   toPhoneDigits,
 } from '../src/utils/contract';
@@ -104,5 +106,21 @@ describe('계약 경로', () => {
     expect(resolveViewKey('/contracts/new')).toBe('contractRegister');
     expect(resolveViewKey('/contracts/c-1')).toBe('contractDetail');
     expect(resolveViewKey('/contracts/c-1/edit')).toBe('contractEdit');
+  });
+});
+
+describe('계약 날짜 범위', () => {
+  it('날짜 칸 방향키로 넘어간 끝값(0001년, 275760년)은 범위 밖이다', () => {
+    expect(isContractDateInRange('2027-11-01')).toBe(true);
+    expect(isContractDateInRange('0001-11-01')).toBe(false);
+    expect(isContractDateInRange('275760-11-01')).toBe(false);
+    expect(isContractDateInRange('')).toBe(false);
+  });
+
+  it('폼 검증: 범위 밖 종료일은 범위 안내, 범위 안이면 시작일 비교', () => {
+    const form = { ...EMPTY_CONTRACT_FORM, startDate: '2026-11-01' };
+    expect(validateContractForm({ ...form, endDate: '275760-11-01' }).endDate).toBe('2000년부터 2099년 사이 날짜를 골라 주세요.');
+    expect(validateContractForm({ ...form, endDate: '2025-11-01' }).endDate).toBe('종료일은 시작일보다 뒤여야 해요.');
+    expect(validateContractForm({ ...form, endDate: '2027-10-31' }).endDate).toBeUndefined();
   });
 });

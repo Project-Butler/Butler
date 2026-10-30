@@ -30,9 +30,14 @@ export const normalizeTenantPhone = (value) => {
   return TENANT_PHONE_PATTERN.test(digits) ? digits : null;
 };
 
-// 'YYYY-MM-DD'이고 실제로 있는 날짜인지(2026-02-30 같은 값 거부).
+// 계약 날짜로 받을 범위. 화면 날짜 칸(min·max)과 같은 값이라 0001년 같은 값이 저장되지 않는다.
+const CONTRACT_DATE_MIN = '2000-01-01';
+const CONTRACT_DATE_MAX = '2099-12-31';
+
+// 'YYYY-MM-DD'이고 실제로 있는 날짜이며 계약 날짜 범위 안인지(2026-02-30 같은 값 거부).
 export const isValidDateString = (value) => {
   if (typeof value !== 'string' || !DATE_PATTERN.test(value)) return false;
+  if (value < CONTRACT_DATE_MIN || value > CONTRACT_DATE_MAX) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 };

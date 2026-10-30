@@ -2,9 +2,13 @@ import { SegmentedControl, TextField } from '@butler/ui';
 import { formatNumber } from '../../utils/format';
 import { toPriceDigits } from '../../utils/formValidation';
 import {
+  CONTRACT_DATE_MAX,
+  CONTRACT_DATE_MIN,
+  CONTRACT_DATE_RANGE_MESSAGE,
   formatManwon,
   formatPhone,
   getLeaseTypeLabel,
+  isContractDateInRange,
   isValidPhone,
   LEASE_TYPE_OPTIONS,
   toPhoneDigits,
@@ -70,8 +74,13 @@ export const validateContractForm = (form) => {
     tenantName:
       form.tenantName.trim().length > MAX_TENANT_NAME_LENGTH ? `${MAX_TENANT_NAME_LENGTH}자 이하로 입력해 주세요.` : undefined,
     tenantPhone: form.tenantPhone && !isValidPhone(form.tenantPhone) ? SERVER_REASON_MESSAGE.INVALID_PHONE : undefined,
+    startDate: form.startDate && !isContractDateInRange(form.startDate) ? CONTRACT_DATE_RANGE_MESSAGE : undefined,
     endDate:
-      form.startDate && form.endDate && form.endDate <= form.startDate ? '종료일은 시작일보다 뒤여야 해요.' : undefined,
+      form.endDate && !isContractDateInRange(form.endDate)
+        ? CONTRACT_DATE_RANGE_MESSAGE
+        : form.startDate && form.endDate && form.endDate <= form.startDate
+          ? '종료일은 시작일보다 뒤여야 해요.'
+          : undefined,
     deposit:
       form.leaseType === 'JEONSE' && form.deposit !== '' && Number(form.deposit) === 0
         ? '전세는 보증금을 입력해 주세요.'
@@ -170,6 +179,8 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
           required
           type="date"
           className="font-num tabular-nums"
+          min={CONTRACT_DATE_MIN}
+          max={CONTRACT_DATE_MAX}
           value={form.startDate}
           onChange={(event) => onChange('startDate', event.target.value)}
           error={fieldError('startDate')}
@@ -180,7 +191,8 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
           required
           type="date"
           className="font-num tabular-nums"
-          min={form.startDate || undefined}
+          min={CONTRACT_DATE_MIN}
+          max={CONTRACT_DATE_MAX}
           value={form.endDate}
           onChange={(event) => onChange('endDate', event.target.value)}
           error={fieldError('endDate')}

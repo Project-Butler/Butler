@@ -7,6 +7,8 @@ import { useGetContract } from '../hooks/useGetContract';
 import { usePostContractTermination } from '../hooks/usePostContractTermination';
 import { formatDateKST } from '../utils/format';
 import {
+  CONTRACT_DATE_MIN,
+  CONTRACT_DATE_RANGE_MESSAGE,
   formatPeriod,
   formatPhone,
   formatWon,
@@ -14,6 +16,7 @@ import {
   getContractStatusBadge,
   getLeaseTypeLabel,
   getMaxTerminationDate,
+  isContractDateInRange,
   isContractInProgress,
 } from '../utils/contract';
 
@@ -38,9 +41,11 @@ const TerminationCard = ({ contract, onTerminated, onUnauthorized }) => {
 
   const dateError = !terminatedOn
     ? '해지일을 입력해 주세요.'
-    : terminatedOn > maxDate
-      ? '해지일은 오늘과 종료일 중 이른 날까지 고를 수 있어요.'
-      : undefined;
+    : !isContractDateInRange(terminatedOn)
+      ? CONTRACT_DATE_RANGE_MESSAGE
+      : terminatedOn > maxDate
+        ? '해지일은 오늘과 종료일 중 이른 날까지 고를 수 있어요.'
+        : undefined;
 
   const handleTerminate = async () => {
     if (dateError) return;
@@ -61,6 +66,7 @@ const TerminationCard = ({ contract, onTerminated, onUnauthorized }) => {
             required
             type="date"
             className="font-num tabular-nums"
+            min={CONTRACT_DATE_MIN}
             max={maxDate}
             value={terminatedOn}
             onChange={(event) => setTerminatedOn(event.target.value)}
