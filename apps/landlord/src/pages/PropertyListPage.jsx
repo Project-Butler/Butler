@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
 import { getUnitTypeLabel } from '../utils/unitListing';
@@ -19,7 +18,6 @@ const RELATION_TABS = [
 const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetPropertyList({ relation, page, size: PAGE_SIZE }, { onUnauthorized });
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const isFormer = relation === 'FORMER_OWNER';
   const items = data?.items ?? [];
 
@@ -71,7 +69,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3.5 font-semibold text-ink">{getPropertyName(property)}</td>
+                <td className="px-5 py-3.5 font-semibold text-ink">{property.displayName}</td>
                 <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
                 <td className="px-5 py-3.5">
                   <Badge tone={badge.tone}>{badge.label}</Badge>
