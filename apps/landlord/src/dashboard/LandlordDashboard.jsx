@@ -1,5 +1,4 @@
 import { Badge, Button, Card, StatCard } from '@butler/ui';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetContractList } from '../hooks/useGetContractList';
 import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
@@ -55,20 +54,14 @@ const getVerificationHint = ({ verified, total, error }) => {
   return unverified > 0 ? { hint: `인증 필요 ${unverified}건`, tone: 'crit' } : { hint: '모두 인증 완료', tone: 'ok' };
 };
 
-// 초기 세팅 안내: 진행률 + 등록한 건물·호실 수
+// 초기 세팅 안내: 진행률 + 등록한 호실 수
 const SetupCard = ({ setup, onNavigate }) => {
   const { data, error } = setup;
   if (error) return <Card className="p-5 text-body text-crit-ink">{error.message}</Card>;
   if (!data) return null;
 
-  const buildingCount = data.buildings.length;
-  const propertyCount = data.buildings.reduce((sum, building) => sum + building.propertyCount, 0);
-  const message =
-    buildingCount === 0
-      ? '첫 건물을 등록하고 호실을 추가해 보세요'
-      : propertyCount === 0
-        ? '건물에 첫 호실을 추가해 보세요'
-        : `건물 ${buildingCount}개 · 호실 ${propertyCount}개를 등록했어요`;
+  const propertyCount = data.steps.find((step) => step.key === 'PROPERTY')?.count ?? 0;
+  const message = propertyCount === 0 ? '첫 부동산을 등록해 보세요' : `호실 ${propertyCount}개를 등록했어요`;
 
   return (
     <Card className="flex items-center justify-between gap-4 p-5">
@@ -78,8 +71,8 @@ const SetupCard = ({ setup, onNavigate }) => {
         </p>
         <p className="mt-1 text-card font-semibold text-ink">{message}</p>
       </div>
-      <Button className="shrink-0" onClick={() => onNavigate(buildingCount === 0 ? 'buildingRegister' : 'setup')}>
-        {buildingCount === 0 ? '건물 등록' : '초기 세팅 보기'}
+      <Button className="shrink-0" onClick={() => onNavigate(propertyCount === 0 ? 'propertyRegister' : 'setup')}>
+        {propertyCount === 0 ? '부동산 등록' : '초기 세팅 보기'}
       </Button>
     </Card>
   );
@@ -89,7 +82,6 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: TABLE_SIZE }, { onUnauthorized });
   const properties = propertyList.data?.items ?? [];
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const propertyTotal = propertyList.data?.meta.total ?? null;
   const ownershipList = useGetPropertyOwnershipList({ active: 'true', size: OWNERSHIP_COUNT_SIZE }, { onUnauthorized });
   const verification = {
@@ -154,11 +146,9 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
           hint={
             propertyList.error
               ? propertyList.error.message
-              : setup.data
-                ? `건물 ${setup.data.buildings.length}개`
-                : propertyTotal != null
-                  ? `호실 ${propertyTotal}`
-                  : '불러오는 중'
+              : propertyTotal != null
+                ? `호실 ${propertyTotal}`
+                : '불러오는 중'
           }
           hintTone={propertyList.error ? 'crit' : 'neutral'}
         />
@@ -190,7 +180,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
                   </Badge>
                   <p className="mt-1.5 text-body font-semibold text-ink">계약 종료 예정 — 갱신하거나 퇴거를 준비하세요</p>
                   <p className="mt-0.5 text-chip text-ink-3">
-                    {getPropertyName(contract.property)} · <span className="font-num tabular-nums">{contract.endDate}</span> 종료
+                    {contract.property.displayName} · <span className="font-num tabular-nums">{contract.endDate}</span> 종료
                     · 보증금 <span className="font-num tabular-nums">{formatWon(contract.deposit)}</span>
                   </p>
                 </div>
@@ -232,7 +222,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-body font-medium text-ink">{event.title}</p>
-                    <p className="truncate text-chip text-ink-3">{getPropertyName(event.contract.property)}</p>
+                    <p className="truncate text-chip text-ink-3">{event.contract.property.displayName}</p>
                   </div>
                   <Badge tone={getDdayTone(days)} className="font-num tabular-nums">
                     {formatDday(days)}
@@ -277,7 +267,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
                         onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                         className="text-left font-medium text-ink hover:text-accent-strong"
                       >
-                        {getPropertyName(property)}
+                        {property.displayName}
                       </button>
                       {spec && <p className="font-num text-chip tabular-nums text-ink-3">{spec}</p>}
                     </td>

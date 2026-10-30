@@ -12,7 +12,6 @@ import {
 } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetContract } from '../hooks/useGetContract';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { usePostContract } from '../hooks/usePostContract';
@@ -33,7 +32,6 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
   const hookOptions = { onUnauthorized };
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
   const register = usePostContract(hookOptions);
-  const { getPropertyName } = useBuildingNames(hookOptions);
   const properties = propertyList.data?.items ?? [];
 
   const [propertyId, setPropertyId] = useState(previous?.property.id ?? initialPropertyId ?? '');
@@ -94,7 +92,7 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
             </option>
             {properties.map((item) => (
               <option key={item.id} value={item.id}>
-                {getPropertyName(item)} · {getPropertyStatusBadge(item.status).label}
+                {item.displayName} · {getPropertyStatusBadge(item.status).label}
               </option>
             ))}
           </select>
@@ -114,7 +112,7 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
           <div>
             <dt className="text-sub text-ink-3">호실</dt>
             <dd className="mt-0.5 flex items-center gap-2 text-body font-semibold text-ink">
-              {property ? getPropertyName(property) : '호실을 선택해 주세요'}
+              {property ? property.displayName : '호실을 선택해 주세요'}
               {property && (
                 <Badge tone={getPropertyStatusBadge(property.status).tone}>{getPropertyStatusBadge(property.status).label}</Badge>
               )}

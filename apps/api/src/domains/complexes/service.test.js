@@ -40,7 +40,7 @@ const OTHER_BD_MGT_SN = '1171010200100290000000001';
 
 const uniqueError =() => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-// complexes·address_search_results만 흉내 낸 메모리 DB
+// complexes·address_caches만 흉내 낸 메모리 DB
 const createFakeDb = () => {
   const db = { complexes: [], saved: new Map(), rawWrites: [], beforeCreate: null, kaptRows: [], kaptError: null, kaptQueries: 0 };
   let nextId = 1;

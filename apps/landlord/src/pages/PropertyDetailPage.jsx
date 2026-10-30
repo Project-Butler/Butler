@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetComplex } from '../hooks/useGetComplex';
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
@@ -472,7 +471,6 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   const property = propertyQuery.data;
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipQuery = useGetPropertyOwnership(property?.myRelation?.ownershipId, hookOptions);
-  const { getPropertyName } = useBuildingNames(hookOptions);
 
   const goBack = () => window.history.back();
 
@@ -495,7 +493,7 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   return (
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
-        title={getPropertyName(property)}
+        title={property.displayName}
         description={complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress}
         onBack={goBack}
         actions={
@@ -534,7 +532,7 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
               key={ownershipQuery.data.id}
               ownership={ownershipQuery.data}
               onSaved={ownershipQuery.refetch}
-              // 들어온 화면(건물 상세·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
+              // 들어온 화면(내 부동산·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
               onEnded={goBack}
               onUnauthorized={onUnauthorized}
             />

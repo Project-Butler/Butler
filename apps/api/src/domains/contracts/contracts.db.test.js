@@ -75,7 +75,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const view = await findPropertyForUser(user, property.id);
     assert.equal(view.status, 'LEASED');
     const setup = await findLandlordSetup(user);
-    assert.deepEqual(setup.steps[2], { key: 'CONTRACT', done: true, count: 1 });
+    assert.deepEqual(setup.steps[1], { key: 'CONTRACT', done: true, count: 1 });
     assert.equal(await prisma.activity.count({ where: { userId: user.id, type: 'CONTRACT_CREATED' } }), 1);
   });
 

@@ -20,7 +20,7 @@ export const findLandlordSetup = async (user) => {
   );
 
   return {
-    ...buildSetupSteps({ buildingCount: buildings.length, propertyCount, contractCount }),
+    ...buildSetupSteps({ propertyCount, contractCount }),
     buildings: buildings.map((building) => {
       const count = counts.get(building.complexId) ?? 0;
       return {

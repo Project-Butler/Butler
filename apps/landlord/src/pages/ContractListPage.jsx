@@ -3,7 +3,6 @@ import { Plus } from 'lucide-react';
 import { Badge, Button, Card, FilterChip } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetContractList } from '../hooks/useGetContractList';
 import {
   CONTRACT_FILTERS,
@@ -22,7 +21,6 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
     { status: filter.status, sort: 'endDate:asc', page, size: PAGE_SIZE },
     { onUnauthorized },
   );
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const items = data?.items ?? [];
 
   if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
@@ -71,7 +69,7 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('contractDetail', { contractId: contract.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3.5 font-semibold text-ink">{getPropertyName(contract.property)}</td>
+                <td className="px-5 py-3.5 font-semibold text-ink">{contract.property.displayName}</td>
                 <td className="px-3 py-3.5">
                   <div className="flex items-center gap-1.5">
                     <Badge tone={status.tone}>{status.label}</Badge>

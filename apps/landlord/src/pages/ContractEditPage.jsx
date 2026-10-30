@@ -11,7 +11,6 @@ import {
 } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetContract } from '../hooks/useGetContract';
 import { usePatchContract } from '../hooks/usePatchContract';
 import { getContractStatusBadge, isContractInProgress } from '../utils/contract';
@@ -31,7 +30,6 @@ const toChangedFields = (original, form, lockedFields) => {
 
 const ContractEditForm = ({ contract, onUnauthorized }) => {
   const patch = usePatchContract({ onUnauthorized });
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const [original] = useState(() => toContractForm(contract));
   const [form, setForm] = useState(original);
   const [serverFieldErrors, setServerFieldErrors] = useState({});
@@ -72,7 +70,7 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
         <div className="flex flex-col gap-1.5">
           <p className="text-label font-semibold text-ink">호실</p>
           <p className="flex items-center gap-2 rounded-input bg-surface-2 px-4 py-3 text-card text-ink-2">
-            {getPropertyName(contract.property)}
+            {contract.property.displayName}
             <Badge tone={status.tone}>{status.label}</Badge>
           </p>
           <p className="text-chip text-ink-3">호실은 바꿀 수 없어요. 다른 호실이라면 계약을 새로 등록해 주세요</p>

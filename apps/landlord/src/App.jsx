@@ -5,10 +5,7 @@ import { getMe, postLogin, postLogout } from '@butler/api-client';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
-import { BuildingDetailPage } from './pages/BuildingDetailPage';
-import { BuildingEditPage } from './pages/BuildingEditPage';
 import { BuildingListPage } from './pages/BuildingListPage';
-import { BuildingRegisterPage } from './pages/BuildingRegisterPage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
 import { ContractListPage } from './pages/ContractListPage';
@@ -27,14 +24,11 @@ import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
 // 화면 전환은 react-router(BrowserRouter)로 하고, 경로 표는 routes.js에 있다.
 // 화면 컴포넌트는 그대로 onNavigate(key, params, { replace })로 이동한다. navigate가 key를 경로로 바꿔 준다.
 
-// 하위 화면은 사이드바에서 '내 부동산'(건물 목록)을 선택된 메뉴로 보여 준다. 초기 세팅은 홈 아래.
+// 하위 화면은 사이드바에서 '내 부동산'을 선택된 메뉴로 보여 준다. 초기 세팅은 홈 아래.
 const NAV_KEY_BY_VIEW = {
   properties: 'buildingList',
   propertyDetail: 'buildingList',
   propertyRegister: 'buildingList',
-  buildingRegister: 'buildingList',
-  buildingEdit: 'buildingList',
-  buildingDetail: 'buildingList',
   contracts: 'leases',
   contractRegister: 'leases',
   contractEdit: 'leases',
@@ -46,10 +40,7 @@ const NAV_KEY_BY_VIEW = {
 const SUB_TITLE_BY_VIEW = {
   properties: '호실 목록',
   propertyDetail: '호실 상세',
-  propertyRegister: '호실 등록',
-  buildingRegister: '건물 등록',
-  buildingEdit: '건물 수정',
-  buildingDetail: '건물 상세',
+  propertyRegister: '부동산 등록',
   contracts: '계약 목록',
   contractRegister: '계약 등록',
   contractEdit: '계약 수정',
@@ -62,14 +53,9 @@ const SUB_TITLE_BY_VIEW = {
 const LOGIN_PATH = '/login';
 
 // 라우트 요소: 경로 파라미터를 화면 props로 옮긴다. id가 바뀌면 화면 상태를 새로 시작한다(key).
-const BuildingDetailRoute = (pageProps) => {
-  const { landlordBuildingId } = useParams();
-  return <BuildingDetailPage key={landlordBuildingId} landlordBuildingId={landlordBuildingId} {...pageProps} />;
-};
-
-const BuildingEditRoute = (pageProps) => {
-  const { landlordBuildingId } = useParams();
-  return <BuildingEditPage key={landlordBuildingId} landlordBuildingId={landlordBuildingId} {...pageProps} />;
+const BuildingListRoute = (pageProps) => {
+  const { state } = useLocation();
+  return <BuildingListPage params={{ notice: state?.notice }} {...pageProps} />;
 };
 
 const PropertyDetailRoute = (pageProps) => {
@@ -78,16 +64,9 @@ const PropertyDetailRoute = (pageProps) => {
 };
 
 const PropertyListRoute = (pageProps) => {
-  // 예전 소유 호실 등 관계별 호실 목록(건물 목록에서 들어온다)
+  // 예전 소유 호실 등 관계별 호실 목록(내 부동산에서 들어온다)
   const [searchParams] = useSearchParams();
   return <PropertyListPage relation={searchParams.get('relation') ?? 'OWNER'} {...pageProps} />;
-};
-
-const PropertyRegisterRoute = (pageProps) => {
-  const [searchParams] = useSearchParams();
-  const complexId = searchParams.get('complexId') ?? undefined;
-  // 건물(complexId)이 바뀌면 화면 상태를 새로 시작한다(key).
-  return <PropertyRegisterPage key={complexId ?? 'pick'} params={{ complexId }} {...pageProps} />;
 };
 
 const ContractRegisterRoute = (pageProps) => {
@@ -122,11 +101,6 @@ const LayoutWithBadges = ({ onUnauthorized, ...layoutProps }) => {
     refetch();
   }, [pathname, refetch]);
   return <LandlordLayout navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }} {...layoutProps} />;
-};
-
-const SetupRoute = (pageProps) => {
-  const { state } = useLocation();
-  return <SetupPage params={{ notice: state?.notice }} {...pageProps} />;
 };
 
 export const App = () => {
@@ -229,18 +203,15 @@ export const App = () => {
         <Routes>
           <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
           <Route path={HOME_PATH} element={<LandlordDashboard {...pageProps} />} />
-          <Route path="/buildings"element={<BuildingListPage {...pageProps} />} />
-          <Route path="/buildings/new" element={<BuildingRegisterPage user={user} params={{}} {...pageProps} />} />
-          <Route path="/buildings/:landlordBuildingId" element={<BuildingDetailRoute {...pageProps} />} />
-          <Route path="/buildings/:landlordBuildingId/edit" element={<BuildingEditRoute {...pageProps} />} />
+          <Route path="/buildings" element={<BuildingListRoute {...pageProps} />} />
           <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
-          <Route path="/properties/new" element={<PropertyRegisterRoute {...pageProps} />} />
+          <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
           <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
           <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
           <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
           <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
           <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
-          <Route path="/setup" element={<SetupRoute {...pageProps} />} />
+          <Route path="/setup" element={<SetupPage {...pageProps} />} />
           {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
           <Route path="/disputes/chat" element={<DisputeChatPage />} />
           <Route path="/disputes" element={<DisputePage {...pageProps} />}>

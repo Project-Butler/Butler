@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetContract } from '../hooks/useGetContract';
 import { usePostContractTermination } from '../hooks/usePostContractTermination';
 import { formatDateKST } from '../utils/format';
@@ -30,7 +29,7 @@ const InfoRow = ({ label, children, numeric = false }) => (
   </div>
 );
 
-// 해지(S-05): [해지하기] → 해지일·사유 + 안내 → [취소]·[해지] 2단계(BuildingEditPage 건물 삭제와 같은 방식, 빨강 없음).
+// 해지(S-05): [해지하기] → 해지일·사유 + 안내 → [취소]·[해지] 2단계(빨강 없음).
 // 해지일은 오늘과 종료일 중 이른 날까지(D-15). 시작 전 계약은 시작일 전으로 해지하면 취소와 같다.
 const TerminationCard = ({ contract, onTerminated, onUnauthorized }) => {
   const terminate = usePostContractTermination({ onUnauthorized });
@@ -115,7 +114,6 @@ const TerminationCard = ({ contract, onTerminated, onUnauthorized }) => {
 // 임차인 초대 영역은 보류(D-18).
 export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) => {
   const contractQuery = useGetContract(contractId, { onUnauthorized });
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
   const contract = contractQuery.data;
 
   if (!contract) {
@@ -139,7 +137,7 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
   return (
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
-        title={getPropertyName(contract.property)}
+        title={contract.property.displayName}
         description={`${contract.tenantName} · ${getLeaseTypeLabel(contract.leaseType)} 계약`}
         onBack={() => window.history.back()}
         actions={
@@ -178,7 +176,7 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
                 onClick={() => onNavigate('propertyDetail', { propertyId: contract.property.id })}
                 className="text-left font-medium text-ink hover:text-accent-strong"
               >
-                {getPropertyName(contract.property)}
+                {contract.property.displayName}
               </button>
             </InfoRow>
             <InfoRow label="유형">{getLeaseTypeLabel(contract.leaseType)}</InfoRow>
