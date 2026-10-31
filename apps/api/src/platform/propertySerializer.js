@@ -17,6 +17,7 @@ export const toPropertySummary = (property) => ({
     id: property.complex.id,
     name: property.complex.name,
     legalDongCode: property.complex.regionId,
+    roadAddress: property.complex.roadAddress ?? null,
   },
   buildingNo: property.buildingNo,
   unitNo: property.unitNo,

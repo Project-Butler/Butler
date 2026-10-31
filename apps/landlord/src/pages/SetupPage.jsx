@@ -11,8 +11,7 @@ const ACTIVITY_SIZE = 10;
 
 // STEP 키(GET /dashboard/landlord/setup steps[].key) → 화면 문구와 이동할 곳
 const STEP_INFO = {
-  BUILDING: { title: '건물 등록', desc: '도로명주소로 건물을 등록해요', action: { label: '건물 등록', view: 'buildingRegister' } },
-  PROPERTY: { title: '호실 등록', desc: '건물에 호실을 추가해요', action: { label: '호실 등록', view: 'propertyRegister' } },
+  PROPERTY: { title: '부동산 등록', desc: '주소와 동·호로 호실을 등록해요', action: { label: '부동산 등록', view: 'propertyRegister' } },
   CONTRACT: { title: '계약 등록', desc: '임대차 계약을 등록해요' },
   TENANT_INVITE: { title: '임차인 초대', desc: '임차인을 버틀러로 초대해요' },
   OPERATION_CHECK: { title: '운영 점검', desc: '앞 단계를 마치면 열려요' },
@@ -50,9 +49,8 @@ const StepCard = ({ index, step, onNavigate }) => {
   );
 };
 
-// 초기 세팅(Landly /setup): 진행률, STEP 카드, 건물별 등록 호실, 최근 활동 10개.
-// params.notice: 호실 저장 직후 안내(이미 등록된 면적·층을 썼을 때 등).
-export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
+// 초기 세팅(Landly /setup): 진행률, STEP 카드, 최근 활동 10개.
+export const SetupPage = ({ onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
   const activities = useGetActivityList({ size: ACTIVITY_SIZE }, { onUnauthorized });
   const data = setup.data;
@@ -61,9 +59,8 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
         title="초기 세팅"
-        description="건물과 호실을 등록하고, 계약·임차인 초대까지 마치면 운영을 시작할 수 있어요."
+        description="부동산을 등록하고, 계약·임차인 초대까지 마치면 운영을 시작할 수 있어요."
       />
-      {params.notice && <NoticeBox tone="info">{params.notice}</NoticeBox>}
       {setup.error && <NoticeBox>{setup.error.message}</NoticeBox>}
 
       <Card className="space-y-3 p-6">
@@ -98,43 +95,22 @@ export const SetupPage = ({ params, onNavigate, onUnauthorized }) => {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
-        <Card className="space-y-3 p-6">
-          <h2 className="text-section font-semibold text-ink">건물별 등록 호실</h2>
-          {data?.buildings.length === 0 && <p className="text-body text-ink-3">등록한 건물이 없습니다</p>}
-          <ul className="divide-y divide-line">
-            {data?.buildings.map((building) => (
-              <li key={building.id}>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('buildingDetail', { landlordBuildingId: building.id })}
-                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:text-accent-strong"
-                >
-                  <span className="min-w-0 truncate text-body font-medium text-ink">{building.name}</span>
-                  <span className="shrink-0 font-num text-sub tabular-nums text-ink-2">{building.propertyCount}개</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="space-y-3 p-6">
-          <h2 className="text-section font-semibold text-ink">최근 활동</h2>
-          {activities.error && <NoticeBox>{activities.error.message}</NoticeBox>}
-          {activities.data?.length === 0 && <p className="text-body text-ink-3">아직 활동이 없습니다</p>}
-          <ul className="space-y-3">
-            {activities.data?.map((activity) => (
-              <li key={activity.id} className="flex gap-3">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                <div className="min-w-0">
-                  <p className="font-num text-chip text-ink-3">{formatDateKST(activity.createdAt)}</p>
-                  <p className="text-body text-ink-2">{formatActivity(activity)}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+      <Card className="space-y-3 p-6">
+        <h2 className="text-section font-semibold text-ink">최근 활동</h2>
+        {activities.error && <NoticeBox>{activities.error.message}</NoticeBox>}
+        {activities.data?.length === 0 && <p className="text-body text-ink-3">아직 활동이 없습니다</p>}
+        <ul className="space-y-3">
+          {activities.data?.map((activity) => (
+            <li key={activity.id} className="flex gap-3">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+              <div className="min-w-0">
+                <p className="font-num text-chip text-ink-3">{formatDateKST(activity.createdAt)}</p>
+                <p className="text-body text-ink-2">{formatActivity(activity)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   );
 };

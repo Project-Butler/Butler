@@ -16,6 +16,9 @@
     "import:kapt-basis": "node prisma/importKaptBasis.js",
     "import:juso-buildings": "node --max-old-space-size=4096 prisma/importJusoBuildings.js",
     "apply:juso-changes": "node prisma/applyJusoChanges.js",
+    "apply:juso-link": "node prisma/applyJusoLink.js",
+    "juso-link:cutover": "node prisma/jusoLinkCutover.js",
+    "juso-link:drift": "node --max-old-space-size=4096 prisma/jusoLinkDrift.js",
     "test:e2e": "node --test --test-concurrency=1 e2e/*.e2e.mjs",
     "embed:disputes": "node prisma/embedDisputes.js"
   },
