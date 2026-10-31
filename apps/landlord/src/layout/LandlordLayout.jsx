@@ -1,5 +1,5 @@
 import { AppShell } from '@butler/ui';
-import { Bot, Building2, ClipboardList, FileSignature, FolderOpen, Home, Settings, Users, Wrench } from 'lucide-react';
+import { Building2, ClipboardList, FileSignature, FolderOpen, Home, Scale, Settings, Users, Wrench } from 'lucide-react';
 
 const NAV_ITEMS = [
   { key: 'home', label: '홈', icon: Home },
@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { key: 'log', label: '관리 로그', icon: ClipboardList },
   { key: 'documents', label: '문서', icon: FolderOpen },
   { key: 'community', label: '커뮤니티', icon: Users },
-  { key: 'disputes', label: 'AI 상담', icon: Bot },
+  { key: 'disputes', label: '임대차 분쟁', icon: Scale },
 ];
 
 const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };

@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ExternalLink, FileText } from 'lucide-react';
+import { ChevronRight, ExternalLink, FileText } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
+import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetDisputeReference } from '../hooks/useGetDisputeReference';
 import { useGetDisputeRelatedReferences } from '../hooks/useGetDisputeRelatedReferences';
 import {
@@ -25,7 +26,7 @@ const Section = ({ title, children }) => (
 // 사례 상세: 본문을 구간(상황·주장·쟁점·검토)별 카드로 나누고, 결과·출처·관련 자료를 이어 보여 준다.
 export const DisputeReferenceDetailPage = () => {
   const { referenceId } = useParams();
-  const { askAi, openReference, goBack, onUnauthorized } = useOutletContext();
+  const { askAi, isAiDocked, setAiSuggestions, openReference, goBack, onUnauthorized } = useOutletContext();
   const detail = useGetDisputeReference(referenceId);
   const related = useGetDisputeRelatedReferences(referenceId);
 
@@ -40,19 +41,15 @@ export const DisputeReferenceDetailPage = () => {
 
   const reference = detail.data;
 
+  // 오른쪽 AI: 이 자료를 읽다가 바로 물어볼 질문
+  useEffect(() => {
+    if (!reference) return;
+    setAiSuggestions?.([`"${reference.title}"을(를) 쉽게 풀어 설명해 주세요`, toApplyQuestion(reference).trim()]);
+  }, [reference, setAiSuggestions]);
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={goBack}
-          aria-label="뒤로"
-          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-input text-ink transition-colors hover:bg-surface-2"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <p className="text-card font-semibold text-ink">사례 상세</p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader title="사례 상세" onBack={goBack} />
 
       {detail.isLoading && <p className="py-6 text-center text-body text-ink-3">자료를 불러오는 중…</p>}
 
@@ -69,8 +66,11 @@ export const DisputeReferenceDetailPage = () => {
               <Badge>{TYPE_LABELS[reference.type] ?? '참고자료'}</Badge>
               <Badge>{CATEGORY_LABELS[reference.category]}</Badge>
             </div>
-            <h2 className="break-keep text-page-sm font-bold text-ink">{reference.title}</h2>
-            <p className="whitespace-pre-line text-body text-ink-2">{breakNumberedItems(reference.summary)}</p>
+            <h3 className="break-keep text-section font-semibold text-ink">{reference.title}</h3>
+            {/* 법령 조문은 요약과 본문이 같은 경우가 있어서, 같으면 본문 카드만 보여 준다. */}
+            {reference.summary.trim() !== reference.content.trim() && (
+              <p className="whitespace-pre-line text-body text-ink-2">{breakNumberedItems(reference.summary)}</p>
+            )}
           </div>
 
           {splitSections(reference.content, reference.type, { hasOutcome: Boolean(reference.outcome) }).map(({ title, body }, i) => (
@@ -153,11 +153,14 @@ export const DisputeReferenceDetailPage = () => {
 
           <LegalNotice />
 
-          <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
-            <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
-              내 상황에 적용해 보기
-            </Button>
-          </div>
+          {/* 넓은 화면은 오른쪽 AI 질문 칩에 같은 질문이 있어서, 좁은 화면에서만 아래 고정 버튼을 둔다. */}
+          {!isAiDocked && (
+            <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
+              <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
+                내 상황에 적용해 보기
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

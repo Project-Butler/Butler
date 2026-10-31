@@ -17,6 +17,8 @@ export const ROUTE_TABLE = [
   { key: 'setup', path: '/setup' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
+  { key: 'disputeSearch', path: '/disputes/search' },
+  { key: 'disputeTopic', path: '/disputes/topics/:topicKey' },
   { key: 'disputeReference', path: '/disputes/references/:referenceId' },
 ];
 
@@ -45,11 +47,18 @@ const BUILDERS = {
   propertyDetail: ({ propertyId }) => ({ pathname: `/properties/${propertyId}` }),
   // 안내 문구(notice)는 주소에 남기지 않고 history state로만 넘긴다(새로고침하면 사라진다).
   setup: ({ notice }) => ({ pathname: '/setup', state: notice ? { notice } : undefined }),
-  // 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
-  disputes: ({ topic, q, tab } = {}) => {
+  // 임대차 분쟁 센터 첫 화면(포털)
+  disputes: () => ({ pathname: '/disputes' }),
+  // 자료 찾기: 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
+  disputeSearch: ({ topic, q, tab } = {}) => {
     const search = new URLSearchParams(Object.entries({ topic, q, tab }).filter(([, value]) => value)).toString();
-    return { pathname: '/disputes', search: search ? `?${search}` : '' };
+    return { pathname: '/disputes/search', search: search ? `?${search}` : '' };
   },
+  // faq: 첫 화면 질문 칩에서 고른 자주 묻는 질문(상황 안내 맨 위에 펼친다)
+  disputeTopic: ({ topicKey, faq }) => ({
+    pathname: `/disputes/topics/${topicKey}`,
+    search: faq ? `?faq=${encodeURIComponent(faq)}` : '',
+  }),
   disputeReference: ({ referenceId }) => ({ pathname: `/disputes/references/${referenceId}` }),
   // 사례 상세에서 넘어온 질문(draft)은 setup의 notice처럼 history state로만 넘긴다.
   disputeChat: ({ draft }) => ({ pathname: '/disputes/chat', state: draft ? { draft } : undefined }),

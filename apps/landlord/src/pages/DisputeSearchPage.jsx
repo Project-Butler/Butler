@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
 import { Button, FilterChip, Pagination, SegmentedControl } from '@butler/ui';
-import { AskAiCard } from '../components/DisputeReference/AskAiCard';
 import { FaqList } from '../components/DisputeReference/FaqList';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
+import { PageHeader } from '../components/PageHeader/PageHeader';
 import { ReferenceCard } from '../components/DisputeReference/ReferenceCard';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
-import { TopicTile } from '../components/DisputeReference/TopicTile';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { DISPUTE_TOPICS, findTopic, REFERENCE_TYPES } from '../utils/disputeReference';
@@ -25,24 +23,24 @@ const REFERENCE_TYPE_VALUES = REFERENCE_TYPES.map(({ value }) => value);
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
-// 분쟁 해결사: 검색창 하나와 상황 칩으로 자주 묻는 질문과 사례·판례·가이드라인을 함께 찾는다.
-// 아무 조건이 없으면 상황 타일을 보여 주고, 조건이 생기면 같은 자리에 결과를 보여 준다(화면 이동 없음).
+// 자료 찾기: 검색창 하나와 상황 칩으로 자주 묻는 질문과 사례·판례·가이드라인을 함께 찾는다.
+// 조건이 없으면 전체 자료를 보여 준다(상황 고르기는 첫 화면 몫이라 여기에는 타일을 두지 않는다).
 // 조건(topic·q·tab)은 주소에 둬서 사례 상세에서 돌아와도 그대로 남는다.
 export const DisputeSearchPage = () => {
-  const { askAi, openReference, onUnauthorized } = useOutletContext();
+  const { askAi, setAiSuggestions, openReference, goBack, onUnauthorized } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const topic = findTopic(searchParams.get('topic'));
   const q = searchParams.get('q') ?? '';
   const tab = searchParams.get('tab') ?? ALL_TAB;
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const isIdle = !topic && !q;
 
   const [keyword, setKeyword] = useState(q);
   const resultsRef = useRef(null);
 
-  // 상황 선택·쪽 이동은 뒤로 가기로 되돌릴 수 있게 기록을 남기고(push), 글자 입력·탭은 덮어쓴다(replace).
+  // 칩·탭·검색어·쪽은 같은 화면 안의 필터라 기록을 쌓지 않고 주소만 바꾼다(replace).
+  // 그래서 [뒤로]는 칩을 몇 번 눌렀든 이 화면에 오기 전으로 가고, 사례 상세에서 돌아오면 마지막 조건이 그대로 남는다.
   // 쪽(page)을 직접 바꾸지 않는 변경은 조건이 바뀐 것이라 1쪽으로 돌아간다.
-  const updateParams = (changes, { push = false } = {}) =>
+  const updateParams = (changes) =>
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -53,7 +51,7 @@ export const DisputeSearchPage = () => {
         }
         return next;
       },
-      { replace: !push },
+      { replace: true },
     );
 
   // 새로 검색하면 고른 상황을 풀고 전체에서 찾는다(다른 내용을 찾으려고 칩을 직접 끌 필요가 없게).
@@ -77,14 +75,20 @@ export const DisputeSearchPage = () => {
     setKeyword((current) => (current.trim() === q ? current : q));
   }, [q]);
 
+  // 오른쪽 AI: 검색어가 있으면 그 말로 물어볼 질문, 없으면 기본 질문
+  useEffect(() => {
+    setAiSuggestions?.(q ? [`'${q}' 관련해서 제 상황을 물어보고 싶어요`, `'${q}'이(가) 무슨 뜻인지 쉽게 설명해 주세요`] : null);
+  }, [q, setAiSuggestions]);
+
   const category = topic ? topic.categories.join(',') : undefined;
   const faqs = useGetDisputeFaqList({ category, q: q || undefined });
-  // 처음 화면에서는 타일 숫자(유형별 자료 수)만 쓰려고 한 건만 받는다.
-  const list = useGetDisputeReferenceList(
-    isIdle
-      ? { size: 1 }
-      : { type: REFERENCE_TYPE_VALUES.includes(tab) ? tab : undefined, category, q: q || undefined, page, size: PAGE_SIZE },
-  );
+  const list = useGetDisputeReferenceList({
+    type: REFERENCE_TYPE_VALUES.includes(tab) ? tab : undefined,
+    category,
+    q: q || undefined,
+    page,
+    size: PAGE_SIZE,
+  });
 
   useEffect(() => {
     if (isUnauthorizedError(list.error) || isUnauthorizedError(faqs.error)) onUnauthorized?.();
@@ -94,7 +98,6 @@ export const DisputeSearchPage = () => {
   const references = list.data?.data ?? [];
   const meta = list.data?.meta;
   const countsByType = meta?.countsByType;
-  const countsByCategory = meta?.countsByCategory;
   const referenceTotal = countsByType ? sum(Object.values(countsByType)) : undefined;
   const isCounting = countsByType === undefined || faqs.data === undefined;
 
@@ -110,40 +113,18 @@ export const DisputeSearchPage = () => {
   const totalPages = meta ? Math.ceil(meta.total / PAGE_SIZE) : 0;
   const hasNoResult = !isCounting && faqItems.length + referenceTotal === 0;
 
-  // 검색어가 있으면 고른 칩을 다시 눌러 풀 수 있다. 검색어 없이 풀면 처음 화면으로 넘어가 버려서 그대로 둔다.
-  const selectTopic = (key) => {
-    if (topic?.key === key && !q) return;
-    updateParams({ topic: topic?.key === key ? null : key, tab: null }, { push: true });
-  };
-  const resetToTiles = () => {
-    setKeyword('');
-    updateParams({ topic: null, q: null, tab: null }, { push: true });
-  };
+  // 고른 칩을 다시 누르면 상황을 풀고 전체에서 본다.
+  const selectTopic = (key) => updateParams({ topic: topic?.key === key ? null : key, tab: null });
   const changePage = (nextPage) => {
-    updateParams({ page: nextPage > 1 ? String(nextPage) : null }, { push: true });
+    updateParams({ page: nextPage > 1 ? String(nextPage) : null });
     resultsRef.current?.scrollIntoView?.({ block: 'start' });
   };
 
-  const tileCount = (categories) =>
-    countsByCategory ? sum(categories.map((item) => countsByCategory[item] ?? 0)) : undefined;
-  const tileQuestion = (categories) => faqItems.find((faq) => categories.includes(faq.category))?.question;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      {/* 결과 화면의 [처음으로]는 제목 줄 오른쪽에 둬서, 생겨도 제목 위치·줄 높이(44)가 바뀌지 않게 한다. */}
-      <div className="flex min-h-11 items-center justify-between gap-3">
-        <h2 className="text-h1 font-semibold text-ink">분쟁 해결사</h2>
-        {!isIdle && (
-          <button
-            type="button"
-            onClick={resetToTiles}
-            className="-mr-2 flex min-h-11 shrink-0 items-center gap-1 rounded-input px-2 text-label font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <ChevronLeft size={16} />
-            처음으로
-          </button>
-        )}
-      </div>
+    <div className="flex flex-col gap-4">
+      {/* 다른 메뉴 화면과 같은 제목 줄(PageHeader). [뒤로]는 앱 안에서 왔으면 이전 화면, 주소로 바로 들어왔으면 임대차 분쟁 센터로 간다. */}
+      <PageHeader title="자료 찾기" onBack={goBack} />
 
       <SearchBox
         value={keyword}
@@ -155,135 +136,111 @@ export const DisputeSearchPage = () => {
         }}
       />
 
-      {/* 처음 화면에서는 같은 상황을 타일로 고르므로, 칩은 결과 화면에서 다른 상황으로 바꿀 때만 보여 준다. */}
-      {!isIdle && (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="상황">
-          {DISPUTE_TOPICS.map((item) => (
-            <FilterChip key={item.key} selected={topic?.key === item.key} onClick={() => selectTopic(item.key)}>
-              {item.label}
-            </FilterChip>
-          ))}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="상황">
+        {DISPUTE_TOPICS.map((item) => (
+          <FilterChip key={item.key} selected={topic?.key === item.key} onClick={() => selectTopic(item.key)}>
+            {item.label}
+          </FilterChip>
+        ))}
+      </div>
+
+      {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다. */}
+      <div ref={resultsRef} className="scroll-mt-4">
+        <SegmentedControl
+          ariaLabel="결과 종류"
+          value={tab}
+          onChange={(value) => updateParams({ tab: value === ALL_TAB ? null : value })}
+          options={tabs}
+        />
+      </div>
+
+      {(list.error || faqs.error) && !isUnauthorizedError(list.error) && !isUnauthorizedError(faqs.error) && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-card border border-crit bg-crit-soft px-4 py-3">
+          <p className="text-body text-crit-ink">{toApiError(list.error ?? faqs.error).message}</p>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              list.refetch();
+              faqs.refetch();
+            }}
+            className="min-h-11 shrink-0"
+          >
+            다시 시도
+          </Button>
         </div>
       )}
 
-      {isIdle ? (
-        <>
-          <h3 className="pt-2 text-section font-semibold text-ink">어떤 상황인가요?</h3>
-          <ul className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            {DISPUTE_TOPICS.map((item) => (
-              <li key={item.key}>
-                <TopicTile
-                  topic={item}
-                  count={tileCount(item.categories)}
-                  sampleQuestion={tileQuestion(item.categories)}
-                  onClick={() => selectTopic(item.key)}
-                />
+      {isCounting && !list.error && !faqs.error && (
+        <p className="py-6 text-center text-body text-ink-3">찾는 중…</p>
+      )}
+
+      {hasNoResult && (
+        <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-8 text-center">
+          <p className="text-card font-semibold text-ink">맞는 질문이나 사례를 찾지 못했어요</p>
+          <p className="mt-1 text-body text-ink-2">다른 단어로 찾아보거나, AI에게 상황을 물어보세요.</p>
+        </div>
+      )}
+
+      {shownFaqs.length > 0 && (
+        <section className="flex flex-col gap-2">
+          {tab === ALL_TAB && (
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-label font-semibold text-ink-2">
+                자주 묻는 질문 <span className="font-num tabular-nums">{faqItems.length}</span>
+              </h3>
+              {faqItems.length > FAQ_PREVIEW_COUNT && (
+                <button
+                  type="button"
+                  onClick={() => updateParams({ tab: FAQ_TAB })}
+                  className="min-h-11 px-1 text-label font-semibold text-accent hover:text-accent-strong"
+                >
+                  질문 모두 보기
+                </button>
+              )}
+            </div>
+          )}
+          <FaqList key={`${topic?.key}-${q}-${tab}`} faqs={shownFaqs} onOpenReference={openReference} />
+        </section>
+      )}
+
+      {tab === FAQ_TAB && !isCounting && faqItems.length === 0 && !hasNoResult && (
+        <p className="rounded-card border border-line bg-surface px-5 py-6 text-center text-body text-ink-2">
+          맞는 질문이 없어요. 사례·판례 탭을 확인해 보세요.
+        </p>
+      )}
+
+      {showReferences && references.length > 0 && (
+        <section className="flex flex-col gap-2">
+          {tab === ALL_TAB && (
+            <h3 className="pt-2 text-label font-semibold text-ink-2">
+              사례·판례·가이드라인 <span className="font-num tabular-nums">{referenceTotal}</span>
+            </h3>
+          )}
+          <ul className="flex flex-col gap-3">
+            {references.map((reference) => (
+              <li key={reference.id}>
+                <ReferenceCard reference={reference} onOpen={openReference} />
               </li>
             ))}
           </ul>
-          <AskAiCard onClick={() => askAi()} />
-        </>
-      ) : (
-        <>
-          {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다. */}
-          <div ref={resultsRef} className="scroll-mt-4">
-            <SegmentedControl
-              ariaLabel="결과 종류"
-              value={tab}
-              onChange={(value) => updateParams({ tab: value === ALL_TAB ? null : value })}
-              options={tabs}
-            />
-          </div>
-
-          {(list.error || faqs.error) && !isUnauthorizedError(list.error) && !isUnauthorizedError(faqs.error) && (
-            <div role="alert" className="flex items-center justify-between gap-3 rounded-card border border-crit bg-crit-soft px-4 py-3">
-              <p className="text-body text-crit-ink">{toApiError(list.error ?? faqs.error).message}</p>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  list.refetch();
-                  faqs.refetch();
-                }}
-                className="min-h-11 shrink-0"
-              >
-                다시 시도
-              </Button>
+          {totalPages > 1 && (
+            <div className="mt-1 flex flex-col items-center gap-1">
+              <p className="font-num text-sub tabular-nums text-ink-3">
+                총 {meta.total}건 중 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, meta.total)}
+              </p>
+              <Pagination page={page} totalPages={totalPages} onChange={changePage} ariaLabel="자료 쪽 이동" />
             </div>
           )}
-
-          {isCounting && !list.error && !faqs.error && (
-            <p className="py-6 text-center text-body text-ink-3">찾는 중…</p>
-          )}
-
-          {hasNoResult && (
-            <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-8 text-center">
-              <p className="text-card font-semibold text-ink">맞는 질문이나 사례를 찾지 못했어요</p>
-              <p className="mt-1 text-body text-ink-2">다른 단어로 찾아보거나, AI에게 상황을 물어보세요.</p>
-            </div>
-          )}
-
-          {shownFaqs.length > 0 && (
-            <section className="flex flex-col gap-2">
-              {tab === ALL_TAB && (
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-label font-semibold text-ink-2">
-                    자주 묻는 질문 <span className="font-num tabular-nums">{faqItems.length}</span>
-                  </h3>
-                  {faqItems.length > FAQ_PREVIEW_COUNT && (
-                    <button
-                      type="button"
-                      onClick={() => updateParams({ tab: FAQ_TAB })}
-                      className="min-h-11 px-1 text-label font-semibold text-accent hover:text-accent-strong"
-                    >
-                      질문 모두 보기
-                    </button>
-                  )}
-                </div>
-              )}
-              <FaqList key={`${topic?.key}-${q}-${tab}`} faqs={shownFaqs} onOpenReference={openReference} />
-            </section>
-          )}
-
-          {tab === FAQ_TAB && !isCounting && faqItems.length === 0 && !hasNoResult && (
-            <p className="rounded-card border border-line bg-surface px-5 py-6 text-center text-body text-ink-2">
-              맞는 질문이 없어요. 사례·판례 탭을 확인해 보세요.
-            </p>
-          )}
-
-          {showReferences && references.length > 0 && (
-            <section className="flex flex-col gap-2">
-              {tab === ALL_TAB && (
-                <h3 className="pt-2 text-label font-semibold text-ink-2">
-                  사례·판례·가이드라인 <span className="font-num tabular-nums">{referenceTotal}</span>
-                </h3>
-              )}
-              <ul className="flex flex-col gap-3">
-                {references.map((reference) => (
-                  <li key={reference.id}>
-                    <ReferenceCard reference={reference} onOpen={openReference} />
-                  </li>
-                ))}
-              </ul>
-              {totalPages > 1 && (
-                <div className="mt-1 flex flex-col items-center gap-1">
-                  <p className="font-num text-sub tabular-nums text-ink-3">
-                    총 {meta.total}건 중 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, meta.total)}
-                  </p>
-                  <Pagination page={page} totalPages={totalPages} onChange={changePage} ariaLabel="자료 쪽 이동" />
-                </div>
-              )}
-            </section>
-          )}
-
-          <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
-            <p className="text-card font-semibold text-ink">찾는 내용이 없나요?</p>
-            <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 비슷한 사례를 찾아 정리해 드려요.</p>
-            <Button onClick={() => askAi(q)} className="mt-4 min-h-11 px-5">
-              AI에게 물어보기
-            </Button>
-          </div>
-        </>
+        </section>
       )}
+
+      <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
+        <p className="text-card font-semibold text-ink">찾는 내용이 없나요?</p>
+        <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 비슷한 사례를 찾아 정리해 드려요.</p>
+        <Button onClick={() => askAi(q)} className="mt-4 min-h-11 px-5">
+          AI에게 물어보기
+        </Button>
+      </div>
 
       <LegalNotice />
     </div>
