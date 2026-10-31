@@ -1,7 +1,11 @@
-import { DisputeCategory, DisputeReferenceType } from '@prisma/client';
+import { DisputeCategory, DisputeReferenceType, Prisma } from '@prisma/client';
 import { prisma } from '../../platform/prismaClient.js';
+import { findSynonyms, replaceSearchWord } from './searchSynonyms.js';
+import { toSourceUrl } from './sourceLinks.js';
 
 export const SORTABLE_FIELDS = ['createdAt', 'title', 'sourcePage'];
+// 관련도 순은 컬럼이 아니라 검색어로 계산한 점수라 검색어가 있을 때만 쓴다(controller.js).
+export const RELEVANCE_SORT_FIELD = 'relevance';
 // Prisma는 nullable 컬럼에만 nulls 옵션을 받는다.
 const NULLABLE_SORT_FIELDS = ['sourcePage'];
 
@@ -22,17 +26,56 @@ const LIST_SELECT = {
   keywords: true,
   sourceTitle: true,
   sourcePage: true,
+  // 원문 링크(sourceUrl)를 만드는 데만 쓰고 응답에서는 뺀다(toListItem).
+  sourceKey: true,
+  caseNumber: true,
 };
 
-const buildKeywordWhere = (keyword) => ({
-  OR: [
-    { title: { contains: keyword, mode: 'insensitive' } },
-    { summary: { contains: keyword, mode: 'insensitive' } },
-    { content: { contains: keyword, mode: 'insensitive' } },
-    { outcome: { contains: keyword, mode: 'insensitive' } },
-    { keywords: { has: keyword } },
-  ],
+const toListItem = ({ sourceKey, caseNumber, ...item }) => ({
+  ...item,
+  sourceUrl: toSourceUrl({ sourceKey, title: item.title, caseNumber }),
 });
+
+// 검색어를 공백으로 나눈 단어 목록(중복 제거). "보증금 반환"은 ['보증금', '반환'].
+export const toSearchTerms = (keyword) => [...new Set(keyword.split(/\s+/).filter(Boolean))];
+
+// 비용을 뜻하는 끝말. 자료에는 "도배비"보다 "도배·장판", "도배 35만 원"처럼 쓰인 경우가 많아서
+// 이 끝말로 끝나는 단어는 끝말을 뗀 말로도 찾는다. 긴 끝말을 먼저 본다("도배비용"은 "도배").
+const COST_SUFFIXES = ['비용', '비'];
+// 남는 말이 한 글자면 떼지 않는다("준비"→"준", "설비"→"설"처럼 뜻이 없어지는 경우를 막는다).
+const MIN_STEM_LENGTH = 2;
+
+const stripCostSuffix = (term) => {
+  const suffix = COST_SUFFIXES.find((candidate) => term.endsWith(candidate));
+  const stem = suffix ? term.slice(0, -suffix.length) : '';
+  return stem.length >= MIN_STEM_LENGTH ? [term, stem] : [term];
+};
+
+// 단어 하나로 찾을 말과 점수 배율: 입력한 말(바꿔 찾기·비용 끝말을 뗀 말 포함)은 2배, 그 동의어(searchSynonyms.js)는 1배.
+// 동의어로만 맞은 자료가 입력한 말이 그대로 있는 자료를 앞지르지 않게 한다.
+const toWeightedVariants = (term) => {
+  const words = [...new Set(replaceSearchWord(term).flatMap(stripCostSuffix))];
+  const synonyms = [...new Set(words.flatMap(findSynonyms))].filter((synonym) => !words.includes(synonym));
+  return [...words.map((text) => ({ text, factor: 2 })), ...synonyms.map((text) => ({ text, factor: 1 }))];
+};
+
+// 단어 하나로 찾을 말 목록: 단어 그대로 + 비용 끝말을 뗀 말 + 그 둘의 동의어.
+// "도배비"는 ['도배비', '도배'], "월세"는 ['월세', '차임', '임대료'], "수리비"는 ['수리비', '수리', '수선'].
+export const toTermVariants = (term) => toWeightedVariants(term).map(({ text }) => text);
+
+const buildTermWhere = (term) => ({
+  OR: toTermVariants(term).flatMap((text) => [
+    { title: { contains: text, mode: 'insensitive' } },
+    { summary: { contains: text, mode: 'insensitive' } },
+    { content: { contains: text, mode: 'insensitive' } },
+    { outcome: { contains: text, mode: 'insensitive' } },
+    { keywords: { has: text } },
+  ]),
+});
+
+// 단어마다 제목·요약·본문·결과·키워드 중 한 곳에 있으면 되고(비용 끝말을 뗀 말·동의어도 인정), 모든 단어가 있어야 한다(AND).
+// 단어가 서로 다른 필드에 있어도 된다. 예: "보증금 반환"은 "보증금을 반환하지 않아…"에도 걸린다.
+const buildKeywordWhere = (keyword) => ({ AND: toSearchTerms(keyword).map(buildTermWhere) });
 
 const buildWhere = ({ propertyKind, ...exactFilters }, keyword) => {
   const conditions = [exactFilters];
@@ -45,20 +88,75 @@ const buildWhere = ({ propertyKind, ...exactFilters }, keyword) => {
 const toCounts = (values, groups, field) =>
   Object.fromEntries(values.map((value) => [value, groups.find((group) => group[field] === value)?._count._all ?? 0]));
 
+// 관련도 점수: 단어가 어느 필드에 있는지에 따라 더한다(제목 > 요약·키워드 > 본문·결과).
+// 비용 끝말을 뗀 말·동의어도 따로 더한다 — 같은 필드라면 "도배비"가 그대로 있는 자료가 "도배"로도 점수를 받아 "도배"만 있는 자료보다 앞선다.
+// 입력한 말은 2배, 동의어는 1배로 더한다(toWeightedVariants).
+// 단어가 둘 이상이고 검색어가 띄어 쓴 그대로 붙어 있으면 입력한 말과 같은 배율로 한 번 더 더한다.
+const RELEVANCE_WEIGHTS = { title: 3, summary: 2, keywords: 2, content: 1, outcome: 1 };
+
+// ILIKE에서 %, _, \는 특수 문자라 글자 그대로 찾도록 이스케이프한다(Prisma contains와 같은 결과).
+const escapeLike = (text) => text.replace(/[\\%_]/g, (char) => `\\${char}`);
+const ilikeScore = (column, text, weight) =>
+  Prisma.sql`(CASE WHEN ${Prisma.raw(column)} ILIKE ${`%${escapeLike(text)}%`} THEN ${weight} ELSE 0 END)`;
+
+const buildTextScore = (text, factor) =>
+  Prisma.join(
+    [
+      ilikeScore('title', text, RELEVANCE_WEIGHTS.title * factor),
+      ilikeScore('summary', text, RELEVANCE_WEIGHTS.summary * factor),
+      ilikeScore('content', text, RELEVANCE_WEIGHTS.content * factor),
+      ilikeScore("coalesce(outcome, '')", text, RELEVANCE_WEIGHTS.outcome * factor),
+    ],
+    ' + ',
+  );
+
+const PHRASE_FACTOR = 2;
+
+const buildRelevanceScore = (keyword) => {
+  const terms = toSearchTerms(keyword);
+  const scores = terms.flatMap(toWeightedVariants).map(
+    ({ text, factor }) =>
+      Prisma.sql`${buildTextScore(text, factor)} + (CASE WHEN ${text} = ANY(keywords) THEN ${RELEVANCE_WEIGHTS.keywords * factor} ELSE 0 END)`,
+  );
+  if (terms.length > 1) scores.push(buildTextScore(terms.join(' '), PHRASE_FACTOR));
+  return Prisma.join(scores, ' + ');
+};
+
+// 검색 조건에 맞는 id 중 한 페이지를 점수 순으로 고른다. 점수가 같으면 id 순서로 페이지마다 순서를 고정한다.
+const findPageIdsByRelevance = async (ids, keyword, direction, page, size) => {
+  if (ids.length === 0) return [];
+  const rows = await prisma.$queryRaw`
+    SELECT id FROM dispute_references
+    WHERE id = ANY(${ids}::uuid[])
+    ORDER BY ${buildRelevanceScore(keyword)} ${direction === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`}, id ASC
+    LIMIT ${size} OFFSET ${(page - 1) * size}`;
+  return rows.map((row) => row.id);
+};
+
+const findReferencePageByRelevance = async (matchedIds, keyword, { direction }, page, size) => {
+  const pageIds = await findPageIdsByRelevance(matchedIds, keyword, direction, page, size);
+  const items = await prisma.disputeReference.findMany({ where: { id: { in: pageIds } }, select: LIST_SELECT });
+  return pageIds.map((id) => toListItem(items.find((item) => item.id === id)));
+};
+
 export const findReferences = async ({ filters, keyword, page, size, orderBy }) => {
   const where = buildWhere(filters, keyword);
   const { type: _type, category, ...baseFilters } = filters;
+  // 관련도 순이면 조건에 맞는 id만 먼저 받고, 점수 계산·페이지 자르기는 SQL로 한다.
+  const byRelevance = orderBy.field === RELEVANCE_SORT_FIELD;
 
   // 화면 숫자용 개수. 종류 탭(countsByType)은 고른 종류만 빼고, 상황 타일(countsByCategory)은
   // 종류·유형을 둘 다 빼고 같은 검색 조건으로 센다.
-  const [items, total, typeGroups, categoryGroups] = await prisma.$transaction([
-    prisma.disputeReference.findMany({
-      where,
-      select: LIST_SELECT,
-      orderBy: buildOrderBy(orderBy),
-      skip: (page - 1) * size,
-      take: size,
-    }),
+  const [found, total, typeGroups, categoryGroups] = await prisma.$transaction([
+    byRelevance
+      ? prisma.disputeReference.findMany({ where, select: { id: true } })
+      : prisma.disputeReference.findMany({
+          where,
+          select: LIST_SELECT,
+          orderBy: buildOrderBy(orderBy),
+          skip: (page - 1) * size,
+          take: size,
+        }),
     prisma.disputeReference.count({ where }),
     prisma.disputeReference.groupBy({
       by: ['type'],
@@ -73,6 +171,16 @@ export const findReferences = async ({ filters, keyword, page, size, orderBy }) 
       orderBy: { category: 'asc' },
     }),
   ]);
+
+  const items = byRelevance
+    ? await findReferencePageByRelevance(
+        found.map((reference) => reference.id),
+        keyword,
+        orderBy,
+        page,
+        size,
+      )
+    : found.map(toListItem);
 
   return {
     items,
@@ -95,6 +203,7 @@ export const findReferenceById = async (referenceId) => {
   const { embedding: _embedding, ...reference } = found;
   return {
     ...reference,
+    sourceUrl: toSourceUrl(reference),
     createdAt: reference.createdAt.toISOString(),
     updatedAt: reference.updatedAt.toISOString(),
   };
@@ -118,20 +227,24 @@ export const findReferenceForRelated = (referenceId) =>
   });
 
 // 관련 자료 후보(기준 자료 제외). 목록과 같은 필드에 유사도 계산용 임베딩을 더한다.
-export const findRelatedCandidates = (excludeId) =>
-  prisma.disputeReference.findMany({
+export const findRelatedCandidates = async (excludeId) => {
+  const candidates = await prisma.disputeReference.findMany({
     where: { id: { not: excludeId }, embedding: { isEmpty: false } },
     select: { ...LIST_SELECT, embedding: true },
   });
+  return candidates.map(toListItem);
+};
 
 // 임베딩이 아직 없을 때(embed:disputes 실행 전) 쓰는 대체: 같은 분쟁 유형의 최근 자료.
-export const findSameCategoryReferences = ({ excludeId, category, limit }) =>
-  prisma.disputeReference.findMany({
+export const findSameCategoryReferences = async ({ excludeId, category, limit }) => {
+  const references = await prisma.disputeReference.findMany({
     where: { id: { not: excludeId }, category },
     select: LIST_SELECT,
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     take: limit,
   });
+  return references.map(toListItem);
+};
 
 // ===== 분쟁 상담 챗봇 =====
 

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, FileText } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { useGetDisputeReference } from '../hooks/useGetDisputeReference';
@@ -103,6 +103,23 @@ export const DisputeReferenceDetailPage = () => {
                   {reference.sourcePage && <span className="font-num tabular-nums"> p.{reference.sourcePage}</span>}
                 </dd>
               </div>
+              {reference.sourceUrl && (
+                <div className="flex gap-3">
+                  <dt className="w-16 shrink-0 text-ink-3">원문</dt>
+                  <dd>
+                    <a
+                      href={reference.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-accent underline hover:text-accent-strong"
+                    >
+                      원문 보기
+                      <ExternalLink size={14} aria-hidden="true" />
+                      <span className="sr-only">(새 탭)</span>
+                    </a>
+                  </dd>
+                </div>
+              )}
             </dl>
           </section>
 
