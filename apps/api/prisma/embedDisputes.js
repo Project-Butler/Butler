@@ -1,8 +1,12 @@
 // 분쟁 참고자료(DisputeReference)의 임베딩을 계산해 저장한다. 챗봇 RAG 검색에 쓴다.
-// seed:disputes 다음에 실행한다. 매번 전체를 다시 계산한다(사례집 171건 + 판례 1,152건 + 법령 130건 + 서울시 가이드북 30건 + 상담사례집 211건 + 국토부 사례집 58건, Gemini 임베딩 API로 몇 분 걸린다).
+// seed:disputes 다음에 실행한다. 매번 다시 계산한다(사례집 171건 + 판례 1,152건 + 법령 130건 + 서울시 가이드북 30건 + 상담사례집 211건 + 국토부 사례집 58건, Gemini 임베딩 API로 몇 분 걸린다).
+// 챗봇용 자료(CHATBOT_JSON_PATHS)만 임베딩한다 — 나머지 판례(precedents-all.json에만 있는 것)는 일반 검색에만 쓰고,
+// 챗봇·관련 자료는 임베딩이 있는 자료만 읽으므로 여기에 걸리지 않는다.
 // 실행: npm run embed:disputes -w apps/api
 import '../src/loadEnv.js';
 import { PrismaClient } from '@prisma/client';
+import { readFileSync } from 'fs';
+import { CHATBOT_JSON_PATHS } from './disputeSeedFiles.js';
 import { EMBEDDING_MODEL, embedPassages } from '../src/domains/disputes/embedder.js';
 
 const prisma = new PrismaClient();
@@ -27,7 +31,11 @@ const toPassage = (reference) =>
   [reference.title, reference.summary, reference.keywords.join(', '), CATEGORY_LABELS[reference.category]].join('\n');
 
 const main = async () => {
+  const sourceKeys = CHATBOT_JSON_PATHS.flatMap((jsonPath) =>
+    JSON.parse(readFileSync(jsonPath, 'utf-8')).map((row) => row.sourceKey),
+  );
   const references = await prisma.disputeReference.findMany({
+    where: { sourceKey: { in: sourceKeys } },
     select: { id: true, title: true, summary: true, keywords: true, category: true },
     orderBy: { sourceKey: 'asc' },
   });
