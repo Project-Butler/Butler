@@ -14,6 +14,7 @@
     "sync:kapt": "node prisma/syncKaptComplexes.js",
     "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
     "import:kapt-basis": "node prisma/importKaptBasis.js",
+    "refresh:kapt-basis": "node prisma/refreshKaptBasis.js",
     "import:juso-buildings": "node --max-old-space-size=4096 prisma/importJusoBuildings.js",
     "apply:juso-changes": "node prisma/applyJusoChanges.js",
     "apply:juso-link": "node prisma/applyJusoLink.js",
@@ -30,12 +31,12 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "exceljs": "^4.4.0",
     "nodemon": "^3.1.7",
     "prisma": "^5.20.0"
   },

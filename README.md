@@ -84,7 +84,16 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 ## 참고 데이터 처음 적재 (A팀만)
 단지 검색의 K-apt 단지명·분양형태와 단지 `kaptCode`는 참고 데이터 표(`kapt_complexes`, `kapt_address_links`, `juso_building_links`)에서 나온다. 처음 한 번 A팀이 로컬에서 전체를 적재하고, 그 뒤로는 Vercel cron이 갱신한다(주간 `/api/cron/kapt-complexes` 목록 동기화, 매일 `/api/cron/reference-data` juso 변동·새 K-apt 단지).
 - juso 쪽(`juso_building_links`)은 매일 변동만 받아 적용하므로 **분기 전체 재적재는 하지 않는다**. 전체분 적재(4번)는 처음 한 번, 사고 복구, 아래 드리프트 점검에서 권할 때만 한다.
-- K-apt 기본정보 엑셀(2번)은 지금처럼 분기마다 한 번(1·4·7·10월 첫 주) 다시 넣는다.
+- K-apt 기본정보 엑셀(2번)은 처음 한 번 넣은 뒤 `npm run refresh:kapt-basis -w apps/api`를 주 1회 실행해 갱신한다. 아래 "K-apt 엑셀 주간 갱신"을 본다.
+
+### K-apt 엑셀 주간 갱신
+```bash
+npm run refresh:kapt-basis -w apps/api
+```
+- K-apt 자료실의 최신 엑셀을 받아 2번과 같은 적재를 한다. 이미 넣은 날짜면 받지 않고 끝난다. 브라우저는 쓰지 않는다.
+- 스케줄은 코드에 두지 않는다. 서버의 crontab 등에서 이 명령을 금요일 게시 다음 날쯤 주 1회 부른다. 필요한 것은 Node와 `DATABASE_URL`·`DIRECT_URL`이고, 접속은 아래 "Supabase에 적재할 때 접속 규칙"을 따른다.
+- 실패하면 종료 코드 1이고 DB는 그대로다. 알림은 스케줄러 쪽에 건다. 적재 단계 실패는 `reference_data_imports`에도 남는다.
+- 2026-10-26부터 파일이 단지당 한 줄이라 추가 도로명주소가 없다. 그래서 파일에 없는 연결은 지우지 않고, 빈 칸은 기존 값을 유지한다.
 
 ### 준비 파일
 - K-apt 공동주택 기본정보 엑셀(k-apt.go.kr › 단지정보 › 기본정보 내려받기, `.xlsx`). 추출일을 `--file-date`로 넘긴다.
