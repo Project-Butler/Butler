@@ -129,7 +129,7 @@ export const JobListPage = ({ onUnauthorized }) => {
         {data && data.items.length > 0 && (
           <table className={`w-full text-body ${isLoading ? 'opacity-60' : ''}`}>
             <thead>
-              <tr className="border-y border-line text-left text-chip text-ink-3">
+              <tr className="whitespace-nowrap border-y border-line text-left text-chip text-ink-3">
                 <th className="px-5 py-2 font-medium">작업</th>
                 <th className="px-3 py-2 font-medium">상태</th>
                 <th className="px-3 py-2 font-medium">시도</th>
@@ -145,15 +145,15 @@ export const JobListPage = ({ onUnauthorized }) => {
                     <span className="font-medium text-ink">{JOB_TYPE_LABEL[job.type] ?? job.type}</span>
                     <span className="block font-num text-chip text-ink-3">{job.id}</span>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="whitespace-nowrap px-3 py-3">
                     <Badge tone={JOB_STATUS_TONE[job.status]}>{JOB_STATUS_LABEL[job.status] ?? job.status}</Badge>
                   </td>
                   <td className="px-3 py-3 font-num text-ink-2">{job.attempts}</td>
                   <td className="max-w-xs px-3 py-3 text-chip text-ink-2">
                     <span className="line-clamp-2 break-all">{getJobErrorText(job) ?? '-'}</span>
                   </td>
-                  <td className="px-3 py-3 font-num text-chip text-ink-2">{formatDateTime(job.createdAt)}</td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="whitespace-nowrap px-3 py-3 font-num text-chip text-ink-2">{formatDateTime(job.createdAt)}</td>
+                  <td className="whitespace-nowrap px-5 py-3 text-right">
                     {job.status === 'FAILED' && (
                       <Button variant="secondary" size="sm" onClick={() => handleRetry(job)} disabled={retryingId !== null}>
                         {retryingId === job.id ? '재시도 중…' : '재시도'}
