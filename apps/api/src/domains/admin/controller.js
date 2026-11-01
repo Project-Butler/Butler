@@ -8,9 +8,11 @@ import {
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
 import { decodeCreatedAtCursor } from '../../platform/createdAtCursor.js';
+import { parseComplexBody } from './complexInput.js';
 import { OWNERSHIP_FILTER_STATUSES } from './ownershipFilter.js';
 import {
   changeUserStatus,
+  createComplex,
   endOwnershipByAdmin,
   findAdminJobs,
   findAdminOwnerships,
@@ -290,6 +292,15 @@ export const postJobRetry = async (req, res, next) => {
     if (!isUuid(jobId)) throw new AppError('JOB_NOT_FOUND', 404, '작업을 찾을 수 없습니다.');
     assertAllowedBody(req.body ?? {}, []);
     sendData(res, await retryJob(req.user, jobId, req), { status: 202 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/complexes — { name, jibunAddress, roadAddress, legalDongCode, sourceKey }
+export const postComplex = async (req, res, next) => {
+  try {
+    sendData(res, await createComplex(req.user, parseComplexBody(req.body), req), { status: 201 });
   } catch (error) {
     next(error);
   }
