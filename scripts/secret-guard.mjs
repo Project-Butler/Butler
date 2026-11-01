@@ -153,7 +153,8 @@ function collectPushed() {
       .filter(Boolean);
     touched.forEach((n) => names.add(n));
     const diff = git(['log', ...range, '-p', '-U0', '--no-color', '--diff-filter=ACMR', '--pretty=format:']);
-    added.push(...parseAddedLines(diff));
+    // 추가된 줄이 수십만 개면 push(...)의 인자 한도를 넘으므로 하나씩 넣는다
+    for (const line of parseAddedLines(diff)) added.push(line);
   }
   return { names: [...names], added };
 }
