@@ -36,14 +36,23 @@ export const CONTRACT_FILTERS = [
 // 금액: 50000000 → '50,000,000원'
 export const formatWon = (value) => (value == null ? null : `${formatNumber(value)}원`);
 
-// 금액 짧게: 50000000 → '5,000만'. 만 원 단위로 안 떨어지면 원 단위 그대로.
+// 금액 짧게: 50000000 → '5,000만', 520000000 → '5억 2,000만', 5000000000000 → '5조'.
+// 만 원 단위로 안 떨어지면 원 단위 그대로.
 export const formatManwon = (value) => {
   if (value == null) return null;
-  if (value !== 0 && value % 10000 === 0) return `${formatNumber(value / 10000)}만`;
-  return formatWon(value);
+  if (value === 0 || value % 10000 !== 0) return formatWon(value);
+  const parts = [
+    [Math.floor(value / 1000000000000), '조'],
+    [Math.floor((value % 1000000000000) / 100000000), '억'],
+    [(value % 100000000) / 10000, '만'],
+  ];
+  return parts
+    .filter(([amount]) => amount > 0)
+    .map(([amount, unit]) => `${formatNumber(amount)}${unit}`)
+    .join(' ');
 };
 
-// 목록·홈 한 줄: 월세 '1,000만 / 50만', 전세 '전세 20,000만'
+// 목록·홈 한 줄: 월세 '1,000만 / 50만', 전세 '전세 2억'
 export const formatContractAmount = ({ leaseType, deposit, monthlyRent }) =>
   leaseType === 'JEONSE' ? `전세 ${formatManwon(deposit)}` : `${formatManwon(deposit)} / ${formatManwon(monthlyRent)}`;
 

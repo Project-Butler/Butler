@@ -24,11 +24,17 @@ describe('계약 금액 표기', () => {
     expect(formatManwon(500000)).toBe('50만');
     expect(formatManwon(1234567)).toBe('1,234,567원');
     expect(formatManwon(0)).toBe('0원');
+    expect(formatManwon(99990000)).toBe('9,999만');
+    expect(formatManwon(100000000)).toBe('1억');
+    expect(formatManwon(520000000)).toBe('5억 2,000만');
+    expect(formatManwon(5000000000000)).toBe('5조');
+    expect(formatManwon(1234567890000)).toBe('1조 2,345억 6,789만');
+    expect(formatManwon(100012345)).toBe('100,012,345원');
   });
 
   it('월세는 보증금 / 월세, 전세는 보증금만', () => {
     expect(formatContractAmount({ leaseType: 'MONTHLY', deposit: 10000000, monthlyRent: 500000 })).toBe('1,000만 / 50만');
-    expect(formatContractAmount({ leaseType: 'JEONSE', deposit: 200000000, monthlyRent: 0 })).toBe('전세 20,000만');
+    expect(formatContractAmount({ leaseType: 'JEONSE', deposit: 200000000, monthlyRent: 0 })).toBe('전세 2억');
   });
 });
 
