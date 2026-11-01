@@ -36,6 +36,13 @@ test('R-01: 날짜·비용·내용 형식', async () => {
   assertInvalid(await callPost({ ...VALID, scope: 'PUBLIC' }), 'scope');
 });
 
+test('D-10: 오래된 날짜도 형식이 맞으면 형식 검사를 통과한다', async () => {
+  // 서비스까지 가면 DB 오류가 나므로 occurredOn 오류가 없는지만 본다(다른 칸을 틀리게 해 400에서 멈춘다).
+  const error = await callPost({ ...VALID, occurredOn: '1998-05-01', title: '' });
+  assertInvalid(error, 'title');
+  assert.equal(error.details.some((item) => item.field === 'occurredOn'), false);
+});
+
 test('R-02: 첨부는 받지 않는다', async () => {
   assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: ['x'] }), 'attachmentDocumentIds', 'ATTACHMENTS_NOT_SUPPORTED');
 });

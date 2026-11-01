@@ -1,5 +1,4 @@
 import { SegmentedControl, TextField } from '@butler/ui';
-import { CONTRACT_DATE_MAX, CONTRACT_DATE_MIN, isContractDateInRange } from '../../utils/contract';
 import { formatNumber } from '../../utils/format';
 import { WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
 
@@ -18,7 +17,6 @@ export const toLogForm = (log) => ({
 export const validateLogForm = (form) => {
   const errors = {};
   if (form.title.trim().length > MAX_TITLE_LENGTH) errors.title = `제목은 ${MAX_TITLE_LENGTH}자까지 쓸 수 있어요.`;
-  if (form.occurredOn && !isContractDateInRange(form.occurredOn)) errors.occurredOn = '2000년부터 2099년 사이 날짜를 입력해 주세요.';
   return errors;
 };
 
@@ -77,8 +75,7 @@ export const ManagementLogForm = ({ form, onChange, fieldError, disabled = false
         required
         type="date"
         className="font-num tabular-nums"
-        min={CONTRACT_DATE_MIN}
-        max={CONTRACT_DATE_MAX}
+        max="9999-12-31"
         value={form.occurredOn}
         onChange={(event) => onChange('occurredOn', event.target.value)}
         error={fieldError('occurredOn')}

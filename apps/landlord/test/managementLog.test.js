@@ -5,11 +5,12 @@ describe('getLogOriginLabel', () => {
   it('내가 쓴 기록은 표시하지 않는다', () => {
     expect(getLogOriginLabel({ author: { id: 'me' }, source: { resourceType: null } })).toBeNull();
   });
-  it('작성자가 없고 만든 곳이 있으면 자동 기록', () => {
-    expect(getLogOriginLabel({ author: null, source: { resourceType: 'TICKET' } })).toBe('자동 기록');
+  it('작성자가 없고 만든 곳이나 다른 기능이 있으면 자동 기록', () => {
+    expect(getLogOriginLabel({ author: null, source: { feature: 'platform', resourceType: 'TICKET' } })).toBe('자동 기록');
+    expect(getLogOriginLabel({ author: null, source: { feature: 'repair-calculator', resourceType: null } })).toBe('자동 기록');
   });
-  it('작성자가 없고 만든 곳도 없으면 이전 소유자', () => {
-    expect(getLogOriginLabel({ author: null, source: { resourceType: null } })).toBe('이전 소유자');
+  it('작성자가 없고 직접 쓴 표식이면 이전 소유자', () => {
+    expect(getLogOriginLabel({ author: null, source: { feature: 'platform', resourceType: null } })).toBe('이전 소유자');
   });
 });
 

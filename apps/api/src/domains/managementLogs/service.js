@@ -121,7 +121,10 @@ const lockLogForWriter = async (tx, user, logId) => {
   if (!found) throwLogNotFound();
   const ownership = await lockOwnershipRow(tx, found.ownershipId);
   if (ownership.userId !== user.id) throwLogNotFound();
-  return tx.propertyLog.findUnique({ where: { id: logId }, include: MANAGEMENT_LOG_INCLUDE });
+  // 잠금을 기다리는 사이 다른 요청이 지웠을 수 있다.
+  const log = await tx.propertyLog.findUnique({ where: { id: logId }, include: MANAGEMENT_LOG_INCLUDE });
+  if (!log) throwLogNotFound();
+  return log;
 };
 
 const throwLogReadOnly = () => {

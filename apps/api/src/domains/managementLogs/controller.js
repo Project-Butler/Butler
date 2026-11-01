@@ -1,7 +1,7 @@
 // 관리 로그 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
 import { AppError } from '../../platform/AppError.js';
-import { isValidDateString } from '../../platform/contractRules.js';
 import {
+  isValidLogDate,
   MANAGEMENT_LOG_EDITABLE_FIELDS,
   MANAGEMENT_LOG_SCOPES,
   MANAGEMENT_LOG_TYPES,
@@ -56,8 +56,8 @@ const FIELD_PARSERS = {
     return undefined;
   },
   occurredOn: (value, details) => {
-    if (isValidDateString(value)) return value;
-    details.push({ field: 'occurredOn', reason: '2000-01-01~2099-12-31 사이의 YYYY-MM-DD 날짜여야 합니다.' });
+    if (isValidLogDate(value)) return value;
+    details.push({ field: 'occurredOn', reason: 'YYYY-MM-DD 날짜여야 합니다.' });
     return undefined;
   },
   // 원 단위 정수 → DB bigint. 비용 없는 기록은 null.
@@ -128,7 +128,7 @@ const parseListQuery = (query) => {
   if (types.some((type) => !MANAGEMENT_LOG_TYPES.includes(type))) {
     details.push({ field: 'type', reason: `${MANAGEMENT_LOG_TYPES.join(', ')} 중에서 쉼표로 고릅니다.` });
   }
-  if (query.until !== undefined && !isValidDateString(query.until)) {
+  if (query.until !== undefined && !isValidLogDate(query.until)) {
     details.push({ field: 'until', reason: 'YYYY-MM-DD 날짜여야 합니다.' });
   }
   const sortMatch = SORT_PATTERN.exec(query.sort ?? 'occurredOn:desc');

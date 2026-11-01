@@ -17,10 +17,10 @@ export const getLogScopeBadge = (scope) => ({
 // 미래 날짜 기록은 "예정"으로 보여 준다(D-10).
 export const isFutureLog = ({ occurredOn }, today = getTodayKST()) => occurredOn > today;
 
-// 작성자가 비어 있으면 시스템 기록(만든 곳이 있다) 또는 다른 소유자가 직접 쓴 기록이다.
+// 작성자가 비어 있으면 다른 소유자가 직접 쓴 기록(platform + 만든 곳 없음) 또는 시스템 기록이다.
 export const getLogOriginLabel = ({ author, source }) => {
   if (author) return null;
-  return source?.resourceType ? '자동 기록' : '이전 소유자';
+  return source?.feature === 'platform' && !source.resourceType ? '이전 소유자' : '자동 기록';
 };
 
 // 나만 보기를 내가 쓴 경우만 지울 수 있다. 소유가 끝난 뒤에도 된다(D-13).
