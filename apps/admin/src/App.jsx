@@ -6,6 +6,7 @@ import { AdminLayout, NAV_ITEMS, SETTINGS_ITEM } from './layout/AdminLayout';
 import { AdminDashboard } from './dashboard/AdminDashboard';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
+import { ComplexCreatePage } from './pages/ComplexCreatePage';
 import { JobListPage } from './pages/JobListPage';
 import { OwnershipListPage } from './pages/OwnershipListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
@@ -22,6 +23,7 @@ const PAGE_BY_KEY = {
   users: UserListPage,
   userDetail: UserDetailPage,
   ownerships: OwnershipListPage,
+  complexes: ComplexCreatePage,
   jobs: JobListPage,
   auditLogs: AuditLogPage,
 };

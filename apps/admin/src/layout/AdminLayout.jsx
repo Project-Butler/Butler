@@ -1,5 +1,5 @@
 import { AppShell } from '@butler/ui';
-import { Building2, FileSignature, FolderOpen, History, LayoutDashboard, ListChecks, Settings, Users, Wrench } from 'lucide-react';
+import { Building, Building2, FileSignature, FolderOpen, History, LayoutDashboard, ListChecks, Settings, Users, Wrench } from 'lucide-react';
 
 // 운영 API가 아직 없는 메뉴는 badge '준비 중'을 달고, 누르면 App이 '준비 중' 화면을 보여 준다.
 const COMING_SOON = '준비 중';
@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { key: 'dashboard', label: '대시보드', icon: LayoutDashboard },
   { key: 'users', label: '회원', icon: Users },
   { key: 'ownerships', label: '소유 관계', icon: Building2 },
+  { key: 'complexes', label: '단지 등록', icon: Building },
   { key: 'jobs', label: '작업', icon: ListChecks },
   { key: 'auditLogs', label: '감사 로그', icon: History },
   { key: 'contracts', label: '계약', icon: FileSignature, badge: COMING_SOON },

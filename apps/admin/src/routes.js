@@ -11,6 +11,7 @@ export const ROUTE_TABLE = [
   { key: 'users', path: '/users' },
   { key: 'userDetail', path: '/users/:userId', navKey: 'users' },
   { key: 'ownerships', path: '/ownerships' },
+  { key: 'complexes', path: '/complexes/new' },
   { key: 'jobs', path: '/jobs' },
   { key: 'auditLogs', path: '/audit-logs' },
   { key: 'contracts', path: '/contracts' },

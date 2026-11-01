@@ -57,5 +57,6 @@ export { getAdminJobList } from './apis/admin/getAdminJobList';
 export { postAdminJobRetry } from './apis/admin/postAdminJobRetry';
 export { postAdminJusoRefresh } from './apis/admin/postAdminJusoRefresh';
 export { postAdminKaptRefresh } from './apis/admin/postAdminKaptRefresh';
+export { postAdminComplex } from './apis/admin/postAdminComplex';
 
 export { getJob } from './apis/jobs/getJob';

@@ -10,6 +10,7 @@ import { formatDisplayName } from '../../platform/unitAddress.js';
 import { runKaptBasisRefreshNow } from '../../referenceData/kaptExcelRefresh.js';
 import { ImportAlreadyRunningError } from '../../referenceData/referenceImports.js';
 import { revokeAllSessions, toPublicUser } from '../auth/service.js';
+import { createComplexByAdmin } from '../complexes/service.js';
 import { JusoRefreshBusyError, runJusoRefreshNow } from '../cron/referenceData.js';
 import { toJobResponse } from '../jobs/service.js';
 import { endOwnershipInTx, toResponse as toOwnershipResponse } from '../propertyOwnerships/service.js';
@@ -323,4 +324,21 @@ export const retryJob = (actor, jobId, req) =>
       client: tx,
     });
     return { jobId, status: 'PENDING' };
+  });
+
+// POST /admin/complexes. 단지 생성과 감사 로그(COMPLEX_CREATED_BY_ADMIN)를 한 트랜잭션으로 묶는다.
+export const createComplex = (actor, input, req) =>
+  prisma.$transaction(async (tx) => {
+    const complex = await createComplexByAdmin(input, { client: tx });
+    await audit.record({
+      actor,
+      action: 'COMPLEX_CREATED_BY_ADMIN',
+      resourceType: 'COMPLEX',
+      resourceId: complex.id,
+      summary: complex.name,
+      after: { ...input, sourceKey: complex.sourceKey },
+      req,
+      client: tx,
+    });
+    return complex;
   });
