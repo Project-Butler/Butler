@@ -200,7 +200,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     assert.equal(asTenant.memo, null);
     assert.equal(asTenant.isReadOnly, true);
     const asAdmin = await findContractForUser(admin, contract.id);
-    assert.equal(asAdmin.memo, '관리비 별도');
+    assert.equal(asAdmin.memo, null);
     assert.equal(asAdmin.isReadOnly, true);
 
     const { items } = await findContracts(tenant, LIST_DEFAULTS);

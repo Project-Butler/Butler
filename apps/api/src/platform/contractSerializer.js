@@ -50,7 +50,8 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     terminatedOn: toDateOnlyString(contract.terminatedOn),
     terminationReason: contract.terminationReason ?? null,
     previousContractId: contract.previousContractId ?? null,
-    memo: viewer === 'TENANT' ? null : (contract.memo ?? null),
+    // 메모는 임대인 개인 기록이라 소유자·이전 소유자에게만 보인다(임차인·운영자는 null, 명세 D-19).
+    memo: viewer === 'OWNER' || viewer === 'FORMER_OWNER' ? (contract.memo ?? null) : null,
     isReadOnly: isOwner ? isContractReadOnly(status, Boolean(ownership.endedAt)) : true,
     createdAt: contract.createdAt.toISOString(),
     updatedAt: contract.updatedAt.toISOString(),
