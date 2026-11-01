@@ -33,6 +33,12 @@ export { deleteLandlordBuilding } from './apis/landlordBuildings/deleteLandlordB
 export { getLandlordSetup } from './apis/dashboard/getLandlordSetup';
 export { getActivityList } from './apis/activities/getActivityList';
 
+export { getContractList } from './apis/contracts/getContractList';
+export { getContract } from './apis/contracts/getContract';
+export { postContract } from './apis/contracts/postContract';
+export { patchContract } from './apis/contracts/patchContract';
+export { postContractTermination } from './apis/contracts/postContractTermination';
+
 export { getDisputeChatList } from './apis/disputes/getDisputeChatList';
 export { getDisputeChat } from './apis/disputes/getDisputeChat';
 export { postDisputeChat } from './apis/disputes/postDisputeChat';

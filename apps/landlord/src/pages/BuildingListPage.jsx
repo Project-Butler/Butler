@@ -3,9 +3,10 @@ import { Plus } from 'lucide-react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
+import { PropertyContractCell } from '../components/PropertyContractCell/PropertyContractCell';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
-import { getPropertyStatusBadge, getUnitTypeLabel } from '../utils/unitListing';
+import { getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
 const UNIT_PAGE_SIZE = 20;
@@ -14,6 +15,7 @@ const UNIT_PAGE_SIZE = 20;
 // params.notice: 등록 직후 안내(이미 등록된 면적·층을 썼을 때 등).
 export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
+  const [contractNotice, setContractNotice] = useState(null);
   const units = useGetPropertyList({ relation: 'OWNER', page, size: UNIT_PAGE_SIZE }, { onUnauthorized });
 
   const unitItems = units.data?.items ?? [];
@@ -70,13 +72,12 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
                 <th className="px-5 py-2.5 font-medium">호실</th>
                 <th className="px-3 py-2.5 font-medium">도로명주소</th>
                 <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
-                <th className="px-3 py-2.5 font-medium">상태</th>
+                <th className="px-3 py-2.5 font-medium">계약</th>
                 <th className="px-5 py-2.5 font-medium">권리자 인증</th>
               </tr>
             </thead>
             <tbody>
               {unitItems.map((property) => {
-                const status = getPropertyStatusBadge(property.status);
                 const verification = getVerificationBadge(property.myRelation?.verificationStatus);
                 const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
                 return (
@@ -88,8 +89,13 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
                     <td className="px-5 py-3.5 font-semibold text-ink">{property.displayName}</td>
                     <td className="max-w-xs truncate px-3 py-3.5 text-ink-2">{property.complex.roadAddress ?? '—'}</td>
                     <td className="whitespace-nowrap px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
-                    <td className="whitespace-nowrap px-3 py-3.5">
-                      <Badge tone={status.tone}>{status.label}</Badge>
+                    <td className="whitespace-nowrap px-3 py-3.5" onClick={(event) => event.stopPropagation()}>
+                      <PropertyContractCell
+                        property={property}
+                        onNavigate={onNavigate}
+                        onUnauthorized={onUnauthorized}
+                        onNotice={setContractNotice}
+                      />
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5">
                       <Badge tone={verification.tone}>{verification.label}</Badge>
@@ -99,6 +105,7 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
               })}
             </tbody>
           </table>
+          {contractNotice && <NoticeBox className="m-5">{contractNotice}</NoticeBox>}
           {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
           {units.data.meta.hasNext && (
             // 다음 페이지 로드가 실패했으면 page는 이미 N이므로 N+1로 건너뛰지 않고 같은 페이지를 다시 불러온다.
