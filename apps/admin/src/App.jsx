@@ -5,12 +5,20 @@ import { getMe, postLogin, postLogout } from '@butler/api-client';
 import { AdminLayout, NAV_ITEMS, SETTINGS_ITEM } from './layout/AdminLayout';
 import { AdminDashboard } from './dashboard/AdminDashboard';
 import { ComingSoonPage } from './pages/ComingSoonPage';
+import { UserDetailPage } from './pages/UserDetailPage';
+import { UserListPage } from './pages/UserListPage';
 import { RoleGuard } from './routes/guards/RoleGuard';
 import { buildLocation, HOME_PATH, resolveViewKey, ROUTE_TABLE } from './routes';
 
 // 화면 전환은 react-router(BrowserRouter)로 하고, 경로 표는 routes.js에 있다.
 const LOGIN_PATH = '/login';
 const LABEL_BY_KEY = Object.fromEntries([...NAV_ITEMS, SETTINGS_ITEM].map((item) => [item.key, item.label]));
+// 운영 API가 붙은 화면. 여기 없는 key는 '준비 중' 화면을 보여 준다.
+const PAGE_BY_KEY = {
+  dashboard: AdminDashboard,
+  users: UserListPage,
+  userDetail: UserDetailPage,
+};
 
 export const App = () => {
   const [user, setUser] = useState(null);
@@ -19,7 +27,10 @@ export const App = () => {
   const location = useLocation();
   const routerNavigate = useNavigate();
 
-  const navigate = useCallback((key) => routerNavigate(buildLocation(key)), [routerNavigate]);
+  const navigate = useCallback(
+    (key, params, search) => routerNavigate(buildLocation(key, params, search)),
+    [routerNavigate],
+  );
 
   // 화면 도중 세션이 끊기면(401) 로그인 화면으로 돌아간다. 데이터 hook이 401을 받으면 부른다.
   const handleUnauthorized = useCallback(() => {
@@ -89,11 +100,11 @@ export const App = () => {
     <RoleGuard user={user} allowedRoles={['ADMIN']} onLogout={handleLogout}>
       <AdminLayout user={user} onLogout={handleLogout} activeKey={resolveViewKey(location.pathname)} onNavigate={navigate}>
         <Routes>
-          <Route path={HOME_PATH} element={<AdminDashboard {...pageProps} />} />
-          {/* 운영 API가 붙기 전인 메뉴는 '준비 중' 화면을 보여 준다. */}
-          {ROUTE_TABLE.filter((route) => route.path !== HOME_PATH).map((route) => (
-            <Route key={route.key} path={route.path} element={<ComingSoonPage title={LABEL_BY_KEY[route.key]} />} />
-          ))}
+          {ROUTE_TABLE.map((route) => {
+            const Page = PAGE_BY_KEY[route.key];
+            const element = Page ? <Page {...pageProps} currentUser={user} /> : <ComingSoonPage title={LABEL_BY_KEY[route.key]} />;
+            return <Route key={route.key} path={route.path} element={element} />;
+          })}
           <Route path="*" element={<Navigate to={HOME_PATH} replace />} />
         </Routes>
       </AdminLayout>
