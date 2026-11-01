@@ -115,7 +115,7 @@ export const postOwnershipEnd = async (req, res, next) => {
     const { ownershipId } = req.params;
     if (!isUuid(ownershipId)) throwOwnershipNotFound();
 
-    const ownership = await endOwnership(req.user, ownershipId, parseEndBody(req.body));
+    const ownership = await endOwnership(req.user, ownershipId, parseEndBody(req.body), req);
     sendData(res, ownership);
   } catch (error) {
     next(error);

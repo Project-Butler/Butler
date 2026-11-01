@@ -50,3 +50,12 @@ export { getAdminUserList } from './apis/admin/getAdminUserList';
 export { getAdminUser } from './apis/admin/getAdminUser';
 export { patchAdminUserStatus } from './apis/admin/patchAdminUserStatus';
 export { getAdminAuditLogList } from './apis/admin/getAdminAuditLogList';
+export { getAdminOwnershipList } from './apis/admin/getAdminOwnershipList';
+export { postAdminOwnershipRevoke } from './apis/admin/postAdminOwnershipRevoke';
+export { postAdminOwnershipEnd } from './apis/admin/postAdminOwnershipEnd';
+export { getAdminJobList } from './apis/admin/getAdminJobList';
+export { postAdminJobRetry } from './apis/admin/postAdminJobRetry';
+export { postAdminJusoRefresh } from './apis/admin/postAdminJusoRefresh';
+export { postAdminKaptRefresh } from './apis/admin/postAdminKaptRefresh';
+
+export { getJob } from './apis/jobs/getJob';
