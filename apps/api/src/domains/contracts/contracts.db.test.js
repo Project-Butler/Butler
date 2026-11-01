@@ -8,7 +8,14 @@ import { prisma } from '../../platform/prismaClient.js';
 import { findLandlordSetup } from '../dashboard/service.js';
 import { findPropertyForUser } from '../properties/service.js';
 import { endOwnership } from '../propertyOwnerships/service.js';
-import { createContract, findContractForUser, findContracts, terminateContract, updateContract } from './service.js';
+import {
+  createContract,
+  findContractForUser,
+  findContracts,
+  terminateContract,
+  updateContract,
+  withPeriodConflictAs409,
+} from './service.js';
 
 const TODAY = getTodayKST();
 const shift = (days) => {
@@ -116,6 +123,33 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     await terminateContract(user, first.id, { terminatedOn: TODAY, reason: null });
     const second = await createContract(user, contractInput(ownership.id, { startDate: shift(100), endDate: shift(900) }));
     assert.equal(second.status, 'UPCOMING');
+  });
+
+  test('서비스 검사를 거치지 않아도 DB 제약이 겹침을 막고 409로 바뀐다, 해지된 계약과는 겹쳐도 된다', async () => {
+    const user = await fixture.createUser();
+    const { ownership } = await createOwnedUnit(user);
+    const first = await createContract(user, contractInput(ownership.id));
+    const insertDirectly = () =>
+      prisma.contract.create({
+        data: {
+          ownershipId: ownership.id,
+          leaseType: 'MONTHLY',
+          deposit: 50000000n,
+          monthlyRent: 800000n,
+          startDate: new Date(`${shift(700)}T00:00:00Z`), // 앞 계약 종료일과 같은 날(양끝 포함)
+          endDate: new Date(`${shift(900)}T00:00:00Z`),
+          tenantName: '이임차',
+          tenantPhone: '01098765432',
+        },
+      });
+
+    await rejectsWith(withPeriodConflictAs409(insertDirectly), 'CONTRACT_PERIOD_OVERLAP');
+    // 다른 오류는 그대로 올린다
+    const unrelated = new Error('다른 오류');
+    await assert.rejects(withPeriodConflictAs409(() => Promise.reject(unrelated)), (error) => error === unrelated);
+
+    await terminateContract(user, first.id, { terminatedOn: TODAY, reason: null });
+    await withPeriodConflictAs409(insertDirectly);
   });
 
   test('같은 기간 동시 등록 → 하나만 성공', async () => {

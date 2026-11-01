@@ -1,5 +1,6 @@
 // 계약(api-contract.md 4장). 쓰기는 모두 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
 // 검사 순서는 docs/4. 계약 관리 개발/명세.md 3-3을 따른다(형식 R-01은 컨트롤러).
+import { Prisma } from '@prisma/client';
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import {
@@ -51,6 +52,10 @@ const assertPeriod = (contract) => {
   }
 };
 
+const throwPeriodOverlap = () => {
+  throw new AppError('CONTRACT_PERIOD_OVERLAP', 409, '같은 기간에 이미 등록한 계약이 있습니다.');
+};
+
 // R-07: 같은 소유 관계 안에서 해지 안 된 계약과 기간이 겹치면 안 된다(양끝 포함).
 const assertNoOverlap = async (tx, { ownershipId, startDate, endDate, excludeId = null }) => {
   const overlapping = await tx.contract.findFirst({
@@ -63,8 +68,20 @@ const assertNoOverlap = async (tx, { ownershipId, startDate, endDate, excludeId 
     },
     select: { id: true },
   });
-  if (overlapping) {
-    throw new AppError('CONTRACT_PERIOD_OVERLAP', 409, '같은 기간에 이미 등록한 계약이 있습니다.');
+  if (overlapping) throwPeriodOverlap();
+};
+
+// DB 제약 ex_contract_period(SQLSTATE 23P01)에 걸려도 같은 409로 답한다. assertNoOverlap이 먼저 막으므로
+// 보통은 닿지 않는 마지막 방어선. Prisma가 코드 없는 오류로 넘겨서 제약 이름으로 알아본다.
+// 실패한 트랜잭션 안에서는 다른 쿼리를 못 하므로 트랜잭션 밖에서 바꾼다.
+export const withPeriodConflictAs409 = async (write) => {
+  try {
+    return await write();
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientUnknownRequestError && error.message.includes('ex_contract_period')) {
+      throwPeriodOverlap();
+    }
+    throw error;
   }
 };
 
@@ -103,7 +120,7 @@ const respond = (contract, user, todayKST = getTodayKST()) =>
 
 // POST /contracts
 export const createContract = async (user, input) => {
-  const created = await prisma.$transaction(async (tx) => {
+  const created = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const ownership = await lockOwnershipRow(tx, input.ownershipId);
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
     assertAmount(input);
@@ -131,7 +148,7 @@ export const createContract = async (user, input) => {
     });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_CREATED, contract);
     return contract;
-  });
+  }));
 
   // TODO(audit): CONTRACT_CREATED — audit.record()가 생기면 여기서 기록한다.
   // TODO(schedule): 종료일 SYSTEM 일정 생성 — 일정 기능이 생기면 연결한다.
@@ -186,7 +203,7 @@ const lockContractForOwner = async (tx, user, contractId) => {
 
 // PATCH /contracts/:contractId — data는 컨트롤러가 검증·변환한 값(보낸 칸만).
 export const updateContract = async (user, contractId, data) => {
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
     const status = computeContractStatus(contract, getTodayKST());
     if (isContractReadOnly(status, Boolean(ownership.endedAt))) throwReadOnly();
@@ -218,7 +235,7 @@ export const updateContract = async (user, contractId, data) => {
     });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_UPDATED, row, { fields: Object.keys(data) });
     return row;
-  });
+  }));
 
   // TODO(audit): CONTRACT_UPDATED / TODO(schedule): endDate가 바뀌면 SYSTEM 일정도 옮긴다.
   return respond(updated, user);
