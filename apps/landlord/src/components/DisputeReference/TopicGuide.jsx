@@ -71,8 +71,8 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onS
 
   return (
     <>
-      {/* 긴 안내라 목차를 스크롤해도 위에 붙여 두고, 필요한 칸으로 바로 건너뛰게 한다. */}
-      <nav aria-label="안내 목차" className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-line bg-ground px-1 py-2">
+      {/* 긴 안내라 맨 위에 목차를 두고, 필요한 칸으로 바로 건너뛰게 한다. */}
+      <nav aria-label="안내 목차" className="flex gap-1.5 overflow-x-auto border-b border-line pb-2">
         {SECTIONS.map((section) => (
           <button
             key={section.id}
