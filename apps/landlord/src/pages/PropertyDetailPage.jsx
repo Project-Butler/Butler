@@ -457,7 +457,7 @@ const LeaseSection = () => (
   <Card className="space-y-4 p-6">
     <SectionTitle>임대 정보</SectionTitle>
     <dl className="divide-y divide-line">
-      <InfoRow label="계약 상태" value="계약 등록 전" />
+      <InfoRow label="계약 상태" value={null} />
       <InfoRow label="임차인" value={null} />
       <InfoRow label="계약" value={null} />
     </dl>
