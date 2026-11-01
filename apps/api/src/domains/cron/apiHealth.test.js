@@ -29,3 +29,19 @@ test('juso 변동분: 마지막 성공이 3일 이내면 OK, 넘으면 STALE, �
   assert.equal(isDeltaStale('2026-10-16', '2026-10-20'), true);
   assert.equal(isDeltaStale(null, '2026-10-20'), true);
 });
+
+test('juso 변동 STALE은 공식 연계 커서를 본다(연계 기준일 - 1로 잰다)', async () => {
+  const { checkDeltaFreshness } = await import('./apiHealth.js');
+  const sources = [];
+  const prismaOf = (ymd) => ({
+    dataImport: {
+      findFirst: async ({ where }) => {
+        sources.push(where.source);
+        return ymd ? { fileDate: new Date(`${ymd}T00:00:00Z`) } : null;
+      },
+    },
+  });
+  assert.equal((await checkDeltaFreshness(prismaOf(null))).status, 'STALE');
+  assert.equal((await checkDeltaFreshness(prismaOf('2020-01-01'))).status, 'STALE');
+  assert.deepEqual(sources, ['JUSO_LINK', 'JUSO_LINK']);
+});

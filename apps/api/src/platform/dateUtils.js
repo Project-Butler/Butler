@@ -16,8 +16,11 @@ export const formatDateKST = (date) => {
   }).format(date);
 };
 
+// 지금 시각. 기록·만료처럼 시각 자체를 쓸 때만 쓴다(날짜 비교는 getTodayKST).
+export const getNow = () => new Date();
+
 // 지금 이 순간의 '오늘'(KST) 날짜 문자열.
-export const getTodayKST = () => formatDateKST(new Date());
+export const getTodayKST = () => formatDateKST(getNow());
 
 // Prisma @db.Date 컬럼(JS Date, UTC 자정)을 'YYYY-MM-DD' 문자열로 바꾼다.
 // 날짜 전용 컬럼이므로 로컬 타임존 getter(getFullYear 등)가 아니라

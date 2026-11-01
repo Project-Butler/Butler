@@ -2,6 +2,7 @@
 // 가짜 prisma·provider로 확인한다(DB·외부 호출 없음).
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
+import { getNow } from '../../platform/dateUtils.js';
 
 process.env.JUSO_API_KEY = process.env.JUSO_API_KEY ?? 'test-key';
 process.env.DATA_GO_KR_SERVICE_KEY = process.env.DATA_GO_KR_SERVICE_KEY ?? 'test-key';
@@ -40,7 +41,7 @@ const OTHER_BD_MGT_SN = '1171010200100290000000001';
 
 const uniqueError =() => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-// complexes·address_search_results만 흉내 낸 메모리 DB
+// complexes·address_caches만 흉내 낸 메모리 DB
 const createFakeDb = () => {
   const db = { complexes: [], saved: new Map(), rawWrites: [], beforeCreate: null, kaptRows: [], kaptError: null, kaptQueries: 0 };
   let nextId = 1;
@@ -54,7 +55,7 @@ const createFakeDb = () => {
       regionId: REGION.id,
       buildingMgtNo: null,
       kaptCode: null,
-      createdAt: new Date(),
+      createdAt: getNow(),
       ...extra,
     };
     db.complexes.push(complex);
@@ -79,7 +80,7 @@ const createFakeDb = () => {
       create: async ({ data }) => {
         if (db.beforeCreate) await db.beforeCreate();
         if (db.complexes.some((c) => c.sourceKey === data.sourceKey)) throw uniqueError();
-        const complex = { ...data, id: `c${nextId++}`, createdAt: new Date() };
+        const complex = { ...data, id: `c${nextId++}`, createdAt: getNow() };
         db.complexes.push(complex);
         return withRegion(complex);
       },
@@ -234,7 +235,7 @@ test('resolve: 이미 있는 단지는 저장본 없이 그대로', async () => 
 
 test('resolve: 24시간 안의 검색 저장본으로 단지를 만든다', async () => {
   const db = createFakeDb();
-  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: getNow() });
 
   const result = await resolveComplex(ROAD_KEY);
 
@@ -254,7 +255,7 @@ test('resolve: 24시간 안의 검색 저장본으로 단지를 만든다', asyn
 test('resolve: 저장본의 건물관리번호가 기존 단지와 같으면 새로 만들지 않고 그 단지', async () => {
   const db = createFakeDb();
   const old = db.addComplex('ROAD:117103100000-0-12-0', { buildingMgtNo: PAYLOAD.bdMgtSn });
-  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: getNow() });
 
   const result = await resolveComplex(ROAD_KEY);
 
@@ -264,7 +265,7 @@ test('resolve: 저장본의 건물관리번호가 기존 단지와 같으면 새
 
 test('resolve: 연결 표의 K-apt 단지로 kaptCode를 채우고 응답에 zipCode·kaptCode·detailBuildingNames', async () => {
   const db = createFakeDb();
-  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: getNow() });
   db.kaptRows = [{ idx: 0, kaptCode: 'A10027875', name: '잠실파크리오', saleType: '분양' }];
   db.kaptBasis = { approvalDate: new Date('2008-08-01T00:00:00Z'), householdCount: 6864, buildingCount: 66 };
 
@@ -311,7 +312,7 @@ test('resolve: 저장본이 없거나 24시간이 지났으면 404 COMPLEX_SOURC
 
 test('resolve: 법정동이 regions에 없으면 만들지 않고 404', async () => {
   const db = createFakeDb();
-  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: { ...PAYLOAD, admCd: '9999999999' }, fetchedAt: new Date() });
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: { ...PAYLOAD, admCd: '9999999999' }, fetchedAt: getNow() });
 
   await assert.rejects(resolveComplex(ROAD_KEY), { code: 'COMPLEX_SOURCE_NOT_FOUND' });
   assert.equal(db.complexes.length, 0);
@@ -319,7 +320,7 @@ test('resolve: 법정동이 regions에 없으면 만들지 않고 404', async ()
 
 test('resolve: 동시에 만든 쪽이 이기면(P2002) 다시 읽어 그 단지를 돌려준다', async () => {
   const db = createFakeDb();
-  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: new Date() });
+  db.saved.set(ROAD_KEY, { sourceKey: ROAD_KEY, payload: PAYLOAD, fetchedAt: getNow() });
   let winner = null;
   db.beforeCreate = async () => {
     if (!winner) winner = db.addComplex(ROAD_KEY);

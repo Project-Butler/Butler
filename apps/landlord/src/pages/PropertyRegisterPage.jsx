@@ -1,11 +1,9 @@
-import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import { Badge, Button, Card, RequiredMark, TextField } from '@butler/ui';
+import { AddressSearchDialog } from '../components/AddressSearchDialog/AddressSearchDialog';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
-import { useGetComplex } from '../hooks/useGetComplex';
-import { useGetLandlordBuildingList } from '../hooks/useGetLandlordBuildingList';
 import { usePostProperty } from '../hooks/usePostProperty';
 import { toFieldErrors } from '../utils/apiError';
 import { formatDetailBuildingRange } from '../utils/detailBuildingNames';
@@ -16,10 +14,9 @@ import { EQUIPMENT_OPTIONS, MAX_EQUIPMENT_ETC_LENGTH, UNIT_TYPE_OPTIONS } from '
 
 // 서버 검증(apps/api properties controller)과 같은 범위
 const MAX_UNIT_PART_LENGTH = 10;
-const BUILDING_PICKER_SIZE = 50;
 
 // 서버 400 details.field 중 이 화면에 칸이 있는 것
-const FORM_FIELDS = ['buildingNo', 'unitNo', 'floor', 'unitType', 'exclusiveArea', 'equipment', 'equipmentEtc'];
+const FORM_FIELDS = ['complexId', 'buildingNo', 'unitNo', 'floor', 'unitType', 'exclusiveArea', 'equipment', 'equipmentEtc'];
 
 // 동 목록(juso 상세건물명)이 있을 때 동 드롭다운의 목록 밖 선택지
 const DONG_NONE = '__none__';
@@ -99,63 +96,43 @@ const CheckboxChip = ({ checked, onChange, label, disabled }) => (
   </label>
 );
 
-// complexId 없이 들어오면(사이드바 [부동산 등록]) 어느 건물에 등록할지 먼저 고른다.
-const BuildingPicker = ({ onNavigate, onUnauthorized }) => {
-  const { data, error, isLoading } = useGetLandlordBuildingList({ size: BUILDING_PICKER_SIZE }, { onUnauthorized });
-  const items = data?.items ?? [];
-
-  return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex items-center justify-between px-5 py-4">
-        <h2 className="text-section font-semibold text-ink">호실을 등록할 건물</h2>
-        <Button variant="secondary" size="sm" onClick={() => onNavigate('buildingRegister', {}, { replace: true })}>
-          <Plus size={14} className="-ml-0.5 mr-1 inline-block" />새 건물 등록
+const AddressField = ({ complex, onOpen, error, disabled }) => (
+  <div className="flex flex-col gap-1.5">
+    <p className="text-label font-semibold text-ink">
+      주소
+      <RequiredMark />
+    </p>
+    {complex ? (
+      <div className="flex items-start justify-between gap-4 rounded-input border border-line px-4 py-3">
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-card font-medium text-ink">{complex.roadAddress ?? complex.jibunAddress}</p>
+          {complex.roadAddress && complex.jibunAddress && <p className="text-sub text-ink-2">지번 {complex.jibunAddress}</p>}
+          {complex.zipCode && <p className="font-num text-sub tabular-nums text-ink-3">우편번호 {complex.zipCode}</p>}
+        </div>
+        <Button variant="secondary" size="sm" className="shrink-0" onClick={onOpen} disabled={disabled}>
+          다시 검색
         </Button>
       </div>
-      {error && <NoticeBox className="mx-5 mb-5">{error.message}</NoticeBox>}
-      {isLoading && !data && (
-        <p role="status" className="py-8 text-center text-body text-ink-3">
-          불러오는 중입니다
-        </p>
-      )}
-      {data && items.length === 0 && (
-        <p className="border-t border-line px-5 py-10 text-center text-body text-ink-3">먼저 건물을 등록해 주세요</p>
-      )}
-      {items.length > 0 && (
-        <table className="w-full text-body">
-          <thead>
-            <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-              <th className="px-5 py-2.5 font-medium">건물명</th>
-              <th className="px-3 py-2.5 font-medium">도로명주소</th>
-              <th className="px-5 py-2.5 text-right font-medium">등록 호실</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((building) => (
-              <tr
-                key={building.id}
-                onClick={() => onNavigate('propertyRegister', { complexId: building.complex.id }, { replace: true })}
-                className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
-              >
-                <td className="px-5 py-3.5 font-semibold text-ink">{building.name}</td>
-                <td className="truncate px-3 py-3.5 text-ink-2">{building.complex.roadAddress}</td>
-                <td className="px-5 py-3.5 text-right font-num tabular-nums text-ink-2">{building.propertyCount}개</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Card>
-  );
-};
+    ) : (
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={disabled}
+        className="flex h-12 items-center gap-2 rounded-input border border-line px-4 text-left text-card text-ink-3 transition-colors hover:border-accent hover:text-ink disabled:opacity-60"
+      >
+        <MapPin size={18} className="shrink-0" />
+        도로명, 건물명, 지번으로 주소를 검색해 주세요
+      </button>
+    )}
+    {error && <p className="text-chip text-crit-ink">{error}</p>}
+  </div>
+);
 
-const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
-  const hookOptions = { onUnauthorized };
-  const complexQuery = useGetComplex(complexId, hookOptions);
-  const register = usePostProperty(hookOptions);
-  const { getBuildingName } = useBuildingNames(hookOptions);
-  const complex = complexQuery.data;
-
+// 부동산 등록(POST /properties): 주소와 동·호를 한 화면에서 입력한다. 저장하면 내 부동산 목록으로 간다(기록 바꿈).
+export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
+  const register = usePostProperty({ onUnauthorized });
+  const [complex, setComplex] = useState(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [serverFieldErrors, setServerFieldErrors] = useState({});
 
@@ -184,6 +161,17 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
     setServerFieldErrors((prev) => ({ ...prev, buildingNo: undefined }));
   };
 
+  const closeDialog = useCallback(() => setIsDialogOpen(false), []);
+
+  // 주소가 바뀌면 동 목록도 달라지므로 동 선택을 비운다.
+  const handleResolved = (resolved) => {
+    setComplex(resolved);
+    setForm((prev) => ({ ...prev, dongChoice: '', noDong: false, buildingNo: '' }));
+    setServerFieldErrors((prev) => ({ ...prev, complexId: undefined, buildingNo: undefined }));
+    register.reset();
+    setIsDialogOpen(false);
+  };
+
   const toggleEquipment = (code) =>
     updateField(
       'equipment',
@@ -192,11 +180,11 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
 
   const handleSubmit = async () => {
     if (!isReady || isSubmitting) return;
-    const body = toCreateBody(complexId, form);
+    const body = toCreateBody(complex.id, form);
     const { data, error } = await register.createProperty(body);
     if (data) {
       const notice = toSavedValueNotice(body, data.property);
-      onNavigate('setup', notice ? { notice } : {}, { replace: true });
+      onNavigate('buildingList', notice ? { notice } : {}, { replace: true });
       return;
     }
     if (error?.status === 400) setServerFieldErrors(toFieldErrors(error));
@@ -210,21 +198,21 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
   const goBack = () => window.history.back();
 
   const dongRange = formatDetailBuildingRange(detailBuildingNames);
-  const buildingName = getBuildingName(complexId) ?? complex?.name;
 
   return (
-    <>
-      <PageHeader
-        title="호실 등록"
-        description={buildingName ? `${buildingName} · ${complex?.roadAddress ?? complex?.jibunAddress ?? ''}` : undefined}
-        onBack={goBack}
-      />
-
-      {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
+    <div className="w-full max-w-6xl space-y-6 pb-10">
+      <PageHeader title="부동산 등록" description="주소와 동·호를 입력하면 등록돼요." onBack={goBack} />
 
       <div className="grid grid-cols-3 items-start gap-6">
         <div className="col-span-2 space-y-4">
           <Card className="space-y-6 p-6">
+            <AddressField
+              complex={complex}
+              onOpen={() => setIsDialogOpen(true)}
+              error={serverFieldErrors.complexId}
+              disabled={isSubmitting}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 {hasDongList ? (
@@ -378,8 +366,8 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
           <h2 className="text-section font-semibold text-ink">등록 요약</h2>
           <dl className="space-y-3">
             <div>
-              <dt className="text-sub text-ink-3">건물</dt>
-              <dd className="mt-0.5 text-body font-medium text-ink">{buildingName ?? '불러오는 중'}</dd>
+              <dt className="text-sub text-ink-3">단지</dt>
+              <dd className="mt-0.5 text-body font-medium text-ink">{complex?.name ?? '주소를 검색해 주세요'}</dd>
               {dongRange && <dd className="text-sub text-ink-3">{dongRange}</dd>}
             </div>
             <div>
@@ -393,31 +381,17 @@ const PropertyForm = ({ complexId, onNavigate, onUnauthorized }) => {
           <NoticeBox tone="seal">등록하면 &apos;미인증&apos;으로 저장돼요. 권리자 인증을 마치면 면적·층을 고칠 수 있어요.</NoticeBox>
           {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
           <Button size="lg" className="w-full" onClick={handleSubmit} disabled={!isReady || isSubmitting}>
-            {isSubmitting ? '등록 중' : '호실 등록'}
+            {isSubmitting ? '등록 중' : '등록'}
           </Button>
           <Button variant="secondary" className="w-full" onClick={() => window.history.back()} disabled={isSubmitting}>
             취소
           </Button>
         </Card>
       </div>
-    </>
+
+      {isDialogOpen && (
+        <AddressSearchDialog onResolved={handleResolved} onClose={closeDialog} onUnauthorized={onUnauthorized} />
+      )}
+    </div>
   );
 };
-
-// 호실 등록(POST /properties): 한 화면에 한 번에 입력. 저장하면 초기 세팅 화면으로 간다(기록 바꿈).
-export const PropertyRegisterPage = ({ params, onNavigate, onUnauthorized }) => (
-  <div className="w-full max-w-6xl space-y-6 pb-10">
-    {params.complexId ? (
-      <PropertyForm
-        complexId={params.complexId}
-        onNavigate={onNavigate}
-        onUnauthorized={onUnauthorized}
-      />
-    ) : (
-      <>
-        <PageHeader title="호실 등록" onBack={() => window.history.back()} />
-        <BuildingPicker onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
-      </>
-    )}
-  </div>
-);

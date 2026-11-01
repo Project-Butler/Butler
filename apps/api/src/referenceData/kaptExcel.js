@@ -1,6 +1,8 @@
 // K-apt 기본정보 엑셀(공동주택 단지 기본정보, k-apt.go.kr 내려받기) → kapt_complexes 기본정보 칸 + kapt_address_links(KAPT_EXCEL).
-// 처음 적재·분기 재적재 전용(A팀 로컬). 1행은 안내문, 2행이 머리글. 같은 단지코드가 도로명주소만 달리 여러 줄 나온다.
-// 쓰기는 한 트랜잭션: 기본정보 칸 UPDATE + 연결 upsert(import_run_id = 이번 실행) → 게이트 → 이번 실행이 아닌 KAPT_EXCEL 행 sweep.
+// 처음 적재(importKaptBasis)와 주간 갱신(refreshKaptBasis)이 함께 쓴다. 1행은 안내문, 2행이 머리글.
+// 예전 파일은 같은 단지코드가 도로명주소만 달리 여러 줄 나왔고, 2026-10-26부터는 단지당 한 줄이다.
+// 쓰기는 게이트 → 한 트랜잭션: 기본정보 칸 UPDATE(빈 칸은 기존 값 유지) + 연결 upsert(import_run_id = 마지막으로 확인한 실행).
+// 파일에 없는 연결은 지우지 않는다: 한 줄 파일에 빠진 추가 도로명주소를 얻을 다른 K-apt 출처가 없다.
 import { parseJibunLots, parseRoadAddress } from '../domains/complexes/kaptAddress.js';
 import { refillComplexKaptCodes } from './complexKaptCodes.js';
 import {
@@ -18,6 +20,7 @@ import {
 export const EXCEL_GATE = {
   minRowsRead: 20_000,
   minParsedRate: 0.95,
+  minFilledRate: 0.95,
   maxRateDropFromLast: 0.05,
   minRowsReadRatioFromLast: 0.9,
 };
@@ -47,7 +50,9 @@ const cellText = (value) => {
 };
 
 const toCount = (value) => {
-  const number = Number(cellText(value).replaceAll(',', ''));
+  const text = cellText(value).replaceAll(',', '');
+  if (!text) return null;
+  const number = Number(text);
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
 };
 
@@ -125,9 +130,10 @@ export const toExcelWrite = (group, legalDongCode) => {
 };
 
 // 결과: { ok: true } | { ok: false, reason }
-export const evaluateExcelGate = ({ rowsRead, parsedRate }, last = null, gate = EXCEL_GATE) => {
+export const evaluateExcelGate = ({ rowsRead, parsedRate, filledRate = 1 }, last = null, gate = EXCEL_GATE) => {
   if (rowsRead < gate.minRowsRead) return { ok: false, reason: `rows read ${rowsRead} < ${gate.minRowsRead}` };
   if (parsedRate < gate.minParsedRate) return { ok: false, reason: `parsed rate ${(parsedRate * 100).toFixed(1)}% < 95%` };
+  if (filledRate < gate.minFilledRate) return { ok: false, reason: `filled rate ${(filledRate * 100).toFixed(1)}% < 95%` };
   if (last) {
     if (typeof last.parsedRate === 'number' && parsedRate < last.parsedRate - gate.maxRateDropFromLast) {
       return { ok: false, reason: 'parsed rate dropped more than 5%p from last success' };
@@ -139,7 +145,7 @@ export const evaluateExcelGate = ({ rowsRead, parsedRate }, last = null, gate = 
   return { ok: true };
 };
 
-// exceljs 스트리밍(devDependency라 이 함수 안에서만 불러온다 — 서버 번들에 넣지 않음)
+// exceljs 스트리밍(적재 명령에서만 쓰므로 이 함수 안에서만 불러온다 — API 서버 번들에 넣지 않음)
 const readWorkbookRows = async (filePath) => {
   const { default: ExcelJS } = await import('exceljs');
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
@@ -156,6 +162,19 @@ const readWorkbookRows = async (filePath) => {
   return rows;
 };
 
+// 기본정보 칸마다 값이 있는 단지의 비율 중 가장 낮은 값(칸이 통째로 비거나 밀리면 떨어진다)
+export const toFilledRate = (groups) => {
+  const list = [...groups];
+  if (list.length === 0) return 0;
+  const rateOf = (hasValue) => list.filter(hasValue).length / list.length;
+  return Math.min(
+    rateOf((group) => group.saleType),
+    rateOf((group) => group.approvalDate),
+    rateOf((group) => group.buildingCount > 0),
+    rateOf((group) => group.householdCount > 0),
+  );
+};
+
 const toChunks = (items, size) => {
   const chunks = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
@@ -164,8 +183,10 @@ const toChunks = (items, size) => {
 
 const writeBasisColumns = (tx, columns, fileDate, now) =>
   tx.$executeRaw`
-    UPDATE kapt_complexes k SET road_address = u.ra, jibun_address = u.ja, main_lot = u.ml, sub_lot = u.sl,
-      sale_type = u.st, household_count = u.hc, building_count = u.bc, approval_date = u.ad,
+    UPDATE kapt_complexes k SET road_address = COALESCE(u.ra, k.road_address), jibun_address = COALESCE(u.ja, k.jibun_address),
+      main_lot = COALESCE(u.ml, k.main_lot), sub_lot = COALESCE(u.sl, k.sub_lot),
+      sale_type = COALESCE(u.st, k.sale_type), household_count = COALESCE(u.hc, k.household_count),
+      building_count = COALESCE(u.bc, k.building_count), approval_date = COALESCE(u.ad, k.approval_date),
       basis_source = 'EXCEL', basis_file_date = ${fileDate}::date, basis_fetched_at = ${now}, basis_error = NULL,
       updated_at = ${now}
     FROM unnest(
@@ -198,7 +219,7 @@ const writeLinks = (tx, links, runId) =>
     DO UPDATE SET import_run_id = EXCLUDED.import_run_id, updated_at = now()`;
 
 // fileDate: 엑셀 추출일 'YYYY-MM-DD'
-export const runKaptExcelImport = async ({ prisma, filePath, fileDate, readRows = readWorkbookRows, log = () => {} }) => {
+export const runKaptExcelImport = async ({ prisma, filePath, fileDate, readRows = readWorkbookRows, gate: gateRules = EXCEL_GATE, log = () => {} }) => {
   const startedAt = Date.now();
   await releaseStaleRunning(prisma, LOCK_KEYS.KAPT_EXCEL);
   const run = await startImport(prisma, {
@@ -243,6 +264,7 @@ export const runKaptExcelImport = async ({ prisma, filePath, fileDate, readRows 
       basisWritten: columns.length,
       parsedCodes,
       parsedRate: parsedCodes / (groups.size || 1),
+      filledRate: toFilledRate(groups.values()),
       links: links.length,
       withSaleType: columns.filter((column) => column.saleType).length,
       multiAddressCodes: [...groups.values()].filter((group) => group.roadAddresses.length > 1).length,
@@ -250,21 +272,18 @@ export const runKaptExcelImport = async ({ prisma, filePath, fileDate, readRows 
     log(`엑셀 ${stats.rowsRead}줄, 단지 ${stats.uniqueCodes}, 목록에 없음 ${notInList}, 도로명 키 ${parsedCodes}(${(stats.parsedRate * 100).toFixed(2)}%)`);
 
     const last = await findLastSucceeded(prisma, SOURCES.KAPT_EXCEL);
-    const gate = evaluateExcelGate(stats, last?.stats ?? null);
+    const gate = evaluateExcelGate(stats, last?.stats ?? null, gateRules);
     if (!gate.ok) throw new ImportGateError(gate.reason, stats);
 
     const now = new Date();
-    const swept = await prisma.$transaction(
+    await prisma.$transaction(
       async (tx) => {
         await takeXactLock(tx, LOCK_KEYS.KAPT_EXCEL);
         for (const chunk of toChunks(columns, WRITE_BATCH_SIZE)) await writeBasisColumns(tx, chunk, fileDate, now);
         for (const chunk of toChunks(links, WRITE_BATCH_SIZE)) await writeLinks(tx, chunk, run.id);
-        return tx.$executeRaw`
-          DELETE FROM kapt_address_links WHERE source = 'KAPT_EXCEL' AND import_run_id IS DISTINCT FROM ${run.id}::uuid`;
       },
       { timeout: 600_000, maxWait: 10_000 },
     );
-    stats.swept = swept;
     stats.complexKaptCodesChanged = await refillComplexKaptCodes(prisma, null);
     stats.totalMs = Date.now() - startedAt;
     await finishImport(prisma, run.id, { status: 'SUCCEEDED', rowsRead: stats.rowsRead, rowsWritten: links.length, stats });
