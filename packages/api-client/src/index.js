@@ -38,3 +38,9 @@ export { getDisputeChat } from './apis/disputes/getDisputeChat';
 export { postDisputeChat } from './apis/disputes/postDisputeChat';
 export { postDisputeChatMessage } from './apis/disputes/postDisputeChatMessage';
 export { deleteDisputeChat } from './apis/disputes/deleteDisputeChat';
+
+export { getAdminDashboard } from './apis/admin/getAdminDashboard';
+export { getAdminUserList } from './apis/admin/getAdminUserList';
+export { getAdminUser } from './apis/admin/getAdminUser';
+export { patchAdminUserStatus } from './apis/admin/patchAdminUserStatus';
+export { getAdminAuditLogList } from './apis/admin/getAdminAuditLogList';
