@@ -60,3 +60,36 @@ export const AUDIT_ACTION_LABEL = {
   COMPLEX_CREATED_BY_ADMIN: '단지 직접 등록',
   JOB_RETRIED: '작업 재시도',
 };
+
+export const JOB_STATUS_LABEL = {
+  PENDING: '대기',
+  PROCESSING: '실행 중',
+  SUCCEEDED: '성공',
+  FAILED: '실패',
+};
+
+export const JOB_STATUS_TONE = {
+  PENDING: 'pending',
+  PROCESSING: 'warning',
+  SUCCEEDED: 'success',
+  FAILED: 'danger',
+};
+
+// 작업 type. 피처 팀이 접두어를 붙여 늘리는 값이라 모르는 값은 원래 값을 그대로 보여 준다.
+export const JOB_TYPE_LABEL = {
+  JUSO_REFRESH_MANUAL: 'juso 즉시 갱신',
+  KAPT_BASIS_REFRESH_MANUAL: 'K-apt 즉시 갱신',
+  KAPT_COMPLEX_SYNC: 'K-apt 단지 동기화',
+  REFERENCE_DATA_DAILY: '참고 데이터 일일 갱신',
+  EXTERNAL_API_HEALTH: '외부 API 상태 점검',
+};
+
+// 감사 로그 resourceType(등록형). 필터 선택지로 쓴다.
+export const AUDIT_RESOURCE_TYPE_LABEL = {
+  USER: '회원',
+  OWNERSHIP: '소유 관계',
+  CONTRACT: '계약',
+  TICKET: '수리·점검 요청',
+  DOCUMENT: '문서',
+  JOB: '작업',
+};

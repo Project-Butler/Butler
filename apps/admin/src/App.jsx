@@ -4,7 +4,10 @@ import { LoginScreen } from '@butler/ui';
 import { getMe, postLogin, postLogout } from '@butler/api-client';
 import { AdminLayout, NAV_ITEMS, SETTINGS_ITEM } from './layout/AdminLayout';
 import { AdminDashboard } from './dashboard/AdminDashboard';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
+import { JobListPage } from './pages/JobListPage';
+import { OwnershipListPage } from './pages/OwnershipListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { UserListPage } from './pages/UserListPage';
 import { RoleGuard } from './routes/guards/RoleGuard';
@@ -18,6 +21,9 @@ const PAGE_BY_KEY = {
   dashboard: AdminDashboard,
   users: UserListPage,
   userDetail: UserDetailPage,
+  ownerships: OwnershipListPage,
+  jobs: JobListPage,
+  auditLogs: AuditLogPage,
 };
 
 export const App = () => {

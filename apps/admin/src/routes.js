@@ -4,7 +4,7 @@ import { generatePath, matchPath } from 'react-router-dom';
 export const HOME_PATH = '/dashboard';
 
 // 화면 key ↔ URL 경로. 화면 컴포넌트는 onNavigate(key, params)로 이동하고, 이 파일이 key를 경로로 바꾼다.
-// 운영 API가 붙기 전인 메뉴(소유 관계 등)도 경로는 미리 정해 두고, App이 '준비 중' 화면을 보여 준다.
+// 운영 API가 붙기 전인 메뉴(계약 등)도 경로는 미리 정해 두고, App이 '준비 중' 화면을 보여 준다.
 // navKey: 메뉴에 없는 하위 화면(상세)에서 켜 둘 메뉴 key.
 export const ROUTE_TABLE = [
   { key: 'dashboard', path: HOME_PATH },
