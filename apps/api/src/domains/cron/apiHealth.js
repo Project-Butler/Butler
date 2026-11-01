@@ -1,16 +1,14 @@
 // 외부 API 상태 점검(주간 cron, 단지 목록 동기화 뒤). 고정 표본 3건으로 juso·K-apt 기본정보를
 // 한 번씩 불러 결과를 jobs(type EXTERNAL_API_HEALTH)에 남기고, 직전 점검도 실패였으면(2회 연속) 경보 로그를 남긴다.
 // K-apt 기본정보는 하루 한도가 있어서 1회만, 사용량 카운터(apiUsage.js)를 거쳐 부른다.
-// juso 변동: 지금 쓰는 출처(공식 연계 모드에 따라 JUSO_DELTA 또는 JUSO_LINK)의 마지막 성공 날짜가
-// 오늘(KST)보다 3일 넘게 지났으면 STALE(매일 cron이 멈췄거나 파일이 빠짐).
+// juso 변동: 공식 연계(JUSO_LINK)의 마지막 성공 날짜가 오늘(KST)보다 3일 넘게 지났으면 STALE(매일 cron이 멈췄거나 파일이 빠짐).
 // STALE은 경보 로그와 결과에만 남기고 점검 성공·실패에는 넣지 않는다(외부 API 상태와 별개).
 import { KAPT_BASIS_API, KAPT_BASIS_CRON_LIMIT, spendApiCall } from '../complexes/apiUsage.js';
 import { fetchKaptBasis } from '../complexes/kaptBasis.js';
 import { ExternalServiceError } from '../complexes/provider/ExternalServiceError.js';
 import { healthProbes } from '../complexes/provider/publicProvider.js';
-import { activeJusoSource, getJusoLinkMode } from '../../referenceData/jusoLinkMode.js';
-import { findDeltaCursorDate, SOURCES, toDeltaDate } from '../../referenceData/referenceImports.js';
-import { formatDateKST } from '../../platform/dateUtils.js';
+import { addDays, findDeltaCursorDate, SOURCES } from '../../referenceData/referenceImports.js';
+import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 
 export const EXTERNAL_API_HEALTH_JOB_TYPE = 'EXTERNAL_API_HEALTH';
 
@@ -46,13 +44,12 @@ export const isDeltaStale = (lastFileDate, today) => {
   return days > DELTA_STALE_DAYS;
 };
 
-// 지금 표에 쓰는 출처(모드 apply면 공식 연계, 아니면 건물DB 일변동분)의 커서를 본다.
-export const checkDeltaFreshness = async (prisma, mode = getJusoLinkMode()) => {
-  const source = activeJusoSource(mode);
+export const checkDeltaFreshness = async (prisma) => {
+  const source = SOURCES.JUSO_LINK;
   const lastFileDate = await findDeltaCursorDate(prisma, source);
-  // 공식 연계 날짜는 일변동분 stdde + 1이라, 같은 기준(3일)으로 재려면 stdde로 되돌려 비교한다.
-  const comparable = lastFileDate && source === SOURCES.JUSO_LINK ? toDeltaDate(lastFileDate) : lastFileDate;
-  const stale = isDeltaStale(comparable, formatDateKST(new Date()));
+  // 연계 기준일 L의 자료는 건물DB 기준일 L-1의 변동이라, 그 날짜로 3일을 잰다.
+  const comparable = lastFileDate && addDays(lastFileDate, -1);
+  const stale = isDeltaStale(comparable, getTodayKST());
   if (stale) console.error('[health] juso delta STALE', source, lastFileDate ?? 'none');
   return { source, lastFileDate, status: stale ? 'STALE' : 'OK' };
 };
@@ -100,7 +97,7 @@ const summarize = (results) => ({
 // 점검 중 예상 못 한 에러(DB 오류 등)가 나도 jobs 행을 PROCESSING으로 두지 않는다(finally에서 FAILED로 닫는다).
 export const runExternalApiHealth = async ({ prisma }) => {
   const job = await prisma.job.create({
-    data: { type: EXTERNAL_API_HEALTH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: new Date() },
+    data: { type: EXTERNAL_API_HEALTH_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: getNow() },
     select: { id: true },
   });
   let status = 'FAILED';

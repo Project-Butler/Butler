@@ -146,7 +146,7 @@ test('도로명이 바뀐 뒤 34: 주소 번호가 기존 연결과 같고 도�
   assert.equal(moved.kind, 'delete');
 });
 
-test('같은 날 63 뒤에 unresolved(도로명 모르는 31)가 오면 그 건물은 아예 쓰지 않는다(shadow 비교와 같은 뜻)', () => {
+test('같은 날 63 뒤에 unresolved(도로명 모르는 31)가 오면 그 건물은 아예 쓰지 않는다', () => {
   const existing = new Map([[mgt(1), existingLink(1)]]);
   const removal = planLinkLine(dongLine({ code: '63' }), lookup, ctxWith({ existing }));
   const readded = planLinkLine(dongLine({ code: '31' }), lookup, ctxWith({ existing }));

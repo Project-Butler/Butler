@@ -317,10 +317,10 @@ model JusoBuildingLink {
 
 // 참고 데이터 가져오기 실행 기록이자 실행 단위 잠금.
 // 부분 유니크 (lock_key) WHERE status='RUNNING', (source, file_date) WHERE status='SUCCEEDED'
-// AND source='JUSO_DELTA'는 마이그레이션 SQL에 있다.
+// AND source IN ('JUSO_DELTA','JUSO_LINK')는 마이그레이션 SQL에 있다.
 model DataImport {
   id          String    @id @default(uuid()) @db.Uuid
-  source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_DELTA / KAPT_API_BASIS
+  source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_LINK / KAPT_API_BASIS
   lockKey     String    @map("lock_key") @db.VarChar(100)
   fileName    String?   @map("file_name")
   fileDate    DateTime? @map("file_date") @db.Date

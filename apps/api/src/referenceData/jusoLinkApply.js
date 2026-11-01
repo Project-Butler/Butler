@@ -1,7 +1,7 @@
-// 공식 연계(JUSO_LINK) 하루치 계획·적용. 날짜 = 연계 기준일(= 건물DB 일변동분 stdde + 1).
+// 공식 연계(JUSO_LINK) 하루치 계획·적용. 날짜 = 연계 기준일.
 // 하루치 = 세 자료요청 구분(100004 동 표시·100001 도로명주소 한글·100005 도로명)의 파일. 재반영 파일은 같은 날짜 뒤에 붙여
-// 줄 순서대로 적용한다(같은 건물이면 뒤의 줄이 이긴다). 적용은 건물DB 일변동분과 같은 엔진(applyCursorImport)이다.
-// 계획(planJusoLinkDay)은 쓰기가 없어서 shadow 비교도 같은 함수를 쓴다.
+// 줄 순서대로 적용한다(같은 건물이면 뒤의 줄이 이긴다). 적용은 applyCursorImport 엔진이 한다.
+// 계획(planJusoLinkDay)은 쓰기가 없어서 CLI의 --dry-run도 같은 함수를 쓴다.
 import { spendApiCall } from '../domains/complexes/apiUsage.js';
 import { rollUpLegalDongCode } from '../domains/complexes/provider/pnu.js';
 import { jusoReferenceSearch } from '../domains/complexes/provider/publicProvider.js';
@@ -197,7 +197,6 @@ export const applyJusoLinkDay = async ({ prisma, linkDate, tables, fileSize, fil
     fileName: fileName ?? `juso-link ${linkDate}`,
     fileSize,
     fileSha1,
-    noBaselineReason: 'no baseline (run juso-link:cutover first)',
     prepare: async () => {
       const plan = await planJusoLinkDay({ prisma, tables, search, deadlineAt: options.deadlineAt ?? Infinity });
       renames = plan.renames;

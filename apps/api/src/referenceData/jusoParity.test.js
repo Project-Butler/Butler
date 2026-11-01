@@ -6,8 +6,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { buildKaptLookup, parseBuildingLine } from './jusoBuildingMatcher.js';
-import { applyOpsToMap, collapseDeltaOps, planDeltaLine } from './jusoDeltaApplier.js';
+import { collapseDeltaOps } from './jusoDeltaApplier.js';
 import { collectFullLinks } from './jusoFullLoad.js';
+import { applyOpsToMap, planDeltaLine } from '../testSupport/jusoLines.js';
 
 const SAMPLE_LINES = readFileSync(new URL('./fixtures/juso-buildings-sample.txt', import.meta.url), 'utf8')
   .split('\n')

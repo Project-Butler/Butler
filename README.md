@@ -109,29 +109,17 @@ npm run backfill:kapt-basis -w apps/api                                      # 3
 npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>               # 4. juso 건물DB → 건물별 K-apt 연결(약 20만 행, 로컬 약 1분)
 ```
 - 2·4번은 소스별 품질 게이트(읽은 줄 수, 연결률, 규칙별 비율, 지난 성공 대비)를 넘지 못하면 아무것도 바꾸지 않고 실패한다(`reference_data_imports.error`에 사유). 잘린 파일로는 기존 데이터를 지우지 않는다.
-- 4번이 성공하면 juso 변동분 커서가 전체분 기준일로 옮겨지고, 매일 cron이 그다음 날부터 변동분을 적용한다. 4번은 변동분이 `RUNNING`·`PARTIAL`이면 시작하지 않는다(같은 잠금 키).
-- 변동분을 손으로 적용할 때(cron을 켜기 전·받기가 안 될 때): `npm run apply:juso-changes -w apps/api -- <YYYYMMDD_dailynoticedata.zip>`. 커서 다음 날짜만 받는다(`--allow-gap`은 빠진 날짜를 알고 일부러 건너뛸 때만).
+- 4번이 성공하면 공식 연계 커서가 전체분 기준일 + 1로 옮겨지고, 매일 cron이 그다음부터 API로 변동을 적용한다. 4번은 공식 연계가 `RUNNING`·`PARTIAL`이면 시작하지 않는다(같은 잠금 키).
 - 끝나면 `reference_data_imports`의 `stats`(연결률·규칙별 비율·행 수)를 확인한다.
 
-### juso 매일 갱신: 건물DB 일변동분 → 공식 연계 전환
-매일 cron이 받는 경로는 `JUSO_LINK_MODE`(apps/api `.env`·Vercel 환경 변수)로 정한다. 승인키 `JUSO_LINK_API_KEY`가 없으면 항상 `off`다.
+### juso 매일 갱신: 공식 연계 API
+매일 cron은 도로명주소 변동자료 공식 연계 API(`update.juso.go.kr`, 승인키 `JUSO_LINK_API_KEY`)로만 받는다. 전체분은 API로 제공되지 않아 처음 적재·복구 때 위 4번으로 넣는다.
 
-| 모드 | 매일 cron이 하는 일 |
-|---|---|
-| `off` | 건물DB 일변동분(비공개 받기 주소, 키 없음)을 적용 |
-| `shadow` (키가 있을 때 기본) | 일변동분을 적용하고, 같은 날 변동을 공식 연계(`update.juso.go.kr`, 승인키)로 **계획만** 해서 결과를 비교·기록(`reference_data_imports` source `JUSO_LINK_SHADOW`). 표에는 쓰지 않는다 |
-| `apply` | 공식 연계만 적용(source `JUSO_LINK`). 일변동분은 돌지 않는다 |
-
-- 날짜: 공식 연계 기준일 L의 자료 = 일변동분 stdde L-1의 자료.
-- 공식 연계는 건물DB 파일이 아니라 상세주소 동 표시(100004) + 도로명주소 한글(100001) + 도로명(100005)을 받아 같은 매칭 규칙으로 맞춘다. 칸이 모자라 판단할 수 없는 건물은 **쓰지 않고**(unresolved, 기존 연결 유지) 기록만 남긴다. 판단 대상의 1%를 넘고 5건 이상이면 그날은 FAILED로 멈춘다.
-- 하루 1번, 재시도 없음. 실패한 날짜는 성공 기록이 없으므로 다음 날 실행이 그 날짜부터 이어서 받는다(공식 연계는 한 번에 최대 10일치).
-- **전환 절차**: `shadow`로 비교 기록이 쌓이면 확인한 뒤 아래를 실행하고, Vercel의 `JUSO_LINK_MODE`를 `apply`로 바꾼다. 7일 연속(설명되지 않는 차이 0건, unresolved 1% 미만)이 안 되면 `--force` 없이는 전환하지 않는다.
-  ```bash
-  npm run juso-link:cutover -w apps/api              # 공식 연계 기준점 = 일변동분 커서 + 1
-  npm run juso-link:cutover -w apps/api -- --revert  # 되돌리기(일변동분 기준점 = 공식 연계 커서 - 1), 그 뒤 모드를 shadow·off로
-  ```
+- 공식 연계는 상세주소 동 표시(100004) + 도로명주소 한글(100001) + 도로명(100005)을 받아 전체분과 같은 매칭 규칙으로 맞춘다. 칸이 모자라 판단할 수 없는 건물은 **쓰지 않고**(unresolved, 기존 연결 유지) 기록만 남긴다. 판단 대상의 1%를 넘고 5건 이상이면 그날은 FAILED로 멈춘다.
+- 하루 1번, 재시도 없음. 실패한 날짜는 성공 기록이 없으므로 다음 날 실행이 그 날짜부터 이어서 받는다(한 번에 최대 10일치).
+- 키가 없거나 API·자료·적용이 실패하면 `jobs`(type `REFERENCE_DATA_DAILY`)가 `FAILED`이고 `result.juso.stopReason`에 사유가 남는다. 아직 안 올라온 최근 이틀과 전체분 적재 전은 실패로 치지 않는다. 마지막 성공이 3일 넘게 지나면 주간 점검이 STALE 로그를 남긴다.
 - 손으로 하루치를 보거나 적용할 때: `npm run apply:juso-link -w apps/api -- --date YYYY-MM-DD [--dry-run]`(`--dry-run`은 쓰지 않고 계획만).
-- **관리자 즉시 갱신**: 매일 cron을 기다리지 않고 지금 갱신하려면 `ADMIN` 계정으로 `POST /api/v1/admin/reference-data/juso/refresh`(본문 없음, `X-Requested-With: butler-web`)를 부른다. 지금 모드 그대로(apply면 공식 연계, off·shadow면 일변동분) 밀린 날짜를 적용하고 결과 요약을 돌려준다. 같은 날을 두 번 적용하지 않으며, 즉시 갱신이 이미 돌고 있으면 `409 REFERENCE_DATA_REFRESH_IN_PROGRESS`. 실행 기록은 `jobs`(type `JUSO_REFRESH_MANUAL`, 요청한 관리자).
+- **관리자 즉시 갱신**: 매일 cron을 기다리지 않고 지금 갱신하려면 `ADMIN` 계정으로 `POST /api/v1/admin/reference-data/juso/refresh`(본문 없음, `X-Requested-With: butler-web`)를 부른다. 공식 연계로 밀린 날짜를 적용하고 결과 요약을 돌려준다. 같은 날을 두 번 적용하지 않으며, 즉시 갱신이 이미 돌고 있으면 `409 REFERENCE_DATA_REFRESH_IN_PROGRESS`. 실행 기록은 `jobs`(type `JUSO_REFRESH_MANUAL`, 요청한 관리자).
 - **드리프트 점검(월 1회, 선택)**: 공식 연계는 건물DB에만 있는 일부 변경(공동주택 여부만 바뀐 경우 등)을 못 본다. 그달 건물DB 전체분 zip으로 지금 표와 비교해서, 차이가 0.5%를 넘으면 4번(전체분 적재)으로 다시 맞춘다. 쓰기는 하지 않는다.
   ```bash
   npm run juso-link:drift -w apps/api -- <건물DB_전체분.zip>

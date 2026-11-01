@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
-import { getTodayKST } from '../../platform/dateUtils.js';
+import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { compareUnits } from '../../platform/naturalSort.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -201,7 +201,7 @@ export const createPropertyWithOwnership = async (user, input) => {
       });
 
       // TODO(audit): OWNERSHIP_CREATED — audit.record()가 생기면 여기서 기록한다.
-      const now = new Date();
+      const now = getNow();
       const summary = toPropertySummary(property);
       return {
         property: toPropertyResponse(
@@ -240,7 +240,7 @@ const findOwnerProperties = async (user, { page, size, complexId }) => {
     include: { property: { include: { complex: true } }, contracts: CONTRACT_SELECT },
   });
 
-  const now = new Date();
+  const now = getNow();
   const today = getTodayKST();
   const sorted = [...ownerships].sort((a, b) => compareUnits(a.property, b.property));
   const items = sorted
@@ -306,7 +306,7 @@ const findFormerOwnerProperties = async (user, { page, size, complexId }) => {
     }),
   ]);
 
-  const now = new Date();
+  const now = getNow();
   const today = getTodayKST();
   // CTE가 정한 순서를 유지한다.
   const items = propertyIds.map((propertyId) => {
@@ -354,7 +354,7 @@ export const findPropertyForUser = async (user, propertyId) => {
   if (!property) return null;
 
   const rows = await loadRelationRows(user, propertyId);
-  return buildPropertyView({ user, property, ...rows, now: new Date(), today: getTodayKST() });
+  return buildPropertyView({ user, property, ...rows, now: getNow(), today: getTodayKST() });
 };
 
 // PATCH /properties/:propertyId — ADMIN 또는 이 호실의 "계산된" VERIFIED 활성 소유자만.
@@ -382,5 +382,5 @@ export const updateProperty = async (user, propertyId, data) => {
     });
     return row;
   });
-  return buildPropertyView({ user, property: updated, ...rows, now: new Date(), today: getTodayKST() });
+  return buildPropertyView({ user, property: updated, ...rows, now: getNow(), today: getTodayKST() });
 };

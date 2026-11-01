@@ -1,14 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildKaptLookup } from './jusoBuildingMatcher.js';
-import {
-  applyOpsToMap,
-  CHANGE_REASONS,
-  collapseDeltaOps,
-  evaluateDeltaGate,
-  planDeltaLine,
-  splitDeltaLines,
-} from './jusoDeltaApplier.js';
+import { CHANGE_REASONS, collapseDeltaOps, splitDeltaLines } from './jusoDeltaApplier.js';
+import { applyOpsToMap, planDeltaLine } from '../testSupport/jusoLines.js';
 
 const LOOKUP = buildKaptLookup({
   roadLinks: [
@@ -39,24 +33,6 @@ test('추가·변경인데 K-apt와 안 맞으면 delete(전에 맞았던 연결
   const op = planDeltaLine(line({ mgt: 1, code: '34', main: '999' }), LOOKUP);
   assert.equal(op.kind, 'delete');
   assert.equal(op.buildingMgtNo, '1135010600105030000000001');
-});
-
-test('모르는 이동사유코드는 unknown → 게이트 실패', () => {
-  const op = planDeltaLine(line({ mgt: 1, code: '99' }), LOOKUP);
-  assert.deepEqual(op, { kind: 'unknown', code: '99' });
-  const gate = evaluateDeltaGate({ lineCount: 10, invalidCount: 0, unknownCodes: ['99'], existingDeleteCount: 0, totalLinks: 1000 });
-  assert.equal(gate.ok, false);
-  assert.match(gate.reason, /unknown change reason code: 99/);
-});
-
-test('게이트: 칸 수가 대부분 다르면 형식 변경, 파싱 실패 1% 초과, 삭제 2% 초과', () => {
-  const base = { lineCount: 1000, invalidCount: 0, unknownCodes: [], existingDeleteCount: 0, totalLinks: 100000 };
-  assert.deepEqual(evaluateDeltaGate(base), { ok: true });
-  assert.equal(evaluateDeltaGate({ ...base, invalidCount: 600 }).reason, 'format changed');
-  assert.match(evaluateDeltaGate({ ...base, invalidCount: 11 }).reason, /parse failures 11\/1000/);
-  assert.equal(evaluateDeltaGate({ ...base, invalidCount: 10 }).ok, true);
-  assert.match(evaluateDeltaGate({ ...base, existingDeleteCount: 2001 }).reason, /too many deletes/);
-  assert.equal(evaluateDeltaGate({ ...base, existingDeleteCount: 2000 }).ok, true);
 });
 
 test('NoData(변동 없는 날)는 줄 0개, CRLF·빈 줄 처리', () => {

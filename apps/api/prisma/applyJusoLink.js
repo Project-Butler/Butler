@@ -1,12 +1,11 @@
 // 공식 연계 하루치를 받아 적용하거나(기본) 계획만 본다(--dry-run). cron과 같은 코드. 확인·수동 따라잡기용.
 // 실행: npm run apply:juso-link -w apps/api -- --date YYYY-MM-DD [--dry-run] [--allow-gap]
-// --date: 연계 기준일(= 건물DB 일변동분 stdde + 1). 승인키는 .env의 JUSO_LINK_API_KEY(출력하지 않는다).
-// 적용은 공식 연계 기준점(juso-link:cutover)이 있어야 하고, 커서 다음 날짜만 한다(--allow-gap은 손으로 확인했을 때만).
+// --date: 연계 기준일. 승인키는 .env의 JUSO_LINK_API_KEY(출력하지 않는다).
+// 적용은 전체분 적재(import:juso-buildings)로 심은 기준점이 있어야 하고, 커서 다음 날짜만 한다(--allow-gap은 손으로 확인했을 때만).
 import '../src/loadEnv.js';
 import { refillComplexKaptCodes } from '../src/referenceData/complexKaptCodes.js';
 import { applyJusoLinkDay, planJusoLinkDay, readJusoLinkDay } from '../src/referenceData/jusoLinkApply.js';
-import { getJusoLinkApiKey } from '../src/referenceData/jusoLinkMode.js';
-import { downloadJusoLink, evaluateLinkDay, groupLinkFilesByDate, LINK_CODES } from '../src/referenceData/jusoLinkResponse.js';
+import { downloadJusoLink, evaluateLinkDay, getJusoLinkApiKey, groupLinkFilesByDate, LINK_CODES } from '../src/referenceData/jusoLinkResponse.js';
 import { createKeySet } from '../src/referenceData/jusoLinks.js';
 import { prisma } from '../src/platform/prismaClient.js';
 import { readOption, toUsageError } from './referenceDataArgs.js';
