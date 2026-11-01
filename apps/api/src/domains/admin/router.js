@@ -7,8 +7,13 @@ import {
   getDashboard,
   getUser,
   listAuditLogs,
+  listJobs,
+  listOwnerships,
   listUsers,
   patchUserStatus,
+  postJobRetry,
+  postOwnershipEnd,
+  postOwnershipRevoke,
   refreshJuso,
   refreshKapt,
 } from './controller.js';
@@ -26,6 +31,11 @@ router.get('/dashboard', getDashboard);
 router.get('/users', listUsers);
 router.get('/users/:userId', getUser);
 router.patch('/users/:userId/status', patchUserStatus);
+router.get('/property-ownerships', listOwnerships);
+router.post('/property-ownerships/:ownershipId/revoke', postOwnershipRevoke);
+router.post('/property-ownerships/:ownershipId/end', postOwnershipEnd);
 router.get('/audit-logs', listAuditLogs);
+router.get('/jobs', listJobs);
+router.post('/jobs/:jobId/retry', postJobRetry);
 
 export default router;
