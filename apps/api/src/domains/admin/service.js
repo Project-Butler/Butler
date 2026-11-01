@@ -3,6 +3,7 @@ import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { afterCreatedAtCursor, toCursorPage } from '../../platform/createdAtCursor.js';
+import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { formatDisplayName } from '../../platform/unitAddress.js';
@@ -264,7 +265,8 @@ export const revokeOwnership = (actor, ownershipId, { reason }, req) =>
 // 운영자 종료는 계약이 있어도 진행한다(api-contract.md 3장). 계약은 이전 소유자·임차인에게 읽기 전용으로 남는다.
 export const endOwnershipByAdmin = (actor, ownershipId, { reason }, req) =>
   prisma.$transaction(async (tx) => {
-    const ownership = await tx.ownership.findUnique({ where: { id: ownershipId } });
+    // 사용자 종료·계약 쓰기와 같은 행 잠금으로 줄을 세운다.
+    const ownership = await lockOwnershipRow(tx, ownershipId);
     if (!ownership) throwOwnershipNotFound();
 
     await endOwnershipInTx(tx, ownership, { endReason: 'ADMIN_ENDED', note: reason, checkActiveContracts: false });

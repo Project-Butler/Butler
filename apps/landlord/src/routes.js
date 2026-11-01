@@ -4,13 +4,17 @@ import { matchPath } from 'react-router-dom';
 export const HOME_PATH = '/home';
 
 // 화면 key ↔ URL 경로. 화면 컴포넌트는 onNavigate(key, params)로 이동하고, 이 파일이 key를 경로로 바꾼다.
-// 위쪽일수록 먼저 맞춰 본다(/properties/new가 /properties/:propertyId보다 앞).
+// 위쪽일수록 먼저 맞춰 본다(/properties/new가 /properties/:propertyId보다 앞, /contracts/new도 같다).
 export const ROUTE_TABLE = [
   { key: 'home', path: HOME_PATH },
   { key: 'buildingList', path: '/buildings' },
   { key: 'properties', path: '/properties' },
   { key: 'propertyRegister', path: '/properties/new' },
   { key: 'propertyDetail', path: '/properties/:propertyId' },
+  { key: 'contracts', path: '/contracts' },
+  { key: 'contractRegister', path: '/contracts/new' },
+  { key: 'contractEdit', path: '/contracts/:contractId/edit' },
+  { key: 'contractDetail', path: '/contracts/:contractId' },
   { key: 'setup', path: '/setup' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
@@ -35,6 +39,16 @@ const BUILDERS = {
   }),
   propertyRegister: () => ({ pathname: '/properties/new' }),
   propertyDetail: ({ propertyId }) => ({ pathname: `/properties/${propertyId}` }),
+  contracts: () => ({ pathname: '/contracts' }),
+  // 사이드바 '계약' 메뉴 key(leases)도 계약 목록으로 보낸다.
+  leases: () => ({ pathname: '/contracts' }),
+  // 공실 호실에서 오면 propertyId, 갱신이면 renewFrom(이전 계약 id)을 주소에 남긴다(D-09·D-14).
+  contractRegister: ({ propertyId, renewFrom } = {}) => {
+    const search = new URLSearchParams(Object.entries({ propertyId, renewFrom }).filter(([, value]) => value)).toString();
+    return { pathname: '/contracts/new', search: search ? `?${search}` : '' };
+  },
+  contractDetail: ({ contractId }) => ({ pathname: `/contracts/${contractId}` }),
+  contractEdit: ({ contractId }) => ({ pathname: `/contracts/${contractId}/edit` }),
   setup: () => ({ pathname: '/setup' }),
   // 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
   disputes: ({ topic, q, tab } = {}) => {
