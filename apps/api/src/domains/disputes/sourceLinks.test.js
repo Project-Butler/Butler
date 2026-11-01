@@ -27,12 +27,14 @@ test('원문 링크: 사례집 속 판례는 국가법령정보센터에 있으�
   );
   assert.equal(
     toSourceUrl({ sourceKey: 'casebook-2025-P-2022gadan6858', title: '갱신요구', caseNumber: '서울중앙지방법원 2023. 1. 26. 선고 2022가단6858 판결' }),
-    'https://adrhome.reb.or.kr',
+    'https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10501000000002022101718&boardNo=4&boardIdx=180',
   );
 });
 
 test('원문 링크: 사례집·가이드북은 책을 받을 수 있는 게시글, 모르는 자료는 null', () => {
-  assert.equal(toSourceUrl({ sourceKey: 'klac-2023-H-01', title: '사례' }), 'https://www.hldcc.or.kr/hp/li/arrCaseList.do');
+  assert.equal(toSourceUrl({ sourceKey: 'klac-2025-C-01', title: '사례' }), 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=1831');
+  assert.equal(toSourceUrl({ sourceKey: 'klac-2023-H-01', title: '사례' }), 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=1070');
+  assert.equal(toSourceUrl({ sourceKey: 'klac-2018-H-37', title: '사례' }), 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=867');
   assert.equal(toSourceUrl({ sourceKey: 'molit-2022-H-s1-2', title: '사례' }), 'https://www.molit.go.kr/USR/policyData/m_34681/dtl.jsp?id=4675');
   assert.equal(toSourceUrl({ sourceKey: 'unknown-1', title: '자료' }), null);
 });
