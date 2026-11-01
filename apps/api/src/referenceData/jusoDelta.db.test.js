@@ -4,10 +4,15 @@ import { createDbFixture, dbTestSkip } from '../testSupport/dbTest.js';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { prisma } from '../platform/prismaClient.js';
-import { applyJusoDeltaFile } from './jusoDelta.js';
+import { createHash } from 'node:crypto';
+import { planDeltaLine } from '../testSupport/jusoLines.js';
+import { applyCursorImport } from './jusoDelta.js';
+import { splitDeltaLines } from './jusoDeltaApplier.js';
+import { decodeCp949 } from './jusoFiles.js';
 import { runJusoFullLoad } from './jusoFullLoad.js';
 import { refillComplexKaptCodes } from './complexKaptCodes.js';
 import { createKeySet } from './jusoLinks.js';
+import { loadKaptLookup } from './kaptLookup.js';
 import { ImportAlreadyRunningError, LOCK_KEYS, SOURCES, startImport } from './referenceImports.js';
 
 const LEGAL = '9999910100';
@@ -77,7 +82,29 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     return () => (calls++ === 0 ? 0 : 2);
   };
 
-  const apply = (fileDate, buffer, extra = {}) => applyJusoDeltaFile({ prisma, fileDate, fileName: `${fileDate}.txt`, buffer, allowGap: true, ...extra });
+  const apply = (fileDate, buffer, extra = {}) =>
+    applyCursorImport({
+      prisma,
+      source: SOURCES.JUSO_LINK,
+      fileDate,
+      fileName: `${fileDate}.txt`,
+      fileSize: BigInt(buffer.length),
+      fileSha1: createHash('sha1').update(buffer).digest('hex'),
+      prepare: async () => {
+        const lines = splitDeltaLines(decodeCp949(buffer));
+        const lookup = await loadKaptLookup(prisma, { sigunguCodes: ['99999'], legalDongCodes: [LEGAL] });
+        const ops = lines.map((text) => planDeltaLine(text, lookup));
+        const unknown = ops.find((op) => op.kind === 'unknown');
+        return {
+          ops,
+          rowsRead: lines.length,
+          planned: {},
+          gate: unknown ? { ok: false, reason: `unknown change reason code: ${unknown.code}` } : { ok: true },
+        };
+      },
+      allowGap: true,
+      ...extra,
+    });
 
   test('모르는 이동사유코드가 있으면 FAILED, 쓰기 0', async () => {
     const result = await apply('2099-01-01', file([line({ n: 1, code: '31', road: 'testro' }), line({ n: 2, code: '99' })]));
@@ -124,7 +151,7 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
     assert.equal(row.fileSha1.length, 40);
 
     // 전체분은 변동분 PARTIAL이 있으면 시작하지 않는다
-    await assert.rejects(runJusoFullLoad({ prisma, sourcePath: '.' }), /juso delta PARTIAL/);
+    await assert.rejects(runJusoFullLoad({ prisma, sourcePath: '.' }), /juso link PARTIAL/);
 
     // 같은 날짜 파일 내용이 바뀜(9번 줄 대신 10번) → 0줄부터 다시
     const changed = [...lines.slice(0, 3), line({ n: 10, code: '31', road: 'testro' })];
@@ -173,7 +200,7 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
   });
 
   test('같은 표에 쓰는 실행은 동시에 하나만 RUNNING(lock_key 부분 유니크)', async () => {
-    const data = { source: SOURCES.JUSO_DELTA, lockKey: LOCK_KEYS.JUSO, fileDate: new Date('2099-01-06T00:00:00Z') };
+    const data = { source: SOURCES.JUSO_LINK, lockKey: LOCK_KEYS.JUSO, fileDate: new Date('2099-01-06T00:00:00Z') };
     const results = await Promise.allSettled([startImport(prisma, data), startImport(prisma, { ...data, source: SOURCES.JUSO_FULL })]);
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
     assert.ok(results.find((result) => result.status === 'rejected').reason instanceof ImportAlreadyRunningError);

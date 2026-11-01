@@ -79,7 +79,7 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
     // 로컬 DB에 실제 공식 연계 기준점이 이미 있을 수 있어서 둘 중 하나로 확인한다.
     const result = await apply('2099-06-01', tablesOf({ dongs: [dong({ n: 1, code: '31' })] }));
     assert.equal(result.status, 'SKIPPED');
-    assert.match(result.reason, /^(no baseline \(run juso-link:cutover first\)|gap: expected \d{4}-\d{2}-\d{2})$/);
+    assert.match(result.reason, /^(no baseline \(run import:juso-buildings first\)|gap: expected \d{4}-\d{2}-\d{2})$/);
   });
 
   test('신규(도로명은 같은 날 100001) → ROAD_KEY, 도로명 모르는 34는 기존 연결 유지, 63은 삭제, 같은 날짜 다시 → SKIPPED', async () => {

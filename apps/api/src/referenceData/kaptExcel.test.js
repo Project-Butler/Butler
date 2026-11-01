@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { evaluateExcelGate, groupExcelRows, toApprovalDate, toExcelWrite, toHeaderIndex } from './kaptExcel.js';
+import { evaluateExcelGate, groupExcelRows, toApprovalDate, toExcelWrite, toFilledRate, toHeaderIndex } from './kaptExcel.js';
 
 // exceljs row.values 모양(1부터 시작, 0번은 비어 있음)
 const HEADER = [undefined, '시도', '시군구', '읍면', '동리', '단지코드', '단지명', '단지분류', '법정동주소', '우편번호', '도로명주소', '분양형태', '사용승인일', '가입일', '동수', '세대수'];
@@ -14,6 +14,26 @@ test('머리글: 필요한 칸 위치를 찾고, 없으면 형식 변경', () =>
   assert.equal(index.kaptCode, 5);
   assert.equal(index.roadAddress, 10);
   assert.throws(() => toHeaderIndex(HEADER.filter((value) => value !== '분양형태')), /format changed: missing headers 분양형태/);
+});
+
+test('빈 칸은 null(0이 아니다) → 기존 값을 덮지 않는다', () => {
+  const groups = groupExcelRows([row('A1', '단지', '서울특별시 노원구 중계동 1', '', '', '', '', '')], toHeaderIndex(HEADER));
+  const { columns } = toExcelWrite(groups.get('A1'), '1135010600');
+  assert.equal(columns.householdCount, null);
+  assert.equal(columns.buildingCount, null);
+  assert.equal(columns.approvalDate, null);
+  assert.equal(columns.saleType, null);
+  assert.equal(columns.roadAddress, null);
+});
+
+test('채움 비율: 칸 중 가장 낮은 비율, 낮으면 게이트가 막는다', () => {
+  const filled = { saleType: '분양', approvalDate: '1990-09-03', buildingCount: 2, householdCount: 100 };
+  assert.equal(toFilledRate([filled, filled]), 1);
+  assert.equal(toFilledRate([filled, { ...filled, householdCount: 0 }]), 0.5);
+  assert.equal(toFilledRate([]), 0);
+  const passing = { rowsRead: 21757, parsedRate: 0.99 };
+  assert.deepEqual(evaluateExcelGate({ ...passing, filledRate: 0.99 }), { ok: true });
+  assert.equal(evaluateExcelGate({ ...passing, filledRate: 0.5 }).ok, false);
 });
 
 test('같은 단지코드의 여러 줄 → 도로명주소를 모두 모아 연결 행 3개(중계그린)', () => {

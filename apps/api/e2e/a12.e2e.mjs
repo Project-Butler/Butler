@@ -277,7 +277,7 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   const refSample = await db.$queryRaw`SELECT road_name_key, road_main_no, road_sub_no, kapt_code FROM kapt_address_links WHERE kapt_code = 'A13986306' AND source = 'KAPT_EXCEL'`;
   const imports = await db.$queryRaw`SELECT status, source, file_date FROM data_imports ORDER BY started_at DESC LIMIT 100`;
   const runningImportCount = await db.dataImport.count({ where: { status: 'RUNNING' } });
-  const deltaRows = imports.filter((x) => x.source === 'JUSO_DELTA');
+  const deltaRows = imports.filter((x) => x.source === 'JUSO_LINK');
   mark('reference data read-only: 중계그린 has three road links and no RUNNING import', refSample.length === 3 && new Set(refSample.map((x) => x.kapt_code)).size === 1 && runningImportCount === 0, { middleGreenLinkCount: refSample.length, links: refSample, runningImports: runningImportCount, deltaRecent: deltaRows.slice(0, 5).map((x) => x.status) });
 
   // Search persistence write throttling and TTL behavior.

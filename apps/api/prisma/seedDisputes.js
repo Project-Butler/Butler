@@ -1,25 +1,14 @@
-// 분쟁 참고자료(DisputeReference) 시딩. seed-data의 사례집·판례·법령·가이드북 JSON(JSON_PATHS)을 읽어 sourceKey 기준으로
+// 분쟁 참고자료(DisputeReference) 시딩. seed-data의 사례집·판례·법령·가이드북 JSON(disputeSeedFiles.js의 SEED_JSON_PATHS)을 읽어 sourceKey 기준으로
 // upsert한다 — 여러 번 실행해도 건수가 늘지 않는다. 데이터 출처는 seed-data/README.md.
 // 실행: npm run seed:disputes -w apps/api
 // Prisma Client는 generate 시점에 .env가 없으면 .env를 읽지 않으므로(npm install 직후 등) 직접 읽는다.
 import '../src/loadEnv.js';
 import { DisputeCategory, DisputePropertyKind, DisputeReferenceType, PrismaClient } from '@prisma/client';
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { SEED_JSON_PATHS } from './disputeSeedFiles.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
 
-const JSON_PATHS = [
-  'disputes.json',
-  'precedents.json',
-  'klac-casebooks.json',
-  'law-articles.json',
-  'seoul-guidebook.json',
-  'counsel-casebooks.json',
-  'molit-casebook.json',
-].map((file) => path.join(__dirname, 'seed-data', file));
 const REQUIRED_FIELDS = ['sourceKey', 'type', 'category', 'title', 'summary', 'content', 'sourceTitle'];
 const ENUM_FIELDS = {
   type: DisputeReferenceType,
@@ -64,7 +53,7 @@ const toRecord = (row) => ({
 });
 
 const main = async () => {
-  const rows = JSON_PATHS.flatMap((jsonPath) => JSON.parse(readFileSync(jsonPath, 'utf-8')));
+  const rows = SEED_JSON_PATHS.flatMap((jsonPath) => JSON.parse(readFileSync(jsonPath, 'utf-8')));
   validate(rows);
 
   for (const row of rows) {

@@ -19,6 +19,7 @@ import {
   findRelatedCandidates,
   findSameCategoryReferences,
   MAX_CHAT_MESSAGES,
+  RELEVANCE_SORT_FIELD,
   SORTABLE_FIELDS,
 } from './service.js';
 
@@ -56,7 +57,7 @@ const parseEnumList = (value, field, allowed, details) => {
   return values;
 };
 
-// 검색어 q: 앞뒤 공백을 빼고, 비면 검색하지 않는다(null).
+// 검색어 q: 앞뒤 공백을 빼고, 비면 검색하지 않는다(null). 공백으로 나눈 단어는 모두 들어 있어야 한다(service.js).
 const parseKeyword = (q, details) => {
   if (q === undefined) return null;
   const keyword = q.trim();
@@ -105,13 +106,16 @@ const parseListQuery = (query) => {
     }
   }
 
-  let orderBy = { field: 'createdAt', direction: 'desc' };
+  // 검색어가 있으면 기본은 관련도 순, 없으면 최신순. 검색어 없이 relevance를 고르면 매길 점수가 없어 최신순으로 둔다.
+  const defaultOrderBy = { field: 'createdAt', direction: 'desc' };
+  let orderBy = keyword ? { field: RELEVANCE_SORT_FIELD, direction: 'desc' } : defaultOrderBy;
   if (sort !== undefined) {
     const [field, direction] = sort.split(':');
-    if (!SORTABLE_FIELDS.includes(field) || !['asc', 'desc'].includes(direction)) {
-      details.push({ field: 'sort', reason: `필드:asc|desc 형식이고 필드는 ${SORTABLE_FIELDS.join(', ')} 중 하나여야 합니다.` });
+    const allowedFields = [...SORTABLE_FIELDS, RELEVANCE_SORT_FIELD];
+    if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
+      details.push({ field: 'sort', reason: `필드:asc|desc 형식이고 필드는 ${allowedFields.join(', ')} 중 하나여야 합니다.` });
     } else {
-      orderBy = { field, direction };
+      orderBy = field === RELEVANCE_SORT_FIELD && !keyword ? defaultOrderBy : { field, direction };
     }
   }
 

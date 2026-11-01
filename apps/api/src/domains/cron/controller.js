@@ -1,5 +1,6 @@
 import { prisma } from '../../platform/prismaClient.js';
 import { sendData } from '../../platform/respond.js';
+import { refreshKaptBasis } from '../../referenceData/kaptExcelRefresh.js';
 import { runReferenceDataCron } from './referenceData.js';
 import { syncKaptComplexList } from './service.js';
 
@@ -13,6 +14,15 @@ export const runKaptComplexSync = async (req, res, next) => {
     const summary = await syncKaptComplexList();
     sendData(res, summary);
   } catch (error) {
+    next(error);
+  }
+};
+
+export const runKaptBasisRefresh = async (req, res, next) => {
+  try {
+    sendData(res, await refreshKaptBasis({ prisma }));
+  } catch (error) {
+    console.error('[cron kapt-basis] failed', error.reason ?? error.code ?? 'internal error');
     next(error);
   }
 };
