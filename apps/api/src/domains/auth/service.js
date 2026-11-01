@@ -85,8 +85,9 @@ export const verifyRefreshToken = (token) => jwt.verify(token, process.env.REFRE
 // DB에는 refresh 토큰 원문 대신 해시만 둔다. 토큰이 이미 충분히 긴 무작위 값이라 빠른 SHA-256이면 된다.
 export const hashRefreshToken = (token) => createHash('sha256').update(token).digest('hex');
 
-export const revokeAllSessions = (userId) =>
-  prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+// client: 다른 작업과 같은 트랜잭션에 넣을 때 tx를 넘긴다(관리자 계정 정지). 기본은 prisma.
+export const revokeAllSessions = (userId, client = prisma) =>
+  client.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
 
 export const revokeSessionByToken = (token) =>
   prisma.session.updateMany({
