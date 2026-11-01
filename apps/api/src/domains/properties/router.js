@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authGuard } from '../../middlewares/authGuard.js';
 import { generalRateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
+import { listPropertyManagementLogs, postPropertyManagementLog } from '../managementLogs/controller.js';
 import { createProperty, getProperty, listProperties, patchProperty } from './controller.js';
 
 const router = Router();
@@ -13,5 +14,8 @@ router.post('/', roleGuard(['LANDLORD']), generalRateLimiter, createProperty);
 router.get('/', roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), generalRateLimiter, listProperties);
 router.get('/:propertyId', roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), generalRateLimiter, getProperty);
 router.patch('/:propertyId', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, patchProperty);
+// 관리 로그(5장)
+router.post('/:propertyId/management-logs', roleGuard(['LANDLORD']), generalRateLimiter, postPropertyManagementLog);
+router.get('/:propertyId/management-logs', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, listPropertyManagementLogs);
 
 export default router;

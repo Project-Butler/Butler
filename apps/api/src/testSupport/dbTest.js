@@ -56,6 +56,7 @@ export const createDbFixture = () => {
     const propertyIds = properties.map((property) => property.id);
 
     await prisma.activity.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.propertyLog.deleteMany({ where: { propertyId: { in: propertyIds } } });
     await prisma.contract.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.ownership.deleteMany({ where: { propertyId: { in: propertyIds } } });
     await prisma.property.deleteMany({ where: { id: { in: propertyIds } } });
