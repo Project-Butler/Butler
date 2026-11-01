@@ -2,7 +2,7 @@
 import { isOwnershipVerified } from './managementLogRules.js';
 import { prisma } from './prismaClient.js';
 
-const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
+export const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
 
 // 직접 작성(POST)과 시스템 기록이 같이 쓰는 삽입. client: prisma 또는 트랜잭션의 tx.
 export const insertPropertyLog = (

@@ -3,8 +3,8 @@ import { formatNumber } from '../../utils/format';
 import { WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
 
 // 서버 검증(apps/api managementLogs controller)과 같은 범위
-export const MAX_TITLE_LENGTH = 100;
-export const MAX_CONTENT_LENGTH = 5000;
+const MAX_TITLE_LENGTH = 100;
+const MAX_CONTENT_LENGTH = 5000;
 
 export const toLogForm = (log) => ({
   type: log.type,

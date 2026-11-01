@@ -7,9 +7,7 @@ import { canEditLog, isOwnershipVerified, toVisibleLogWhere } from '../../platfo
 import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/managementLogSerializer.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
-import { insertPropertyLog } from '../../platform/propertyHistory.js';
-
-const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
+import { insertPropertyLog, toDbDate } from '../../platform/propertyHistory.js';
 
 // 감사 로그 summary에 쓰는 칸 이름(값은 넣지 않는다, 명세 D-04)
 const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용' };
