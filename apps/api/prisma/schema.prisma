@@ -557,6 +557,38 @@ model Job {
   @@map("jobs")
 }
 
+// 감사 로그를 남긴 주체. 시스템 작업(cron 등)은 SYSTEM이고 actorId가 null이다.
+enum AuditActorType {
+  USER
+  SYSTEM
+
+  @@map("audit_actor_type")
+}
+
+// 감사 로그(노션 5번 API Spec 8·10장). 쓰기는 src/platform/audit.js의 audit.record()로만 하고 수정·삭제하지 않는다.
+// action·resourceType은 피처 접두어를 붙여 값을 늘리는 등록형이라 enum이 아니라 문자열이다.
+// resourceType + resourceId로 아무 리소스나 가리키므로 FK가 없다(대상이 지워져도 기록은 남김).
+model AuditLog {
+  id           String         @id @default(uuid()) @db.Uuid
+  actorType    AuditActorType @map("actor_type")
+  actorId      String?        @map("actor_id") @db.Uuid
+  action       String         @db.VarChar(60)
+  resourceType String         @map("resource_type") @db.VarChar(40)
+  resourceId   String?        @map("resource_id") @db.Uuid
+  summary      String?
+  // 비밀번호·토큰·연락처 원문은 넣지 않는다
+  before       Json?
+  after        Json?
+  requestId    String?        @map("request_id") @db.Uuid
+  ip           String?
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([resourceType, resourceId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
 // 요청 한도(rate limit) 카운터. 서버리스 환경이라 메모리에 못 두고 DB에 둔다
 // (노션 4번 인증 방식 4장). id 예: "login:user@example.com:203.0.113.10".
 // 고정 윈도우(fixed window) 방식 — src/middlewares/rateLimiter.js가 읽고 쓴다.
