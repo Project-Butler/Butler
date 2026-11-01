@@ -3,14 +3,17 @@
 // 읽기 부분만 Prisma 조회로 바꾸면 된다 — 응답 모양(GET /disputes/faqs)은 그대로 둔다.
 // 근거는 DB마다 달라지는 id 대신 시드 upsert 키(sourceKey)로 가리킨다.
 import faqData from '../../../prisma/seed-data/dispute-faqs.json' with { type: 'json' };
-import { findReferenceSummariesBySourceKeys } from './service.js';
+import { findReferenceSummariesBySourceKeys, toSearchTerms, toTermVariants } from './service.js';
 
 export const DISPUTE_FAQS = faqData;
 
-// 참고자료 목록의 q 검색(제목·본문 contains, 대소문자 무시)과 같은 규칙으로 질문·답을 찾는다.
+// 참고자료 목록의 q 검색(공백으로 나눈 단어마다 contains, 대소문자 무시, 비용 끝말을 뗀 말·동의어도 인정, 모든 단어 AND)과
+// 같은 규칙으로 질문·답을 찾는다.
 const matchesKeyword = (faq, keyword) => {
-  const lower = keyword.toLowerCase();
-  return faq.question.toLowerCase().includes(lower) || faq.answer.toLowerCase().includes(lower);
+  const text = `${faq.question}\n${faq.answer}`.toLowerCase();
+  return toSearchTerms(keyword.toLowerCase()).every((term) =>
+    toTermVariants(term).some((variant) => text.includes(variant)),
+  );
 };
 
 // categories가 비어 있으면 전체, keyword가 없으면 거르지 않는다. 순서는 JSON에 적힌 순서(유형 안에서 자주 묻는 순).

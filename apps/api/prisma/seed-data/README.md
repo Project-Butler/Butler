@@ -41,6 +41,15 @@ node prisma/seed-data/convertLegalDongCodes.mjs "prisma/seed-data/국토교통�
 - `sourceKey` 규칙: `lawgo-prec-<precSeq>`(국가법령정보센터 판례 일련번호).
 - 변환 스크립트는 원본 자료와 함께 저장소 밖(`자료수집/_work/to_seed.py`)에 있다.
 
+## 판례 전체 (precedents-all.json)
+
+`precedents-all.json`은 위 7,448건을 거르지 않고 같은 형식·규칙으로 옮긴 **7,341건**이다(일련번호만 다른 같은 판례 107건을 뺌). 일반 검색(`GET /disputes/references?q=`)에서 판례를 전부 찾게 하려고 만들었다.
+
+- 시드는 `precedents.json` 대신 이 파일을 넣는다(`disputeSeedFiles.js`의 `SEED_JSON_PATHS`). `precedents.json`의 1,152건은 이 파일에 같은 `sourceKey`·같은 값으로 들어 있어 DB에 두 번 들어가지 않는다.
+- 임베딩(`embed:disputes`)은 `precedents.json`에 있는 판례만 만든다(`CHATBOT_JSON_PATHS`). 챗봇·상세 "관련 자료"는 임베딩이 있는 자료만 읽으므로, 나머지 판례는 일반 검색에만 걸린다.
+- `content`는 판결요지 → 없으면 판시사항 → 없으면 전문 앞부분(【이유】부터 2,000자). `summary`는 판시사항 → 판결요지 → 사건명. 행정·형사 사건과 판결요지 없는 하급심도 들어 있다.
+- 변환 스크립트: `자료수집/_work/to_seed_all.py`(`to_seed.py`의 규칙을 그대로 쓴다).
+
 ## 대한법률구조공단 조정사례집 (klac-casebooks.json)
 
 `klac-casebooks.json`은 대한법률구조공단 주택·상가건물 임대차분쟁조정위원회가 펴낸 조정사례집 3권의 조정사례 112건이다(`type: CASE`). `disputes.json`(한국부동산원 사례집)과 사례가 겹치지 않는다.
