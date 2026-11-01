@@ -159,7 +159,7 @@ const parseListQuery = (query) => {
 // Express 4는 async 핸들러의 에러를 자동으로 넘기지 않아서 next(error)로 넘긴다.
 export const postContract = async (req, res, next) => {
   try {
-    sendData(res, await createContract(req.user, parseCreateBody(req.body)), { status: 201 });
+    sendData(res, await createContract(req.user, parseCreateBody(req.body), req), { status: 201 });
   } catch (error) {
     next(error);
   }
@@ -189,7 +189,7 @@ export const patchContract = async (req, res, next) => {
   try {
     const { contractId } = req.params;
     if (!isUuid(contractId)) throwContractNotFound();
-    sendData(res, await updateContract(req.user, contractId, parseUpdateBody(req.body)));
+    sendData(res, await updateContract(req.user, contractId, parseUpdateBody(req.body), req));
   } catch (error) {
     next(error);
   }
@@ -199,7 +199,7 @@ export const postContractTermination = async (req, res, next) => {
   try {
     const { contractId } = req.params;
     if (!isUuid(contractId)) throwContractNotFound();
-    sendData(res, await terminateContract(req.user, contractId, parseTerminateBody(req.body)));
+    sendData(res, await terminateContract(req.user, contractId, parseTerminateBody(req.body), req));
   } catch (error) {
     next(error);
   }

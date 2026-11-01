@@ -2,6 +2,7 @@
 // 검사 순서는 docs/4. 계약 관리 개발/명세.md 3-3을 따른다(형식 R-01은 컨트롤러).
 import { Prisma } from '@prisma/client';
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
+import { audit } from '../../platform/audit.js';
 import { AppError } from '../../platform/AppError.js';
 import {
   isContractReadOnly,
@@ -115,11 +116,40 @@ const recordContractActivity = (tx, user, type, contract, extra = {}) =>
     params: { ...activityParams(contract), ...extra },
   });
 
+// 감사 로그 before/after에는 이 칸만 넣는다(계약 객체를 통째로 넘기지 않는다).
+// 메모(운영자에게 숨김, D-19)·해지 사유·임차인 이름·연락처는 어디에도 넣지 않는다.
+const AUDIT_FIELDS = ['leaseType', 'deposit', 'monthlyRent', 'startDate', 'endDate', 'previousContractId', 'terminatedOn'];
+const AUDIT_DATE_FIELDS = ['startDate', 'endDate', 'terminatedOn'];
+// 수정 summary에 쓰는 칸 이름(값은 넣지 않는다)
+const FIELD_LABELS = {
+  leaseType: '계약 유형',
+  deposit: '보증금',
+  monthlyRent: '월세',
+  startDate: '시작일',
+  endDate: '종료일',
+  tenantName: '임차인 이름',
+  tenantPhone: '임차인 연락처',
+  memo: '메모',
+};
+
+const pickAuditFields = (contract, fields) =>
+  Object.fromEntries(
+    fields
+      .filter((field) => AUDIT_FIELDS.includes(field))
+      .map((field) => [field, AUDIT_DATE_FIELDS.includes(field) ? toDateOnlyString(contract[field]) : contract[field]]),
+  );
+
+// 칸이 없으면 빈 객체 대신 undefined
+const orUndefined = (picked) => (Object.keys(picked).length > 0 ? picked : undefined);
+
+const recordContractAudit = (tx, user, req, { action, contract, summary, before, after }) =>
+  audit.record({ actor: user, action, resourceType: 'CONTRACT', resourceId: contract.id, summary, before, after, req, client: tx });
+
 const respond = (contract, user, todayKST = getTodayKST()) =>
   toContractResponse(contract, { viewer: resolveContractViewer(contract, user), todayKST });
 
 // POST /contracts
-export const createContract = async (user, input) => {
+export const createContract = async (user, input, req) => {
   const created = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const ownership = await lockOwnershipRow(tx, input.ownershipId);
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
@@ -147,10 +177,15 @@ export const createContract = async (user, input) => {
       include: CONTRACT_INCLUDE,
     });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_CREATED, contract);
+    await recordContractAudit(tx, user, req, {
+      action: 'CONTRACT_CREATED',
+      contract,
+      summary: '계약 등록',
+      after: pickAuditFields(contract, AUDIT_FIELDS),
+    });
     return contract;
   }));
 
-  // TODO(audit): CONTRACT_CREATED — audit.record()가 생기면 여기서 기록한다.
   // TODO(schedule): 종료일 SYSTEM 일정 생성 — 일정 기능이 생기면 연결한다.
   return respond(created, user);
 };
@@ -202,7 +237,7 @@ const lockContractForOwner = async (tx, user, contractId) => {
 };
 
 // PATCH /contracts/:contractId — data는 컨트롤러가 검증·변환한 값(보낸 칸만).
-export const updateContract = async (user, contractId, data) => {
+export const updateContract = async (user, contractId, data, req) => {
   const updated = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
     const status = computeContractStatus(contract, getTodayKST());
@@ -234,15 +269,23 @@ export const updateContract = async (user, contractId, data) => {
       include: CONTRACT_INCLUDE,
     });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_UPDATED, row, { fields: Object.keys(data) });
+    const changedFields = Object.keys(data);
+    await recordContractAudit(tx, user, req, {
+      action: 'CONTRACT_UPDATED',
+      contract: row,
+      summary: `계약 수정: ${changedFields.map((field) => FIELD_LABELS[field]).join(', ')}`,
+      before: orUndefined(pickAuditFields(contract, changedFields)),
+      after: orUndefined(pickAuditFields(row, changedFields)),
+    });
     return row;
   }));
 
-  // TODO(audit): CONTRACT_UPDATED / TODO(schedule): endDate가 바뀌면 SYSTEM 일정도 옮긴다.
+  // TODO(schedule): endDate가 바뀌면 SYSTEM 일정도 옮긴다.
   return respond(updated, user);
 };
 
 // POST /contracts/:contractId/terminate
-export const terminateContract = async (user, contractId, { terminatedOn, reason }) => {
+export const terminateContract = async (user, contractId, { terminatedOn, reason }, req) => {
   const terminated = await prisma.$transaction(async (tx) => {
     const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
     const todayKST = getTodayKST();
@@ -261,9 +304,16 @@ export const terminateContract = async (user, contractId, { terminatedOn, reason
       include: CONTRACT_INCLUDE,
     });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_TERMINATED, row);
+    await recordContractAudit(tx, user, req, {
+      action: 'CONTRACT_TERMINATED',
+      contract: row,
+      summary: '계약 해지',
+      before: { terminatedOn: null },
+      after: { terminatedOn },
+    });
     return row;
   });
 
-  // TODO(audit): CONTRACT_TERMINATED / TODO(schedule): 종료일 SYSTEM 일정 삭제.
+  // TODO(schedule): 종료일 SYSTEM 일정 삭제.
   return respond(terminated, user);
 };

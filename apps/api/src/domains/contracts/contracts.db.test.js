@@ -1,6 +1,7 @@
 // 계약 API 서비스(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다(testSupport/dbTest.js).
 import { createDbFixture, dbTestSkip } from '../../testSupport/dbTest.js';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, describe, test } from 'node:test';
 import { getTodayKST } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
@@ -49,7 +50,21 @@ const rejectsWith = async (promise, code) => {
 
 describe('계약 서비스', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
-  after(() => fixture.cleanup());
+  // 감사 로그 정리용: 이 파일 테스트가 만든 사용자를 기억해 두었다가, 그 사용자 소유 계약의 감사 로그만 지운다.
+  const testUserIds = [];
+  const createUserOriginal = fixture.createUser;
+  fixture.createUser = async (role) => {
+    const user = await createUserOriginal(role);
+    testUserIds.push(user.id);
+    return user;
+  };
+  after(async () => {
+    const contracts = await prisma.contract.findMany({ where: { ownership: { userId: { in: testUserIds } } }, select: { id: true } });
+    await prisma.auditLog.deleteMany({
+      where: { resourceType: 'CONTRACT', OR: [{ resourceId: { in: contracts.map((contract) => contract.id) } }, { actorId: { in: testUserIds } }] },
+    });
+    await fixture.cleanup();
+  });
 
   let unitSeq = 0;
   const createOwnedUnit = async (user) => {
@@ -282,5 +297,131 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     assert.deepEqual(paged.meta, { page: 1, size: 1, total: 2, hasNext: true });
     const byProperty = await findContracts(user, { ...LIST_DEFAULTS, propertyId: second.property.id });
     assert.deepEqual(byProperty.items.map((item) => item.id), [later.id]);
+  });
+
+  describe('감사 로그', () => {
+    const auditRows = (resourceId, action) =>
+      prisma.auditLog.findMany({ where: { resourceType: 'CONTRACT', resourceId, ...(action ? { action } : {}) } });
+    const SECRETS = ['관리비 별도', '비밀메모', '01098765432', '01011112222', '이임차', '박임차', '잘못 입력'];
+    const assertNoSecrets = (row) => {
+      const text = JSON.stringify([row.before, row.after, row.summary]);
+      for (const secret of SECRETS) assert.ok(!text.includes(secret), `감사 로그에 ${secret} 포함`);
+    };
+
+    test('등록 → CONTRACT_CREATED 1행, 허용 칸만, 개인정보·메모 없음', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id, { memo: '비밀메모' }));
+
+      const rows = await auditRows(created.id);
+      assert.equal(rows.length, 1);
+      const [row] = rows;
+      assert.equal(row.action, 'CONTRACT_CREATED');
+      assert.equal(row.actorType, 'USER');
+      assert.equal(row.actorId, user.id);
+      assert.equal(row.resourceId, created.id);
+      assert.equal(row.summary, '계약 등록');
+      assert.equal(row.before, null);
+      assert.deepEqual(row.after, {
+        leaseType: 'MONTHLY',
+        deposit: '50000000',
+        monthlyRent: '800000',
+        startDate: shift(-30),
+        endDate: shift(700),
+        previousContractId: null,
+        terminatedOn: null,
+      });
+      assertNoSecrets(row);
+    });
+
+    test('연락처·메모만 고친 수정 → 1행, before/after 없음, summary에 칸 이름만', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id));
+      await updateContract(user, created.id, { tenantPhone: '01011112222', memo: '비밀메모' });
+
+      const rows = await auditRows(created.id, 'CONTRACT_UPDATED');
+      assert.equal(rows.length, 1);
+      const [row] = rows;
+      assert.equal(row.actorType, 'USER');
+      assert.equal(row.actorId, user.id);
+      assert.equal(row.resourceId, created.id);
+      assert.equal(row.summary, '계약 수정: 임차인 연락처, 메모');
+      assert.equal(row.before, null);
+      assert.equal(row.after, null);
+      assertNoSecrets(row);
+    });
+
+    test('시작 전 계약 월세 수정 → before/after에 전후 값, summary에 월세', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const upcoming = await createContract(user, contractInput(ownership.id, { startDate: shift(10), endDate: shift(700) }));
+      await updateContract(user, upcoming.id, { monthlyRent: 900000n });
+
+      const [row] = await auditRows(upcoming.id, 'CONTRACT_UPDATED');
+      assert.deepEqual(row.before, { monthlyRent: '800000' });
+      assert.deepEqual(row.after, { monthlyRent: '900000' });
+      assert.equal(row.summary, '계약 수정: 월세');
+
+      await updateContract(user, upcoming.id, { endDate: shift(800), tenantName: '박임차' });
+      const rows = await auditRows(upcoming.id, 'CONTRACT_UPDATED');
+      const dated = rows.find((item) => item.summary === '계약 수정: 종료일, 임차인 이름');
+      assert.deepEqual(dated.before, { endDate: shift(700) });
+      assert.deepEqual(dated.after, { endDate: shift(800) });
+      assertNoSecrets(dated);
+    });
+
+    test('해지 → CONTRACT_TERMINATED 1행, 해지 사유 없음', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id));
+      await terminateContract(user, created.id, { terminatedOn: TODAY, reason: '잘못 입력' });
+
+      const rows = await auditRows(created.id, 'CONTRACT_TERMINATED');
+      assert.equal(rows.length, 1);
+      const [row] = rows;
+      assert.equal(row.actorType, 'USER');
+      assert.equal(row.actorId, user.id);
+      assert.equal(row.resourceId, created.id);
+      assert.equal(row.summary, '계약 해지');
+      assert.deepEqual(row.before, { terminatedOn: null });
+      assert.deepEqual(row.after, { terminatedOn: TODAY });
+      assertNoSecrets(row);
+    });
+
+    test('req를 넘기면 requestId·ip 저장, 안 넘기면 비어 있다', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const req = { requestId: randomUUID(), ip: '203.0.113.7' };
+      const withReq = await createContract(user, contractInput(ownership.id), req);
+      await updateContract(user, withReq.id, { memo: 'x' }, req);
+      await terminateContract(user, withReq.id, { terminatedOn: TODAY, reason: null }, req);
+      const rows = await auditRows(withReq.id);
+      assert.equal(rows.length, 3);
+      for (const row of rows) {
+        assert.equal(row.requestId, req.requestId);
+        assert.equal(row.ip, req.ip);
+      }
+
+      const other = await createOwnedUnit(user);
+      const withoutReq = await createContract(user, contractInput(other.ownership.id));
+      const [plain] = await auditRows(withoutReq.id);
+      assert.equal(plain.requestId, null);
+      assert.equal(plain.ip, null);
+    });
+
+    test('실패한 요청(겹침 409, 잠긴 칸 422, 해지일 422)은 감사 로그를 남기지 않는다', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id));
+      const countAll = () => prisma.auditLog.count({ where: { actorId: user.id } });
+      assert.equal(await countAll(), 1);
+
+      await rejectsWith(createContract(user, contractInput(ownership.id, { startDate: shift(100), endDate: shift(900) })), 'CONTRACT_PERIOD_OVERLAP');
+      await rejectsWith(updateContract(user, created.id, { deposit: 60000000n }), 'CONTRACT_READ_ONLY');
+      await rejectsWith(terminateContract(user, created.id, { terminatedOn: shift(1), reason: null }), 'CONTRACT_INVALID_PERIOD');
+      assert.equal(await countAll(), 1);
+      assert.equal((await auditRows(created.id)).length, 1);
+    });
   });
 });
