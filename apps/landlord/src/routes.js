@@ -15,6 +15,11 @@ export const ROUTE_TABLE = [
   { key: 'contractRegister', path: '/contracts/new' },
   { key: 'contractEdit', path: '/contracts/:contractId/edit' },
   { key: 'contractDetail', path: '/contracts/:contractId' },
+  { key: 'logs', path: '/logs' },
+  { key: 'logRegister', path: '/logs/new' },
+  { key: 'logEdit', path: '/logs/:logId/edit' },
+  { key: 'logDetail', path: '/logs/:logId' },
+  { key: 'propertyLogRegister', path: '/properties/:propertyId/logs/new' },
   { key: 'setup', path: '/setup' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
@@ -49,6 +54,13 @@ const BUILDERS = {
   },
   contractDetail: ({ contractId }) => ({ pathname: `/contracts/${contractId}` }),
   contractEdit: ({ contractId }) => ({ pathname: `/contracts/${contractId}/edit` }),
+  // 호실 필터(propertyId)는 주소에 남긴다. 사이드바 '관리 로그' 메뉴 key(log)도 목록으로 보낸다.
+  logs: ({ propertyId } = {}) => ({ pathname: '/logs', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  log: () => ({ pathname: '/logs' }),
+  logRegister: () => ({ pathname: '/logs/new' }),
+  logDetail: ({ logId }) => ({ pathname: `/logs/${logId}` }),
+  logEdit: ({ logId }) => ({ pathname: `/logs/${logId}/edit` }),
+  propertyLogRegister: ({ propertyId }) => ({ pathname: `/properties/${propertyId}/logs/new` }),
   setup: () => ({ pathname: '/setup' }),
   // 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
   disputes: ({ topic, q, tab } = {}) => {

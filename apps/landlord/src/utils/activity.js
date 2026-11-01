@@ -21,6 +21,8 @@ const FIELD_LABEL = {
   tenantPhone: '임차인 연락처',
 };
 
+const LOG_FIELD_LABEL = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용' };
+
 // labels: 활동마다 다르게 부를 칸 이름(계약 memo는 '메모')
 const formatFields = (fields, labels = {}) =>
   Array.isArray(fields) && fields.length > 0
@@ -61,6 +63,12 @@ export const formatActivity = ({ type, params = {} }) => {
       return `${unitOf(params)}${tenantOf(params)} 계약을 수정했어요${formatFields(params.fields, { memo: '메모' })}`;
     case 'CONTRACT_TERMINATED':
       return `${unitOf(params)}${tenantOf(params)} 계약을 해지했어요`;
+    case 'MANAGEMENT_LOG_CREATED':
+      return `${unitOf(params)}에 '${params.title}' 기록을 남겼어요`;
+    case 'MANAGEMENT_LOG_UPDATED':
+      return `${unitOf(params)}의 '${params.title}' 기록을 수정했어요${formatFields(params.fields, LOG_FIELD_LABEL)}`;
+    case 'MANAGEMENT_LOG_DELETED':
+      return `${unitOf(params)}의 '${params.title}' 기록을 삭제했어요`;
     default:
       return '활동';
   }

@@ -38,6 +38,11 @@ export { getContract } from './apis/contracts/getContract';
 export { postContract } from './apis/contracts/postContract';
 export { patchContract } from './apis/contracts/patchContract';
 export { postContractTermination } from './apis/contracts/postContractTermination';
+export { getManagementLogList } from './apis/managementLogs/getManagementLogList';
+export { getManagementLog } from './apis/managementLogs/getManagementLog';
+export { postManagementLog } from './apis/managementLogs/postManagementLog';
+export { patchManagementLog } from './apis/managementLogs/patchManagementLog';
+export { deleteManagementLog } from './apis/managementLogs/deleteManagementLog';
 
 export { getDisputeChatList } from './apis/disputes/getDisputeChatList';
 export { getDisputeChat } from './apis/disputes/getDisputeChat';

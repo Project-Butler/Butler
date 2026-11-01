@@ -2,6 +2,7 @@
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
+import { toDateOnlyString } from '../../platform/dateUtils.js';
 import { canEditLog, isOwnershipVerified, toVisibleLogWhere } from '../../platform/managementLogRules.js';
 import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/managementLogSerializer.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
@@ -12,6 +13,9 @@ const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
 
 // 감사 로그 summary에 쓰는 칸 이름(값은 넣지 않는다, 명세 D-04)
 const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용' };
+
+const isSameFieldValue = (log, field, value) =>
+  field === 'occurredOn' ? toDateOnlyString(log.occurredOn) === value : log[field] === value;
 
 const throwPropertyNotFound = () => {
   throw new AppError('PROPERTY_NOT_FOUND', 404, '호실을 찾을 수 없습니다.');
@@ -134,12 +138,15 @@ export const updateManagementLog = async (user, logId, data, req) => {
       throwLogReadOnly();
     }
 
+    // 화면은 칸을 전부 보내므로 실제로 바뀐 칸만 고르고 기록한다. 바뀐 게 없으면 활동·감사도 남기지 않는다.
+    const fields = Object.keys(data).filter((field) => !isSameFieldValue(log, field, data[field]));
+    if (fields.length === 0) return log;
+
     const row = await tx.propertyLog.update({
       where: { id: log.id },
       data: { ...data, ...(data.occurredOn ? { occurredOn: toDbDate(data.occurredOn) } : {}) },
       include: MANAGEMENT_LOG_INCLUDE,
     });
-    const fields = Object.keys(data);
     await recordLogActivity(tx, user, ACTIVITY_TYPES.MANAGEMENT_LOG_UPDATED, row, { fields });
     if (row.scope === 'PROPERTY_HISTORY') {
       await audit.record({

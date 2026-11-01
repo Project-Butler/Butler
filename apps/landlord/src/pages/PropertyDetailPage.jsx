@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
+import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetComplex } from '../hooks/useGetComplex';
 import { useGetContractList } from '../hooks/useGetContractList';
+import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
 import { usePatchProperty } from '../hooks/usePatchProperty';
 import { usePatchPropertyOwnership } from '../hooks/usePatchPropertyOwnership';
 import { usePostPropertyOwnershipEnd } from '../hooks/usePostPropertyOwnershipEnd';
 import { toFieldErrors } from '../utils/apiError';
-import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../utils/contract';
+import { formatContractAmount, formatPeriod, formatWon, getContractDdayBadge, getContractStatusBadge } from '../utils/contract';
 import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '../utils/floor';
 import { formatDateKST, formatNumber } from '../utils/format';
 import {
@@ -454,6 +456,8 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
   );
 };
 
+const LOG_SECTION_SIZE = 5;
+
 // 내 소유 관계의 지금 계약(진행 중 → 시작 전). 기간이 겹치지 않으므로 종료일이 가장 가까운 것이 지금 계약이다.
 // 연락처·메모는 계약 상세에서 본다.
 const LeaseSection = ({ propertyId, ownershipId, canRegister, onNavigate, onUnauthorized }) => {
@@ -506,6 +510,57 @@ const LeaseSection = ({ propertyId, ownershipId, canRegister, onNavigate, onUnau
           <InfoRow label="기간" value={contract && formatPeriod(contract)} numeric />
         </dl>
       )}
+    </Card>
+  );
+};
+
+// 이 호실의 최근 관리 로그(S-01). 기록 추가는 지금 소유 중일 때만.
+const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
+  const logList = useGetManagementLogList({ propertyId, size: LOG_SECTION_SIZE }, { onUnauthorized });
+  const logs = logList.data?.items ?? [];
+
+  return (
+    <Card className="space-y-4 p-6">
+      <SectionTitle
+        action={
+          <span className="flex gap-2">
+            {logs.length > 0 && (
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('logs', { propertyId })}>
+                전체 보기
+              </Button>
+            )}
+            {canAdd && (
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('propertyLogRegister', { propertyId })}>
+                기록 추가
+              </Button>
+            )}
+          </span>
+        }
+      >
+        관리 로그
+      </SectionTitle>
+      {logList.error && <NoticeBox>{logList.error.message}</NoticeBox>}
+      {logList.isLoading && !logList.data && <p className="py-2.5 text-body text-ink-3">불러오는 중입니다</p>}
+      {logList.data && logs.length === 0 && <p className="py-2.5 text-body text-ink-3">아직 관리 로그가 없어요</p>}
+      <div className="divide-y divide-line">
+        {logs.map((log) => (
+          <button
+            key={log.id}
+            type="button"
+            onClick={() => onNavigate('logDetail', { logId: log.id })}
+            className="block w-full space-y-1.5 py-3 text-left hover:bg-surface-2"
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate text-body font-semibold text-ink">{log.title}</span>
+              <span className="shrink-0 font-num text-sub tabular-nums text-ink-3">{log.occurredOn}</span>
+            </span>
+            <span className="flex items-center justify-between gap-3">
+              <ManagementLogBadges log={log} />
+              {log.cost != null && <span className="shrink-0 font-num text-sub tabular-nums text-ink-2">{formatWon(log.cost)}</span>}
+            </span>
+          </button>
+        ))}
+      </div>
     </Card>
   );
 };
@@ -577,6 +632,14 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
               propertyId={property.id}
               ownershipId={property.myRelation.ownershipId}
               canRegister={property.myRelation.type === 'OWNER'}
+              onNavigate={onNavigate}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
+          {property.myRelation?.ownershipId && (
+            <LogSection
+              propertyId={property.id}
+              canAdd={property.myRelation.type === 'OWNER'}
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />

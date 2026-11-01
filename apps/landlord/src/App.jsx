@@ -10,6 +10,10 @@ import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
 import { ContractListPage } from './pages/ContractListPage';
 import { ContractRegisterPage } from './pages/ContractRegisterPage';
+import { ManagementLogDetailPage } from './pages/ManagementLogDetailPage';
+import { ManagementLogEditPage } from './pages/ManagementLogEditPage';
+import { ManagementLogListPage } from './pages/ManagementLogListPage';
+import { ManagementLogRegisterPage } from './pages/ManagementLogRegisterPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
@@ -33,6 +37,11 @@ const NAV_KEY_BY_VIEW = {
   contractRegister: 'leases',
   contractEdit: 'leases',
   contractDetail: 'leases',
+  logs: 'log',
+  logRegister: 'log',
+  logEdit: 'log',
+  logDetail: 'log',
+  propertyLogRegister: 'buildingList',
   setup: 'home',
   disputeReference: 'disputes',
   disputeChat: 'disputes',
@@ -45,6 +54,11 @@ const SUB_TITLE_BY_VIEW = {
   contractRegister: '계약 등록',
   contractEdit: '계약 수정',
   contractDetail: '계약 상세',
+  logs: '기록 목록',
+  logRegister: '기록 추가',
+  logEdit: '기록 수정',
+  logDetail: '기록 상세',
+  propertyLogRegister: '기록 추가',
   setup: '초기 세팅',
   disputes: '분쟁 해결사',
   disputeReference: '사례 상세',
@@ -85,6 +99,26 @@ const ContractDetailRoute = (pageProps) => {
 const ContractEditRoute = (pageProps) => {
   const { contractId } = useParams();
   return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
+};
+
+const ManagementLogListRoute = (pageProps) => {
+  const [searchParams] = useSearchParams();
+  return <ManagementLogListPage propertyId={searchParams.get('propertyId') ?? undefined} {...pageProps} />;
+};
+
+const PropertyLogRegisterRoute = (pageProps) => {
+  const { propertyId } = useParams();
+  return <ManagementLogRegisterPage key={propertyId} propertyId={propertyId} {...pageProps} />;
+};
+
+const ManagementLogDetailRoute = (pageProps) => {
+  const { logId } = useParams();
+  return <ManagementLogDetailPage key={logId} logId={logId} {...pageProps} />;
+};
+
+const ManagementLogEditRoute = (pageProps) => {
+  const { logId } = useParams();
+  return <ManagementLogEditPage key={logId} logId={logId} {...pageProps} />;
 };
 
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
@@ -211,6 +245,11 @@ export const App = () => {
           <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
           <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
           <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
+          <Route path="/logs" element={<ManagementLogListRoute {...pageProps} />} />
+          <Route path="/logs/new" element={<ManagementLogRegisterPage {...pageProps} />} />
+          <Route path="/logs/:logId" element={<ManagementLogDetailRoute {...pageProps} />} />
+          <Route path="/logs/:logId/edit" element={<ManagementLogEditRoute {...pageProps} />} />
+          <Route path="/properties/:propertyId/logs/new" element={<PropertyLogRegisterRoute {...pageProps} />} />
           <Route path="/setup" element={<SetupPage {...pageProps} />} />
           {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
           <Route path="/disputes/chat" element={<DisputeChatPage />} />

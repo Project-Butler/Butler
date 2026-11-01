@@ -214,6 +214,25 @@ describe('관리 로그 서비스', { skip: dbTestSkip }, () => {
     assert.equal(await activityCount(user, 'MANAGEMENT_LOG_UPDATED'), 2);
   });
 
+  test('D-04: 화면이 칸을 전부 보내도 바뀐 칸만 기록하고, 바뀐 게 없으면 남기지 않는다', async () => {
+    const user = await createUser();
+    const property = await createProperty();
+    await own(user, property, verified);
+    const input = logInput({ scope: 'PROPERTY_HISTORY' });
+    const log = await createManagementLog(user, property.id, input);
+    const { scope: _scope, ...sameFields } = input;
+
+    await updateManagementLog(user, log.id, sameFields);
+    assert.equal(await prisma.auditLog.count({ where: { resourceId: log.id } }), 0);
+    assert.equal(await activityCount(user, 'MANAGEMENT_LOG_UPDATED'), 0);
+
+    await updateManagementLog(user, log.id, { ...sameFields, title: '정정' });
+    const [row] = await prisma.auditLog.findMany({ where: { resourceId: log.id } });
+    assert.equal(row.summary, '관리 기록 수정: 제목');
+    const activity = await prisma.activity.findFirst({ where: { userId: user.id, type: 'MANAGEMENT_LOG_UPDATED' } });
+    assert.deepEqual(activity.params.fields, ['title']);
+  });
+
   test('D-16: 인증이 끊긴 작성자의 호실 이력 수정 → 403, 응답 isReadOnly, 감사·활동 없음', async () => {
     const user = await createUser();
     const property = await createProperty();
