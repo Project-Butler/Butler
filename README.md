@@ -34,7 +34,7 @@ cp apps/landlord/.env.example apps/landlord/.env
 cp apps/tenant/.env.example apps/tenant/.env
 cp apps/admin/.env.example apps/admin/.env
 ```
-`apps/api/.env`의 `ACCESS_TOKEN_SECRET`·`REFRESH_TOKEN_SECRET`은 비어 있으니 아래 명령으로 하나씩 만들어 넣는다(두 값은 달라야 한다). 비워 두면 로그인이 안 된다.
+`apps/api/.env`의 `ACCESS_TOKEN_SECRET`·`REFRESH_TOKEN_SECRET`은 비어 있으니 아래 명령으로 하나씩 만들어 넣는다(두 값은 달라야 한다). 비워 두면 로그인이 안 된다. 휴대폰 번호 암호화용 `FIELD_ENCRYPTION_KEY`(hex 64자)도 같은 명령으로 만들어 넣는다(비워 두면 휴대폰 번호를 넣은 회원가입이 실패한다).
 ```bash
 node -e "console.info(require('crypto').randomBytes(32).toString('hex'))"
 ```

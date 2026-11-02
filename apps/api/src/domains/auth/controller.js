@@ -2,15 +2,18 @@ import { AppError } from '../../platform/AppError.js';
 import { sendData } from '../../platform/respond.js';
 import {
   buildAuthMe,
+  buildRegisteredAuthMe,
   clearAuthCookies,
   findUserByCredentials,
   findUserById,
+  registerUser,
   revokeAllSessions,
   revokeSessionByToken,
   rotateSession,
   startSession,
   verifyRefreshToken,
 } from './service.js';
+import { parseRegisterBody } from './registerValidation.js';
 
 // Express 4는 async 핸들러의 에러를 자동으로 넘기지 않아서 next(error)로 넘긴다.
 export const login = async (req, res, next) => {
@@ -28,6 +31,17 @@ export const login = async (req, res, next) => {
 
     await startSession(req, res, user);
     sendData(res, await buildAuthMe(user), { status: 200 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 가입 직후 로그인 상태로 만들고(쿠키 발급) 응답은 login과 같은 AuthMe 모양이다.
+export const register = async (req, res, next) => {
+  try {
+    const input = parseRegisterBody(req.body);
+    const user = await registerUser(req, res, input);
+    sendData(res, buildRegisteredAuthMe(user), { status: 201 });
   } catch (error) {
     next(error);
   }

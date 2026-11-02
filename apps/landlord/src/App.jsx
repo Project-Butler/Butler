@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { LoginScreen } from '@butler/ui';
-import { getMe, postLogin, postLogout } from '@butler/api-client';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { LoginScreen, RegisterScreen } from '@butler/ui';
+import { getMe, postLogin, postLogout, postRegister } from '@butler/api-client';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
@@ -65,6 +65,9 @@ const SUB_TITLE_BY_VIEW = {
 };
 
 const LOGIN_PATH = '/login';
+const REGISTER_PATH = '/register';
+
+const AUTH_LINK_CLASS = 'font-semibold text-accent-strong hover:underline';
 
 // 라우트 요소: 경로 파라미터를 화면 props로 옮긴다. id가 바뀌면 화면 상태를 새로 시작한다(key).
 const BuildingListRoute = (pageProps) => {
@@ -183,6 +186,12 @@ export const App = () => {
     setUser(loggedInUser);
   };
 
+  // 임대인 앱의 가입은 항상 LANDLORD다(임차인은 초대 링크로만 가입). 가입하면 바로 로그인 상태가 된다.
+  const handleRegister = async (values) => {
+    const { user: registeredUser } = await postRegister({ ...values, role: 'LANDLORD' });
+    setUser(registeredUser);
+  };
+
   const handleLogout = async () => {
     await postLogout();
     // 다음 로그인이 이전 사용자가 보던 경로로 돌아가지 않게 /login으로 직접 보낸다.
@@ -199,11 +208,29 @@ export const App = () => {
   }
 
   const isLoginPath = location.pathname === LOGIN_PATH;
+  const isRegisterPath = location.pathname === REGISTER_PATH;
 
   if (!user) {
-    // 로그인 전에는 어떤 주소로 와도 /login으로 보내고, 로그인하면 원래 가려던 곳으로 돌려보낸다.
-    if (!isLoginPath) {
+    // 로그인 전에는 로그인·회원가입 화면 말고 어떤 주소로 와도 /login으로 보내고, 로그인하면 원래 가려던 곳으로 돌려보낸다.
+    if (!isLoginPath && !isRegisterPath) {
       return <Navigate to={LOGIN_PATH} replace state={{ from: `${location.pathname}${location.search}` }} />;
+    }
+    if (isRegisterPath) {
+      return (
+        <RegisterScreen
+          brand="Butler"
+          subtitle="임대인 회원가입"
+          onSubmit={handleRegister}
+          footer={
+            <p className="text-body text-ink-2">
+              이미 계정이 있으신가요?{' '}
+              <Link to={LOGIN_PATH} className={AUTH_LINK_CLASS}>
+                로그인
+              </Link>
+            </p>
+          }
+        />
+      );
     }
     return (
       <LoginScreen
@@ -211,12 +238,20 @@ export const App = () => {
         subtitle="임대인 전용"
         devHint={import.meta.env.DEV ? 'fixture 계정: landlord@butler.test / password123' : undefined}
         onSubmit={handleLogin}
+        footer={
+          <p className="text-body text-ink-2">
+            계정이 없으신가요?{' '}
+            <Link to={REGISTER_PATH} className={AUTH_LINK_CLASS}>
+              회원가입
+            </Link>
+          </p>
+        }
       />
     );
   }
 
-  // 로그인된 상태로 /login에 오면(로그인 직후 포함) 원래 가려던 곳, 없으면 홈으로 보낸다.
-  if (isLoginPath) {
+  // 로그인된 상태로 /login·/register에 오면(로그인·가입 직후 포함) 원래 가려던 곳, 없으면 홈으로 보낸다.
+  if (isLoginPath || isRegisterPath) {
     return <Navigate to={location.state?.from ?? HOME_PATH} replace />;
   }
 
