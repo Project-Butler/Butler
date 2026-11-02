@@ -5,6 +5,7 @@ import '../../loadEnv.js';
 import express from 'express';
 import { pathToFileURL } from 'node:url';
 import { toRunnerResult } from '../../platform/ownershipVerificationRules.js';
+import { sendData } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
 import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from './runnerSignature.js';
 import { loadLedgerTools, runLedgerIssue } from './runners/local.js';
@@ -12,6 +13,9 @@ import { loadLedgerTools, runLedgerIssue } from './runners/local.js';
 const RUNNER_HOST = '127.0.0.1';
 const RUNNER_PORT = 4100;
 const CALLBACK_TIMEOUT_MS = 15_000;
+
+// 실행 서버는 DB 없이 돌아 API의 errorHandler(사용자 조회 포함)를 쓰지 않는다.
+const sendRejected = (res, status, code) => res.status(status).type('application/json').send(JSON.stringify({ error: { code } }));
 
 const isOptionalString = (value) => value === null || value === undefined || typeof value === 'string';
 
@@ -76,10 +80,10 @@ export const createRunnerServer = ({ secret, callbackUrl, load = loadLedgerTools
       signature: req.get(SIGNATURE_HEADER),
       body: rawBody,
     });
-    if (!isSigned) return res.status(401).json({ error: { code: 'VERIFICATION_RUNNER_SIGNATURE_INVALID' } });
+    if (!isSigned) return sendRejected(res, 401, 'VERIFICATION_RUNNER_SIGNATURE_INVALID');
 
     const job = parseJob(rawBody);
-    if (!job) return res.status(400).json({ error: { code: 'VALIDATION_ERROR' } });
+    if (!job) return sendRejected(res, 400, 'VALIDATION_ERROR');
 
     // 재전송으로 발급이 두 번 신청되지 않게 한다.
     if (!seenAttemptIds.has(job.attemptId)) {
@@ -87,7 +91,7 @@ export const createRunnerServer = ({ secret, callbackUrl, load = loadLedgerTools
       queue.push(job);
       draining ??= drain();
     }
-    return res.status(202).json({ data: { attemptId: job.attemptId } });
+    return sendData(res, { attemptId: job.attemptId }, { status: 202 });
   });
 
   return { app, whenIdle: () => draining ?? Promise.resolve() };
