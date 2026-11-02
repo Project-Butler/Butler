@@ -15,7 +15,7 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContract } from '../hooks/useGetContract';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { usePostContract } from '../hooks/usePostContract';
-import { formatContractAmount, formatPeriod, formatPhone, getRenewalPeriod } from '../utils/contract';
+import { CONTRACT_LEGAL_NOTICE, formatContractAmount, formatPeriod, formatPhone, getRenewalPeriod } from '../utils/contract';
 import { getPropertyStatusBadge } from '../utils/unitListing';
 
 // 호실 선택은 내 활성 소유 호실 전부(목록 API 최대 크기)
@@ -154,7 +154,7 @@ export const ContractRegisterPage = ({ params, onNavigate, onUnauthorized }) => 
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
         title={params.renewFrom ? '갱신 계약 등록' : '계약 등록'}
-        description="계약 조건과 임차인 연락처를 입력해 주세요."
+        description={`계약 조건과 임차인 연락처를 입력해 주세요. ${CONTRACT_LEGAL_NOTICE}.`}
         onBack={() => window.history.back()}
       />
       {renewQuery.error && <NoticeBox>{renewQuery.error.message}</NoticeBox>}
