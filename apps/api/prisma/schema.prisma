@@ -91,6 +91,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions          Session[]
+  consents          Consent[]
   requestedJobs     Job[]
   ownerships        Ownership[]
   tenantContracts   Contract[]   @relation("TenantContracts")
@@ -119,6 +120,24 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+// 약관 동의 이력. 지우지 않고 행을 쌓는다(동의/철회마다 새 행 또는 withdrawnAt).
+// type: TERMS, PRIVACY_REQUIRED (가입 시 필수). version은 동의한 약관 버전.
+model Consent {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  type        String
+  version     String
+  agreed      Boolean
+  agreedAt    DateTime  @map("agreed_at") @db.Timestamptz(3)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(3)
+  ip          String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("consents")
 }
 
 // 법정동. 행정안전부 "법정동코드 전체자료"로 셋업 시점에 시딩한다(prisma/seed.js).
