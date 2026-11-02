@@ -43,8 +43,19 @@ enum EndReason {
   SELF_ENDED
   SUPERSEDED
   ADMIN_ENDED
+  SOLD
 
   @@map("end_reason")
+}
+
+// 권리자 인증 시도 상태. PENDING → RUNNING → VERIFIED | FAILED
+enum VerificationAttemptStatus {
+  PENDING
+  RUNNING
+  VERIFIED
+  FAILED
+
+  @@map("verification_attempt_status")
 }
 
 enum LeaseType {
@@ -101,6 +112,8 @@ model User {
   uploads           Upload[]
   uploadedDocuments Document[]    @relation("UploadedDocuments")
   authoredLogs      PropertyLog[] @relation("AuthoredPropertyLogs")
+
+  ownershipVerificationAttempts OwnershipVerificationAttempt[]
 
   @@map("users")
 }
@@ -426,6 +439,8 @@ model Ownership {
   tickets   Ticket[]
   logs      PropertyLog[]
 
+  verificationAttempts OwnershipVerificationAttempt[]
+
   @@index([propertyId])
   @@index([userId])
   @@map("ownerships")
@@ -663,6 +678,38 @@ model RateLimit {
   expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
   @@map("rate_limits")
+}
+
+// 플랫폼 운영 설정(키·값). 값은 문자열로 두고 읽는 쪽이 검사한다.
+model PlatformSetting {
+  key       String   @id @db.VarChar(60)
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("platform_settings")
+}
+
+// 권리자 인증 시도. 진행 중(PENDING·RUNNING)은 소유 관계마다 1건 — uq_verification_attempt_active (마이그레이션 SQL)
+model OwnershipVerificationAttempt {
+  id           String                    @id @default(uuid()) @db.Uuid
+  ownershipId  String                    @map("ownership_id") @db.Uuid
+  ownership    Ownership                 @relation(fields: [ownershipId], references: [id])
+  requestedBy  String                    @map("requested_by") @db.Uuid
+  requester    User                      @relation(fields: [requestedBy], references: [id])
+  status       VerificationAttemptStatus @default(PENDING)
+  // 상세 사유 코드(계획 5장). 관리자 화면과 감사 로그에만 나간다.
+  reasonCode   String?                   @map("reason_code") @db.VarChar(40)
+  ledgerKind   String?                   @map("ledger_kind") @db.VarChar(20)
+  ownerCount   Int?                      @map("owner_count")
+  // 임시 생년월일 암호문. 끝 상태가 되면 finishAttempt가 같은 갱신에서 비운다.
+  birthDateEnc String?                   @map("birth_date_enc")
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  finishedAt   DateTime?                 @map("finished_at") @db.Timestamptz(3)
+
+  @@index([ownershipId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("ownership_verification_attempts")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
