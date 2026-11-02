@@ -14,7 +14,8 @@ import { endOwnership, findMyOwnerships, findOwnershipForUser, updateOwnership }
 
 // 방 구성·설비(unitType·equipment·equipmentEtc)는 명세 변경 C9
 const UPDATE_FIELDS = ['acquiredYearMonth', 'purchasePrice', ...LISTING_FIELDS];
-const END_FIELDS = ['reason'];
+const END_FIELDS = ['reason', 'endReason'];
+const USER_END_REASONS = ['SELF_ENDED', 'SOLD'];
 const MAX_END_REASON_LENGTH = 200;
 
 const throwOwnershipNotFound = () => {
@@ -62,17 +63,20 @@ const parseUpdateBody = (body) => {
   return data;
 };
 
-const parseEndBody = (body) => {
+export const parseEndBody = (body) => {
   // 바디 없이 보내도 된다(reason은 선택).
   const input = body ?? {};
   assertAllowedBody(input, END_FIELDS);
 
-  const { reason } = input;
-  if (reason === undefined || reason === null) return { reason: null };
+  const { reason, endReason = 'SELF_ENDED' } = input;
+  if (!USER_END_REASONS.includes(endReason)) {
+    throwIfInvalid([{ field: 'endReason', reason: `${USER_END_REASONS.join(', ')} 중 하나여야 합니다.` }]);
+  }
+  if (reason === undefined || reason === null) return { reason: null, endReason };
   if (typeof reason !== 'string' || reason.length > MAX_END_REASON_LENGTH) {
     throwIfInvalid([{ field: 'reason', reason: `${MAX_END_REASON_LENGTH}자 이하 문자열이어야 합니다.` }]);
   }
-  return { reason: reason.trim() || null };
+  return { reason: reason.trim() || null, endReason };
 };
 
 // Express 4는 async 핸들러의 에러를 자동으로 넘기지 않아서 next(error)로 넘긴다.
