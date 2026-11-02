@@ -129,5 +129,13 @@ export const isContractDateInRange = (dateString) =>
   Boolean(dateString) && dateString >= CONTRACT_DATE_MIN && dateString <= CONTRACT_DATE_MAX;
 export const CONTRACT_DATE_RANGE_MESSAGE = '2000년부터 2099년 사이 날짜를 골라 주세요.';
 
+export const CONTRACT_LEGAL_NOTICE = '관리용 기록이며 법적 효력이 없어요';
+
+// 계약 응답의 endReason(소유 관계 종료 사유) → 끝난 소유 관계 문구. 끝나지 않았으면 null.
+export const getEndedOwnershipNotice = (endReason) => {
+  if (!endReason) return null;
+  return endReason === 'SOLD' || endReason === 'SUPERSEDED' ? '소유권 이전으로 종료된 소유 관계의 계약' : '종료된 소유 관계의 계약';
+};
+
 // 해지일 최대(D-15): 오늘과 종료일 중 이른 날
 export const getMaxTerminationDate = (endDate, today = getTodayKST()) => (endDate < today ? endDate : today);

@@ -55,7 +55,17 @@ export const formatActivity = ({ type, params = {} }) => {
     case 'OWNERSHIP_UPDATED':
       return `${unitOf(params)} 임대 조건을 수정했어요${formatFields(params.fields)}`;
     case 'OWNERSHIP_ENDED':
-      return `${unitOf(params)}를 삭제했어요(소유 종료)`;
+      // 새 소유자 인증으로 자동 종료(SUPERSEDED)된 경우는 본인이 삭제한 것이 아니다.
+      return params.endReason === 'SUPERSEDED'
+        ? `${unitOf(params)} 소유 관계가 종료됐어요`
+        : `${unitOf(params)}를 삭제했어요(소유 종료)`;
+    // 인증 활동 params에는 상세 사유가 없다(계획 5장).
+    case 'OWNERSHIP_VERIFICATION_REQUESTED':
+      return `${unitOf(params)} 권리자 인증을 요청했어요`;
+    case 'OWNERSHIP_VERIFIED':
+      return `${unitOf(params)} 권리자 인증을 마쳤어요`;
+    case 'OWNERSHIP_VERIFICATION_FAILED':
+      return `${unitOf(params)} 권리자 인증을 마치지 못했어요`;
     // 계약 활동 params에는 금액·연락처가 없다(명세 3-6). 임차인 이름이 있으면 붙인다.
     case 'CONTRACT_CREATED':
       return `${unitOf(params)}${tenantOf(params)} 계약을 등록했어요`;
