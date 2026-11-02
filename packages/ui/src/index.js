@@ -7,6 +7,7 @@ export { PropertySwitcher } from './PropertySwitcher/PropertySwitcher';
 export { UserMenu } from './UserMenu/UserMenu';
 export { LoggedOutScreen } from './LoggedOutScreen/LoggedOutScreen';
 export { LoginScreen } from './LoginScreen/LoginScreen';
+export { RegisterScreen } from './RegisterScreen/RegisterScreen';
 export { RequiredMark, TextField } from './TextField/TextField';
 export { SegmentedControl } from './SegmentedControl/SegmentedControl';
 export { FilterChip } from './FilterChip/FilterChip';
