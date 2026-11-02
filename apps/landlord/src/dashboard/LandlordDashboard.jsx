@@ -136,9 +136,9 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
 
   const today = getTodayKST();
   // 시작 전·진행 중 계약을 한 번에 받는다. 예정 일정은 전부, 나머지(총 보증금 D-16·계약 중·오늘 할 일·
-  // 내 부동산 표)는 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다.
+  // 내 부동산 표)는 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다. 소유가 끝난 호실의 계약은 할 일이 아니므로 뺀다.
   const liveContracts = useGetContractList(
-    { status: 'UPCOMING,ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE },
+    { status: 'UPCOMING,ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE, activeOwnership: 'true' },
     { onUnauthorized },
   );
   const liveItems = liveContracts.data?.items ?? [];
