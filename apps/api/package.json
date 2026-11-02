@@ -33,7 +33,7 @@
     "exceljs": "^4.4.0",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
-    "puppeteer-core": "24.43.1"
+    "puppeteer-core": "24.43.1",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
