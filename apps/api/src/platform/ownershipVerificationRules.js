@@ -95,7 +95,11 @@ export const buildJibunAddress = (complex) => {
   if (index < 0) return null;
 
   const before = words.slice(0, index);
-  if (before[before.length - 1] === '산') before.pop();
+  if (before[before.length - 1] === '산') {
+    // 산 표기인데 칸은 산이 아니면 어느 필지인지 확실하지 않으므로 조립하지 않는다.
+    if (!isMountain) return null;
+    before.pop();
+  }
   if (before.length < 2) return null;
   return `${before.join(' ')} ${isMountain ? '산 ' : ''}${lot}`;
 };

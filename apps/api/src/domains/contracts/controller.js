@@ -141,6 +141,9 @@ const parseListQuery = (query) => {
   if (statuses.some((status) => !CONTRACT_STATUSES.includes(status))) {
     details.push({ field: 'status', reason: `${CONTRACT_STATUSES.join(', ')} 중에서 쉼표로 고릅니다.` });
   }
+  if (query.activeOwnership !== undefined && query.activeOwnership !== 'true') {
+    details.push({ field: 'activeOwnership', reason: 'true만 받습니다.' });
+  }
   const sortMatch = SORT_PATTERN.exec(query.sort ?? 'endDate:asc');
   if (!sortMatch) details.push({ field: 'sort', reason: 'endDate|startDate|createdAt:asc|desc 형식이어야 합니다.' });
   const { page, size } = parsePagination(query, details);
@@ -149,6 +152,7 @@ const parseListQuery = (query) => {
   return {
     propertyId: query.propertyId ?? null,
     ownershipId: query.ownershipId ?? null,
+    activeOwnership: query.activeOwnership === 'true',
     statuses,
     sort: { field: sortMatch[1], direction: sortMatch[2] },
     page,

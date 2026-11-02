@@ -142,7 +142,7 @@ const ManagementLogEditRoute = (pageProps) => {
 // 재인증 안내(종 아이콘 목록·만료 팝업)도 여기서 읽는다. 인증을 끝내거나 만료되면 다음 화면 이동 때 맞춰진다.
 const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAuthMe, children, ...layoutProps }) => {
   const { pathname } = useLocation();
-  const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1 }, { onUnauthorized });
+  const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1, activeOwnership: 'true' }, { onUnauthorized });
   const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, { onUnauthorized });
   const { refetch } = expiringSoon;
   const { refetch: refetchRenewal } = renewal;

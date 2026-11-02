@@ -105,6 +105,11 @@ test('buildJibunAddress: 건물명이 붙은 주소도 parseTarget을 통과한�
   assert.equal(typeof parseTarget({ address: '서울특별시 송파구 신천동 17 잠실파크리오', dong: '101', ho: '1203' }), 'string');
 });
 
+test('buildJibunAddress: 주소는 산인데 칸이 산이 아니면 조립하지 않는다', () => {
+  assert.equal(buildJibunAddress({ jibunAddress: '강원특별자치도 정선군 사북읍 산 17', isMountain: null, mainLot: 17 }), null);
+  assert.equal(buildJibunAddress({ jibunAddress: '강원특별자치도 정선군 사북읍 산 17', isMountain: false, mainLot: 17 }), null);
+});
+
 test('buildJibunAddress: 부번·번지·산 표기', () => {
   assert.equal(buildJibunAddress({ jibunAddress: '서울 강서구 등촌동 660-9', mainLot: 660, subLot: 9 }), '서울 강서구 등촌동 660-9');
   assert.equal(buildJibunAddress({ jibunAddress: '서울 강서구 등촌동 660-9번지 어떤빌라', mainLot: 660, subLot: 9 }), '서울 강서구 등촌동 660-9');

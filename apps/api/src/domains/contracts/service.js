@@ -193,11 +193,13 @@ export const createContract = async (user, input, req) => {
 const SORT_FIELDS = { endDate: 'endDate', startDate: 'startDate', createdAt: 'createdAt' };
 
 // GET /contracts — 내 소유 관계(활성·종료)의 계약 + 내가 임차인인 계약.
-export const findContracts = async (user, { propertyId, ownershipId, statuses, sort, page, size }) => {
+export const findContracts = async (user, { propertyId, ownershipId, activeOwnership, statuses, sort, page, size }) => {
   const todayKST = getTodayKST();
   const filters = [{ OR: [{ ownership: { userId: user.id } }, { tenantId: user.id }] }];
   if (propertyId) filters.push({ ownership: { propertyId } });
   if (ownershipId) filters.push({ ownershipId });
+  // 매도 등으로 끝난 소유 관계의 계약은 읽기 전용이라 만료 임박 배지에서 뺀다.
+  if (activeOwnership) filters.push({ ownership: { endedAt: null } });
   if (statuses.length > 0) filters.push(statusToWhere(statuses, todayKST));
   const where = { AND: filters };
 
