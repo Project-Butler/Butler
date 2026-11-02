@@ -90,6 +90,7 @@ export const AUDIT_RESOURCE_TYPE_LABEL = {
   OWNERSHIP: '소유 관계',
   CONTRACT: '계약',
   TICKET: '수리·점검 요청',
+  MANAGEMENT_LOG: '관리 기록',
   DOCUMENT: '문서',
   JOB: '작업',
 };
