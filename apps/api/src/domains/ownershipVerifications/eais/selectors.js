@@ -61,8 +61,6 @@ export const SEL = {
 
   // 뷰어(ClipReport) — id 뒤에 실행마다 바뀌는 해시가 붙어 접두어로 찾는다
   viewerCanvas: 'canvas',
-  viewerCurrentPage: 'input[id^="re_input"][title="현재 페이지"]',
   viewerTotalPages: 'input[id^="re_totalCountNumber"]',
-  viewerNext: 'button[id^="re_next"][title="다음 페이지로 이동"]',
   viewerZoom: 'select[id^="re_zoomSelect"]',
 };

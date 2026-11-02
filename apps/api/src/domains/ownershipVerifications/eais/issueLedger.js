@@ -1,14 +1,15 @@
 // Created: 2026-10-21 04:33
 // 세움터 건축물대장 1건 발급의 진입점. 브라우저 열기 → 로그인 → 발급 → 로그아웃 → 브라우저 닫기.
-// 원본: eais-ledger src/cli.ts 의 runBrowser. 파일은 저장하지 않고 캡처한 쪽을 PNG Buffer로 돌려준다.
-// 결과에는 실제 소유자 정보(성명·주민번호 앞자리·주소)가 그림으로 들어 있다. 로그·응답에 그대로 내보내지 않는다.
+// 원본: eais-ledger src/cli.ts 의 runBrowser. 파일은 저장하지 않고 캡처한 1쪽을 PNG Buffer로 돌려준다(소유자현황은 1쪽에만 있다).
+// 결과에는 실제 소유자 정보(성명·주민번호 앞자리·주소)가 그림으로 들어 있다.
+// 로컬 CLI(--ocr)에서는 소유자 성명·생년월일을 콘솔에 그대로 찍는다(사용자 결정 2026-11-02). 주소는 추출하지 않는다.
 import { openSession } from './browser.js';
 import { StopError, createContext, issueOnce, login, logout } from './eais.js';
 import { parseTarget } from './issueCore.js';
 
 // input: { address(지번 주소), dong, ho, buildingName, headless }
 // 돌려주는 값:
-//   성공 { status: 'ok', target, query, issuedAt, pages: [{ page, size, png }], totalPages, dialogs, humanSteps, autoFallbacks }
+//   성공 { status: 'ok', target, query, issuedAt, pages: [{ page: 1, size, png }], totalPages(전체 쪽수), dialogs, humanSteps, autoFallbacks }
 //   멈춤 { status: 'stopped', reason, candidates, ... } — 하나로 좁혀지지 않았거나 화면이 예상과 다름(사람이 확인할 일)
 //   오류 { status: 'error', reason, ... }
 // 입력이 잘못됐으면 { status: 'invalid', reason }을 돌려주고 세움터에 접속하지 않는다.

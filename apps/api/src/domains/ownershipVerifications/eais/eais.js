@@ -1,5 +1,5 @@
 // Created: 2026-10-21 04:33
-// 세움터 로그인 · 건축물대장 발급 1건 · 뷰어 쪽별 캡처 · 로그아웃. 원본: eais-ledger src/eais.ts
+// 세움터 로그인 · 건축물대장 발급 1건 · 뷰어 1쪽 캡처 · 로그아웃. 원본: eais-ledger src/eais.ts
 // 원본과 달리 파일을 저장하지 않는다(스크린샷·화면 기록 없음). 캡처한 쪽은 PNG Buffer로 돌려준다.
 // 규칙:
 //   - 실행 1회에 발급은 최대 1건(세움터 자동화 제재 공지 2026-07-30 — "사람 수준 부하"로 쓰기로 함)
@@ -414,7 +414,7 @@ const prepareApplication = async (ctx, t, hint) => {
   console.info('[eais] 신청 확인 화면 점검 통과');
 };
 
-// 뷰어(ClipReport) 본문은 canvas라 DOM에 글자가 없다 → 쪽마다 캔버스 픽셀을 PNG로 받는다.
+// 뷰어(ClipReport) 본문은 canvas라 DOM에 글자가 없다 → 1쪽 캔버스 픽셀을 PNG로 받는다.
 // 화면 비율 100%(1122×793)는 비전이 ㅁ/ㅇ 받침·작은 머리말을 틀린다 → 300%로 다시 그리게 해 캔버스 픽셀(3367×2381)을 그대로 받는다(2026-10-20 비교).
 // 캔버스가 화면 밖으로 넘치므로 스크린샷 대신 toDataURL. 기기 배율(deviceScaleFactor)은 캔버스가 따르지 않아 쓸모없다. 300%를 바꾸지 말 것.
 const VIEWER_ZOOM = '300%';
@@ -431,33 +431,20 @@ const captureViewer = async (viewer) => {
   if (!zoomed) console.info(`[eais] ⚠ 화면 비율 ${VIEWER_ZOOM} 선택 실패 — 100% 그대로 저장(인식률 낮음)`);
   await viewer.waitForNetworkIdle({ idleTime: 1000 }).catch(() => undefined);
   await wait(1500);
-  const pages = [];
-  // 모든 쪽을 받는다 — 소유자가 많으면 소유자현황 표가 다음 쪽으로 넘어갈 수 있다(사용자 결정 2026-10-20)
-  const count = total ?? 1;
-  for (let i = 1; i <= count; i++) {
-    if (i > 1) {
-      await pause();
-      await viewer.click(SEL.viewerNext);
-      await viewer
-        .waitForFunction(`(document.querySelector(${JSON.stringify(SEL.viewerCurrentPage)})?.value ?? '').replace(/\D/g, '') === '${i}'`)
-        .catch(() => console.info(`[eais] ⚠ ${i}쪽 이동 확인 못 함`));
-      await viewer.waitForNetworkIdle({ idleTime: 800 }).catch(() => undefined);
-      await wait(1000);
-    }
-    // 픽셀이 가장 큰 캔버스 = 본문
-    const got = await viewer.evaluate(
-      String.raw`(() => { const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0]; return c ? { size: c.width + 'x' + c.height, data: c.toDataURL('image/png') } : null; })()`,
-    );
-    if (!got) throw new StopError(`${i}쪽 캔버스를 찾지 못했습니다.`);
-    pages.push({ page: i, size: got.size, png: Buffer.from(got.data.split(',')[1], 'base64') });
-    console.info(`[eais] 발급본 ${i}/${count}쪽 캡처(${got.size})`);
-  }
+  // 1쪽만 받는다 — 소유자현황은 일반·집합 모두 양식상 1쪽에만 있다(사용자 확인 2026-11-02, 이전의 "모든 쪽" 결정을 바꿈)
+  // 픽셀이 가장 큰 캔버스 = 본문
+  const got = await viewer.evaluate(
+    String.raw`(() => { const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0]; return c ? { size: c.width + 'x' + c.height, data: c.toDataURL('image/png') } : null; })()`,
+  );
+  if (!got) throw new StopError('1쪽 캔버스를 찾지 못했습니다.');
+  const pages = [{ page: 1, size: got.size, png: Buffer.from(got.data.split(',')[1], 'base64') }];
+  console.info(`[eais] 발급본 1쪽 캡처(${got.size}, 전체 ${total ?? '알 수 없음'}쪽)`);
   return { pages, totalPages: total };
 };
 
-// 발급 1건: 신청 확인까지(prepareApplication) → 신청하기 → 신청내역 「발급」 → 뷰어 쪽별 캡처.
+// 발급 1건: 신청 확인까지(prepareApplication) → 신청하기 → 신청내역 「발급」 → 뷰어 1쪽 캡처.
 // hint: { query(자동완성 검색어), buildingName(같은 지번 건물이 여럿일 때), show(사람 차례 안내용) }
-// 돌려주는 값: { issuedAt, pages: [{ page, size, png(Buffer) }], totalPages }
+// 돌려주는 값: { issuedAt, pages: [{ page: 1, size, png(Buffer) }](1쪽만), totalPages(발급본 전체 쪽수) }
 export const issueOnce = async (ctx, t, hint) => {
   const page = ctx.session.page;
   await prepareApplication(ctx, t, hint);
