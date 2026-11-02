@@ -12,6 +12,7 @@ import managementLogsRouter from './domains/managementLogs/router.js';
 import cronRouter from './domains/cron/router.js';
 import dashboardRouter from './domains/dashboard/router.js';
 import disputesRouter from './domains/disputes/router.js';
+import jobsRouter from './domains/jobs/router.js';
 import landlordBuildingsRouter from './domains/landlordBuildings/router.js';
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
@@ -43,6 +44,7 @@ app.use('/api/v1/management-logs', managementLogsRouter);
 app.use('/api/v1/landlord-buildings', landlordBuildingsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/activities', activitiesRouter);
+app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/admin', adminRouter);
 
 // Vercel Cron 전용(/api/cron/*). 계약 API가 아니라서 /api/v1 밖이고, 경로는 라우터 안에 있다.

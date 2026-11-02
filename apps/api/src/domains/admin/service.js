@@ -1,15 +1,21 @@
+import { Prisma } from '@prisma/client';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow, getTodayKST } from '../../platform/dateUtils.js';
+import { afterCreatedAtCursor, toCursorPage } from '../../platform/createdAtCursor.js';
+import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { formatDisplayName } from '../../platform/unitAddress.js';
 import { runKaptBasisRefreshNow } from '../../referenceData/kaptExcelRefresh.js';
 import { ImportAlreadyRunningError } from '../../referenceData/referenceImports.js';
 import { revokeAllSessions, toPublicUser } from '../auth/service.js';
+import { createComplexByAdmin } from '../complexes/service.js';
 import { JusoRefreshBusyError, runJusoRefreshNow } from '../cron/referenceData.js';
-import { encodeAuditLogCursor } from './auditLogCursor.js';
+import { toJobResponse } from '../jobs/service.js';
+import { endOwnershipInTx, toResponse as toOwnershipResponse } from '../propertyOwnerships/service.js';
 import { splitExpiredOwnerships, sumCounts, toCountMap } from './dashboardCounts.js';
+import { toVerificationStatusWhere } from './ownershipFilter.js';
 import { assertUserStatusChangeAllowed } from './userStatusChange.js';
 
 const toRefreshBusyError = () => new AppError('REFERENCE_DATA_REFRESH_IN_PROGRESS', 409, '이미 갱신 중입니다. 잠시 뒤 다시 시도해 주세요.');
@@ -39,7 +45,7 @@ export const USER_ROLES = ['LANDLORD', 'TENANT', 'ADMIN'];
 export const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'WITHDRAWN'];
 const STORED_VERIFICATION_STATUSES = ['UNVERIFIED', 'VERIFIED', 'REVOKED'];
 const TICKET_STATUSES = ['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELED'];
-const JOB_STATUSES = ['PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED'];
+export const JOB_STATUSES = ['PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED'];
 
 // GET /admin/dashboard 요약 카운트. 소유 관계는 활성(endedAt null)만 센다.
 // 계약 active는 contractStatus.js의 ACTIVE·EXPIRING_SOON과 같은 범위(해지 안 됨 + 시작일 ≤ 오늘(KST) ≤ 종료일)다.
@@ -187,15 +193,152 @@ export const findAuditLogs = async ({ actorId, action, resourceType, resourceId,
     ...(resourceType && { resourceType }),
     ...(resourceId && { resourceId }),
     ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: to }) } }),
-    ...(cursor && {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
-    }),
+    ...afterCreatedAtCursor(cursor),
   };
   const logs = await prisma.auditLog.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: size + 1 });
-  const hasNext = logs.length > size;
-  const items = logs.slice(0, size);
-  return {
-    items: items.map(toAuditLogResponse),
-    meta: { nextCursor: hasNext ? encodeAuditLogCursor(items[items.length - 1]) : null, hasNext },
-  };
+  const { items, meta } = toCursorPage(logs, size);
+  return { items: items.map(toAuditLogResponse), meta };
 };
+
+const OWNERSHIP_INCLUDE = {
+  property: { include: { complex: true } },
+  user: { select: { id: true, name: true, email: true } },
+};
+
+const throwOwnershipNotFound = () => {
+  throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
+};
+
+// PropertyOwnership 전체 + 소유자(owner). 관리자 화면이 소유자 이름·이메일을 같이 보여 준다.
+const toAdminOwnership = (ownership, now) => ({ ...toOwnershipResponse(ownership, now), owner: ownership.user });
+
+// GET /admin/property-ownerships. 활성·종료 전부, 시작일 최신순. EXPIRED 필터는 ownershipFilter.js가 나눈다.
+export const findAdminOwnerships = async ({ verificationStatus, page, size }) => {
+  const now = getNow();
+  const where = toVerificationStatusWhere(verificationStatus, now);
+  const [ownerships, total] = await prisma.$transaction([
+    prisma.ownership.findMany({
+      where,
+      include: OWNERSHIP_INCLUDE,
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * size,
+      take: size,
+    }),
+    prisma.ownership.count({ where }),
+  ]);
+  return { items: ownerships.map((ownership) => toAdminOwnership(ownership, now)), meta: toPageMeta(page, size, total) };
+};
+
+// POST /admin/property-ownerships/:ownershipId/revoke. 활성 소유 관계만, 이미 REVOKED면 아무것도 하지 않는다.
+// 상태 변경과 감사 로그(OWNERSHIP_REVOKED_BY_ADMIN)를 한 트랜잭션으로 묶는다.
+export const revokeOwnership = (actor, ownershipId, { reason }, req) =>
+  prisma.$transaction(async (tx) => {
+    const ownership = await tx.ownership.findUnique({ where: { id: ownershipId } });
+    if (!ownership) throwOwnershipNotFound();
+    if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
+
+    if (ownership.verificationStatus !== 'REVOKED') {
+      // 동시에 철회해도 감사 로그가 한 번만 남도록 REVOKED가 아닐 때만 바꾼다.
+      const { count } = await tx.ownership.updateMany({
+        where: { id: ownershipId, endedAt: null, verificationStatus: { not: 'REVOKED' } },
+        data: { verificationStatus: 'REVOKED' },
+      });
+      if (count > 0) {
+        const before = computeOwnershipVerificationStatus(ownership, getNow());
+        await audit.record({
+          actor,
+          action: 'OWNERSHIP_REVOKED_BY_ADMIN',
+          resourceType: 'OWNERSHIP',
+          resourceId: ownershipId,
+          summary: `${before} → REVOKED`,
+          before: { verificationStatus: before },
+          after: { verificationStatus: 'REVOKED', reason },
+          req,
+          client: tx,
+        });
+      }
+    }
+    const updated = await tx.ownership.findUnique({ where: { id: ownershipId }, include: OWNERSHIP_INCLUDE });
+    return toAdminOwnership(updated, getNow());
+  });
+
+// POST /admin/property-ownerships/:ownershipId/end. 사용자 종료와 같은 종료 로직을 쓰되,
+// 운영자 종료는 계약이 있어도 진행한다(api-contract.md 3장). 계약은 이전 소유자·임차인에게 읽기 전용으로 남는다.
+export const endOwnershipByAdmin = (actor, ownershipId, { reason }, req) =>
+  prisma.$transaction(async (tx) => {
+    // 사용자 종료·계약 쓰기와 같은 행 잠금으로 줄을 세운다.
+    const ownership = await lockOwnershipRow(tx, ownershipId);
+    if (!ownership) throwOwnershipNotFound();
+
+    await endOwnershipInTx(tx, ownership, { endReason: 'ADMIN_ENDED', note: reason, checkActiveContracts: false });
+    await audit.record({
+      actor,
+      action: 'OWNERSHIP_ENDED',
+      resourceType: 'OWNERSHIP',
+      resourceId: ownershipId,
+      summary: 'ADMIN_ENDED',
+      after: { endReason: 'ADMIN_ENDED', reason },
+      req,
+      client: tx,
+    });
+    const ended = await tx.ownership.findUnique({ where: { id: ownershipId }, include: OWNERSHIP_INCLUDE });
+    return toAdminOwnership(ended, getNow());
+  });
+
+// GET /admin/jobs. 최근 순 커서 방식(감사 로그와 같음).
+export const findAdminJobs = async ({ status, cursor, size }) => {
+  const where = { ...(status && { status }), ...afterCreatedAtCursor(cursor) };
+  const jobs = await prisma.job.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: size + 1 });
+  const { items, meta } = toCursorPage(jobs, size);
+  return { items: items.map(toJobResponse), meta };
+};
+
+const throwJobNotRetryable = () => {
+  throw new AppError('JOB_NOT_RETRYABLE', 422, '실패한 작업만 다시 시도할 수 있습니다.');
+};
+
+// POST /admin/jobs/:jobId/retry. FAILED만 PENDING으로 되돌린다. 실행 수단(워커)은 아직 없어서
+// 여기서는 상태만 바꾸고, 실제 재실행은 jobs.enqueue()·워커가 생기면 붙인다(api-contract.md 8장 "작업(Job)").
+export const retryJob = (actor, jobId, req) =>
+  prisma.$transaction(async (tx) => {
+    const job = await tx.job.findUnique({ where: { id: jobId } });
+    if (!job) throw new AppError('JOB_NOT_FOUND', 404, '작업을 찾을 수 없습니다.');
+    if (job.status !== 'FAILED') throwJobNotRetryable();
+
+    // 동시에 재시도해도 한 번만 바뀌도록 FAILED 조건을 건다.
+    const { count } = await tx.job.updateMany({
+      where: { id: jobId, status: 'FAILED' },
+      data: { status: 'PENDING', error: Prisma.DbNull, lockedAt: null, runAfter: getNow() },
+    });
+    if (count === 0) throwJobNotRetryable();
+
+    await audit.record({
+      actor,
+      action: 'JOB_RETRIED',
+      resourceType: 'JOB',
+      resourceId: jobId,
+      summary: `${job.type} FAILED → PENDING`,
+      before: { status: 'FAILED', error: job.error },
+      after: { status: 'PENDING' },
+      req,
+      client: tx,
+    });
+    return { jobId, status: 'PENDING' };
+  });
+
+// POST /admin/complexes. 단지 생성과 감사 로그(COMPLEX_CREATED_BY_ADMIN)를 한 트랜잭션으로 묶는다.
+export const createComplex = (actor, input, req) =>
+  prisma.$transaction(async (tx) => {
+    const complex = await createComplexByAdmin(input, { client: tx });
+    await audit.record({
+      actor,
+      action: 'COMPLEX_CREATED_BY_ADMIN',
+      resourceType: 'COMPLEX',
+      resourceId: complex.id,
+      summary: complex.name,
+      after: { ...input, sourceKey: complex.sourceKey },
+      req,
+      client: tx,
+    });
+    return complex;
+  });

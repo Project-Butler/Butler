@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../../platform/AppError.js';
 import { toDateOnlyString } from '../../platform/dateUtils.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -274,4 +275,41 @@ export const resolveComplex = async (sourceKey) => {
 export const findComplexById = async (complexId) => {
   const complex = await prisma.complex.findUnique({ where: { id: complexId }, include: COMPLEX_INCLUDE });
   return complex ? toComplexResponseWithBasis(complex) : null;
+};
+
+const throwComplexAlreadyExists = () => {
+  throw new AppError('COMPLEX_ALREADY_EXISTS', 409, '같은 sourceKey의 단지가 이미 있습니다.');
+};
+
+// POST /admin/complexes(api-contract.md 8장): 검색되지 않는 단지를 운영자가 직접 만든다. 외부 호출 없음.
+// sourceKey를 비우면 'ADMIN:<uuid>'를 만든다. 감사 로그와 묶으려면 client에 트랜잭션(tx)을 넘긴다.
+export const createComplexByAdmin = async ({ name, jibunAddress, roadAddress, legalDongCode, sourceKey }, { client = prisma } = {}) => {
+  const region = await client.region.findUnique({ where: { id: legalDongCode }, select: { id: true } });
+  if (!region) throw new AppError('REGION_NOT_FOUND', 404, '법정동을 찾을 수 없습니다.');
+
+  if (sourceKey) {
+    const existing = await client.complex.findUnique({ where: { sourceKey }, select: { id: true } });
+    if (existing) throwComplexAlreadyExists();
+  }
+
+  let complex;
+  try {
+    complex = await client.complex.create({
+      data: {
+        sourceKey: sourceKey ?? `ADMIN:${randomUUID()}`,
+        name,
+        jibunAddress,
+        roadAddress,
+        regionId: legalDongCode,
+        createdByAdmin: true,
+      },
+      include: COMPLEX_INCLUDE,
+    });
+  } catch (error) {
+    // 같은 sourceKey를 동시에 만든 경쟁에서 진 쪽
+    if (error.code === 'P2002') throwComplexAlreadyExists();
+    throw error;
+  }
+  // 관리자 단지는 kaptCode가 없어 K-apt 조회 없이 buildingInfo: null이다.
+  return toComplexResponse(complex);
 };

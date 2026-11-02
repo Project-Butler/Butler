@@ -7,15 +7,24 @@ import {
 } from '../../platform/requestValidation.js';
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
-import { decodeAuditLogCursor } from './auditLogCursor.js';
+import { decodeCreatedAtCursor } from '../../platform/createdAtCursor.js';
+import { parseComplexBody } from './complexInput.js';
+import { OWNERSHIP_FILTER_STATUSES } from './ownershipFilter.js';
 import {
   changeUserStatus,
+  createComplex,
+  endOwnershipByAdmin,
+  findAdminJobs,
+  findAdminOwnerships,
   findAdminUser,
   findAdminUsers,
   findAuditLogs,
   getDashboardCounts,
+  JOB_STATUSES,
   refreshJusoReferenceData,
   refreshKaptReferenceData,
+  retryJob,
+  revokeOwnership,
   USER_ROLES,
   USER_STATUSES,
 } from './service.js';
@@ -50,24 +59,47 @@ const parseUserListQuery = (query) => {
   return { query: keyword, role, status, page, size };
 };
 
+// 운영자가 입력하는 사유. 비어 있으면 null, required면 필수.
+const parseReason = (value, details, { required, requiredMessage = '사유를 입력해 주세요.' }) => {
+  if (value !== undefined && value !== null && typeof value !== 'string') {
+    details.push({ field: 'reason', reason: '문자열이어야 합니다.' });
+    return null;
+  }
+  const reason = value?.trim() || null;
+  if (reason && reason.length > MAX_REASON_LENGTH) {
+    details.push({ field: 'reason', reason: `${MAX_REASON_LENGTH}자 이하여야 합니다.` });
+  }
+  if (required && !reason) details.push({ field: 'reason', reason: requiredMessage });
+  return reason;
+};
+
 const parseStatusBody = (body) => {
   assertAllowedBody(body, ['status', 'reason']);
   const details = [];
   const status = parseEnum(body.status, 'status', ADMIN_SETTABLE_STATUSES, details);
   if (body.status === undefined) details.push({ field: 'status', reason: '필수 값입니다.' });
-
-  let reason = body.reason ?? null;
-  if (reason !== null && typeof reason !== 'string') {
-    details.push({ field: 'reason', reason: '문자열이어야 합니다.' });
-  } else {
-    reason = reason?.trim() || null;
-    if (reason && reason.length > MAX_REASON_LENGTH) {
-      details.push({ field: 'reason', reason: `${MAX_REASON_LENGTH}자 이하여야 합니다.` });
-    }
-    if (status === 'SUSPENDED' && !reason) details.push({ field: 'reason', reason: '정지 사유를 입력해 주세요.' });
-  }
+  const reason = parseReason(body.reason, details, { required: status === 'SUSPENDED', requiredMessage: '정지 사유를 입력해 주세요.' });
   throwIfInvalid(details);
   return { status, reason };
+};
+
+// 소유 관계 철회·종료 본문 { reason }(필수).
+const parseReasonBody = (body) => {
+  const input = body ?? {};
+  assertAllowedBody(input, ['reason']);
+  const details = [];
+  const reason = parseReason(input.reason, details, { required: true });
+  throwIfInvalid(details);
+  return { reason };
+};
+
+const parseOwnershipListQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  const verificationStatus = parseEnum(query.verificationStatus, 'verificationStatus', OWNERSHIP_FILTER_STATUSES, details);
+  const { page, size } = parsePagination(query, details);
+  throwIfInvalid(details);
+  return { verificationStatus, page, size };
 };
 
 const parseDateTime = (value, field, details) => {
@@ -80,18 +112,11 @@ const parseDateTime = (value, field, details) => {
   return date;
 };
 
-const parseAuditLogQuery = (query) => {
-  assertSingleValues(query);
-  const details = [];
-  for (const field of ['actorId', 'resourceId']) {
-    if (query[field] !== undefined && !isUuid(query[field])) details.push({ field, reason: 'UUID 형식이어야 합니다.' });
-  }
-  const from = parseDateTime(query.from, 'from', details);
-  const to = parseDateTime(query.to, 'to', details);
-
+// 커서 방식 목록의 cursor·size(api-contract.md 1장 "목록 조회").
+const parseCursorPagination = (query, details) => {
   let cursor;
   if (query.cursor !== undefined) {
-    cursor = decodeAuditLogCursor(query.cursor);
+    cursor = decodeCreatedAtCursor(query.cursor);
     if (!cursor) details.push({ field: 'cursor', reason: '올바르지 않은 커서입니다.' });
   }
 
@@ -102,6 +127,19 @@ const parseAuditLogQuery = (query) => {
       details.push({ field: 'size', reason: `1 이상 ${MAX_CURSOR_SIZE} 이하의 정수여야 합니다.` });
     }
   }
+  return { cursor, size };
+};
+
+const parseAuditLogQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  for (const field of ['actorId', 'resourceId']) {
+    if (query[field] !== undefined && !isUuid(query[field])) details.push({ field, reason: 'UUID 형식이어야 합니다.' });
+  }
+  const from = parseDateTime(query.from, 'from', details);
+  const to = parseDateTime(query.to, 'to', details);
+
+  const { cursor, size } = parseCursorPagination(query, details);
   throwIfInvalid(details);
   return {
     actorId: query.actorId,
@@ -115,8 +153,21 @@ const parseAuditLogQuery = (query) => {
   };
 };
 
+const parseJobListQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  const status = parseEnum(query.status, 'status', JOB_STATUSES, details);
+  const { cursor, size } = parseCursorPagination(query, details);
+  throwIfInvalid(details);
+  return { status, cursor, size };
+};
+
 const throwUserNotFound = () => {
   throw new AppError('USER_NOT_FOUND', 404, '회원을 찾을 수 없습니다.');
+};
+
+const throwOwnershipNotFound = () => {
+  throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
 };
 
 // POST /api/v1/admin/reference-data/juso/refresh — 관리자가 juso 참고 데이터를 지금 갱신한다(본문 없음).
@@ -187,6 +238,69 @@ export const listAuditLogs = async (req, res, next) => {
   try {
     const { items, meta } = await findAuditLogs(parseAuditLogQuery(req.query));
     sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/property-ownerships?verificationStatus=&page=&size= — EXPIRED는 조회 시점 계산.
+export const listOwnerships = async (req, res, next) => {
+  try {
+    const { items, meta } = await findAdminOwnerships(parseOwnershipListQuery(req.query));
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/property-ownerships/:ownershipId/revoke — { reason }
+export const postOwnershipRevoke = async (req, res, next) => {
+  try {
+    const { ownershipId } = req.params;
+    if (!isUuid(ownershipId)) throwOwnershipNotFound();
+    sendData(res, await revokeOwnership(req.user, ownershipId, parseReasonBody(req.body), req));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/property-ownerships/:ownershipId/end — { reason }. 계약이 있어도 종료한다(ADMIN_ENDED).
+export const postOwnershipEnd = async (req, res, next) => {
+  try {
+    const { ownershipId } = req.params;
+    if (!isUuid(ownershipId)) throwOwnershipNotFound();
+    sendData(res, await endOwnershipByAdmin(req.user, ownershipId, parseReasonBody(req.body), req));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/jobs?status=&size=&cursor= — 최근 순 커서 방식.
+export const listJobs = async (req, res, next) => {
+  try {
+    const { items, meta } = await findAdminJobs(parseJobListQuery(req.query));
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/jobs/:jobId/retry — FAILED만 PENDING으로 되돌린다(202, 본문 없음).
+export const postJobRetry = async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    if (!isUuid(jobId)) throw new AppError('JOB_NOT_FOUND', 404, '작업을 찾을 수 없습니다.');
+    assertAllowedBody(req.body ?? {}, []);
+    sendData(res, await retryJob(req.user, jobId, req), { status: 202 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/complexes — { name, jibunAddress, roadAddress, legalDongCode, sourceKey }
+export const postComplex = async (req, res, next) => {
+  try {
+    sendData(res, await createComplex(req.user, parseComplexBody(req.body), req), { status: 201 });
   } catch (error) {
     next(error);
   }
