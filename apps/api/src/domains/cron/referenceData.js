@@ -9,6 +9,7 @@
 // 데워진 인스턴스에서 돌 수 있다 — 모듈 로드 시각으로 재면 모든 마감이 지난 것으로 보여 아무것도 안 하고 끝난다.
 // 콜드 스타트 직후 첫 호출에서만 min(t0, BOOT_AT)을 쓴다(콜드 스타트 시간도 60초에 들어가므로).
 import { formatDateKST, getNow } from '../../platform/dateUtils.js';
+import { expireStaleAttempts as defaultExpireStaleAttempts } from '../../platform/ownershipVerification.js';
 import { KAPT_BASIS_CRON_LIMIT } from '../complexes/apiUsage.js';
 import { fillKaptBasis } from '../complexes/kaptBasis.js';
 import { refillComplexKaptCodes } from '../../referenceData/complexKaptCodes.js';
@@ -213,12 +214,22 @@ export const runJusoRefreshNow = async ({ prisma, requestedBy = null, now = getN
 
 // 실패는 단계마다 잡아서 결과에 남긴다(한 단계가 실패해도 다음 단계는 돈다). jobs에 REFERENCE_DATA_DAILY로 남긴다.
 export const runReferenceDataCron = async ({ prisma, t0, bootAt, coldStart, now = getNow, deps = {} }) => {
+  // 멈춘 권리자 인증 시도 정리. 임시 생년월일 삭제가 걸려 있어 시간 예산에 밀리지 않게 맨 앞에서 따로 한다.
+  const { expireStaleAttempts = defaultExpireStaleAttempts } = deps;
+  let staleAttempts;
+  try {
+    staleAttempts = { expired: await expireStaleAttempts() };
+  } catch (error) {
+    console.error('[reference-data] 멈춘 인증 시도 정리 실패', toReason(error));
+    staleAttempts = { error: toReason(error) };
+  }
+
   const { downloadLinkDays, readLinkDay, applyLinkDay, fillBasis, refill, cleanupSearchResults } = { ...defaultDeps, ...deps };
   const base = resolveBudgetBase({ t0, bootAt, coldStart });
   const elapsedAtStart = Date.now() - base;
   const today = formatDateKST(now());
   const keySet = createKeySet();
-  const result = { elapsedAtStart, today, juso: null, basis: null, finalize: null };
+  const result = { elapsedAtStart, today, staleAttempts, juso: null, basis: null, finalize: null };
 
   const job = await prisma.job.create({
     data: { type: REFERENCE_DATA_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: getNow(), payload: { elapsedAtStart } },
