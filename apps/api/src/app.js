@@ -14,6 +14,7 @@ import dashboardRouter from './domains/dashboard/router.js';
 import disputesRouter from './domains/disputes/router.js';
 import jobsRouter from './domains/jobs/router.js';
 import landlordBuildingsRouter from './domains/landlordBuildings/router.js';
+import ownershipVerificationsRouter, { ownershipVerificationResultRouter } from './domains/ownershipVerifications/router.js';
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
 import { csrfGuard } from './middlewares/csrfGuard.js';
@@ -29,6 +30,8 @@ app.set('trust proxy', 1);
 
 app.use(requestId);
 app.use(cors(corsOptions));
+// 서명 검증에 원문 바이트가 필요해 express.json·csrfGuard보다 앞에 둔다.
+app.use('/api/v1/ownership-verifications', ownershipVerificationResultRouter);
 app.use(express.json());
 app.use(cookieParser());
 app.use(csrfGuard);
@@ -39,6 +42,7 @@ app.use('/api/v1/disputes', disputesRouter);
 app.use('/api/v1/complexes', complexesRouter);
 app.use('/api/v1/properties', propertiesRouter);
 app.use('/api/v1/property-ownerships', propertyOwnershipsRouter);
+app.use('/api/v1/ownership-verifications', ownershipVerificationsRouter);
 app.use('/api/v1/contracts', contractsRouter);
 app.use('/api/v1/management-logs', managementLogsRouter);
 app.use('/api/v1/landlord-buildings', landlordBuildingsRouter);
