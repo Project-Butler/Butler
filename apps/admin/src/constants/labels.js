@@ -37,6 +37,28 @@ export const END_REASON_LABEL = {
   ADMIN_ENDED: '운영자 종료',
 };
 
+export const LEASE_TYPE_LABEL = {
+  MONTHLY: '월세',
+  JEONSE: '전세',
+};
+
+// 계약 상태(서버 계산, api-contract.md 10장). 임대인 앱과 같은 문구·tone.
+export const CONTRACT_STATUS_LABEL = {
+  UPCOMING: '시작 전',
+  ACTIVE: '진행 중',
+  EXPIRING_SOON: '만료 임박',
+  EXPIRED: '만료',
+  TERMINATED: '해지',
+};
+
+export const CONTRACT_STATUS_TONE = {
+  UPCOMING: 'default',
+  ACTIVE: 'success',
+  EXPIRING_SOON: 'warning',
+  EXPIRED: 'default',
+  TERMINATED: 'default',
+};
+
 // 감사 로그 액션(api-contract.md 10장). 등록형이라 모르는 값은 원래 값을 그대로 보여 준다.
 export const AUDIT_ACTION_LABEL = {
   AUTH_LOGIN_FAILED: '로그인 연속 실패',

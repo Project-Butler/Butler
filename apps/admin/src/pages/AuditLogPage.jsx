@@ -40,7 +40,7 @@ const JsonBlock = ({ label, value }) => (
 
 // 감사 로그. 필터는 URL 쿼리에 두고 [적용]을 눌러야 바뀐다. 최근 순 커서 방식이라 쪽 번호 대신 "더 보기"로 이어 읽는다.
 // 감사 로그는 수정·삭제할 수 없다(api-contract.md 8장).
-export const AuditLogPage = ({ onUnauthorized }) => {
+export const AuditLogPage = ({ onNavigate, onUnauthorized }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const applied = Object.fromEntries(FILTER_KEYS.map((key) => [key, searchParams.get(key) ?? '']));
   const [draft, setDraft] = useState(applied);
@@ -204,6 +204,17 @@ export const AuditLogPage = ({ onUnauthorized }) => {
                             <JsonBlock label="변경 전" value={log.before} />
                             <JsonBlock label="변경 후" value={log.after} />
                           </div>
+                          {log.resourceType === 'CONTRACT' && log.resourceId && (
+                            <div className="flex justify-end">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onNavigate('contractDetail', { contractId: log.resourceId })}
+                              >
+                                계약 상세 보기
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

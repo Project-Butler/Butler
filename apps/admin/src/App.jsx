@@ -7,6 +7,8 @@ import { AdminDashboard } from './dashboard/AdminDashboard';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ComplexCreatePage } from './pages/ComplexCreatePage';
+import { ContractDetailPage } from './pages/ContractDetailPage';
+import { ContractLookupPage } from './pages/ContractLookupPage';
 import { JobListPage } from './pages/JobListPage';
 import { OwnershipListPage } from './pages/OwnershipListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
@@ -26,6 +28,8 @@ const PAGE_BY_KEY = {
   complexes: ComplexCreatePage,
   jobs: JobListPage,
   auditLogs: AuditLogPage,
+  contracts: ContractLookupPage,
+  contractDetail: ContractDetailPage,
 };
 
 export const App = () => {
