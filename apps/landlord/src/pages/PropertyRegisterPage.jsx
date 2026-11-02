@@ -128,7 +128,8 @@ const AddressField = ({ complex, onOpen, error, disabled }) => (
   </div>
 );
 
-// 부동산 등록(POST /properties): 주소와 동·호를 한 화면에서 입력한다. 저장하면 내 부동산 목록으로 간다(기록 바꿈).
+// 부동산 등록(POST /properties): 주소와 동·호를 한 화면에서 입력한다. 저장하면 권리자 인증 화면으로 간다(기록 바꿈).
+// 한 번에 한 호실씩 등록한다. 여러 호실은 인증 화면의 [나중에 하기]·[다른 호실 등록]을 거쳐 이어서 등록한다.
 export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
   const register = usePostProperty({ onUnauthorized });
   const [complex, setComplex] = useState(null);
@@ -184,7 +185,7 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
     const { data, error } = await register.createProperty(body);
     if (data) {
       const notice = toSavedValueNotice(body, data.property);
-      onNavigate('buildingList', notice ? { notice } : {}, { replace: true });
+      onNavigate('propertyVerify', { propertyId: data.property.id, ...(notice && { notice }) }, { replace: true });
       return;
     }
     if (error?.status === 400) setServerFieldErrors(toFieldErrors(error));

@@ -17,12 +17,16 @@ import { ManagementLogRegisterPage } from './pages/ManagementLogRegisterPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
+import { PropertyVerifyPage } from './pages/PropertyVerifyPage';
 import { SetupPage } from './pages/SetupPage';
+import { SupportInquiryPage } from './pages/SupportInquiryPage';
 import { DisputeChatPage } from './pages/DisputeChatPage';
 import { DisputePage } from './pages/DisputePage';
 import { DisputeReferenceDetailPage } from './pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from './pages/DisputeSearchPage';
+import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
 import { useGetContractList } from './hooks/useGetContractList';
+import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
 
 // 화면 전환은 react-router(BrowserRouter)로 하고, 경로 표는 routes.js에 있다.
@@ -33,6 +37,7 @@ const NAV_KEY_BY_VIEW = {
   properties: 'buildingList',
   propertyDetail: 'buildingList',
   propertyRegister: 'buildingList',
+  propertyVerify: 'buildingList',
   contracts: 'leases',
   contractRegister: 'leases',
   contractEdit: 'leases',
@@ -50,6 +55,8 @@ const SUB_TITLE_BY_VIEW = {
   properties: '호실 목록',
   propertyDetail: '호실 상세',
   propertyRegister: '부동산 등록',
+  propertyVerify: '권리자 인증',
+  supportInquiry: '관리자 문의',
   contracts: '계약 목록',
   contractRegister: '계약 등록',
   contractEdit: '계약 수정',
@@ -78,6 +85,12 @@ const BuildingListRoute = (pageProps) => {
 const PropertyDetailRoute = (pageProps) => {
   const { propertyId } = useParams();
   return <PropertyDetailPage key={propertyId} propertyId={propertyId} {...pageProps} />;
+};
+
+const PropertyVerifyRoute = (pageProps) => {
+  const { propertyId } = useParams();
+  const { state } = useLocation();
+  return <PropertyVerifyPage key={propertyId} propertyId={propertyId} notice={state?.notice} {...pageProps} />;
 };
 
 const PropertyListRoute = (pageProps) => {
@@ -126,22 +139,39 @@ const ManagementLogEditRoute = (pageProps) => {
 
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
 // 계약 메뉴 배지 = 만료 임박 건수. 화면을 옮길 때마다 다시 세어 등록·해지 뒤에도 맞게 한다.
-const LayoutWithBadges = ({ onUnauthorized, ...layoutProps }) => {
+// 재인증 안내(종 아이콘 목록·만료 팝업)도 여기서 읽는다. 인증을 끝내거나 만료되면 다음 화면 이동 때 맞춰진다.
+const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAuthMe, children, ...layoutProps }) => {
   const { pathname } = useLocation();
   const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1 }, { onUnauthorized });
+  const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, { onUnauthorized });
   const { refetch } = expiringSoon;
+  const { refetch: refetchRenewal } = renewal;
   const visitedPathRef = useRef(pathname);
   useEffect(() => {
     // 처음 그릴 때는 훅이 이미 불러오므로 경로가 바뀔 때만 다시 센다.
     if (visitedPathRef.current === pathname) return;
     visitedPathRef.current = pathname;
     refetch();
-  }, [pathname, refetch]);
-  return <LandlordLayout navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }} {...layoutProps} />;
+    refetchRenewal();
+    onRefreshAuthMe();
+  }, [pathname, refetch, refetchRenewal, onRefreshAuthMe]);
+
+  const { onNavigate, user } = layoutProps;
+  return (
+    <LandlordLayout
+      navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }}
+      notifications={toRenewalNotifications(renewal.notices, onNavigate)}
+      {...layoutProps}
+    >
+      {children}
+      <RenewalDialog userId={user.id} notices={renewal.notices} onNavigate={onNavigate} />
+    </LandlordLayout>
+  );
 };
 
 export const App = () => {
   const [user, setUser] = useState(null);
+  const [verifiedLegalDongCodes, setVerifiedLegalDongCodes] = useState([]);
   // 새로고침해도 로그인이 풀리지 않게, 처음 열 때 쿠키 세션(GET /auth/me)을 확인한다.
   const [isRestoring, setIsRestoring] = useState(true);
   const location = useLocation();
@@ -166,11 +196,20 @@ export const App = () => {
     setUser(null);
   }, []);
 
+  // 인증 완료·만료가 바로 보이게 /auth/me의 법정동 권한을 다시 읽는다. 실패해도 지금 화면을 막지 않는다.
+  const refreshAuthMe = useCallback(() => {
+    getMe()
+      .then(({ verifiedLegalDongCodes: codes }) => setVerifiedLegalDongCodes(codes ?? []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     let isActive = true;
     getMe()
-      .then(({ user: sessionUser }) => {
-        if (isActive) setUser(sessionUser);
+      .then(({ user: sessionUser, verifiedLegalDongCodes: codes }) => {
+        if (!isActive) return;
+        setUser(sessionUser);
+        setVerifiedLegalDongCodes(codes ?? []);
       })
       .catch(() => {})
       .finally(() => {
@@ -182,14 +221,16 @@ export const App = () => {
   }, []);
 
   const handleLogin = async ({ email, password }) => {
-    const { user: loggedInUser } = await postLogin({ email, password });
+    const { user: loggedInUser, verifiedLegalDongCodes: codes } = await postLogin({ email, password });
     setUser(loggedInUser);
+    setVerifiedLegalDongCodes(codes ?? []);
   };
 
   // 임대인 앱의 가입은 항상 LANDLORD다(임차인은 초대 링크로만 가입). 가입하면 바로 로그인 상태가 된다.
   const handleRegister = async (values) => {
     const { user: registeredUser } = await postRegister({ ...values, role: 'LANDLORD' });
     setUser(registeredUser);
+    setVerifiedLegalDongCodes([]);
   };
 
   const handleLogout = async () => {
@@ -256,13 +297,15 @@ export const App = () => {
   }
 
   const viewKey = resolveViewKey(location.pathname);
-  const pageProps = { onNavigate: navigate, onUnauthorized: handleUnauthorized };
+  const pageProps = { onNavigate: navigate, onUnauthorized: handleUnauthorized, verifiedLegalDongCodes, onVerified: refreshAuthMe };
 
   return (
     <>
       <InstallBanner />
       <LayoutWithBadges
         onUnauthorized={handleUnauthorized}
+        verifiedLegalDongCodes={verifiedLegalDongCodes}
+        onRefreshAuthMe={refreshAuthMe}
         user={user}
         onLogout={handleLogout}
         activeKey={NAV_KEY_BY_VIEW[viewKey] ?? viewKey}
@@ -276,6 +319,8 @@ export const App = () => {
           <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
           <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
           <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
+          <Route path="/properties/:propertyId/verify" element={<PropertyVerifyRoute {...pageProps} />} />
+          <Route path="/support/inquiry" element={<SupportInquiryPage />} />
           <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
           <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
           <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />

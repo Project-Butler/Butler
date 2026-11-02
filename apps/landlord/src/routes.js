@@ -11,6 +11,8 @@ export const ROUTE_TABLE = [
   { key: 'properties', path: '/properties' },
   { key: 'propertyRegister', path: '/properties/new' },
   { key: 'propertyDetail', path: '/properties/:propertyId' },
+  { key: 'propertyVerify', path: '/properties/:propertyId/verify' },
+  { key: 'supportInquiry', path: '/support/inquiry' },
   { key: 'contracts', path: '/contracts' },
   { key: 'contractRegister', path: '/contracts/new' },
   { key: 'contractEdit', path: '/contracts/:contractId/edit' },
@@ -44,6 +46,12 @@ const BUILDERS = {
   }),
   propertyRegister: () => ({ pathname: '/properties/new' }),
   propertyDetail: ({ propertyId }) => ({ pathname: `/properties/${propertyId}` }),
+  // 등록 직후 안내(notice)는 주소에 남기지 않고 history state로만 넘긴다.
+  propertyVerify: ({ propertyId, notice }) => ({
+    pathname: `/properties/${propertyId}/verify`,
+    state: notice ? { notice } : undefined,
+  }),
+  supportInquiry: () => ({ pathname: '/support/inquiry' }),
   contracts: () => ({ pathname: '/contracts' }),
   // 사이드바 '계약' 메뉴 key(leases)도 계약 목록으로 보낸다.
   leases: () => ({ pathname: '/contracts' }),
