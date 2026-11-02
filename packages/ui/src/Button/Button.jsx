@@ -1,4 +1,6 @@
+// lg: 화면 하단 고정 주요 버튼(높이 약 52, design.md §5 "모바일 하단 52")
 const SIZE_CLASS = {
+  lg: 'px-5 py-3.5 text-card',
   md: 'px-4 py-2 text-body',
   sm: 'px-3 py-1.5 text-chip',
 };

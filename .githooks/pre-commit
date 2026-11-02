@@ -1,0 +1,3 @@
+#!/bin/sh
+# 비밀값(.env, 키, 토큰)이 커밋에 들어가지 않도록 검사한다.
+exec node "$(git rev-parse --show-toplevel)/scripts/secret-guard.mjs" staged

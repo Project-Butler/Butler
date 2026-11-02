@@ -2,12 +2,32 @@ import { DisputeCategory, DisputePropertyKind, DisputeReferenceType } from '@pri
 import { AppError } from '../../platform/AppError.js';
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
-import { findReferenceById, findReferences, SORTABLE_FIELDS } from './service.js';
+import { askCounselor } from './chatbot.js';
+import { listFaqs } from './faqs.js';
+import { rankBySimilarity } from './related.js';
+import { retrieveReferences } from './retriever.js';
+import {
+  appendChatMessages,
+  createChat,
+  deleteChat,
+  findChatHistory,
+  findChats,
+  findChatWithMessages,
+  findReferenceById,
+  findReferenceForRelated,
+  findReferences,
+  findRelatedCandidates,
+  findSameCategoryReferences,
+  MAX_CHAT_MESSAGES,
+  RELEVANCE_SORT_FIELD,
+  SORTABLE_FIELDS,
+} from './service.js';
 
 // api-contract.md 1장 "목록 조회": page는 1부터, size는 기본 20·최대 100
 const DEFAULT_SIZE = 20;
 const MAX_SIZE = 100;
 const MAX_KEYWORD_LENGTH = 100;
+const MAX_QUESTION_LENGTH = 2000;
 
 const parsePositiveInt = (value, field, details) => {
   const number = Number(value);
@@ -26,36 +46,55 @@ const parseEnum = (value, field, allowed, details) => {
   return value;
 };
 
-const parseListQuery = (query) => {
-  const details = [];
-  const filters = {};
-
-  // ?type=A&type=B처럼 같은 키가 여러 번 오면 배열이 되므로 문자열만 받는다.
-  for (const [field, value] of Object.entries(query)) {
-    if (typeof value !== 'string') {
-      details.push({ field, reason: '한 번만 보낼 수 있습니다.' });
-    }
+// api-contract 1장처럼 여러 값은 쉼표로 받는다(?category=GENERAL,PREMIUM).
+const parseEnumList = (value, field, allowed, details) => {
+  const values = value.split(',').map((item) => item.trim()).filter(Boolean);
+  const invalid = values.filter((item) => !Object.values(allowed).includes(item));
+  if (values.length === 0 || invalid.length > 0) {
+    details.push({ field, reason: `${Object.values(allowed).join(', ')} 중에서 쉼표로 구분해 보내야 합니다.` });
+    return null;
   }
+  return values;
+};
+
+// 검색어 q: 앞뒤 공백을 빼고, 비면 검색하지 않는다(null). 공백으로 나눈 단어는 모두 들어 있어야 한다(service.js).
+const parseKeyword = (q, details) => {
+  if (q === undefined) return null;
+  const keyword = q.trim();
+  if (keyword.length === 0) return null;
+  if (keyword.length > MAX_KEYWORD_LENGTH) {
+    details.push({ field: 'q', reason: `${MAX_KEYWORD_LENGTH}자 이하여야 합니다.` });
+  }
+  return keyword;
+};
+
+// ?type=A&type=B처럼 같은 키가 여러 번 오면 배열이 되므로 문자열만 받는다.
+const assertSingleValues = (query) => {
+  const details = Object.entries(query)
+    .filter(([, value]) => typeof value !== 'string')
+    .map(([field]) => ({ field, reason: '한 번만 보낼 수 있습니다.' }));
   if (details.length > 0) {
     throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', details);
   }
+};
+
+const parseListQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  const filters = {};
 
   const { type, category, propertyKind, q, page, size, sort } = query;
 
   if (type !== undefined) filters.type = parseEnum(type, 'type', DisputeReferenceType, details);
-  if (category !== undefined) filters.category = parseEnum(category, 'category', DisputeCategory, details);
+  if (category !== undefined) {
+    const categories = parseEnumList(category, 'category', DisputeCategory, details);
+    if (categories) filters.category = categories.length === 1 ? categories[0] : { in: categories };
+  }
   if (propertyKind !== undefined) {
     filters.propertyKind = parseEnum(propertyKind, 'propertyKind', DisputePropertyKind, details);
   }
 
-  let keyword = null;
-  if (q !== undefined) {
-    keyword = q.trim();
-    if (keyword.length === 0) keyword = null;
-    else if (keyword.length > MAX_KEYWORD_LENGTH) {
-      details.push({ field: 'q', reason: `${MAX_KEYWORD_LENGTH}자 이하여야 합니다.` });
-    }
-  }
+  const keyword = parseKeyword(q, details);
 
   const pageNumber = page === undefined ? 1 : parsePositiveInt(page, 'page', details);
 
@@ -67,13 +106,16 @@ const parseListQuery = (query) => {
     }
   }
 
-  let orderBy = { field: 'createdAt', direction: 'desc' };
+  // 검색어가 있으면 기본은 관련도 순, 없으면 최신순. 검색어 없이 relevance를 고르면 매길 점수가 없어 최신순으로 둔다.
+  const defaultOrderBy = { field: 'createdAt', direction: 'desc' };
+  let orderBy = keyword ? { field: RELEVANCE_SORT_FIELD, direction: 'desc' } : defaultOrderBy;
   if (sort !== undefined) {
     const [field, direction] = sort.split(':');
-    if (!SORTABLE_FIELDS.includes(field) || !['asc', 'desc'].includes(direction)) {
-      details.push({ field: 'sort', reason: `필드:asc|desc 형식이고 필드는 ${SORTABLE_FIELDS.join(', ')} 중 하나여야 합니다.` });
+    const allowedFields = [...SORTABLE_FIELDS, RELEVANCE_SORT_FIELD];
+    if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
+      details.push({ field: 'sort', reason: `필드:asc|desc 형식이고 필드는 ${allowedFields.join(', ')} 중 하나여야 합니다.` });
     } else {
-      orderBy = { field, direction };
+      orderBy = field === RELEVANCE_SORT_FIELD && !keyword ? defaultOrderBy : { field, direction };
     }
   }
 
@@ -94,17 +136,162 @@ export const listReferences = async (req, res, next) => {
   }
 };
 
+const referenceNotFound = () => new AppError('DISPUTE_REFERENCE_NOT_FOUND', 404, '분쟁 참고자료를 찾을 수 없습니다.');
+
 export const getReference = async (req, res, next) => {
   try {
     const { referenceId } = req.params;
     // 형식이 틀린 id는 DB를 조회하지 않고 없는 자료와 같은 404로 응답한다.
     const reference = isUuid(referenceId) ? await findReferenceById(referenceId) : null;
 
-    if (!reference) {
-      throw new AppError('DISPUTE_REFERENCE_NOT_FOUND', 404, '분쟁 참고자료를 찾을 수 없습니다.');
-    }
+    if (!reference) throw referenceNotFound();
 
     sendData(res, reference);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 사례 상세 아래 "관련 자료". 본문 임베딩이 가까운 자료를 고른다(종류 상관없음).
+const RELATED_LIMIT = 3;
+
+export const getRelatedReferences = async (req, res, next) => {
+  try {
+    const { referenceId } = req.params;
+    const target = isUuid(referenceId) ? await findReferenceForRelated(referenceId) : null;
+    if (!target) throw referenceNotFound();
+
+    let items;
+    if (target.embedding.length > 0) {
+      // 화면에 유사도 숫자를 보여주지 않기로 해서 응답에도 넣지 않는다.
+      items = rankBySimilarity(target.embedding, await findRelatedCandidates(target.id), RELATED_LIMIT);
+    } else {
+      items = await findSameCategoryReferences({ excludeId: target.id, category: target.category, limit: RELATED_LIMIT });
+    }
+
+    sendData(res, items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 자주 묻는 질문. 수십 건이라 페이지 없이 한 번에 보낸다.
+export const listDisputeFaqs = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const details = [];
+    const categories =
+      req.query.category === undefined ? [] : parseEnumList(req.query.category, 'category', DisputeCategory, details);
+    const keyword = parseKeyword(req.query.q, details);
+    if (details.length > 0) {
+      throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', details);
+    }
+
+    sendData(res, await listFaqs({ categories, keyword }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===== 분쟁 상담 챗봇 =====
+
+const parsePageQuery = (query) => {
+  const details = [];
+  const { page, size } = query;
+
+  const pageNumber = page === undefined ? 1 : parsePositiveInt(page, 'page', details);
+
+  let pageSize = DEFAULT_SIZE;
+  if (size !== undefined) {
+    pageSize = parsePositiveInt(size, 'size', details);
+    if (pageSize !== null && pageSize > MAX_SIZE) {
+      details.push({ field: 'size', reason: `${MAX_SIZE} 이하여야 합니다.` });
+    }
+  }
+
+  if (details.length > 0) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', details);
+  }
+  return { page: pageNumber, size: pageSize };
+};
+
+const parseQuestion = (body) => {
+  const question = typeof body?.message === 'string' ? body.message.trim() : '';
+  if (question.length === 0 || question.length > MAX_QUESTION_LENGTH) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', [
+      { field: 'message', reason: `1자 이상 ${MAX_QUESTION_LENGTH}자 이하의 문자열이어야 합니다.` },
+    ]);
+  }
+  return question;
+};
+
+const chatNotFound = () => new AppError('DISPUTE_CHAT_NOT_FOUND', 404, '상담 대화를 찾을 수 없습니다.');
+
+// RAG: 질문과 비슷한 참고자료를 검색하고(retriever) 그 자료를 근거로 답변을 만든다(chatbot).
+// Claude 호출이 실패하면 질문도 저장하지 않는다 — 사용자는 같은 질문을 다시 보내면 된다.
+const ask = async (history, question) => {
+  const questionAt = new Date();
+  const references = await retrieveReferences({ history, question });
+  const answer = await askCounselor({ references, history, question });
+  return { question, questionAt, answer, answerAt: new Date() };
+};
+
+export const listChats = async (req, res, next) => {
+  try {
+    const { items, meta } = await findChats({ userId: req.user.id, ...parsePageQuery(req.query) });
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const startChat = async (req, res, next) => {
+  try {
+    const question = parseQuestion(req.body);
+    const chat = await createChat({ userId: req.user.id, ...(await ask([], question)) });
+    sendData(res, chat, { status: 201 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getChat = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const chat = isUuid(chatId) ? await findChatWithMessages({ chatId, userId: req.user.id }) : null;
+    if (!chat) throw chatNotFound();
+
+    sendData(res, chat);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sendChatMessage = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const question = parseQuestion(req.body);
+    const history = isUuid(chatId) ? await findChatHistory({ chatId, userId: req.user.id }) : null;
+    if (!history) throw chatNotFound();
+
+    if (history.length + 2 > MAX_CHAT_MESSAGES) {
+      throw new AppError('DISPUTE_CHAT_LIMIT_EXCEEDED', 422, '대화가 너무 길어졌습니다. 새 대화를 시작해주세요.');
+    }
+
+    const messages = await appendChatMessages({ chatId, ...(await ask(history, question)) });
+    sendData(res, messages, { status: 201 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeChat = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const deleted = isUuid(chatId) ? await deleteChat({ chatId, userId: req.user.id }) : 0;
+    if (deleted === 0) throw chatNotFound();
+
+    res.status(204).end();
   } catch (error) {
     next(error);
   }

@@ -8,6 +8,11 @@ export const authGuard = (req, res, next) => {
   const token = req.cookies?.access_token;
 
   if (!token) {
+    // access_token 쿠키는 만료 시각(15분)에 브라우저가 지운다. refresh_token이 남아 있으면 "없음"이 아니라
+    // "만료"로 알려야 프론트가 /auth/refresh로 이어 간다(아니면 15분마다 로그인 화면으로 튕긴다).
+    if (req.cookies?.refresh_token) {
+      return next(new AppError('AUTH_TOKEN_EXPIRED', 401, '로그인이 만료되었습니다.'));
+    }
     return next(new AppError('UNAUTHENTICATED', 401, '로그인이 필요합니다.'));
   }
 

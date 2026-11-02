@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- 개발용 미리보기: 분쟁 해결사 화면만 사이드바 없이 띄운다(모바일 폭 확인용). npm run dev 후 /dispute-preview.html (disputes.html로 두면 Vite가 앱 경로 /disputes를 이 파일로 대신 열어 버린다)
+     임대인 앱 공통 틀(AppShell)에 모바일 레이아웃이 생기기 전까지 쓰고, 빌드(vite build)에는 포함되지 않는다. -->
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <title>Butler · 분쟁 해결사 미리보기</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/preview/DisputePreview.jsx"></script>
+  </body>
+</html>
