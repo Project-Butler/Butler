@@ -1,8 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import { AppError } from '../../platform/AppError.js';
+import { decryptField, encryptField } from '../../platform/fieldCrypto.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { normalizeEmail } from './registerValidation.js';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000; // 15분 (api-contract.md 1장)
 const REFRESH_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14일
@@ -21,8 +24,6 @@ export const cookieOptions = {
 
 export const hashPassword = (password) => bcrypt.hash(password, 10);
 
-const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
-
 // 이메일·비밀번호가 맞으면 User를, 아니면 null을 돌려준다. 계정 상태(정지 등)는 호출한 쪽이 본다.
 export const findUserByCredentials = async (email, password) => {
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
@@ -38,7 +39,7 @@ export const toPublicUser = (user) => ({
   id: user.id,
   email: user.email,
   name: user.name,
-  phone: user.phone,
+  phone: decryptField(user.phone),
   role: user.role,
   status: user.status,
   createdAt: user.createdAt.toISOString(),
@@ -100,10 +101,10 @@ const setCookies = (res, user, refreshToken) => {
   res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_TTL_MS });
 };
 
-// 새 세션을 만들고 access/refresh 쿠키를 내려준다. 로그인과 refresh 교체가 같이 쓴다.
-export const startSession = async (req, res, user) => {
+// 세션 행을 만들고 refresh 토큰 원문을 돌려준다. db는 prisma 또는 트랜잭션 tx(가입이 사용자와 같이 만든다).
+const createSessionRecord = async (db, req, user) => {
   const refreshToken = signRefreshToken(user);
-  await prisma.session.create({
+  await db.session.create({
     data: {
       userId: user.id,
       refreshTokenHash: hashRefreshToken(refreshToken),
@@ -112,7 +113,12 @@ export const startSession = async (req, res, user) => {
       ip: req.ip ?? null,
     },
   });
-  setCookies(res, user, refreshToken);
+  return refreshToken;
+};
+
+// 새 세션을 만들고 access/refresh 쿠키를 내려준다. 로그인과 refresh 교체가 같이 쓴다.
+export const startSession = async (req, res, user) => {
+  setCookies(res, user, await createSessionRecord(prisma, req, user));
 };
 
 // refresh 토큰을 한 번 쓰고 새 토큰으로 바꾼다. 쓸 수 없는 토큰이면 null.
@@ -140,4 +146,59 @@ export const rotateSession = async (req, res, user, token) => {
 export const clearAuthCookies = (res) => {
   res.clearCookie('access_token', cookieOptions);
   res.clearCookie('refresh_token', cookieOptions);
+};
+
+// ----- 회원가입 -----
+
+// 약관 문구를 바꾸면 이 버전을 올린다. 동의 이력(consents.version)에 그대로 남는다.
+export const TERMS_VERSION = '2026-10-30';
+export const PRIVACY_VERSION = '2026-10-30';
+
+// 가입 직후 AuthMe: 소유 관계가 아직 없으므로 buildAuthMe를 다시 조회하지 않고 빈 값으로 채운다.
+export const buildRegisteredAuthMe = (user) => ({
+  user: toPublicUser(user),
+  verifiedLegalDongCodes: [],
+  activeOwnershipCount: 0,
+});
+
+const isEmailUniqueViolation = (error) =>
+  error?.code === 'P2002' && [].concat(error.meta?.target ?? []).some((target) => String(target).includes('email'));
+
+const emailTakenError = () => new AppError('EMAIL_ALREADY_EXISTS', 409, '이미 가입된 이메일입니다.');
+
+// 사용자·약관 동의·첫 세션을 한 트랜잭션으로 만들고, 성공하면 쿠키를 내려준다.
+// 입력은 parseRegisterBody를 통과한 값이다. 이메일 중복은 사전 조회 + 유니크 제약(동시 가입) 둘 다 409로 처리한다.
+export const registerUser = async (req, res, { email, password, name, phone, role }) => {
+  if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) throw emailTakenError();
+
+  // 비용이 큰 해시·암호화는 트랜잭션 밖에서 끝낸다.
+  const passwordHash = await hashPassword(password);
+  const encryptedPhone = phone ? encryptField(phone) : null;
+  const agreedAt = new Date();
+  const ip = req.ip ?? null;
+
+  let created;
+  let refreshToken;
+  try {
+    ({ created, refreshToken } = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email, passwordHash, name, phone: encryptedPhone, role } });
+      await tx.consent.createMany({
+        data: [
+          { userId: user.id, type: 'TERMS', version: TERMS_VERSION, agreed: true, agreedAt, ip },
+          { userId: user.id, type: 'PRIVACY_REQUIRED', version: PRIVACY_VERSION, agreed: true, agreedAt, ip },
+        ],
+      });
+      return { created: user, refreshToken: await createSessionRecord(tx, req, user) };
+    }));
+  } catch (error) {
+    if (isEmailUniqueViolation(error)) throw emailTakenError();
+    throw error;
+  }
+
+  // 이 브라우저에 다른 계정의 세션이 남아 있으면 폐기한다(쿠키는 아래에서 새 계정 것으로 덮어쓴다).
+  const previousToken = req.cookies?.refresh_token;
+  if (previousToken) await revokeSessionByToken(previousToken).catch(() => {});
+
+  setCookies(res, created, refreshToken);
+  return created;
 };
