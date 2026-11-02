@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
+import { VerificationFailedNotice } from '../components/VerificationFailedNotice/VerificationFailedNotice';
 import { useGetComplex } from '../hooks/useGetComplex';
 import { useGetContractList } from '../hooks/useGetContractList';
+import { useGetLatestOwnershipVerification } from '../hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
+import { useGetOwnershipRenewalNoticeList } from '../hooks/useGetOwnershipRenewalNoticeList';
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
 import { usePatchProperty } from '../hooks/usePatchProperty';
@@ -23,6 +26,14 @@ import {
   validateExclusiveArea,
   validatePurchasePrice,
 } from '../utils/formValidation';
+import {
+  END_REASONS,
+  getVerificationAction,
+  isSoldReason,
+  toOwnershipEndBody,
+  VERIFICATION_REVOKED_MESSAGE,
+  VERIFICATION_RUNNING_MESSAGE,
+} from '../utils/ownershipVerification';
 import { formatUnitLabel } from '../utils/unitAddress';
 import {
   EQUIPMENT_OPTIONS,
@@ -34,13 +45,13 @@ import {
 } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
-const END_REASONS = ['매도', '증여', '기타'];
-
-// 값이 없으면 '—'. numeric이면 숫자 글꼴.
-const InfoRow = ({ label, value, numeric = false }) => (
+// 값이 없으면 '—'. numeric이면 숫자 글꼴, seal이면 검증된 값을 뜻하는 남색 글자.
+const InfoRow = ({ label, value, numeric = false, seal = false }) => (
   <div className="flex gap-4 py-2.5">
     <dt className="w-24 shrink-0 text-body text-ink-3">{label}</dt>
-    <dd className={`min-w-0 flex-1 text-body text-ink ${numeric ? 'font-num tabular-nums' : ''}`}>{value ?? '—'}</dd>
+    <dd className={`min-w-0 flex-1 text-body ${seal ? 'text-seal-ink' : 'text-ink'} ${numeric ? 'font-num tabular-nums' : ''}`}>
+      {value ?? '—'}
+    </dd>
   </div>
 );
 
@@ -163,7 +174,8 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
 };
 
 // 내 소유 정보: 취득 연월·매입가 수정, 호실 삭제(= 소유 관계 종료, 확인 패널). 종료된 소유 관계는 조회만.
-const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
+// 권리자 인증: 진행 표시·실패 안내·재인증 안내와 다음 행동([인증하기]·[재인증]·[문의하기]).
+const OwnershipSection = ({ ownership, attempt, isAttemptRunning, renewalNotice, onNavigate, onSaved, onEnded, onUnauthorized }) => {
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const end = usePostPropertyOwnershipEnd({ onUnauthorized });
   const [mode, setMode] = useState('view'); // view | edit | end
@@ -173,6 +185,11 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
 
   const badge = getVerificationBadge(ownership.verificationStatus);
   const isVerified = ownership.verificationStatus === 'VERIFIED';
+  const verificationAction = getVerificationAction(ownership);
+  const goVerify = () => onNavigate('propertyVerify', { propertyId: ownership.property.id });
+  const goInquiry = () => onNavigate('supportInquiry');
+  // 재인증 안내(만료 30일 전부터)와 실패 안내는 아직 할 일이 남았을 때만 보여 준다.
+  const showFailed = ownership.isActive && !isAttemptRunning && attempt?.status === 'FAILED' && verificationAction && verificationAction !== 'INQUIRY';
 
   const startEdit = () => {
     setDraft({
@@ -211,7 +228,7 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
   };
 
   const handleEnd = async () => {
-    const { data } = await end.endOwnership(ownership.id, endReason ? { reason: endReason } : {});
+    const { data } = await end.endOwnership(ownership.id, toOwnershipEndBody(endReason));
     if (data) onEnded();
   };
 
@@ -222,6 +239,11 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
     <Card className="space-y-4 p-6">
       <SectionTitle action={<Badge tone={badge.tone}>{badge.label}</Badge>}>내 소유 정보</SectionTitle>
 
+      {ownership.isActive && isAttemptRunning && <NoticeBox tone="seal">{VERIFICATION_RUNNING_MESSAGE}</NoticeBox>}
+      {showFailed && <VerificationFailedNotice onInquiry={goInquiry} />}
+      {ownership.isActive && verificationAction === 'INQUIRY' && <NoticeBox>{VERIFICATION_REVOKED_MESSAGE}</NoticeBox>}
+      {renewalNotice && <NoticeBox tone="warn">{renewalNotice.message}</NoticeBox>}
+
       {mode !== 'edit' && (
         <dl className="divide-y divide-line">
           <InfoRow label="취득 연월" value={ownership.acquiredYearMonth} numeric />
@@ -230,8 +252,8 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
             value={ownership.purchasePrice != null ? `${formatNumber(ownership.purchasePrice)}원` : null}
             numeric
           />
-          <InfoRow label="인증일" value={formatDateKST(ownership.verifiedAt)} numeric />
-          <InfoRow label="인증 만료일" value={formatDateKST(ownership.verificationExpiresAt)} numeric />
+          <InfoRow label="인증일" value={formatDateKST(ownership.verifiedAt)} numeric seal={isVerified} />
+          <InfoRow label="인증 만료일" value={formatDateKST(ownership.verificationExpiresAt)} numeric seal={isVerified} />
           <InfoRow label="소유 시작" value={formatDateKST(ownership.startedAt)} numeric />
           {!ownership.isActive && <InfoRow label="소유 종료" value={formatDateKST(ownership.endedAt)} numeric />}
         </dl>
@@ -239,10 +261,14 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
 
       {ownership.isActive && mode === 'view' && (
         <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-          {!isVerified && (
-            // 권리자 인증 절차는 피처 팀 작업 — 지금은 자리만 둔다.
-            <Button variant="verifyOutline" size="sm" disabled title="권리자 인증은 준비 중입니다">
-              인증하기
+          {(verificationAction === 'VERIFY' || verificationAction === 'RENEW') && (
+            <Button variant="verifyOutline" size="sm" onClick={goVerify} disabled={isAttemptRunning}>
+              {isAttemptRunning ? '인증 진행 중' : verificationAction === 'RENEW' ? '재인증' : '인증하기'}
+            </Button>
+          )}
+          {verificationAction === 'INQUIRY' && (
+            <Button variant="secondary" size="sm" onClick={goInquiry}>
+              문의하기
             </Button>
           )}
           <Button variant="secondary" size="sm" onClick={startEdit}>
@@ -297,14 +323,16 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
           <div>
             <p className="text-body font-semibold text-ink">이 호실을 삭제할까요?</p>
             <p className="mt-0.5 text-sub text-ink-2">
-              내 소유 관계를 종료합니다. 되돌릴 수 없고 &apos;예전 소유 호실&apos;로 옮겨지며, 건물의 등록 호실 수에서 빠집니다.
-              진행 중인 계약이 있으면 삭제할 수 없어요.
+              내 소유 관계를 종료합니다. 되돌릴 수 없고 &apos;예전 소유 호실&apos;로 옮겨지며, 건물의 등록 호실 수에서 빠집니다.{' '}
+              {isSoldReason(endReason)
+                ? '매도는 진행 중인 계약이 있어도 종료돼요. 계약은 수정·해지할 수 없고 보기만 할 수 있어요.'
+                : "진행 중인 계약이 있으면 삭제할 수 없어요. 호실을 팔았다면 '매도'를 골라 주세요."}
             </p>
           </div>
           <div>
             <p className="text-label font-semibold text-ink">종료 사유 (선택)</p>
             <div role="radiogroup" aria-label="종료 사유" className="mt-1.5 flex gap-1 rounded-btn border border-line bg-surface-2 p-1">
-              {END_REASONS.map((reason) => {
+              {END_REASONS.map(({ label: reason }) => {
                 const isSelected = endReason === reason;
                 return (
                   <button
@@ -566,12 +594,34 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
 };
 
 // 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
-export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) => {
+export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerified, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
   const property = propertyQuery.data;
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipQuery = useGetPropertyOwnership(property?.myRelation?.ownershipId, hookOptions);
+  const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, hookOptions);
+  const { refetch: refetchProperty } = propertyQuery;
+  const { refetch: refetchOwnership } = ownershipQuery;
+  const { refetch: refetchRenewal } = renewal;
+
+  // 인증 화면을 나가도 인증은 계속되므로 여기서도 진행 상태를 읽고, 끝나면 화면을 맞춘다.
+  const handleVerificationFinished = useCallback(
+    (attempt) => {
+      refetchProperty();
+      refetchOwnership();
+      if (attempt.status === 'VERIFIED') {
+        refetchRenewal();
+        onVerified?.();
+      }
+    },
+    [refetchProperty, refetchOwnership, refetchRenewal, onVerified],
+  );
+  const activeOwnershipId = property?.myRelation?.type === 'OWNER' ? property.myRelation.ownershipId : undefined;
+  const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, {
+    onFinished: handleVerificationFinished,
+    onUnauthorized,
+  });
 
   const goBack = () => window.history.back();
 
@@ -648,6 +698,10 @@ export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) =
             <OwnershipSection
               key={ownershipQuery.data.id}
               ownership={ownershipQuery.data}
+              attempt={latestAttempt.data}
+              isAttemptRunning={latestAttempt.isActive}
+              renewalNotice={renewal.notices.find((notice) => notice.id === ownershipQuery.data.id)}
+              onNavigate={onNavigate}
               onSaved={ownershipQuery.refetch}
               // 들어온 화면(내 부동산·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
               onEnded={goBack}
