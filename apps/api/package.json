@@ -11,7 +11,7 @@
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js",
-    "eais": "node src/domains/ownershipVerifications/eais/cli.js"
+    "eais": "node src/domains/ownershipVerifications/eais/cli.js",
     "sync:kapt": "node prisma/syncKaptComplexes.js",
     "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
     "import:kapt-basis": "node prisma/importKaptBasis.js",
