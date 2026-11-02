@@ -11,7 +11,7 @@ export const NAV_ITEMS = [
   { key: 'complexes', label: '단지 등록', icon: Building },
   { key: 'jobs', label: '작업', icon: ListChecks },
   { key: 'auditLogs', label: '감사 로그', icon: History },
-  { key: 'contracts', label: '계약', icon: FileSignature, badge: COMING_SOON },
+  { key: 'contracts', label: '계약', icon: FileSignature },
   { key: 'tickets', label: '유지보수', icon: Wrench, badge: COMING_SOON },
   { key: 'documents', label: '문서', icon: FolderOpen, badge: COMING_SOON },
 ];
