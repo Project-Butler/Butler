@@ -42,6 +42,8 @@ export const appendPropertyHistory = async ({
   source,
   client = prisma,
 }) => {
+  if (!source?.feature) throw new TypeError('appendPropertyHistory: source.feature가 필요합니다.');
+
   const ownership = await client.ownership.findUnique({ where: { id: ownershipId } });
   return insertPropertyLog(client, {
     propertyId,
