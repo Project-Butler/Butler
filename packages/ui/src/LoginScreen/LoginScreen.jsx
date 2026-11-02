@@ -3,7 +3,7 @@ import { Home } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../Card/Card';
 
-export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, onSubmit }) => {
+export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, footer, onSubmit }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -69,6 +69,8 @@ export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, onSubmit }) =
           </Button>
         </form>
       </Card>
+
+      {footer}
 
       {devHint && <p className="text-chip text-ink-3">{devHint}</p>}
     </div>
