@@ -1,4 +1,4 @@
-// remote 실행 서버(Azure Windows VM). API가 서명해 보낸 발급 요청을 메모리 큐로 한 번에 1건만 처리하고(Chrome·세움터 계정 충돌 방지),
+// remote 실행 서버(Linux VM, headless Chrome). API가 서명해 보낸 발급 요청을 메모리 큐로 한 번에 1건만 처리하고(Chrome·세움터 계정 충돌 방지),
 // 결과를 서명해 API로 돌려준다. idText·warnings·예외 메시지는 여기서 버린다. 판정과 복호화는 API만 한다.
 // 실행: npm run ownership-runner -w apps/api. 공인 포트를 열지 않고 SSH 터널로 잇는다.
 import '../../loadEnv.js';

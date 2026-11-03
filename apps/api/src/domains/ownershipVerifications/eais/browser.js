@@ -14,6 +14,7 @@ export const STEP_TIMEOUT_MS = 30_000;
 const CHROME_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  '/usr/bin/google-chrome',
 ];
 
 // 세움터 보안 프로그램(KCase)은 PC에 설치된 프로그램과 localhost로 통신한다. Chrome은 이때 왼쪽 위에
@@ -26,7 +27,7 @@ const LOCAL_NETWORK_PERMISSIONS = ['local-network-access', 'local-network', 'loo
 // { browser, page, headless, close() }를 돌려준다. 오류가 나도 반드시 close()를 불러야 node가 끝난다
 export const openSession = async ({ headless }) => {
   const executablePath = CHROME_CANDIDATES.find((p) => !!p && existsSync(p));
-  if (!executablePath) throw new Error('Chrome 실행 파일을 찾지 못했습니다(C:/Program Files/Google/Chrome 에 설치돼 있어야 합니다).');
+  if (!executablePath) throw new Error('Chrome 실행 파일을 찾지 못했습니다(C:/Program Files/Google/Chrome 에 설치돼 있어야 합니다. Linux는 /usr/bin/google-chrome).');
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'butler-eais-'));
   const browser = await puppeteer.launch({
     executablePath,

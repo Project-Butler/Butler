@@ -1,4 +1,4 @@
-// 이 PC(Windows)에서 세움터 발급 + CLOVA OCR을 실행한다. eais/, ocr/는 동적 import로 불러 Vercel 번들에 영향을 주지 않는다.
+// 이 PC에서 세움터 발급 + CLOVA OCR을 실행한다. eais/, ocr/는 동적 import로 불러 Vercel 번들에 영향을 주지 않는다.
 import { toRunnerResult } from '../../../platform/ownershipVerificationRules.js';
 
 export const loadLedgerTools = async () => {
