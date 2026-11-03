@@ -2,7 +2,7 @@
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
-import { toDateOnlyString } from '../../platform/dateUtils.js';
+import { getNow, toDateOnlyString } from '../../platform/dateUtils.js';
 import { canEditLog, isOwnershipVerified, toVisibleLogWhere } from '../../platform/managementLogRules.js';
 import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/managementLogSerializer.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
@@ -46,7 +46,7 @@ const buildFilters = ({ propertyId, scope, types, until }) => ({
 });
 
 const findPage = async (user, ownerships, filters, { sortDirection, page, size }) => {
-  const now = new Date();
+  const now = getNow();
   const where = { AND: [toVisibleLogWhere(user, ownerships, now), buildFilters(filters)] };
   const [total, rows] = await Promise.all([
     prisma.propertyLog.count({ where }),
@@ -103,7 +103,7 @@ export const findManagementLogs = async (user, query) => findPage(user, await fi
 
 // GET /management-logs/:logId — 볼 수 없으면 null(컨트롤러가 404).
 export const findManagementLogForUser = async (user, logId) => {
-  const now = new Date();
+  const now = getNow();
   const ownerships = await findUserOwnerships(user);
   const log = await prisma.propertyLog.findFirst({
     where: { AND: [{ id: logId }, toVisibleLogWhere(user, ownerships, now)] },
