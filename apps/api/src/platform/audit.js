@@ -14,6 +14,7 @@ const SENSITIVE_KEYS = new Set([
   'refreshTokenHash',
   'resetToken',
   'phone',
+  'birthDate',
   'tenantPhone',
 ]);
 

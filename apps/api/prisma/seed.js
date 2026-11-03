@@ -86,9 +86,9 @@ const main = async () => {
 // DATABASE_URL이 localhost가 아니면(Supabase 등) 건너뛴다. 이미 있는 계정은 건드리지 않는다.
 const DEV_PASSWORD = 'password123';
 const DEV_USERS = [
-  { id: '00000000-0000-4000-8000-000000000001', email: 'landlord@butler.test', name: '김집주', phone: '01011112222', role: 'LANDLORD' },
-  { id: '00000000-0000-4000-8000-000000000002', email: 'tenant@butler.test', name: '이세입', phone: '01033334444', role: 'TENANT' },
-  { id: '00000000-0000-4000-8000-000000000003', email: 'admin@butler.test', name: '박운영', phone: '01055556666', role: 'ADMIN' },
+  { id: '00000000-0000-4000-8000-000000000001', email: 'landlord@butler.test', name: '김집주', phone: '01011112222', birthDate: '1975-03-15', role: 'LANDLORD' },
+  { id: '00000000-0000-4000-8000-000000000002', email: 'tenant@butler.test', name: '이세입', phone: '01033334444', birthDate: '1992-07-21', role: 'TENANT' },
+  { id: '00000000-0000-4000-8000-000000000003', email: 'admin@butler.test', name: '박운영', phone: '01055556666', birthDate: '1988-11-02', role: 'ADMIN' },
 ];
 
 const isLocalDatabase = () => {
@@ -112,6 +112,8 @@ const seedDevUsers = async () => {
       update: {},
       create: { ...user, passwordHash },
     });
+    // 생년월일 도입 전에 만든 계정에는 값만 채운다(이미 있으면 그대로). phone처럼 시드는 평문, 읽을 때 decryptField가 그대로 돌려준다.
+    await prisma.user.updateMany({ where: { email: user.email, birthDate: null }, data: { birthDate: user.birthDate } });
   }
   console.info(`[seed] 로컬 확인용 계정 ${DEV_USERS.length}개 확인.`);
 };

@@ -6,6 +6,7 @@ const valid = () => ({
   email: 'New.User@Example.com',
   password: 'abcd1234',
   name: '홍길동',
+  birthDate: '1990-01-31',
   role: 'LANDLORD',
   termsAgreed: true,
   privacyAgreed: true,
@@ -22,13 +23,14 @@ const failsOn = (body, field) => {
   return false;
 };
 
-test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, 휴대폰은 없으면 null', () => {
+test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, 휴대폰은 없으면 null, 생년월일은 그대로', () => {
   const result = parseRegisterBody({ ...valid(), email: '  New.User@Example.com ', name: '  홍   길동 ' });
   assert.deepEqual(result, {
     email: 'new.user@example.com',
     password: 'abcd1234',
     name: '홍 길동',
     phone: null,
+    birthDate: '1990-01-31',
     role: 'LANDLORD',
   });
 });
@@ -110,6 +112,30 @@ test('휴대폰: 번호 형식이 아니면 거부(지역번호·자리수·문�
   assert.ok(failsOn({ ...valid(), phone: ['01012345678'] }, 'phone'));
 });
 
+test('생년월일: 앞뒤 공백은 자르고, 경계 날짜(1900-01-01, 윤일, 오늘)는 허용', () => {
+  assert.equal(parseRegisterBody({ ...valid(), birthDate: ' 1990-01-31 ' }).birthDate, '1990-01-31');
+  assert.equal(parseRegisterBody({ ...valid(), birthDate: '1900-01-01' }).birthDate, '1900-01-01');
+  assert.equal(parseRegisterBody({ ...valid(), birthDate: '2000-02-29' }).birthDate, '2000-02-29');
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(parseRegisterBody({ ...valid(), birthDate: today }).birthDate, today);
+});
+
+test('생년월일: 생략·빈 값은 필수 오류', () => {
+  for (const birthDate of [undefined, null, '', '   ']) {
+    assert.ok(failsOn({ ...valid(), birthDate }, 'birthDate'), String(birthDate));
+  }
+});
+
+test('생년월일: 형식 오류·없는 날짜·1900년 이전·미래·타입 오류 거부', () => {
+  const bad = ['19900131', '1990/01/31', '90-01-31', '1990-1-31', '1990-01-31T00:00:00Z', '1990-13-01', '1990-00-10', '1990-02-30', '1999-02-29', '1990-04-31', '1899-12-31', '9999-01-01', '생년월일'];
+  for (const birthDate of bad) assert.ok(failsOn({ ...valid(), birthDate }, 'birthDate'), birthDate);
+  const tomorrow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  assert.ok(failsOn({ ...valid(), birthDate: tomorrow }, 'birthDate'));
+  for (const birthDate of [19900131, ['1990-01-31'], { y: 1990 }, true]) {
+    assert.ok(failsOn({ ...valid(), birthDate }, 'birthDate'));
+  }
+});
+
 test('약관: true가 아니면(생략·false·"true"·1) 모두 거부, 필드별로 알려준다', () => {
   for (const value of [undefined, false, 'true', 1, null]) {
     assert.ok(failsOn({ ...valid(), termsAgreed: value }, 'termsAgreed'));
@@ -123,7 +149,7 @@ test('여러 오류는 한 번에 모아서 알려준다', () => {
     assert.fail('통과하면 안 된다');
   } catch (error) {
     const fields = error.details.map((detail) => detail.field);
-    for (const field of ['email', 'password', 'name', 'termsAgreed', 'privacyAgreed']) assert.ok(fields.includes(field), field);
+    for (const field of ['email', 'password', 'name', 'birthDate', 'termsAgreed', 'privacyAgreed']) assert.ok(fields.includes(field), field);
   }
 });
 

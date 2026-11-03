@@ -80,6 +80,8 @@ model User {
   name         String
   // 애플리케이션 레벨에서 암호화한 값을 저장한다 (ERD 공통 설계 규칙)
   phone        String?
+  // 소유주 인증(이름+생년월일 대조)용. "YYYY-MM-DD"를 phone처럼 암호화해 저장한다. 기존 사용자·시드 계정은 null.
+  birthDate    String?    @map("birth_date")
   role         Role
   status       UserStatus @default(ACTIVE)
 

@@ -8,6 +8,7 @@ export const REGISTER_FIELDS = [
   'name',
   'role',
   'phone',
+  'birthDate',
   'termsAgreed',
   'privacyAgreed',
   'invitationToken',
@@ -108,7 +109,32 @@ const validatePhone = (value, details) => {
   return digits;
 };
 
-const validateAgreement = (value, field, label, details) => {
+const BIRTH_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const BIRTH_YEAR_MIN = 1900;
+
+// 필수. "YYYY-MM-DD"만 받는다. 존재하는 날짜인지(2월 30일 등)와 오늘 이후가 아닌지까지 본다.
+const validateBirthDate = (value, details) => {
+  if (isBlank(value)) {
+    details.push({ field: 'birthDate', reason: '생년월일을 입력해주세요.' });
+    return null;
+  }
+  const match = typeof value === 'string' ? BIRTH_DATE_PATTERN.exec(value.trim()) : null;
+  const [year, month, day] = match ? match.slice(1).map(Number) : [];
+  // Date.UTC는 없는 날짜를 다음 달로 넘기므로 되돌려 읽어 같은지 확인한다.
+  const parsed = match ? new Date(Date.UTC(year, month - 1, day)) : null;
+  const exists = parsed && parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+  if (!exists) {
+    details.push({ field: 'birthDate', reason: '생년월일 형식이 올바르지 않습니다. (예: 1990-01-31)' });
+    return null;
+  }
+  if (year < BIRTH_YEAR_MIN || parsed.getTime() > Date.now()) {
+    details.push({ field: 'birthDate', reason: '생년월일이 올바르지 않습니다.' });
+    return null;
+  }
+  return value.trim();
+};
+
+const validateAgreement =(value, field, label, details) => {
   if (value !== true) details.push({ field, reason: `${label}에 동의해야 가입할 수 있습니다.` });
 };
 
@@ -121,6 +147,7 @@ export const parseRegisterBody = (body) => {
   const password = validatePassword(body.password, email, details);
   const name = validateName(body.name, details);
   const phone = validatePhone(body.phone, details);
+  const birthDate = validateBirthDate(body.birthDate, details);
   validateAgreement(body.termsAgreed, 'termsAgreed', '이용약관', details);
   validateAgreement(body.privacyAgreed, 'privacyAgreed', '개인정보 수집·이용', details);
 
@@ -146,5 +173,5 @@ export const parseRegisterBody = (body) => {
     );
   }
 
-  return { email, password, name, phone, role };
+  return { email, password, name, phone, birthDate, role };
 };
