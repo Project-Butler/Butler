@@ -156,12 +156,13 @@ const emailTakenError = () => new AppError('EMAIL_ALREADY_EXISTS', 409, '이미 
 
 // 사용자·약관 동의·첫 세션을 한 트랜잭션으로 만들고, 성공하면 쿠키를 내려준다.
 // 입력은 parseRegisterBody를 통과한 값이다. 이메일 중복은 사전 조회 + 유니크 제약(동시 가입) 둘 다 409로 처리한다.
-export const registerUser = async (req, res, { email, password, name, phone, role }) => {
+export const registerUser = async (req, res, { email, password, name, phone, birthDate, role }) => {
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) throw emailTakenError();
 
   // 비용이 큰 해시·암호화는 트랜잭션 밖에서 끝낸다.
   const passwordHash = await hashPassword(password);
   const encryptedPhone = phone ? encryptField(phone) : null;
+  const encryptedBirthDate = encryptField(birthDate);
   const agreedAt = new Date();
   const ip = req.ip ?? null;
 
@@ -169,7 +170,9 @@ export const registerUser = async (req, res, { email, password, name, phone, rol
   let refreshToken;
   try {
     ({ created, refreshToken } = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email, passwordHash, name, phone: encryptedPhone, role } });
+      const user = await tx.user.create({
+        data: { email, passwordHash, name, phone: encryptedPhone, birthDate: encryptedBirthDate, role },
+      });
       await tx.consent.createMany({
         data: [
           { userId: user.id, type: 'TERMS', version: TERMS_VERSION, agreed: true, agreedAt, ip },
