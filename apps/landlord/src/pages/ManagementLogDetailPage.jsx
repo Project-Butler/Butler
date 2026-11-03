@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Card } from '@butler/ui';
 import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
+import { DocumentThumbnail } from '../components/DocumentThumbnail/DocumentThumbnail';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useDeleteManagementLog } from '../hooks/useDeleteManagementLog';
 import { useGetManagementLog } from '../hooks/useGetManagementLog';
@@ -108,6 +109,21 @@ export const ManagementLogDetailPage = ({ logId, onNavigate, onUnauthorized }) =
               {formatDateKST(log.createdAt)}
             </InfoRow>
           </dl>
+          {log.attachments.length > 0 && (
+            <section className="mt-6 space-y-3">
+              <h3 className="text-label font-semibold text-ink">
+                사진 <span className="font-num font-normal tabular-nums text-ink-3">{log.attachments.length}장</span>
+              </h3>
+              {/* 다운로드 URL은 화면을 열 때 문서마다 받는다(5분 유효). 사진을 누르면 원본을 새 창에서 연다. */}
+              <ul className="grid grid-cols-4 gap-3">
+                {log.attachments.map((attachment) => (
+                  <li key={attachment.id}>
+                    <DocumentThumbnail document={attachment} onUnauthorized={onUnauthorized} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </Card>
 
         <div className="space-y-6">
