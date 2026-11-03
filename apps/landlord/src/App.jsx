@@ -314,7 +314,7 @@ export const App = () => {
       >
         <Routes>
           <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
-          <Route path={HOME_PATH} element={<LandlordDashboard {...pageProps} />} />
+          <Route path={HOME_PATH} element={<LandlordDashboard userName={user.name} {...pageProps} />} />
           <Route path="/buildings" element={<BuildingListRoute {...pageProps} />} />
           <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
           <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
@@ -338,7 +338,7 @@ export const App = () => {
             <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
           </Route>
           {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
-          <Route path="*" element={<LandlordDashboard {...pageProps} />} />
+          <Route path="*" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
         </Routes>
       </LayoutWithBadges>
     </>

@@ -121,7 +121,7 @@ const SetupCard = ({ setup, onNavigate }) => {
   );
 };
 
-export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
+export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: TABLE_SIZE }, { onUnauthorized });
   const properties = propertyList.data?.items ?? [];
@@ -164,7 +164,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
         <p className="font-num text-body tabular-nums text-ink-3">
           {today} ({getWeekday(today)})
         </p>
-        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, 버틀러님</h2>
+        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, {userName}님</h2>
         <p className="mt-1 text-body text-ink-2">
           {expiringContracts.length > 0
             ? `오늘 확인할 일이 ${expiringContracts.length}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
