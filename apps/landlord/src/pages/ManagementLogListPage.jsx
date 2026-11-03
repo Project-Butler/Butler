@@ -6,6 +6,7 @@ import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
+import { formatAttachmentCount } from '../utils/attachment';
 import { formatWon } from '../utils/contract';
 import { TYPE_FILTER_OPTIONS } from '../utils/managementLog';
 
@@ -67,7 +68,12 @@ const ManagementLogListSection = ({ propertyId, type, onNavigate, onUnauthorized
             >
               <td className="whitespace-nowrap px-5 py-3.5 font-num tabular-nums text-ink-2">{log.occurredOn}</td>
               <td className="px-3 py-3.5 text-ink-2">{log.property.displayName}</td>
-              <td className="px-3 py-3.5 font-semibold text-ink">{log.title}</td>
+              <td className="px-3 py-3.5 font-semibold text-ink">
+                {log.title}
+                {formatAttachmentCount(log.attachments) && (
+                  <span className="ml-2 font-num text-chip font-normal tabular-nums text-ink-3">{formatAttachmentCount(log.attachments)}</span>
+                )}
+              </td>
               <td className="px-3 py-3.5">
                 <ManagementLogBadges log={log} />
               </td>

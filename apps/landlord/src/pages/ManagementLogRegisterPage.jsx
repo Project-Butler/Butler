@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, Card, RequiredMark, SegmentedControl } from '@butler/ui';
 import {
+  isAttachmentReady,
   isLogFormComplete,
   ManagementLogForm,
   toLogFields,
@@ -8,6 +9,7 @@ import {
 } from '../components/ManagementLogForm/ManagementLogForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
+import { useAttachmentUploads } from '../hooks/useAttachmentUploads';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { usePostManagementLog } from '../hooks/usePostManagementLog';
 import { toFieldErrors } from '../utils/apiError';
@@ -22,6 +24,7 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
   const hookOptions = { onUnauthorized };
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
   const create = usePostManagementLog(hookOptions);
+  const uploads = useAttachmentUploads([], hookOptions);
   const properties = propertyList.data?.items ?? [];
 
   const [propertyId, setPropertyId] = useState(fixedPropertyId ?? '');
@@ -36,7 +39,8 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
   const clientErrors = validateLogForm(form);
   const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
   const isSubmitting = create.isLoading;
-  const isReady = Boolean(property) && isLogFormComplete(form) && Object.keys(clientErrors).length === 0;
+  const isReady =
+    Boolean(property) && isLogFormComplete(form) && Object.keys(clientErrors).length === 0 && isAttachmentReady(uploads);
   const isPropertyMissing = propertyList.data && propertyId && !property;
 
   const updateField = (name, value) => {
@@ -46,7 +50,11 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
 
   const handleSubmit = async () => {
     if (!isReady || isSubmitting) return;
-    const { data, error } = await create.mutate(propertyId, { scope: effectiveScope, ...toLogFields(form) });
+    const { data, error } = await create.mutate(propertyId, {
+      scope: effectiveScope,
+      ...toLogFields(form),
+      attachmentDocumentIds: uploads.documentIds,
+    });
     // 작성 화면 기록은 상세로 바꾼다(뒤로 가면 다시 작성 폼이 나오지 않게).
     if (data) {
       onNavigate('logDetail', { logId: data.id }, { replace: true });
@@ -109,13 +117,22 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
             </p>
           </div>
 
-          <ManagementLogForm form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} />
+          <ManagementLogForm
+            form={form}
+            onChange={updateField}
+            fieldError={fieldError}
+            uploads={uploads}
+            onUnauthorized={onUnauthorized}
+            disabled={isSubmitting}
+          />
         </Card>
 
         <Card className="sticky top-6 space-y-4 p-6">
           <h2 className="text-section font-semibold text-ink">작성 요약</h2>
           <p className="text-body font-semibold text-ink">{property ? property.displayName : '호실을 선택해 주세요'}</p>
           <p className="text-sub text-ink-2">{SCOPE_LABEL[effectiveScope]}</p>
+          {uploads.isUploading && <p className="text-chip text-ink-3">사진을 올리는 중이에요. 끝나면 저장할 수 있어요.</p>}
+          {uploads.hasFailed && <p className="text-chip text-crit-ink">올리지 못한 사진을 빼고 저장해 주세요.</p>}
           {create.error && Object.keys(serverFieldErrors).length === 0 && <NoticeBox>{create.error.message}</NoticeBox>}
           <Button size="lg" className="w-full" onClick={handleSubmit} disabled={!isReady || isSubmitting}>
             {isSubmitting ? '저장 중' : '기록 저장'}

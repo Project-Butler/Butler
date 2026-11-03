@@ -21,7 +21,7 @@ const FIELD_LABEL = {
   tenantPhone: '임차인 연락처',
 };
 
-const LOG_FIELD_LABEL = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용' };
+const LOG_FIELD_LABEL = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용', attachments: '사진' };
 
 // labels: 활동마다 다르게 부를 칸 이름(계약 memo는 '메모')
 const formatFields = (fields, labels = {}) =>

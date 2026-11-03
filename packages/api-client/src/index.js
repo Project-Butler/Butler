@@ -50,6 +50,14 @@ export { postManagementLog } from './apis/managementLogs/postManagementLog';
 export { patchManagementLog } from './apis/managementLogs/patchManagementLog';
 export { deleteManagementLog } from './apis/managementLogs/deleteManagementLog';
 
+export { postUploadSession } from './apis/documents/postUploadSession';
+export { putUploadContent } from './apis/documents/putUploadContent';
+export { postDocument } from './apis/documents/postDocument';
+export { getDocumentList } from './apis/documents/getDocumentList';
+export { getDocument } from './apis/documents/getDocument';
+export { postDocumentDownloadUrl } from './apis/documents/postDocumentDownloadUrl';
+export { deleteDocument } from './apis/documents/deleteDocument';
+
 export { getDisputeChatList } from './apis/disputes/getDisputeChatList';
 export { getDisputeChat } from './apis/disputes/getDisputeChat';
 export { postDisputeChat } from './apis/disputes/postDisputeChat';

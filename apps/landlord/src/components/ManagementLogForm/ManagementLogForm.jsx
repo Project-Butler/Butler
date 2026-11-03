@@ -1,4 +1,5 @@
 import { SegmentedControl, TextField } from '@butler/ui';
+import { AttachmentPicker } from '../AttachmentPicker/AttachmentPicker';
 import { formatNumber } from '../../utils/format';
 import { WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
 
@@ -30,8 +31,12 @@ export const toLogFields = (form) => ({
   cost: form.cost === '' ? null : Number(form.cost),
 });
 
-// 유형·제목·내용·날짜·비용 입력. 호실·공개 범위는 쓰는 화면이 따로 그린다.
-export const ManagementLogForm = ({ form, onChange, fieldError, disabled = false }) => (
+// 사진을 올리는 중이거나 실패한 사진이 남아 있으면 저장하지 않는다(빼거나 끝날 때까지).
+export const isAttachmentReady = (uploads) => !uploads.isUploading && !uploads.hasFailed;
+
+// 유형·제목·내용·날짜·비용·사진 입력. 호실·공개 범위는 쓰는 화면이 따로 그린다.
+// uploads: useAttachmentUploads() 반환값. 저장할 때 uploads.documentIds를 attachmentDocumentIds로 보낸다.
+export const ManagementLogForm = ({ form, onChange, fieldError, uploads, onUnauthorized, disabled = false }) => (
   <>
     <div className="flex flex-col gap-1.5">
       <span className="text-label font-semibold text-ink">유형</span>
@@ -92,5 +97,7 @@ export const ManagementLogForm = ({ form, onChange, fieldError, disabled = false
         disabled={disabled}
       />
     </div>
+    {uploads && <AttachmentPicker uploads={uploads} disabled={disabled} onUnauthorized={onUnauthorized} />}
+    {fieldError('attachmentDocumentIds') && <p className="text-chip text-crit-ink">{fieldError('attachmentDocumentIds')}</p>}
   </>
 );

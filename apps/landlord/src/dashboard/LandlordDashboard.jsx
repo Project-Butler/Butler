@@ -4,6 +4,7 @@ import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
+import { formatAttachmentCount } from '../utils/attachment';
 import { addDays, daysBetween, formatDday, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
 import { formatNumber, formatUnitSpec } from '../utils/format';
 import { formatLogDate } from '../utils/managementLog';
@@ -62,7 +63,12 @@ const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
               <span className="block font-num text-chip text-ink-3">
                 {formatLogDate(log.occurredOn)} · {log.property.displayName}
               </span>
-              <span className="block truncate text-body text-ink-2">{log.title}</span>
+              <span className="block truncate text-body text-ink-2">
+                {log.title}
+                {formatAttachmentCount(log.attachments) && (
+                  <span className="ml-1.5 font-num text-chip tabular-nums text-ink-3">{formatAttachmentCount(log.attachments)}</span>
+                )}
+              </span>
             </span>
           </button>
         ))}

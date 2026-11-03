@@ -1,5 +1,6 @@
 // 관리 로그 응답 직렬화(DB 의존 없음). 목록·상세·쓰기 응답이 모두 이 함수를 쓴다(계약 5장).
 import { toDateOnlyString } from './dateUtils.js';
+import { toAttachmentResponse } from './documentAttachments.js';
 import { canEditLog } from './managementLogRules.js';
 import { toMoney } from './money.js';
 import { toPropertySummary } from './propertySerializer.js';
@@ -28,8 +29,8 @@ export const toManagementLogResponse = (log, user, now = new Date()) => ({
     resourceType: log.sourceResourceType ?? null,
     resourceId: log.sourceResourceId ?? null,
   },
-  // 문서 기능 전이라 항상 빈 배열(명세 D-03). TODO(documents)
-  attachments: [],
+  // 붙은 문서(숨기지 않은 것, 올린 순서). 행에 attachments를 붙여 넘긴다(documentAttachments.withAttachments). URL은 넣지 않는다.
+  attachments: (log.attachments ?? []).map(toAttachmentResponse),
   isReadOnly: !canEditLog(log, user, now),
   createdAt: log.createdAt.toISOString(),
   updatedAt: log.updatedAt.toISOString(),

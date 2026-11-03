@@ -10,6 +10,7 @@
 // 콜드 스타트 직후 첫 호출에서만 min(t0, BOOT_AT)을 쓴다(콜드 스타트 시간도 60초에 들어가므로).
 import { formatDateKST, getNow } from '../../platform/dateUtils.js';
 import { expireStaleAttempts as defaultExpireStaleAttempts } from '../../platform/ownershipVerification.js';
+import { cleanupExpiredUploads as defaultCleanupExpiredUploads } from '../documents/service.js';
 import { KAPT_BASIS_CRON_LIMIT } from '../complexes/apiUsage.js';
 import { fillKaptBasis } from '../complexes/kaptBasis.js';
 import { refillComplexKaptCodes } from '../../referenceData/complexKaptCodes.js';
@@ -223,13 +224,22 @@ export const runReferenceDataCron = async ({ prisma, t0, bootAt, coldStart, now 
     console.error('[reference-data] 멈춘 인증 시도 정리 실패', toReason(error));
     staleAttempts = { error: toReason(error) };
   }
+  // 만료된 업로드 세션·24시간 지난 미연결 문서와 그 파일 정리(문서 첨부 결정 Q5). 실패해도 다음 단계는 돈다.
+  const { cleanupExpiredUploads = defaultCleanupExpiredUploads } = deps;
+  let documentCleanup;
+  try {
+    documentCleanup = await cleanupExpiredUploads();
+  } catch (error) {
+    console.error('[reference-data] 만료 업로드 정리 실패', toReason(error));
+    documentCleanup = { error: toReason(error) };
+  }
 
   const { downloadLinkDays, readLinkDay, applyLinkDay, fillBasis, refill, cleanupSearchResults } = { ...defaultDeps, ...deps };
   const base = resolveBudgetBase({ t0, bootAt, coldStart });
   const elapsedAtStart = Date.now() - base;
   const today = formatDateKST(now());
   const keySet = createKeySet();
-  const result = { elapsedAtStart, today, staleAttempts, juso: null, basis: null, finalize: null };
+  const result = { elapsedAtStart, today, staleAttempts, documentCleanup, juso: null, basis: null, finalize: null };
 
   const job = await prisma.job.create({
     data: { type: REFERENCE_DATA_JOB_TYPE, status: 'PROCESSING', attempts: 1, lockedAt: getNow(), payload: { elapsedAtStart } },

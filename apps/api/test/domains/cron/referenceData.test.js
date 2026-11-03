@@ -55,6 +55,7 @@ const fakeDeps = (calls, state, { available = ['2026-10-18', '2026-10-19'] } = {
   },
   cleanupSearchResults: async () => 0,
   expireStaleAttempts: async () => 2,
+  cleanupExpiredUploads: async () => ({ uploadsDeleted: 1, documentsDeleted: 0 }),
 });
 
 const newCalls = () => ({ download: [], apply: [], basis: [], refill: [] });
@@ -76,6 +77,30 @@ test('멈춘 인증 시도 정리: 맨 앞에서 돌고, 실패해도 나머지 
     },
   });
   assert.deepEqual(failed.staleAttempts, { error: 'P1001' });
+  assert.ok(calls.basis.length >= 2);
+});
+
+test('만료 업로드 정리: 인증 시도 정리 다음에 돌고, 실패해도 나머지 단계는 돈다', async () => {
+  const calls = newCalls();
+  const { prisma, state } = createFakePrisma();
+  const order = [];
+  const deps = fakeDeps(calls, state);
+  const applied = await run(prisma, {
+    ...deps,
+    expireStaleAttempts: async () => (order.push('attempts'), 0),
+    cleanupExpiredUploads: async () => (order.push(`uploads:${calls.download.length}`), { uploadsDeleted: 3, documentsDeleted: 1 }),
+  });
+  assert.deepEqual(order, ['attempts', 'uploads:0']);
+  assert.deepEqual(applied.documentCleanup, { uploadsDeleted: 3, documentsDeleted: 1 });
+
+  const failed = await run(prisma, {
+    ...deps,
+    cleanupExpiredUploads: async () => {
+      throw Object.assign(new Error('x'), { code: 'EACCES' });
+    },
+  });
+  assert.deepEqual(failed.documentCleanup, { error: 'EACCES' });
+  assert.deepEqual(failed.staleAttempts, { expired: 2 });
   assert.ok(calls.basis.length >= 2);
 });
 

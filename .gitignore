@@ -38,3 +38,6 @@ docs/
 *.xls
 # 테스트용 juso 변동분 샘플(1KB 미만)은 레포에 둔다 — 없으면 jusoFiles.test.js가 실패한다.
 !apps/api/src/referenceData/fixtures/*.zip
+
+# 문서 첨부 임시 로컬 저장소(STORAGE_DRIVER=local). 업로드한 파일이 들어간다.
+apps/api/.storage/
