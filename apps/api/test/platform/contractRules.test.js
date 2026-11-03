@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  ACTIVE_EDITABLE_FIELDS,
+  CONTRACT_EDITABLE_FIELDS,
+  isRentPaymentDayInRange,
   isValidAmount,
   isValidDateString,
   isValidPeriod,
+  isValidRentPaymentDay,
   isValidTermination,
   lockedFieldsForStatus,
   normalizeTenantPhone,
@@ -65,6 +69,27 @@ test('진행 중 계약은 연락처·메모만 바꿀 수 있다', () => {
   assert.deepEqual(lockedFieldsForStatus('ACTIVE', ['deposit', 'memo', 'tenantPhone']), ['deposit']);
   assert.deepEqual(lockedFieldsForStatus('EXPIRING_SOON', ['startDate']), ['startDate']);
   assert.deepEqual(lockedFieldsForStatus('UPCOMING', ['deposit', 'startDate', 'leaseType']), []);
+});
+
+test('월세 입금일은 진행 중 계약에서도 바꿀 수 있다(#76)', () => {
+  assert.ok(CONTRACT_EDITABLE_FIELDS.includes('rentPaymentDay'));
+  assert.deepEqual(ACTIVE_EDITABLE_FIELDS, ['tenantPhone', 'memo', 'rentPaymentDay']);
+  assert.deepEqual(lockedFieldsForStatus('ACTIVE', ['rentPaymentDay', 'monthlyRent']), ['monthlyRent']);
+  assert.deepEqual(lockedFieldsForStatus('EXPIRING_SOON', ['rentPaymentDay']), []);
+});
+
+test('월세 입금일: 월세는 1~31 정수, 전세는 null만, null은 언제나 허용', () => {
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: 1 }), true);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: 31 }), true);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: null }), true);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: 0 }), false);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: 32 }), false);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: 1.5 }), false);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'MONTHLY', rentPaymentDay: '25' }), false);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'JEONSE', rentPaymentDay: null }), true);
+  assert.equal(isValidRentPaymentDay({ leaseType: 'JEONSE', rentPaymentDay: 25 }), false);
+  assert.equal(isRentPaymentDayInRange(25), true);
+  assert.equal(isRentPaymentDayInRange(null), false);
 });
 
 test('기간 겹침은 양끝 포함', () => {
