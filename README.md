@@ -136,6 +136,6 @@ npm run import:juso-buildings -w apps/api -- <건물DB_전체분.zip>           
 - Supabase 적재는 마이그레이션 반영 뒤, 반영 전 `pg_dump`를 떠 둔다. 로컬 DB에서 먼저 같은 순서로 돌려 본다.
 
 ## 브랜치 · 커밋 · PR
-- `dev`에서 `feature/<팀>-<이슈번호>-<기능명>` 브랜치를 만들어 작업하고 `dev`로 PR을 올린다. `main`·`dev`에 직접 푸시하지 않는다.
+- `dev`에서 `<type>/<팀>-<이슈번호>-<기능명>` 브랜치(type은 이슈 type: feat는 `feature`, 그 외는 `setting`·`fix` 등)를 만들어 작업하고 `dev`로 PR을 올린다. `main`·`dev`에 직접 푸시하지 않는다.
 - 커밋 메시지는 `type: subject` 또는 `YYMMDD type: subject` (예: `261019 feat: 계약 등록 폼 추가`).
 - PR 전에 `console.log`를 지우고, `npm run lint --workspaces --if-present`와 `npm run build --workspaces --if-present`가 통과하는지 확인한다.
