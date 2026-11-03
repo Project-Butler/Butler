@@ -129,15 +129,31 @@ const throwLogReadOnly = () => {
   throw new AppError('MANAGEMENT_LOG_READ_ONLY', 422, '소유가 끝난 호실의 기록이나 시스템이 만든 기록은 수정할 수 없습니다.');
 };
 
+// 수정(첨부 추가·삭제 포함)할 수 있는 기록을 잠가서 돌려준다. 문서 API도 같은 규칙을 쓴다(documents/resourcePolicies.js).
+export const lockWritableLog = async (tx, user, logId) => {
+  const log = await lockLogForWriter(tx, user, logId);
+  if (!canEditLog(log, user)) {
+    // 활성 소유자 본인이 쓴 호실 이력인데 수정 못 하는 경우는 인증이 끊긴 것뿐이다(D-16).
+    if (log.authorId === user.id && !log.ownership.endedAt) throwVerificationRequired();
+    throwLogReadOnly();
+  }
+  return log;
+};
+
+// 기록을 볼 수 있는지(문서 조회 권한). 목록·상세와 같은 범위다.
+export const canViewManagementLog = async (user, logId) => {
+  const ownerships = await findUserOwnerships(user);
+  const log = await prisma.propertyLog.findFirst({
+    where: { AND: [{ id: logId }, toVisibleLogWhere(user, ownerships, getNow())] },
+    select: { id: true },
+  });
+  return Boolean(log);
+};
+
 // PATCH /management-logs/:logId — data는 컨트롤러가 검증한 값(보낸 칸만).
 export const updateManagementLog = async (user, logId, data, req) => {
   const updated = await prisma.$transaction(async (tx) => {
-    const log = await lockLogForWriter(tx, user, logId);
-    if (!canEditLog(log, user)) {
-      // 활성 소유자 본인이 쓴 호실 이력인데 수정 못 하는 경우는 인증이 끊긴 것뿐이다(D-16).
-      if (log.authorId === user.id && !log.ownership.endedAt) throwVerificationRequired();
-      throwLogReadOnly();
-    }
+    const log = await lockWritableLog(tx, user, logId);
 
     // 화면은 칸을 전부 보내므로 실제로 바뀐 칸만 고르고 기록한다. 바뀐 게 없으면 활동·감사도 남기지 않는다.
     const fields = Object.keys(data).filter((field) => !isSameFieldValue(log, field, data[field]));
