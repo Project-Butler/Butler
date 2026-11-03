@@ -1,10 +1,12 @@
 import { Badge, Button, Card, StatCard } from '@butler/ui';
 import { useGetContractList } from '../hooks/useGetContractList';
 import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
+import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
 import { addDays, daysBetween, formatDday, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
 import { formatNumber, formatUnitSpec } from '../utils/format';
+import { formatLogDate } from '../utils/managementLog';
 import { getUnitTypeLabel } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
@@ -16,17 +18,58 @@ const OWNERSHIP_COUNT_SIZE = 100;
 const CONTRACT_SUM_SIZE = 100;
 // 예정 일정에 보여 줄 기간(D-12)
 const SCHEDULE_DAYS = 30;
+const RECENT_LOG_SIZE = 5;
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const getWeekday = (dateString) => WEEKDAYS[new Date(`${dateString}T00:00:00Z`).getUTCDay()];
 
-const LOGS = [
-  { date: '10.12', title: '임대차 계약 등록 · 특약 2건', unit: '노원 1234호' },
-  { date: '10.08', title: '권리자 인증 완료 · 등기부 대조', unit: '노원 1234호' },
-  { date: '10.01', title: '욕실 누수 수리 완료 · 사진 4장', unit: '노원 1234호' },
-];
+// 최근 관리 로그(D-12): 오늘까지의 기록 최신 5개. 미래 기록은 그날이 되면 나온다.
+const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
+  const today = getTodayKST();
+  const { data, error, isLoading } = useGetManagementLogList({ until: today, size: RECENT_LOG_SIZE }, { onUnauthorized });
+  const logs = data?.items ?? [];
 
-// 최근 관리 로그(LOGS)만 관리 로그 기능(5번) 전까지 화면 예시 값을 그대로 둔다. 나머지는 실데이터.
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-body font-semibold text-ink">최근 관리 로그</h3>
+        {logs.length > 0 && (
+          <Button variant="secondary" size="sm" onClick={() => onNavigate('logs')}>
+            전체 보기
+          </Button>
+        )}
+      </div>
+      <div className="mt-4 space-y-4">
+        {error && <p className="text-body text-crit-ink">{error.message}</p>}
+        {isLoading && !data && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+        {data && logs.length === 0 && (
+          <div className="space-y-3">
+            <p className="text-body text-ink-3">아직 관리 로그가 없어요</p>
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('buildingList')}>
+              호실 목록 보기
+            </Button>
+          </div>
+        )}
+        {logs.map((log) => (
+          <button
+            key={log.id}
+            type="button"
+            onClick={() => onNavigate('logDetail', { logId: log.id })}
+            className="flex w-full gap-3 text-left hover:opacity-80"
+          >
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+            <span className="min-w-0">
+              <span className="block font-num text-chip text-ink-3">
+                {formatLogDate(log.occurredOn)} · {log.property.displayName}
+              </span>
+              <span className="block truncate text-body text-ink-2">{log.title}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+};
 
 // 예정 일정(D-12): 오늘~30일 안의 계약 시작일·종료일. 시작일은 시작 전 계약만.
 const toScheduleEvents = (contracts, today) => {
@@ -78,7 +121,7 @@ const SetupCard = ({ setup, onNavigate }) => {
   );
 };
 
-export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
+export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
   const setup = useGetLandlordSetup({ onUnauthorized });
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: TABLE_SIZE }, { onUnauthorized });
   const properties = propertyList.data?.items ?? [];
@@ -93,9 +136,9 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
 
   const today = getTodayKST();
   // 시작 전·진행 중 계약을 한 번에 받는다. 예정 일정은 전부, 나머지(총 보증금 D-16·계약 중·오늘 할 일·
-  // 내 부동산 표)는 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다.
+  // 내 부동산 표)는 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다. 소유가 끝난 호실의 계약은 할 일이 아니므로 뺀다.
   const liveContracts = useGetContractList(
-    { status: 'UPCOMING,ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE },
+    { status: 'UPCOMING,ACTIVE,EXPIRING_SOON', sort: 'endDate:asc', size: CONTRACT_SUM_SIZE, activeOwnership: 'true' },
     { onUnauthorized },
   );
   const liveItems = liveContracts.data?.items ?? [];
@@ -121,7 +164,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
         <p className="font-num text-body tabular-nums text-ink-3">
           {today} ({getWeekday(today)})
         </p>
-        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, 버틀러님</h2>
+        <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, {userName}님</h2>
         <p className="mt-1 text-body text-ink-2">
           {expiringContracts.length > 0
             ? `오늘 확인할 일이 ${expiringContracts.length}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
@@ -291,22 +334,7 @@ export const LandlordDashboard = ({ onNavigate, onUnauthorized }) => {
           </table>
         </Card>
 
-        <Card className="p-5">
-          <h3 className="text-body font-semibold text-ink">최근 관리 로그</h3>
-          <div className="mt-4 space-y-4">
-            {LOGS.map((log) => (
-              <div key={log.title} className="flex gap-3">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                <div className="min-w-0">
-                  <p className="font-num text-chip text-ink-3">
-                    {log.date} · {log.unit}
-                  </p>
-                  <p className="text-body text-ink-2">{log.title}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <RecentLogsCard onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
       </div>
 
       <div className="grid grid-cols-4 gap-4">

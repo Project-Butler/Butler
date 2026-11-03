@@ -19,4 +19,9 @@ export const queryKey = {
   ADMIN_AUDIT_LOGS: 'admin_audit_logs',
   ADMIN_OWNERSHIPS: 'admin_property_ownerships',
   ADMIN_JOBS: 'admin_jobs',
+  OWNERSHIP_VERIFICATION_DETAIL: 'ownership_verification',
+  OWNERSHIP_VERIFICATION_LATEST: 'ownership_verification_latest',
+  OWNERSHIP_VERIFICATION_RENEWAL_TARGETS: 'ownership_verification_renewal_targets',
+  ADMIN_OWNERSHIP_VERIFICATION_SETTING: 'admin_ownership_verification_setting',
+  ADMIN_OWNERSHIP_VERIFICATION_ATTEMPTS: 'admin_ownership_verification_attempts',
 };

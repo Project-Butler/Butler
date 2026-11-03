@@ -25,6 +25,11 @@ export { getPropertyOwnership } from './apis/propertyOwnerships/getPropertyOwner
 export { patchPropertyOwnership } from './apis/propertyOwnerships/patchPropertyOwnership';
 export { postPropertyOwnershipEnd } from './apis/propertyOwnerships/postPropertyOwnershipEnd';
 
+export { postOwnershipVerification } from './apis/ownershipVerifications/postOwnershipVerification';
+export { getOwnershipVerification } from './apis/ownershipVerifications/getOwnershipVerification';
+export { getLatestOwnershipVerification } from './apis/ownershipVerifications/getLatestOwnershipVerification';
+export { getOwnershipVerificationRenewalTargetList } from './apis/ownershipVerifications/getOwnershipVerificationRenewalTargetList';
+
 export { getLandlordBuildingList } from './apis/landlordBuildings/getLandlordBuildingList';
 export { getLandlordBuilding } from './apis/landlordBuildings/getLandlordBuilding';
 export { postLandlordBuilding } from './apis/landlordBuildings/postLandlordBuilding';
@@ -39,6 +44,11 @@ export { getContract } from './apis/contracts/getContract';
 export { postContract } from './apis/contracts/postContract';
 export { patchContract } from './apis/contracts/patchContract';
 export { postContractTermination } from './apis/contracts/postContractTermination';
+export { getManagementLogList } from './apis/managementLogs/getManagementLogList';
+export { getManagementLog } from './apis/managementLogs/getManagementLog';
+export { postManagementLog } from './apis/managementLogs/postManagementLog';
+export { patchManagementLog } from './apis/managementLogs/patchManagementLog';
+export { deleteManagementLog } from './apis/managementLogs/deleteManagementLog';
 
 export { getDisputeChatList } from './apis/disputes/getDisputeChatList';
 export { getDisputeChat } from './apis/disputes/getDisputeChat';
@@ -54,6 +64,9 @@ export { getAdminAuditLogList } from './apis/admin/getAdminAuditLogList';
 export { getAdminOwnershipList } from './apis/admin/getAdminOwnershipList';
 export { postAdminOwnershipRevoke } from './apis/admin/postAdminOwnershipRevoke';
 export { postAdminOwnershipEnd } from './apis/admin/postAdminOwnershipEnd';
+export { getAdminOwnershipVerificationSetting } from './apis/admin/getAdminOwnershipVerificationSetting';
+export { patchAdminOwnershipVerificationSetting } from './apis/admin/patchAdminOwnershipVerificationSetting';
+export { getAdminOwnershipVerificationAttemptList } from './apis/admin/getAdminOwnershipVerificationAttemptList';
 export { getAdminJobList } from './apis/admin/getAdminJobList';
 export { postAdminJobRetry } from './apis/admin/postAdminJobRetry';
 export { postAdminJusoRefresh } from './apis/admin/postAdminJusoRefresh';

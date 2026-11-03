@@ -40,7 +40,8 @@ test('암호화 도입 전 평문과 null은 그대로 돌려준다', () =>
 
 test('변조되었거나 키가 다른 암호문은 null(응답 전체를 깨뜨리지 않는다)', () => {
   const stored = withKey(KEY, () => encryptField('01012345678'));
-  const tampered = `${stored.slice(0, -2)}00`;
+  // 끝 글자를 항상 다른 값으로 바꾼다. 고정값을 넣으면 원래 그 값일 때 변조가 되지 않는다.
+  const tampered = `${stored.slice(0, -1)}${stored.endsWith('0') ? '1' : '0'}`;
   withKey(KEY, () => assert.equal(decryptField(tampered), null));
   withKey('b'.repeat(64), () => assert.equal(decryptField(stored), null));
   withKey(KEY, () => assert.equal(decryptField('enc:v1:zz'), null));

@@ -21,6 +21,7 @@ export const useFindCurrentContract = ({ onUnauthorized } = {}) => {
         const { data: items } = await getContractList({
           propertyId,
           status: 'ACTIVE,EXPIRING_SOON,UPCOMING',
+          activeOwnership: 'true',
           sort: 'endDate:asc',
           size: 1,
         });

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../../platform/AppError.js';
 import { decryptField, encryptField } from '../../platform/fieldCrypto.js';
-import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
+import { OWNERSHIP_REGION_SELECT, pickVerifiedLegalDongCodes } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { normalizeEmail } from './registerValidation.js';
 
@@ -50,24 +50,12 @@ export const toPublicUser = (user) => ({
 export const buildAuthMe = async (user) => {
   const ownerships = await prisma.ownership.findMany({
     where: { userId: user.id, endedAt: null },
-    select: {
-      verificationStatus: true,
-      verificationExpiresAt: true,
-      property: { select: { complex: { select: { regionId: true } } } },
-    },
+    select: OWNERSHIP_REGION_SELECT,
   });
-
-  const verifiedLegalDongCodes = [
-    ...new Set(
-      ownerships
-        .filter((ownership) => computeOwnershipVerificationStatus(ownership) === 'VERIFIED')
-        .map((ownership) => ownership.property.complex.regionId),
-    ),
-  ];
 
   return {
     user: toPublicUser(user),
-    verifiedLegalDongCodes,
+    verifiedLegalDongCodes: pickVerifiedLegalDongCodes(ownerships),
     activeOwnershipCount: ownerships.length,
   };
 };

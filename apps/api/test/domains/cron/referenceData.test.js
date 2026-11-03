@@ -54,10 +54,30 @@ const fakeDeps = (calls, state, { available = ['2026-10-18', '2026-10-19'] } = {
     return 1;
   },
   cleanupSearchResults: async () => 0,
+  expireStaleAttempts: async () => 2,
 });
 
 const newCalls = () => ({ download: [], apply: [], basis: [], refill: [] });
 const run = (prisma, deps, t0 = Date.now()) => runReferenceDataCron({ prisma, t0, bootAt: 0, coldStart: false, now: NOW, deps });
+
+test('멈춘 인증 시도 정리: 맨 앞에서 돌고, 실패해도 나머지 단계는 돈다', async () => {
+  const calls = newCalls();
+  const { prisma, state } = createFakePrisma();
+  const order = [];
+  const deps = fakeDeps(calls, state);
+  const applied = await run(prisma, { ...deps, expireStaleAttempts: async () => (order.push(calls.download.length), 2) });
+  assert.deepEqual(order, [0]);
+  assert.deepEqual(applied.staleAttempts, { expired: 2 });
+
+  const failed = await run(prisma, {
+    ...deps,
+    expireStaleAttempts: async () => {
+      throw Object.assign(new Error('x'), { code: 'P1001' });
+    },
+  });
+  assert.deepEqual(failed.staleAttempts, { error: 'P1001' });
+  assert.ok(calls.basis.length >= 2);
+});
 
 test('시간 예산 기준: 데워진 인스턴스는 요청 시각, 콜드 스타트 직후 첫 호출만 모듈 로드 시각', () => {
   const t0 = 1_000_000;

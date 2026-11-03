@@ -1,5 +1,6 @@
 import { Bell, ChevronRight, Home, Search } from 'lucide-react';
 import { Button } from '../Button/Button';
+import { NotificationMenu } from '../NotificationMenu/NotificationMenu';
 import { PropertySwitcher } from '../PropertySwitcher/PropertySwitcher';
 import { UserMenu } from '../UserMenu/UserMenu';
 
@@ -40,6 +41,7 @@ export const AppShell = ({
   searchPlaceholder,
   propertySwitcher,
   notificationCount,
+  notifications,
   user,
   primaryAction,
   children,
@@ -97,16 +99,20 @@ export const AppShell = ({
               </button>
             )}
 
-            <button
-              type="button"
-              aria-label="알림"
-              className="relative flex h-9 w-9 items-center justify-center rounded-btn text-ink-2 transition-colors hover:bg-surface-2"
-            >
-              <Bell size={18} />
-              {!!notificationCount && (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-crit" />
-              )}
-            </button>
+            {notifications ? (
+              <NotificationMenu {...notifications} />
+            ) : (
+              <button
+                type="button"
+                aria-label="알림"
+                className="relative flex h-9 w-9 items-center justify-center rounded-btn text-ink-2 transition-colors hover:bg-surface-2"
+              >
+                <Bell size={18} />
+                {!!notificationCount && (
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-crit" />
+                )}
+              </button>
+            )}
 
             {primaryAction && (
               <Button variant="primary" onClick={primaryAction.onClick}>

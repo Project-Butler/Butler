@@ -42,7 +42,7 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
   const hasChanges = Object.keys(changes).length > 0;
   const isSubmitting = patch.isLoading;
   const isReady = hasChanges && isContractFormComplete(form) && Object.keys(clientErrors).length === 0;
-  const status = getContractStatusBadge(contract.status);
+  const status = getContractStatusBadge(contract);
 
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));

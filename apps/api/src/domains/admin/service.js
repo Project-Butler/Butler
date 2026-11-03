@@ -3,8 +3,10 @@ import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { afterCreatedAtCursor, toCursorPage } from '../../platform/createdAtCursor.js';
+import { endOwnershipInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
+import { readValiditySetting, writeValiditySetting } from '../../platform/ownershipVerification.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { formatDisplayName } from '../../platform/unitAddress.js';
 import { runKaptBasisRefreshNow } from '../../referenceData/kaptExcelRefresh.js';
@@ -13,7 +15,7 @@ import { revokeAllSessions, toPublicUser } from '../auth/service.js';
 import { createComplexByAdmin } from '../complexes/service.js';
 import { JusoRefreshBusyError, runJusoRefreshNow } from '../cron/referenceData.js';
 import { toJobResponse } from '../jobs/service.js';
-import { endOwnershipInTx, toResponse as toOwnershipResponse } from '../propertyOwnerships/service.js';
+import { toResponse as toOwnershipResponse } from '../propertyOwnerships/service.js';
 import { splitExpiredOwnerships, sumCounts, toCountMap } from './dashboardCounts.js';
 import { toVerificationStatusWhere } from './ownershipFilter.js';
 import { assertUserStatusChangeAllowed } from './userStatusChange.js';
@@ -284,6 +286,75 @@ export const endOwnershipByAdmin = (actor, ownershipId, { reason }, req) =>
     const ended = await tx.ownership.findUnique({ where: { id: ownershipId }, include: OWNERSHIP_INCLUDE });
     return toAdminOwnership(ended, getNow());
   });
+
+const toValiditySetting = ({ validityYears, updatedAt }) => ({ validityYears, updatedAt: updatedAt?.toISOString() ?? null });
+
+// GET /admin/settings/ownership-verification. 저장값이 없으면 기본 3년.
+export const getOwnershipVerificationSetting = async () => toValiditySetting(await readValiditySetting());
+
+// PATCH /admin/settings/ownership-verification. 새 인증부터 적용한다(기존 만료일은 그대로). 값이 같으면 아무것도 하지 않는다.
+export const updateOwnershipVerificationSetting = (actor, { validityYears }, req) =>
+  prisma.$transaction(async (tx) => {
+    const before = await readValiditySetting(tx);
+    if (before.validityYears === validityYears && before.updatedAt) return toValiditySetting(before);
+
+    const saved = await writeValiditySetting(tx, validityYears);
+    await audit.record({
+      actor,
+      action: 'OWNERSHIP_VERIFICATION_VALIDITY_UPDATED',
+      resourceType: 'PLATFORM_SETTING',
+      summary: `${before.validityYears}년 → ${validityYears}년`,
+      before: { validityYears: before.validityYears },
+      after: { validityYears },
+      req,
+      client: tx,
+    });
+    return toValiditySetting({ validityYears, updatedAt: saved.updatedAt });
+  });
+
+// 임시 암호문은 읽지도 않는다.
+const toAdminAttempt = (attempt) => ({
+  id: attempt.id,
+  ownershipId: attempt.ownershipId,
+  propertyId: attempt.ownership.propertyId,
+  displayName: formatDisplayName(attempt.ownership.property.complex.name, attempt.ownership.property.buildingNo, attempt.ownership.property.unitNo),
+  requester: attempt.requester,
+  status: attempt.status,
+  reasonCode: attempt.reasonCode,
+  ledgerKind: attempt.ledgerKind,
+  ownerCount: attempt.ownerCount,
+  createdAt: attempt.createdAt.toISOString(),
+  finishedAt: attempt.finishedAt?.toISOString() ?? null,
+});
+
+// GET /admin/ownership-verification-attempts. 최근 순 커서 방식.
+export const findOwnershipVerificationAttempts = async ({ status, reasonCode, ownershipId, cursor, size }) => {
+  const where = {
+    ...(status && { status }),
+    ...(reasonCode && { reasonCode }),
+    ...(ownershipId && { ownershipId }),
+    ...afterCreatedAtCursor(cursor),
+  };
+  const attempts = await prisma.ownershipVerificationAttempt.findMany({
+    where,
+    select: {
+      id: true,
+      ownershipId: true,
+      status: true,
+      reasonCode: true,
+      ledgerKind: true,
+      ownerCount: true,
+      createdAt: true,
+      finishedAt: true,
+      requester: { select: { id: true, name: true, email: true } },
+      ownership: { select: { propertyId: true, property: { select: { buildingNo: true, unitNo: true, complex: { select: { name: true } } } } } },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: size + 1,
+  });
+  const { items, meta } = toCursorPage(attempts, size);
+  return { items: items.map(toAdminAttempt), meta };
+};
 
 // GET /admin/jobs. 최근 순 커서 방식(감사 로그와 같음).
 export const findAdminJobs = async ({ status, cursor, size }) => {

@@ -11,8 +11,10 @@ import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractLookupPage } from './pages/ContractLookupPage';
 import { JobListPage } from './pages/JobListPage';
 import { OwnershipListPage } from './pages/OwnershipListPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { UserListPage } from './pages/UserListPage';
+import { VerificationAttemptListPage } from './pages/VerificationAttemptListPage';
 import { RoleGuard } from './routes/guards/RoleGuard';
 import { buildLocation, HOME_PATH, resolveViewKey, ROUTE_TABLE } from './routes';
 
@@ -30,6 +32,8 @@ const PAGE_BY_KEY = {
   auditLogs: AuditLogPage,
   contracts: ContractLookupPage,
   contractDetail: ContractDetailPage,
+  verificationAttempts: VerificationAttemptListPage,
+  settings: SettingsPage,
 };
 
 export const App = () => {

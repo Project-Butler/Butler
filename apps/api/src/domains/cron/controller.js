@@ -1,4 +1,5 @@
 import { prisma } from '../../platform/prismaClient.js';
+import { endAbandonedUnverifiedOwnerships } from '../../platform/ownershipVerification.js';
 import { sendData } from '../../platform/respond.js';
 import { refreshKaptBasis } from '../../referenceData/kaptExcelRefresh.js';
 import { runReferenceDataCron } from './referenceData.js';
@@ -34,6 +35,14 @@ export const runReferenceData = async (req, res, next) => {
   coldStartPending = false;
   try {
     sendData(res, await runReferenceDataCron({ prisma, t0, bootAt: BOOT_AT, coldStart }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const runUnverifiedOwnershipSweep = async (req, res, next) => {
+  try {
+    sendData(res, await endAbandonedUnverifiedOwnerships());
   } catch (error) {
     next(error);
   }

@@ -43,8 +43,20 @@ enum EndReason {
   SELF_ENDED
   SUPERSEDED
   ADMIN_ENDED
+  SOLD
+  UNVERIFIED_EXPIRED
 
   @@map("end_reason")
+}
+
+// 권리자 인증 시도 상태. PENDING → RUNNING → VERIFIED | FAILED
+enum VerificationAttemptStatus {
+  PENDING
+  RUNNING
+  VERIFIED
+  FAILED
+
+  @@map("verification_attempt_status")
 }
 
 enum LeaseType {
@@ -96,12 +108,15 @@ model User {
   consents          Consent[]
   requestedJobs     Job[]
   ownerships        Ownership[]
-  tenantContracts   Contract[]   @relation("TenantContracts")
+  tenantContracts   Contract[]    @relation("TenantContracts")
   myBuildings       MyBuilding[]
   activities        Activity[]
-  requestedTickets  Ticket[]     @relation("RequestedTickets")
+  requestedTickets  Ticket[]      @relation("RequestedTickets")
   uploads           Upload[]
-  uploadedDocuments Document[]   @relation("UploadedDocuments")
+  uploadedDocuments Document[]    @relation("UploadedDocuments")
+  authoredLogs      PropertyLog[] @relation("AuthoredPropertyLogs")
+
+  ownershipVerificationAttempts OwnershipVerificationAttempt[]
 
   @@map("users")
 }
@@ -385,6 +400,7 @@ model Property {
 
   ownerships Ownership[]
   tickets    Ticket[]
+  logs       PropertyLog[]
 
   // 같은 단지·동·호는 한 Property로 합친다(POST /properties가 이 키로 찾아 재사용).
   @@unique([complexId, buildingNo, unitNo])
@@ -424,6 +440,9 @@ model Ownership {
 
   contracts Contract[]
   tickets   Ticket[]
+  logs      PropertyLog[]
+
+  verificationAttempts OwnershipVerificationAttempt[]
 
   @@index([propertyId])
   @@index([userId])
@@ -470,6 +489,48 @@ model Contract {
 
 // 수리·점검 요청 (노션 6번 10장, 계약 5장).
 // category는 등록형 문자열(REPAIR, INSPECTION, OTHER, 피처가 추가)이라 enum이 아니다.
+// 관리 로그(하우스 로그, 계약 5장). API 경로·활동·감사 이름은 management-logs·MANAGEMENT_LOG_*를 쓴다.
+enum PropertyLogScope {
+  PRIVATE
+  PROPERTY_HISTORY
+
+  @@map("property_log_scope")
+}
+
+model PropertyLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @map("property_id") @db.Uuid
+  property    Property  @relation(fields: [propertyId], references: [id])
+  // 작성 당시 소유 관계. 이 관계가 끝나면 기록은 읽기 전용이 된다.
+  ownershipId String    @map("ownership_id") @db.Uuid
+  ownership   Ownership @relation(fields: [ownershipId], references: [id])
+  // 시스템이 만든 기록은 null
+  authorId    String?   @map("author_id") @db.Uuid
+  author      User?     @relation("AuthoredPropertyLogs", fields: [authorId], references: [id])
+
+  scope      PropertyLogScope
+  type       String           @db.VarChar(30) // REPAIR, INSPECTION, NOTE, TICKET_SUMMARY(등록형)
+  title      String           @db.VarChar(100)
+  content    String?
+  occurredOn DateTime         @map("occurred_on") @db.Date
+  cost       BigInt?
+
+  // 응답의 source. 직접 쓴 기록은 platform + null, 시스템 기록은 만든 곳을 가리킨다.
+  sourceFeature      String  @default("platform") @map("source_feature") @db.VarChar(40)
+  sourceResourceType String? @map("source_resource_type") @db.VarChar(40)
+  sourceResourceId   String? @map("source_resource_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tickets Ticket[]
+
+  @@index([propertyId, scope, occurredOn(sort: Desc)])
+  @@index([ownershipId, occurredOn(sort: Desc)])
+  @@index([authorId, occurredOn(sort: Desc)])
+  @@map("property_logs")
+}
+
 model Ticket {
   id          String    @id @default(uuid()) @db.Uuid
   propertyId  String    @map("property_id") @db.Uuid
@@ -490,8 +551,8 @@ model Ticket {
   resolutionNote String?      @map("resolution_note")
   cost           BigInt? // 임대인에게만 보인다
   // DONE이 되면 자동 생성되는 TICKET_SUMMARY 관리 로그(응답의 historyLogId).
-  // property_logs는 아직 없어서 FK 없이 값만 두고, 그 테이블을 만들 때 건다.
   logId          String?      @map("log_id") @db.Uuid
+  log            PropertyLog? @relation(fields: [logId], references: [id])
   closedAt       DateTime?    @map("closed_at") @db.Timestamptz(3) // DONE·CANCELED가 된 시각
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -620,6 +681,36 @@ model RateLimit {
   expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
   @@map("rate_limits")
+}
+
+// 플랫폼 운영 설정(키·값). 값은 문자열로 두고 읽는 쪽이 검사한다.
+model PlatformSetting {
+  key       String   @id @db.VarChar(60)
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("platform_settings")
+}
+
+// 권리자 인증 시도. 진행 중(PENDING·RUNNING)은 소유 관계마다 1건 — uq_verification_attempt_active (마이그레이션 SQL)
+model OwnershipVerificationAttempt {
+  id           String                    @id @default(uuid()) @db.Uuid
+  ownershipId  String                    @map("ownership_id") @db.Uuid
+  ownership    Ownership                 @relation(fields: [ownershipId], references: [id])
+  requestedBy  String                    @map("requested_by") @db.Uuid
+  requester    User                      @relation(fields: [requestedBy], references: [id])
+  status       VerificationAttemptStatus @default(PENDING)
+  // 상세 사유 코드(계획 5장). 관리자 화면과 감사 로그에만 나간다.
+  reasonCode   String?                   @map("reason_code") @db.VarChar(40)
+  ledgerKind   String?                   @map("ledger_kind") @db.VarChar(20)
+  ownerCount   Int?                      @map("owner_count")
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  finishedAt   DateTime?                 @map("finished_at") @db.Timestamptz(3)
+
+  @@index([ownershipId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("ownership_verification_attempts")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====

@@ -6,11 +6,14 @@ import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
   getDashboard,
   getUser,
+  getVerificationSetting,
   listAuditLogs,
   listJobs,
   listOwnerships,
   listUsers,
+  listVerificationAttempts,
   patchUserStatus,
+  patchVerificationSetting,
   postComplex,
   postJobRetry,
   postOwnershipEnd,
@@ -35,6 +38,9 @@ router.patch('/users/:userId/status', patchUserStatus);
 router.get('/property-ownerships', listOwnerships);
 router.post('/property-ownerships/:ownershipId/revoke', postOwnershipRevoke);
 router.post('/property-ownerships/:ownershipId/end', postOwnershipEnd);
+router.get('/settings/ownership-verification', getVerificationSetting);
+router.patch('/settings/ownership-verification', patchVerificationSetting);
+router.get('/ownership-verification-attempts', listVerificationAttempts);
 router.post('/complexes', postComplex);
 router.get('/audit-logs', listAuditLogs);
 router.get('/jobs', listJobs);

@@ -8,11 +8,13 @@ import { formatDateKST } from '../utils/format';
 import {
   CONTRACT_DATE_MIN,
   CONTRACT_DATE_RANGE_MESSAGE,
+  CONTRACT_LEGAL_NOTICE,
   formatPeriod,
   formatPhone,
   formatWon,
   getContractDdayBadge,
   getContractStatusBadge,
+  getEndedOwnershipNotice,
   getLeaseTypeLabel,
   getMaxTerminationDate,
   isContractDateInRange,
@@ -129,10 +131,11 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
     );
   }
 
-  const status = getContractStatusBadge(contract.status);
+  const status = getContractStatusBadge(contract);
   const dday = getContractDdayBadge(contract);
   const canEdit = !contract.isReadOnly;
   const canRenew = canEdit && isContractInProgress(contract.status);
+  const endedOwnershipNotice = getEndedOwnershipNotice(contract.endReason);
 
   return (
     <div className="w-full max-w-6xl space-y-6 pb-10">
@@ -155,6 +158,8 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
       />
 
       {contractQuery.error && <NoticeBox>{contractQuery.error.message}</NoticeBox>}
+      {endedOwnershipNotice && <NoticeBox tone="warn">{endedOwnershipNotice}</NoticeBox>}
+      <p className="text-sub text-ink-3">{CONTRACT_LEGAL_NOTICE}</p>
 
       <div className="grid grid-cols-3 items-start gap-6">
         <Card className="col-span-2 p-6">
