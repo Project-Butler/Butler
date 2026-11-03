@@ -274,12 +274,12 @@ export const updateContract = async (user, contractId, input, req) => {
   const updated = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
     const status = computeContractStatus(contract, getTodayKST());
+    // 입력값 검사(400, 전세 입금일)가 읽기 전용·잠금(422)보다 먼저다(3-3, R-01).
+    const leaseType = input.leaseType ?? contract.leaseType;
+    if (input.rentPaymentDay !== undefined) assertRentPaymentDay({ leaseType, rentPaymentDay: input.rentPaymentDay });
     if (isContractReadOnly(status, Boolean(ownership.endedAt))) throwReadOnly();
     const locked = lockedFieldsForStatus(status, Object.keys(input));
     if (locked.length > 0) throwReadOnly(locked.map((field) => ({ field, reason: 'LOCKED_WHILE_ACTIVE' })));
-
-    const leaseType = input.leaseType ?? contract.leaseType;
-    if (input.rentPaymentDay !== undefined) assertRentPaymentDay({ leaseType, rentPaymentDay: input.rentPaymentDay });
     // 시작 전 계약을 전세로 바꾸면 입금일을 서버가 비운다(#76 Q5). 바뀐 칸이라 감사 로그에도 남는다.
     const clearsRentPaymentDay = leaseType === 'JEONSE' && input.rentPaymentDay === undefined && contract.rentPaymentDay !== null;
     const data = clearsRentPaymentDay ? { ...input, rentPaymentDay: null } : input;

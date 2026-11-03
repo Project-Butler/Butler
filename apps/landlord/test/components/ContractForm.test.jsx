@@ -71,6 +71,13 @@ describe('계약 폼 월세 입금일(#76)', () => {
     expect(isContractFormComplete({ ...FILLED, leaseType: 'JEONSE', monthlyRent: '' })).toBe(true);
   });
 
+  it('입금일 없던 기존 월세 계약 수정: 입금일은 선택, 전세→월세로 바꾸면 필수', () => {
+    expect(isContractFormComplete(FILLED, { rentPaymentDayOptional: true })).toBe(true);
+    expect(isContractFormComplete({ ...FILLED, monthlyRent: '' }, { rentPaymentDayOptional: true })).toBe(false);
+    // 입금일이 있던 계약, 또는 전세에서 월세로 바꾼 계약은 optional을 켜지 않으므로 비면 미완성
+    expect(isContractFormComplete({ ...FILLED, rentPaymentDay: '' })).toBe(false);
+  });
+
   it('전세로 바꾸면 칸을 숨기고 값을 비운다, 보낼 때도 null', async () => {
     const user = userEvent.setup();
     render(<Harness initial={{ ...FILLED, rentPaymentDay: '25' }} />);

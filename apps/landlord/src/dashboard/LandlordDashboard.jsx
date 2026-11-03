@@ -161,9 +161,11 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         <p className="mt-1 text-body text-ink-2">
           {taskCount === 0
             ? '오늘 확인할 일이 없습니다.'
-            : expiringContracts.length > 0
-              ? `오늘 확인할 일이 ${taskCount}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
-              : `오늘 확인할 일이 ${taskCount}건 있습니다. 오늘 월세 입금일인 계약을 확인해 주세요.`}
+            : expiringContracts.length > 0 && rentDueContracts.length > 0
+              ? `오늘 확인할 일이 ${taskCount}건 있습니다.`
+              : expiringContracts.length > 0
+                ? `오늘 확인할 일이 ${taskCount}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
+                : `오늘 확인할 일이 ${taskCount}건 있습니다. 오늘 월세 입금일인 계약을 확인해 주세요.`}
         </p>
       </div>
 
@@ -208,7 +210,7 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
           <div className="mt-4 space-y-3">
             {liveContracts.error && <p className="text-body text-crit-ink">{liveContracts.error.message}</p>}
             {liveContracts.data && taskCount === 0 && (
-              <p className="py-4 text-center text-body text-ink-3">종료가 가까운 계약이 없습니다</p>
+              <p className="py-4 text-center text-body text-ink-3">오늘 할 일이 없습니다</p>
             )}
             {rentDueContracts.map((contract) => (
               <div key={`${contract.id}-rent`} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">

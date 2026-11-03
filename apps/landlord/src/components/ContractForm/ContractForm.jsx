@@ -104,10 +104,12 @@ export const validateContractForm = (form) => {
 };
 
 // 필수 칸을 다 채웠는지(전세면 월세·입금일 칸은 보지 않음). 입금일은 API에서는 선택이지만 화면에서는 월세면 필수(#76 Q1).
-export const isContractFormComplete = (form) =>
+// 입금일이 없던 기존 월세 계약을 수정할 때만 rentPaymentDayOptional로 선택 칸으로 둔다.
+export const isContractFormComplete = (form, { rentPaymentDayOptional = false } = {}) =>
   Boolean(
     form.deposit !== '' &&
-      (form.leaseType === 'JEONSE' || (form.monthlyRent !== '' && form.rentPaymentDay !== '')) &&
+      (form.leaseType === 'JEONSE' ||
+        (form.monthlyRent !== '' && (rentPaymentDayOptional || form.rentPaymentDay !== ''))) &&
       form.startDate &&
       form.endDate &&
       form.tenantName.trim() &&

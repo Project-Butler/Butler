@@ -21,6 +21,7 @@ export const computeNextRentPaymentDate = (contract, { todayKST, ownershipEnded 
   if (status === 'TERMINATED' || status === 'EXPIRED') return null;
 
   const startDate = toDateOnlyString(contract.startDate);
+  // terminatedOn은 방어용이다(해지 계약은 위에서 이미 null).
   const lastDate = toDateOnlyString(contract.terminatedOn ?? contract.endDate);
   // 시작 전 계약은 시작일부터 센다.
   const from = compareDateStrings(startDate, todayKST) > 0 ? startDate : todayKST;

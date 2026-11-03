@@ -41,7 +41,9 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
   const changes = toChangedFields(original, form, lockedFields);
   const hasChanges = Object.keys(changes).length > 0;
   const isSubmitting = patch.isLoading;
-  const isReady = hasChanges && isContractFormComplete(form) && Object.keys(clientErrors).length === 0;
+  // 입금일이 없던 기존 월세 계약은 입금일을 고르지 않아도 수정할 수 있다(전세→월세로 바꾸면 필수).
+  const rentPaymentDayOptional = original.leaseType === 'MONTHLY' && original.rentPaymentDay === '';
+  const isReady = hasChanges && isContractFormComplete(form, { rentPaymentDayOptional }) && Object.keys(clientErrors).length === 0;
   const status = getContractStatusBadge(contract);
 
   const updateField = (name, value) => {

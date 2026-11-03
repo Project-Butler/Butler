@@ -7,6 +7,7 @@ import { getTodayKST } from '../../../src/platform/dateUtils.js';
 import { computeNextRentPaymentDate } from '../../../src/platform/rentPayment.js';
 import { lockOwnershipRow } from '../../../src/platform/ownershipLock.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
+import { patchContract } from '../../../src/domains/contracts/controller.js';
 import { findLandlordSetup } from '../../../src/domains/dashboard/service.js';
 import { findPropertyForUser } from '../../../src/domains/properties/service.js';
 import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
@@ -296,6 +297,22 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
         return true;
       });
 
+    // 컨트롤러(형식 검사)까지 거쳐 PATCH를 흉내 낸다. 성공이면 { status, body }, 실패면 next로 넘어온 에러를 돌려준다.
+    const patchViaController = (user, contractId, body) =>
+      new Promise((resolve, reject) => {
+        const res = {
+          statusCode: 200,
+          status(code) {
+            this.statusCode = code;
+            return this;
+          },
+          json(payload) {
+            resolve({ status: this.statusCode, body: payload });
+          },
+        };
+        patchContract({ params: { contractId }, body, user }, res, (error) => (error ? resolve({ error }) : reject(new Error('next without error'))));
+      });
+
     test('등록·수정 때 저장하고 응답에 nextRentPaymentDate가 온다', async () => {
       const user = await fixture.createUser();
       const { ownership } = await createOwnedUnit(user);
@@ -388,6 +405,52 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
       assert.deepEqual(rows[1].after, { rentPaymentDay: null });
       const [createdRow] = await prisma.auditLog.findMany({ where: { resourceId: active.id, action: 'CONTRACT_CREATED' } });
       assert.equal(createdRow.after.rentPaymentDay, 25);
+    });
+
+    test('입금일 형식이 틀리면(0·32·1.5·"5") 400', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id, { rentPaymentDay: 25 }));
+      for (const rentPaymentDay of [0, 32, 1.5, '5']) {
+        const { error } = await patchViaController(user, created.id, { rentPaymentDay });
+        assert.equal(error?.httpStatus, 400, `rentPaymentDay=${JSON.stringify(rentPaymentDay)}`);
+        assert.equal(error.code, 'VALIDATION_ERROR');
+      }
+      assert.equal((await findContractForUser(user, created.id)).rentPaymentDay, 25);
+    });
+
+    test('시작 전 계약: 전세로 바꾸며 입금일을 보내면 400, 입금일 없이 월세로 바꾸면 200에 null', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const upcoming = await createContract(user, contractInput(ownership.id, { startDate: shift(10), endDate: shift(700), rentPaymentDay: 10 }));
+      await rejectsWithDetails(
+        updateContract(user, upcoming.id, { leaseType: 'JEONSE', monthlyRent: 0n, rentPaymentDay: 5 }),
+        'VALIDATION_ERROR',
+        notAllowed,
+      );
+      const jeonse = await updateContract(user, upcoming.id, { leaseType: 'JEONSE', monthlyRent: 0n });
+      assert.equal(jeonse.rentPaymentDay, null);
+      const monthly = await updateContract(user, upcoming.id, { leaseType: 'MONTHLY', monthlyRent: 700000n });
+      assert.equal(monthly.leaseType, 'MONTHLY');
+      assert.equal(monthly.rentPaymentDay, null);
+      assert.equal(monthly.nextRentPaymentDate, null);
+    });
+
+    test('끝난(만료·해지) 전세 계약에 입금일을 보내면 읽기 전용(422)보다 먼저 400', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const jeonse = { leaseType: 'JEONSE', deposit: 300000000n, monthlyRent: 0n };
+      const terminated = await createContract(user, contractInput(ownership.id, jeonse));
+      await terminateContract(user, terminated.id, { terminatedOn: TODAY, reason: null });
+      await rejectsWithDetails(updateContract(user, terminated.id, { rentPaymentDay: 5 }), 'VALIDATION_ERROR', notAllowed);
+
+      // 만료 계약은 등록 때 과거 종료일이 막혀 있어 DB에서 기간을 당겨 만든다.
+      const expired = await createContract(user, contractInput(ownership.id, { ...jeonse, startDate: shift(10), endDate: shift(700) }));
+      await prisma.contract.update({ where: { id: expired.id }, data: { startDate: new Date(`${shift(-60)}T00:00:00Z`), endDate: new Date(`${shift(-1)}T00:00:00Z`) } });
+      assert.equal((await findContractForUser(user, expired.id)).status, 'EXPIRED');
+      await rejectsWithDetails(updateContract(user, expired.id, { rentPaymentDay: 5 }), 'VALIDATION_ERROR', notAllowed);
+      // 입금일이 문제없으면 그대로 읽기 전용 422
+      await rejectsWith(updateContract(user, expired.id, { memo: 'x' }), 'CONTRACT_READ_ONLY');
     });
 
     test('소유 관계가 끝나면 nextRentPaymentDate는 null', async () => {
