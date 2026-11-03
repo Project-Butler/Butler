@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { createRunnerServer } from '../../../../src/domains/ownershipVerifications/runnerServer.js';
 import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from '../../../../src/domains/ownershipVerifications/runnerSignature.js';
-import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../../../src/domains/ownershipVerifications/runners/fixture.js';
+import { FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../../helpers/fakeLedgerRunner.js';
 import { resolveRunnerKind, selectRunner } from '../../../../src/domains/ownershipVerifications/runners/index.js';
 import { createLocalRunner, runLedgerIssue } from '../../../../src/domains/ownershipVerifications/runners/local.js';
 import { createRemoteRunner } from '../../../../src/domains/ownershipVerifications/runners/remote.js';
@@ -18,12 +18,10 @@ const assertNoRawText = (value) => {
   for (const raw of [FIXTURE_ID_TEXT, FIXTURE_WARNING, FIXTURE_REASON]) assert.ok(!text.includes(raw));
 };
 
-test('러너 선택: 미설정·Vercel local·운영 fixture는 쓸 수 없다', () => {
+test('러너 선택: 미설정·fixture·Vercel local은 쓸 수 없다', () => {
   assert.equal(resolveRunnerKind({}), null);
   assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'etc' }), null);
-  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture' }), 'fixture');
-  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture', VERCEL: '1' }), null);
-  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture', NODE_ENV: 'production' }), null);
+  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture' }), null);
   const LOCAL = { OWNERSHIP_VERIFICATION_RUNNER: 'local', EAIS_ID: 'x', EAIS_PW: 'x', CLOVA_OCR_INVOKE_URL: 'x', CLOVA_OCR_SECRET: 'x' };
   assert.equal(resolveRunnerKind(LOCAL), 'local');
   assert.equal(resolveRunnerKind({ ...LOCAL, VERCEL: '1' }), null);
@@ -37,23 +35,6 @@ test('러너 선택: 미설정·Vercel local·운영 fixture는 쓸 수 없다',
   assert.equal(selectRunner(REMOTE_ENV).kind, 'remote');
   assert.equal(selectRunner(REMOTE_ENV).awaitDispatch, true);
   assert.equal(selectRunner({ OWNERSHIP_VERIFICATION_RUNNER: 'local', EAIS_ID: 'x', EAIS_PW: 'x', CLOVA_OCR_INVOKE_URL: 'x', CLOVA_OCR_SECRET: 'x' }).kind, 'local');
-});
-
-test('fixture: 호 끝 두 자리로 결과를 고르고 원문을 돌려주지 않는다', async () => {
-  const runner = createFixtureRunner();
-  const identity = { name: '김철수', birthDate: '1980-01-01' };
-  const run = (ho) => runner.run({ ...TARGET, ho }, { getIdentity: async () => identity });
-
-  const matched = await run('1201');
-  assert.deepEqual(matched, { kind: 'OK', ledgerKind: 'UNIT_EXCLUSIVE', owners: [identity] });
-  assert.equal((await run('1291')).owners[0].name, '픽스처 다른소유자');
-  assert.deepEqual((await run('1292')).owners, [{ name: null, birthDate: null }]);
-  assert.equal((await run('1293')).kind, 'ISSUE_FAILED');
-  assert.equal((await run('1294')).kind, 'ISSUE_STOPPED');
-  assert.equal((await run('1295')).kind, 'ISSUE_INVALID');
-  assert.equal((await run('1296')).kind, 'OCR_FAILED');
-  await assert.rejects(run('1297'));
-  for (const ho of ['1201', '1291', '1292', '1293', '1296']) assertNoRawText(await run(ho));
 });
 
 test('local: 주입한 가짜로 발급·1쪽 OCR을 돌린다', async () => {

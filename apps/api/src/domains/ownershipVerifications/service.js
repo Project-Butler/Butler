@@ -99,7 +99,7 @@ export const runAttempt = async (attemptId, runner, deps = {}) => {
       return;
     }
 
-    const result = await runner.run(target, { attemptId, getIdentity: () => loadIdentity(attempt.requestedBy) });
+    const result = await runner.run(target, { attemptId });
     if (result.kind !== 'DISPATCHED') await receiveRunnerResult(attemptId, result, deps);
   } catch (error) {
     logFailure('실행 실패', attemptId, error);

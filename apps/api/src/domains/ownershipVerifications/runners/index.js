@@ -1,6 +1,5 @@
 // 러너 선택(OWNERSHIP_VERIFICATION_RUNNER). 쓸 수 없으면 null이고, service가 시도 저장 전에 503으로 거절한다.
-// 미설정, Vercel의 local, 세움터·OCR 값이 빠진 local, Vercel·production의 fixture, 설정이 빠진 remote는 쓸 수 없다.
-import { createFixtureRunner } from './fixture.js';
+// 실제 발급만 한다(local·remote). 미설정, Vercel의 local, 세움터·OCR 값이 빠진 local, 설정이 빠진 remote는 쓸 수 없다.
 import { createLocalRunner } from './local.js';
 import { createRemoteRunner } from './remote.js';
 
@@ -9,7 +8,6 @@ const LOCAL_REQUIRED_KEYS = ['EAIS_ID', 'EAIS_PW', 'CLOVA_OCR_INVOKE_URL', 'CLOV
 
 export const resolveRunnerKind = (env) => {
   const kind = env.OWNERSHIP_VERIFICATION_RUNNER;
-  if (kind === 'fixture') return env.VERCEL || env.NODE_ENV === 'production' ? null : 'fixture';
   if (kind === 'local') return env.VERCEL || !LOCAL_REQUIRED_KEYS.every((key) => env[key]) ? null : 'local';
   if (kind === 'remote') return env.OWNERSHIP_VERIFICATION_RUNNER_URL && env.OWNERSHIP_VERIFICATION_RUNNER_SECRET ? 'remote' : null;
   return null;
@@ -17,7 +15,6 @@ export const resolveRunnerKind = (env) => {
 
 export const selectRunner = (env = process.env) => {
   const kind = resolveRunnerKind(env);
-  if (kind === 'fixture') return createFixtureRunner();
   if (kind === 'local') return createLocalRunner();
   if (kind === 'remote') {
     return createRemoteRunner({ url: env.OWNERSHIP_VERIFICATION_RUNNER_URL, secret: env.OWNERSHIP_VERIFICATION_RUNNER_SECRET });

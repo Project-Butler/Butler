@@ -1,4 +1,4 @@
-// 권리자 인증(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다. 러너는 fixture와 가짜 함수만 쓴다.
+// 권리자 인증(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다. 러너는 테스트 전용 가짜(test/helpers/fakeLedgerRunner.js)와 가짜 함수만 쓴다.
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -16,7 +16,9 @@ import { buildAuthMe, signAccessToken } from '../../../src/domains/auth/service.
 import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
 import { ownershipVerificationResultRouter } from '../../../src/domains/ownershipVerifications/router.js';
 import { buildSignedHeaders } from '../../../src/domains/ownershipVerifications/runnerSignature.js';
-import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../../src/domains/ownershipVerifications/runners/fixture.js';
+import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../helpers/fakeLedgerRunner.js';
+import { createRunnerServer } from '../../../src/domains/ownershipVerifications/runnerServer.js';
+import { decryptField } from '../../../src/platform/fieldCrypto.js';
 import { createRemoteRunner } from '../../../src/domains/ownershipVerifications/runners/remote.js';
 import {
   findAttemptForUser,
@@ -35,11 +37,20 @@ const DAY = 86400000;
 const FUTURE = () => new Date(Date.now() + DAY * 365);
 const PAST = () => new Date(Date.now() - DAY);
 
-// 실행을 직접 기다리는 fixture 러너 설정.
+// 가짜 러너가 일치 결과로 돌려줄 요청자 정보. 서비스가 비교에 쓰는 회원 정보와 같다.
+const identityOfAttempt = async (attemptId) => {
+  const { requester } = await prisma.ownershipVerificationAttempt.findUnique({
+    where: { id: attemptId },
+    select: { requester: { select: { name: true, birthDate: true } } },
+  });
+  return { name: requester.name, birthDate: decryptField(requester.birthDate) };
+};
+
+// 실행을 직접 기다리는 가짜 러너 설정(테스트 전용, 앱에는 fixture 모드가 없다).
 const inline = () => {
   const pending = [];
   return {
-    deps: { selectRunner: () => createFixtureRunner(), schedule: (fn) => pending.push(fn) },
+    deps: { selectRunner: () => createFixtureRunner({ getIdentity: identityOfAttempt }), schedule: (fn) => pending.push(fn) },
     drain: () => Promise.all(pending.splice(0).map((fn) => fn())),
   };
 };
@@ -83,7 +94,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     unitSeq += 1;
     return prisma.property.create({ data: { complexId: created.id, buildingNo: '101', unitNo: unitNo ?? `${3000 + unitSeq}00` } });
   };
-  // 기본 호수는 00으로 끝난다. fixture 러너는 호 끝 두 자리 91~97을 실패 규칙으로 쓴다.
+  // 기본 호수는 00으로 끝난다. 가짜 러너는 호 끝 두 자리 91~97을 실패 규칙으로 쓴다.
   // startedAtOffset: 음수면 더 먼저 등록한 것. started_at 순서를 고정한다.
   const own = async (user, property, { startedAtOffset = 0, ...data } = {}) => {
     const ownership = await prisma.ownership.create({
@@ -216,7 +227,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal((await findLatestAttempt(user, ownership.id)).id, attempt.id);
   });
 
-  test('fixture 호실 규칙별 실패 사유, 활동에 사유 없음, 원문 없음', async () => {
+  test('가짜 러너 호실 규칙별 실패 사유, 활동에 사유 없음, 원문 없음', async () => {
     const expected = { 91: 'NOT_MATCHED', 92: 'UNREADABLE', 93: 'ISSUE_FAILED', 94: 'ISSUE_STOPPED', 95: 'ISSUE_INVALID', 96: 'OCR_FAILED', 97: 'INTERNAL' };
     for (const [suffix, reasonCode] of Object.entries(expected)) {
       const user = await createUser();
@@ -554,10 +565,19 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
   describe('실제 앱 경로', () => {
     const saved = {};
-    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER', 'ACCESS_TOKEN_SECRET'];
+    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER', 'OWNERSHIP_VERIFICATION_RUNNER_URL', 'OWNERSHIP_VERIFICATION_RUNNER_SECRET', 'ACCESS_TOKEN_SECRET'];
+    const RUNNER_SECRET = randomUUID();
     let server;
+    let runnerServer;
+    let runnerUrl;
     let baseUrl;
     const userIds = [];
+
+    // 실제 remote 경로: API → 실행 서버(발급·OCR만 가짜) → 서명 콜백 → API.
+    const fakeTools = {
+      issue: async () => ({ status: 'ok', target: { ledgerKind: 'UNIT_EXCLUSIVE' }, pages: [{ page: 1, png: Buffer.alloc(0) }] }),
+      extract: async () => ({ owners: [{ row: 1, name: NAME, birthDate: BIRTH_DATE, idText: FIXTURE_ID_TEXT }], warnings: [] }),
+    };
 
     before(async () => {
       for (const key of KEYS) saved[key] = process.env[key];
@@ -565,7 +585,13 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       server = await new Promise((resolve) => {
         const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
       });
-      baseUrl = `http://127.0.0.1:${server.address().port}/api/v1/ownership-verifications`;
+      const apiRoot = `http://127.0.0.1:${server.address().port}`;
+      baseUrl = `${apiRoot}/api/v1/ownership-verifications`;
+      const { app: runnerApp } = createRunnerServer({ secret: RUNNER_SECRET, callbackUrl: apiRoot, load: async () => fakeTools });
+      runnerServer = await new Promise((resolve) => {
+        const listening = runnerApp.listen(0, '127.0.0.1', () => resolve(listening));
+      });
+      runnerUrl = `http://127.0.0.1:${runnerServer.address().port}`;
     });
     after(async () => {
       for (const key of KEYS) {
@@ -573,6 +599,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
         else process.env[key] = saved[key];
       }
       await new Promise((resolve) => server.close(resolve));
+      await new Promise((resolve) => runnerServer.close(resolve));
       for (const id of userIds) await prisma.rateLimit.deleteMany({ where: { id: { contains: id } } });
     });
 
@@ -593,7 +620,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       return user;
     };
 
-    test('POST: 러너 미설정 503·시도 없음, 동의 없음 400, fixture 202 후 완료, 재인증 대상·최신 조회 경로', async () => {
+    test('POST: 러너 미설정 503·시도 없음, 동의 없음 400, remote 202 후 실행 서버 콜백으로 완료, 재인증 대상·최신 조회 경로', async () => {
       const user = await landlord();
       const ownership = await own(user, await createProperty());
       const body = { ...input(ownership), consent: true };
@@ -604,7 +631,9 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       assert.equal((await unavailable.json()).error.code, 'VERIFICATION_RUNNER_UNAVAILABLE');
       assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: ownership.id } }), 0);
 
-      process.env.OWNERSHIP_VERIFICATION_RUNNER = 'fixture';
+      process.env.OWNERSHIP_VERIFICATION_RUNNER = 'remote';
+      process.env.OWNERSHIP_VERIFICATION_RUNNER_URL = runnerUrl;
+      process.env.OWNERSHIP_VERIFICATION_RUNNER_SECRET = RUNNER_SECRET;
       const noConsent = await postStart(user, input(ownership));
       assert.equal(noConsent.status, 400);
       const noConsentText = await noConsent.text();
