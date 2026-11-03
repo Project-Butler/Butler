@@ -704,8 +704,6 @@ model OwnershipVerificationAttempt {
   reasonCode   String?                   @map("reason_code") @db.VarChar(40)
   ledgerKind   String?                   @map("ledger_kind") @db.VarChar(20)
   ownerCount   Int?                      @map("owner_count")
-  // 임시 생년월일 암호문. 끝 상태가 되면 finishAttempt가 같은 갱신에서 비운다.
-  birthDateEnc String?                   @map("birth_date_enc")
   createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(3)
   finishedAt   DateTime?                 @map("finished_at") @db.Timestamptz(3)

@@ -7,7 +7,6 @@ import {
   computeVerificationExpiry,
   getStartBlockReason,
   hasEarlierRevokedOwner,
-  isValidBirthDate,
   matchOwner,
   parseRunnerResult,
   parseValidityYears,
@@ -19,16 +18,6 @@ const NOW = new Date('2026-11-03T00:00:00Z');
 const PAST = new Date('2026-01-01T00:00:00Z');
 const FUTURE = new Date('2028-01-01T00:00:00Z');
 const IDENTITY = { name: '김 철수', birthDate: '1980-01-01' };
-
-test('isValidBirthDate: 형식·실제 날짜·오늘 이하만', () => {
-  assert.equal(isValidBirthDate('1980-01-01', '2026-11-03'), true);
-  assert.equal(isValidBirthDate('2026-11-03', '2026-11-03'), true);
-  assert.equal(isValidBirthDate('2026-11-04', '2026-11-03'), false);
-  assert.equal(isValidBirthDate('2023-02-30', '2026-11-03'), false);
-  assert.equal(isValidBirthDate('1980-1-1', '2026-11-03'), false);
-  assert.equal(isValidBirthDate(19800101, '2026-11-03'), false);
-  assert.equal(isValidBirthDate(null, '2026-11-03'), false);
-});
 
 test('resolveIdentity: 이름은 가입 정보, 생년월일은 입력', () => {
   assert.deepEqual(resolveIdentity({ name: '김철수' }, { birthDate: '1980-01-01' }), { name: '김철수', birthDate: '1980-01-01' });

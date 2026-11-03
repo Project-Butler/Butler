@@ -1,5 +1,4 @@
 // 권리자 인증 판정·변환 순수 함수(DB·네트워크 의존 없음). 판정 절차는 ownershipVerification.js.
-import { compareDateStrings } from './dateUtils.js';
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 
 export const ACTIVE_ATTEMPT_STATUSES = Object.freeze(['PENDING', 'RUNNING']);
@@ -32,18 +31,7 @@ export const MAX_VALIDITY_YEARS = 100;
 
 const BIRTH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-// YYYY-MM-DD, 실제 있는 날짜, 오늘(KST) 이하. isValidLogDate는 미래를 허용하므로 쓰지 않는다.
-export const isValidBirthDate = (value, todayKST) => {
-  if (typeof value !== 'string' || !BIRTH_DATE_PATTERN.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return false;
-  return compareDateStrings(value, todayKST) <= 0;
-};
-
-// 본인 정보는 이 함수에서만 만든다. 생년월일은 지금 인증 화면에서 임시로 받는다.
-// 회원 정보로 바꿀 때 절차: (1) 인증 화면의 BirthDateField와 POST의 birthDate를 뺀다.
-// (2) 이 함수가 user의 생년월일을 읽게 한다. (3) birth_date_enc 칸과 finishAttempt의 삭제 줄을 뺀다.
-// 회원 생년월일은 인증이 끝나도 유지된다.
+// 본인 정보는 이 함수에서만 만든다. 이름과 생년월일은 회원가입 때 받은 회원 정보다(생년월일은 복호화한 값).
 export const resolveIdentity = (user, { birthDate }) => ({ name: user?.name ?? null, birthDate: birthDate ?? null });
 
 const normalizeName = (name) => (typeof name === 'string' ? name.normalize('NFC').replace(/\s+/g, '') : '');

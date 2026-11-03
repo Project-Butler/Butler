@@ -1,7 +1,6 @@
 // 권리자 인증 요청 형식 검사와 응답. 절차는 service.js.
 import { AppError } from '../../platform/AppError.js';
-import { getTodayKST } from '../../platform/dateUtils.js';
-import { isValidBirthDate, parseRunnerResult } from '../../platform/ownershipVerificationRules.js';
+import { parseRunnerResult } from '../../platform/ownershipVerificationRules.js';
 import { assertAllowedBody, assertSingleValues, throwIfInvalid } from '../../platform/requestValidation.js';
 import { sendData } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
@@ -14,18 +13,17 @@ import {
   startOwnershipVerification,
 } from './service.js';
 
-const START_FIELDS = ['ownershipId', 'birthDate', 'consent'];
+const START_FIELDS = ['ownershipId', 'consent'];
 const RESULT_FIELDS = ['attemptId', 'kind', 'ledgerKind', 'owners'];
 
 // 400 details에 입력값을 담지 않는다.
-export const parseStartBody = (body, todayKST = getTodayKST()) => {
+export const parseStartBody = (body) => {
   assertAllowedBody(body, START_FIELDS);
   const details = [];
   if (!isUuid(body.ownershipId)) details.push({ field: 'ownershipId', reason: 'UUID여야 합니다.' });
-  if (!isValidBirthDate(body.birthDate, todayKST)) details.push({ field: 'birthDate', reason: 'YYYY-MM-DD 형식의 오늘 이전 날짜여야 합니다.' });
   if (body.consent !== true) details.push({ field: 'consent', reason: 'CONSENT_REQUIRED' });
   throwIfInvalid(details);
-  return { ownershipId: body.ownershipId, birthDate: body.birthDate };
+  return { ownershipId: body.ownershipId };
 };
 
 const throwInvalidResult = () => {

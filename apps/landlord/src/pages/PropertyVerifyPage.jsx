@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { Button, Card } from '@butler/ui';
-import { BirthDateField } from '../components/BirthDateField/BirthDateField';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { VerificationFailedNotice } from '../components/VerificationFailedNotice/VerificationFailedNotice';
@@ -8,13 +7,10 @@ import { useGetLatestOwnershipVerification } from '../hooks/useGetLatestOwnershi
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
 import { usePostOwnershipVerification } from '../hooks/usePostOwnershipVerification';
-import { toFieldErrors } from '../utils/apiError';
-import { getTodayKST } from '../utils/contract';
 import { formatDateKST } from '../utils/format';
 import {
   getVerificationAction,
   RUNNER_UNAVAILABLE_CODE,
-  validateBirthDate,
   VERIFICATION_PREPARING_MESSAGE,
   VERIFICATION_REVOKED_CODE,
   VERIFICATION_REVOKED_MESSAGE,
@@ -25,15 +21,15 @@ const ConsentNotice = () => (
   <dl className="space-y-1.5 rounded-input bg-surface-2 p-4 text-sub text-ink-2">
     <div className="flex gap-2">
       <dt className="w-16 shrink-0 font-semibold text-ink">수집 항목</dt>
-      <dd>이름, 생년월일, 건축물대장의 소유자 정보</dd>
+      <dd>회원 정보의 이름·생년월일, 건축물대장의 소유자 정보</dd>
     </div>
     <div className="flex gap-2">
       <dt className="w-16 shrink-0 font-semibold text-ink">이용 목적</dt>
-      <dd>입력한 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.</dd>
+      <dd>회원 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.</dd>
     </div>
     <div className="flex gap-2">
       <dt className="w-16 shrink-0 font-semibold text-ink">보유 기간</dt>
-      <dd>비교가 끝나면 바로 파기해요.</dd>
+      <dd>건축물대장의 소유자 정보는 비교가 끝나면 바로 파기해요. 회원 정보는 따로 저장하지 않고 비교에만 써요.</dd>
     </div>
     <div className="flex gap-2">
       <dt className="w-16 shrink-0 font-semibold text-ink">거부 권리</dt>
@@ -44,28 +40,19 @@ const ConsentNotice = () => (
 
 const VerificationForm = ({ ownership, isRenewal, hasFailed, onStarted, onRevoked, onLater, onInquiry, onUnauthorized }) => {
   const start = usePostOwnershipVerification({ onUnauthorized });
-  const [birthDate, setBirthDate] = useState('');
   const [isConsented, setIsConsented] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
+  const isReady = isConsented && !start.isLoading;
 
-  const today = getTodayKST();
-  const birthDateError = validateBirthDate(birthDate, today) ?? fieldErrors.birthDate;
-  const isReady = Boolean(birthDate) && !validateBirthDate(birthDate, today) && isConsented && !start.isLoading;
-
+  // 이름·생년월일은 회원 정보를 쓰므로 동의만 받고 바로 시작한다.
   const handleStart = async () => {
     if (!isReady) return;
-    const body = { ownershipId: ownership.id, birthDate, consent: true };
-    // 보내고 나면 화면에 남기지 않는다. 실패하면 다시 입력한다.
-    setBirthDate('');
     setIsConsented(false);
-    setFieldErrors({});
-    const { data, error } = await start.startVerification(body);
+    const { data, error } = await start.startVerification({ ownershipId: ownership.id, consent: true });
     if (data) {
       onStarted(data);
       return;
     }
     if (error?.code === VERIFICATION_REVOKED_CODE) onRevoked();
-    if (error?.status === 400) setFieldErrors(toFieldErrors(error));
   };
 
   const startError = start.error;
@@ -75,21 +62,10 @@ const VerificationForm = ({ ownership, isRenewal, hasFailed, onStarted, onRevoke
     <Card className="space-y-5 p-6">
       <div className="space-y-1">
         <h2 className="text-section font-semibold text-ink">{isRenewal ? '권리자 재인증' : '권리자 인증'}</h2>
-        <p className="text-sub text-ink-2">가입할 때 적은 이름과 입력한 생년월일을 건축물대장의 소유자 정보와 비교해요.</p>
+        <p className="text-sub text-ink-2">가입할 때 적은 이름과 생년월일을 건축물대장의 소유자 정보와 비교해요.</p>
       </div>
 
       {hasFailed && !startError && <VerificationFailedNotice onInquiry={onInquiry} />}
-
-      <BirthDateField
-        value={birthDate}
-        onChange={(value) => {
-          setBirthDate(value);
-          setFieldErrors({});
-        }}
-        max={today}
-        error={birthDateError}
-        disabled={start.isLoading}
-      />
 
       <div className="space-y-3">
         <p className="text-label font-semibold text-ink">개인정보 수집·이용 동의</p>
@@ -107,7 +83,7 @@ const VerificationForm = ({ ownership, isRenewal, hasFailed, onStarted, onRevoke
       </div>
 
       {isPreparing && <NoticeBox tone="seal">{VERIFICATION_PREPARING_MESSAGE}</NoticeBox>}
-      {startError && !isPreparing && !fieldErrors.birthDate && <NoticeBox>{startError.message}</NoticeBox>}
+      {startError && !isPreparing && <NoticeBox>{startError.message}</NoticeBox>}
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onLater} disabled={start.isLoading}>

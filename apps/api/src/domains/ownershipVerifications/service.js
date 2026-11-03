@@ -3,7 +3,7 @@ import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
-import { decryptField, encryptField } from '../../platform/fieldCrypto.js';
+import { decryptField } from '../../platform/fieldCrypto.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { applyOwnershipVerification, expireStaleAttempts, failAttemptInTx } from '../../platform/ownershipVerification.js';
 import {
@@ -19,7 +19,7 @@ import { toOwnershipResponse, toPropertySummary } from '../../platform/propertyS
 import { selectRunner as defaultSelectRunner } from './runners/index.js';
 
 export const CONSENT_TYPE = 'OWNERSHIP_VERIFICATION';
-export const CONSENT_VERSION = '2026-11-03';
+export const CONSENT_VERSION = '2026-11-03-member-birth-date';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -40,10 +40,11 @@ const logFailure = (label, attemptId, error) => {
 const failRunningAttempt = (attemptId, reasonCode, extra) =>
   prisma.$transaction((tx) => failAttemptInTx(tx, attemptId, 'RUNNING', reasonCode, extra));
 
-const loadIdentity = async (attempt) => {
-  const user = await prisma.user.findUnique({ where: { id: attempt.requestedBy }, select: { name: true } });
+// 회원 정보의 이름·생년월일. 비교할 때마다 읽어 시도 행에는 생년월일을 두지 않는다.
+const loadIdentity = async (userId) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, birthDate: true } });
   // decryptField는 실패하면 null이다. 호출 쪽에서 INTERNAL로 구분한다.
-  return resolveIdentity(user, { birthDate: decryptField(attempt.birthDateEnc) });
+  return resolveIdentity(user, { birthDate: decryptField(user?.birthDate ?? null) });
 };
 
 // 러너 결과 { kind, ledgerKind, owners } → 판정 → 반영. 늦은 결과는 버린다. 예외를 밖으로 내지 않는다(결과 원문 보호).
@@ -57,11 +58,11 @@ export const receiveRunnerResult = async (attemptId, result, deps = {}) => {
 
     const attempt = await prisma.ownershipVerificationAttempt.findUnique({
       where: { id: attemptId },
-      select: { status: true, requestedBy: true, birthDateEnc: true },
+      select: { status: true, requestedBy: true },
     });
     if (attempt?.status !== 'RUNNING') return { accepted: false };
 
-    const identity = await loadIdentity(attempt);
+    const identity = await loadIdentity(attempt.requestedBy);
     if (!identity.birthDate) return { accepted: await failRunningAttempt(attemptId, 'INTERNAL', extra) };
 
     const judged = matchOwner(identity, result.owners);
@@ -89,7 +90,6 @@ export const runAttempt = async (attemptId, runner, deps = {}) => {
       where: { id: attemptId },
       select: {
         requestedBy: true,
-        birthDateEnc: true,
         ownership: { select: { property: { include: { complex: true } } } },
       },
     });
@@ -99,7 +99,7 @@ export const runAttempt = async (attemptId, runner, deps = {}) => {
       return;
     }
 
-    const result = await runner.run(target, { attemptId, getIdentity: () => loadIdentity(attempt) });
+    const result = await runner.run(target, { attemptId, getIdentity: () => loadIdentity(attempt.requestedBy) });
     if (result.kind !== 'DISPATCHED') await receiveRunnerResult(attemptId, result, deps);
   } catch (error) {
     logFailure('실행 실패', attemptId, error);
@@ -110,7 +110,7 @@ export const runAttempt = async (attemptId, runner, deps = {}) => {
 const findActiveAttempt = (client, ownershipId) =>
   client.ownershipVerificationAttempt.findFirst({ where: { ownershipId, status: { in: [...ACTIVE_ATTEMPT_STATUSES] } } });
 
-const createAttemptInTx = async (tx, user, { ownershipId, birthDateEnc }, req) => {
+const createAttemptInTx = async (tx, user, { ownershipId }, req) => {
   // 소유 종료·계약 쓰기와 같은 행 잠금으로 줄을 세운다. 이중 POST도 여기서 줄을 선다.
   const ownership = await lockOwnershipRow(tx, ownershipId);
   if (!ownership || ownership.userId !== user.id) throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
@@ -133,7 +133,7 @@ const createAttemptInTx = async (tx, user, { ownershipId, birthDateEnc }, req) =
     data: { userId: user.id, type: CONSENT_TYPE, version: CONSENT_VERSION, agreed: true, agreedAt: now, ip: req?.ip ?? null },
   });
   const attempt = await tx.ownershipVerificationAttempt.create({
-    data: { ownershipId, requestedBy: user.id, birthDateEnc: blockReason ? null : birthDateEnc },
+    data: { ownershipId, requestedBy: user.id },
   });
 
   const property = await tx.property.findUnique({
@@ -170,10 +170,14 @@ export const startOwnershipVerification = async (user, input, req, deps = {}) =>
 
   await expireStaleAttempts();
 
-  const birthDateEnc = encryptField(resolveIdentity(user, input).birthDate);
+  // 회원가입 때 생년월일을 받기 전에 가입한 회원은 비교할 값이 없다.
+  if (!(await loadIdentity(user.id)).birthDate) {
+    throw new AppError('OWNERSHIP_VERIFICATION_BIRTH_DATE_REQUIRED', 422, '회원 정보에 생년월일이 없어 인증할 수 없습니다. 관리자에게 문의해 주세요.');
+  }
+
   let outcome;
   try {
-    outcome = await prisma.$transaction((tx) => createAttemptInTx(tx, user, { ownershipId: input.ownershipId, birthDateEnc }, req));
+    outcome = await prisma.$transaction((tx) => createAttemptInTx(tx, user, { ownershipId: input.ownershipId }, req));
   } catch (error) {
     if (error?.code !== 'P2002') throw error;
     const existing = await findActiveAttempt(prisma, input.ownershipId);

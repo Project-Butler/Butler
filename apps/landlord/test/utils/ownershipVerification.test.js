@@ -11,7 +11,6 @@ import {
   losesCommunityAccess,
   toOwnershipEndBody,
   toRenewalNotices,
-  validateBirthDate,
 } from '../../src/utils/ownershipVerification';
 
 const NOW = new Date('2026-11-03T03:00:00Z');
@@ -24,21 +23,6 @@ const ownershipOf = (overrides = {}) => ({
   verificationExpiresAt: '2026-11-20T00:00:00.000Z',
   property: { id: 'p1', displayName: '항여울 116동 712호', complex: { legalDongCode: DONG } },
   ...overrides,
-});
-
-describe('validateBirthDate', () => {
-  const today = '2026-11-03';
-  it('비어 있으면 오류가 아니다', () => {
-    expect(validateBirthDate('', today)).toBeUndefined();
-  });
-  it('오늘까지 허용하고 미래는 거절한다', () => {
-    expect(validateBirthDate('2026-11-03', today)).toBeUndefined();
-    expect(validateBirthDate('2026-11-04', today)).toBeTruthy();
-  });
-  it('없는 날짜와 다른 형식을 거절한다', () => {
-    expect(validateBirthDate('1990-02-30', today)).toBeTruthy();
-    expect(validateBirthDate('19900101', today)).toBeTruthy();
-  });
 });
 
 describe('isAttemptActive', () => {

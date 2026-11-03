@@ -33,8 +33,7 @@ export const writeValiditySetting = (client, years) =>
     update: { value: String(years) },
   });
 
-// 시도를 끝내는 유일한 함수. 끝 상태 저장과 임시 생년월일 삭제가 같은 갱신이다. expectedStatus가 아니면 false.
-// 회원 정보로 전환하면 birthDateEnc 줄을 뺀다(resolveIdentity 주석).
+// 시도를 끝내는 유일한 함수. expectedStatus가 아니면 false.
 export const finishAttempt = async (tx, attemptId, expectedStatus, result) => {
   const now = getNow();
   const { count } = await tx.ownershipVerificationAttempt.updateMany({
@@ -44,7 +43,6 @@ export const finishAttempt = async (tx, attemptId, expectedStatus, result) => {
       reasonCode: result.reasonCode ?? null,
       ledgerKind: result.ledgerKind ?? undefined,
       ownerCount: result.ownerCount ?? undefined,
-      birthDateEnc: null,
       finishedAt: now,
       updatedAt: now,
     },

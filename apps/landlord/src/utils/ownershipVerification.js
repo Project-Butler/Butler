@@ -1,5 +1,5 @@
 // 권리자 인증 화면이 쓰는 판단·문구(DB·React 없음). 기준: docs 권리자 인증 연결 계획 4·8·12장.
-import { daysBetween, getTodayKST } from './contract';
+import { daysBetween } from './contract';
 import { formatDateKST } from './format';
 
 export const VERIFICATION_FAILED_MESSAGE = '소유자 정보를 확인하지 못했어요. 관리자에게 문의해 주세요.';
@@ -14,16 +14,6 @@ export const VERIFICATION_REVOKED_CODE = 'VERIFICATION_REVOKED';
 const RENEWAL_WINDOW_DAYS = 30;
 
 export const isAttemptActive = (attempt) => attempt?.status === 'PENDING' || attempt?.status === 'RUNNING';
-
-// 'YYYY-MM-DD', 실제 있는 날짜, 오늘(KST) 이하. 비어 있으면 오류가 아니다(버튼 비활성으로 표시).
-export const validateBirthDate = (value, today = getTodayKST()) => {
-  if (!value) return undefined;
-  const isShapeValid = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  const date = new Date(`${value}T00:00:00Z`);
-  const isRealDate = isShapeValid && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-  if (!isRealDate) return '생년월일을 다시 확인해 주세요.';
-  return value > today ? '오늘 이후 날짜는 입력할 수 없어요.' : undefined;
-};
 
 // 만료까지 남은 날(KST 달력). 지났으면 음수, 만료일이 없으면 null.
 export const getDaysUntilExpiry = (expiresAt, now = new Date()) =>

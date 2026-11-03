@@ -6,7 +6,7 @@ import { parseEndBody } from '../../../src/domains/propertyOwnerships/controller
 import { parseStartBody } from '../../../src/domains/ownershipVerifications/controller.js';
 
 const TODAY = '2026-11-03';
-const VALID = { ownershipId: randomUUID(), birthDate: '1980-01-01', consent: true };
+const VALID = { ownershipId: randomUUID(), consent: true };
 
 const invalidFields = (fn) => {
   try {
@@ -19,20 +19,18 @@ const invalidFields = (fn) => {
 };
 
 test('parseStartBody: 정상 입력에서 consent를 뺀 값을 돌려준다', () => {
-  assert.deepEqual(parseStartBody(VALID, TODAY), { ownershipId: VALID.ownershipId, birthDate: VALID.birthDate });
+  assert.deepEqual(parseStartBody(VALID), { ownershipId: VALID.ownershipId });
 });
 
-test('parseStartBody: 동의 없음·미래·없는 날짜·모르는 칸은 400이고 입력값을 담지 않는다', () => {
+test('parseStartBody: 동의 없음·잘못된 id·모르는 칸은 400이고, 생년월일은 받지 않는다', () => {
   for (const consent of [undefined, false, 'true']) {
-    assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, consent }, TODAY)).fields, ['consent']);
+    assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, consent })).fields, ['consent']);
   }
-  for (const birthDate of ['2026-11-04', '2023-02-30', '19800101', null]) {
-    const { fields, text } = invalidFields(() => parseStartBody({ ...VALID, birthDate }, TODAY));
-    assert.deepEqual(fields, ['birthDate']);
-    if (birthDate) assert.ok(!text.includes(birthDate));
-  }
-  assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, ownershipId: 'x' }, TODAY)).fields, ['ownershipId']);
-  assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, name: '김철수' }, TODAY)).fields, ['name']);
+  assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, ownershipId: 'x' })).fields, ['ownershipId']);
+  assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, name: '김철수' })).fields, ['name']);
+  const { fields, text } = invalidFields(() => parseStartBody({ ...VALID, birthDate: '1980-01-01' }));
+  assert.deepEqual(fields, ['birthDate']);
+  assert.ok(!text.includes('1980-01-01'));
 });
 
 test('유효기간 입력: 1 이상 정수만', () => {

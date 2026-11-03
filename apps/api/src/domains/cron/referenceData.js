@@ -214,7 +214,7 @@ export const runJusoRefreshNow = async ({ prisma, requestedBy = null, now = getN
 
 // 실패는 단계마다 잡아서 결과에 남긴다(한 단계가 실패해도 다음 단계는 돈다). jobs에 REFERENCE_DATA_DAILY로 남긴다.
 export const runReferenceDataCron = async ({ prisma, t0, bootAt, coldStart, now = getNow, deps = {} }) => {
-  // 멈춘 권리자 인증 시도 정리. 임시 생년월일 삭제가 걸려 있어 시간 예산에 밀리지 않게 맨 앞에서 따로 한다.
+  // 멈춘 권리자 인증 시도 정리. 시간 예산에 밀리지 않게 맨 앞에서 따로 한다.
   const { expireStaleAttempts = defaultExpireStaleAttempts } = deps;
   let staleAttempts;
   try {

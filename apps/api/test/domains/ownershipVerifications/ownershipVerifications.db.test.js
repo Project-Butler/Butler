@@ -73,15 +73,17 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
   const createUser = async (name = NAME) => {
     const user = await fixture.createUser();
-    await prisma.user.update({ where: { id: user.id }, data: { name } });
+    // 회원가입 때 받은 생년월일(암호문). 인증은 이 값으로 비교한다.
+    await prisma.user.update({ where: { id: user.id }, data: { name, birthDate: encryptField(BIRTH_DATE) } });
     return user;
   };
   let unitSeq = 0;
   const createProperty = async ({ unitNo, complex = {} } = {}) => {
     const created = await fixture.createComplex({ ...JIBUN, ...complex });
     unitSeq += 1;
-    return prisma.property.create({ data: { complexId: created.id, buildingNo: '101', unitNo: unitNo ?? `${3000 + unitSeq}1` } });
+    return prisma.property.create({ data: { complexId: created.id, buildingNo: '101', unitNo: unitNo ?? `${3000 + unitSeq}00` } });
   };
+  // 기본 호수는 00으로 끝난다. fixture 러너는 호 끝 두 자리 91~97을 실패 규칙으로 쓴다.
   // startedAtOffset: 음수면 더 먼저 등록한 것. started_at 순서를 고정한다.
   const own = async (user, property, { startedAtOffset = 0, ...data } = {}) => {
     const ownership = await prisma.ownership.create({
@@ -90,7 +92,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     ownershipIds.push(ownership.id);
     return ownership;
   };
-  const input = (ownership) => ({ ownershipId: ownership.id, birthDate: BIRTH_DATE });
+  const input = (ownership) => ({ ownershipId: ownership.id });
   const getAttempt = (id) => prisma.ownershipVerificationAttempt.findUnique({ where: { id } });
   const getOwnership = (id) => prisma.ownership.findUnique({ where: { id } });
   const start = async (user, ownership) => {
@@ -102,7 +104,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
   // RUNNING 시도를 직접 만든다(발급 없이 결과 경로만 시험).
   const runningAttempt = (user, ownership, data = {}) =>
     prisma.ownershipVerificationAttempt.create({
-      data: { ownershipId: ownership.id, requestedBy: user.id, status: 'RUNNING', birthDateEnc: encryptField(BIRTH_DATE), ...data },
+      data: { ownershipId: ownership.id, requestedBy: user.id, status: 'RUNNING', ...data },
     });
   const matched = { kind: 'OK', ledgerKind: 'UNIT_EXCLUSIVE', owners: [{ name: NAME, birthDate: BIRTH_DATE }] };
   const auditsOf = (ownership, action) => prisma.auditLog.findMany({ where: { resourceType: 'OWNERSHIP', resourceId: ownership.id, action } });
@@ -118,10 +120,9 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     };
     const text = JSON.stringify(rows);
     for (const raw of [BIRTH_DATE, NAME, FIXTURE_ID_TEXT, FIXTURE_WARNING, FIXTURE_REASON]) assert.ok(!text.includes(raw), raw);
-    assert.equal(rows.attempt.birthDateEnc, null);
   };
 
-  test('성공: 인증 저장, 만료일, 감사·활동, 응답에 사유 없음, 임시값 삭제, 사용자 행 불변', async () => {
+  test('성공: 인증 저장, 만료일, 감사·활동, 응답에 사유 없음, 사용자 행 불변', async () => {
     const user = await createUser();
     const property = await createProperty();
     const ownership = await own(user, property);
@@ -131,14 +132,10 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const accepted = await startOwnershipVerification(user, input(ownership), { ip: '127.0.0.1' }, deps);
     assert.equal(accepted.status, 'PENDING');
     assert.deepEqual(Object.keys(accepted).sort(), ['createdAt', 'finishedAt', 'id', 'ownershipId', 'status']);
-    const stored = await getAttempt(accepted.id);
-    assert.ok(stored.birthDateEnc.startsWith('enc:v1:'));
-    assert.ok(!stored.birthDateEnc.includes(BIRTH_DATE));
     await drain();
 
     const attempt = await getAttempt(accepted.id);
     assert.equal(attempt.status, 'VERIFIED');
-    assert.equal(attempt.birthDateEnc, null);
     assert.equal(attempt.ledgerKind, 'UNIT_EXCLUSIVE');
     assert.equal(attempt.ownerCount, 1);
 
@@ -149,7 +146,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
     const consent = await prisma.consent.findFirst({ where: { userId: user.id } });
     assert.equal(consent.type, 'OWNERSHIP_VERIFICATION');
-    assert.equal(consent.version, '2026-11-03');
+    assert.equal(consent.version, '2026-11-03-member-birth-date');
     assert.equal((await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_REQUESTED')).length, 1);
     assert.equal((await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_APPLIED')).length, 1);
     assert.equal((await activitiesOf(user, 'OWNERSHIP_VERIFICATION_REQUESTED')).length, 1);
@@ -194,7 +191,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const { deps } = inline();
     const ownership = await own(user, await createProperty());
     await rejectsWith(startOwnershipVerification(stranger, input(ownership), null, deps), 'OWNERSHIP_NOT_FOUND');
-    await rejectsWith(startOwnershipVerification(user, { ownershipId: randomUUID(), birthDate: BIRTH_DATE }, null, deps), 'OWNERSHIP_NOT_FOUND');
+    await rejectsWith(startOwnershipVerification(user, { ownershipId: randomUUID() }, null, deps), 'OWNERSHIP_NOT_FOUND');
 
     const ended = await own(user, await createProperty(), { endedAt: new Date(), endReason: 'SELF_ENDED' });
     await rejectsWith(startOwnershipVerification(user, input(ended), null, deps), 'OWNERSHIP_ENDED');
@@ -219,7 +216,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal((await findLatestAttempt(user, ownership.id)).id, attempt.id);
   });
 
-  test('fixture 호실 규칙별 실패 사유, 임시값 삭제, 활동에 사유 없음, 원문 없음', async () => {
+  test('fixture 호실 규칙별 실패 사유, 활동에 사유 없음, 원문 없음', async () => {
     const expected = { 91: 'NOT_MATCHED', 92: 'UNREADABLE', 93: 'ISSUE_FAILED', 94: 'ISSUE_STOPPED', 95: 'ISSUE_INVALID', 96: 'OCR_FAILED', 97: 'INTERNAL' };
     for (const [suffix, reasonCode] of Object.entries(expected)) {
       const user = await createUser();
@@ -241,10 +238,9 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const ownership = await own(user, await createProperty({ complex: { jibunAddress: null, mainLot: null } }));
     const { attempt } = await start(user, ownership);
     assert.equal(attempt.reasonCode, 'NO_JIBUN_ADDRESS');
-    assert.equal(attempt.birthDateEnc, null);
   });
 
-  test('유효한 인증자가 있으면 발급 없이 VERIFIED_OWNER_EXISTS, 임시값을 저장하지 않는다', async () => {
+  test('유효한 인증자가 있으면 발급 없이 VERIFIED_OWNER_EXISTS', async () => {
     const first = await createUser();
     const second = await createUser();
     const property = await createProperty();
@@ -256,7 +252,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(response.status, 'FAILED');
     const attempt = await getAttempt(response.id);
     assert.equal(attempt.reasonCode, 'VERIFIED_OWNER_EXISTS');
-    assert.equal(attempt.birthDateEnc, null);
   });
 
   test('먼저 인증한 사람이 소유자다: 나중에 등록해도 인증되고 앞선 미인증 행과 계약은 끝난다', async () => {
@@ -336,7 +331,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const timedOut = await getAttempt(attempt.id);
     assert.equal(timedOut.status, 'FAILED');
     assert.equal(timedOut.reasonCode, 'TIMED_OUT');
-    assert.equal(timedOut.birthDateEnc, null);
     assert.equal((await activitiesOf(user, 'OWNERSHIP_VERIFICATION_FAILED')).length, 1);
 
     assert.deepEqual(await receiveRunnerResult(attempt.id, matched), { accepted: false });
@@ -350,13 +344,12 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const stale = await own(user, await createProperty());
     const fresh = await own(user, await createProperty());
     const staleAttempt = await prisma.ownershipVerificationAttempt.create({
-      data: { ownershipId: stale.id, requestedBy: user.id, birthDateEnc: encryptField(BIRTH_DATE), createdAt: new Date(Date.now() - 11 * 60 * 1000) },
+      data: { ownershipId: stale.id, requestedBy: user.id, createdAt: new Date(Date.now() - 11 * 60 * 1000) },
     });
     const freshAttempt = await runningAttempt(user, fresh);
 
     const seen = await findAttemptForUser(user, staleAttempt.id);
     assert.equal(seen.status, 'FAILED');
-    assert.equal((await getAttempt(staleAttempt.id)).birthDateEnc, null);
     assert.equal((await getAttempt(freshAttempt.id)).status, 'RUNNING');
     await receiveRunnerResult(freshAttempt.id, { kind: 'ISSUE_FAILED' });
   });
@@ -368,7 +361,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     await runAttempt(attempt.id, { run: async () => assert.fail('실행하면 안 된다') });
     assert.equal((await getAttempt(attempt.id)).status, 'RUNNING');
     await receiveRunnerResult(attempt.id, { kind: 'ISSUE_FAILED' });
-    assert.equal((await getAttempt(attempt.id)).birthDateEnc, null);
   });
 
   test('만료자가 있는 호실에서 두 시도가 경쟁해도 VERIFIED는 1건이고 예외가 없다', async () => {
@@ -386,12 +378,11 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(statuses.filter((attempt) => attempt.status === 'VERIFIED').length, 1);
     const failed = statuses.find((attempt) => attempt.status === 'FAILED');
     assert.ok(['OWNERSHIP_CHANGED', 'VERIFIED_OWNER_EXISTS'].includes(failed.reasonCode));
-    assert.equal(failed.birthDateEnc, null);
     const verifiedCount = await prisma.ownership.count({ where: { propertyId: property.id, endedAt: null, verificationStatus: 'VERIFIED' } });
     assert.equal(verifiedCount, 1);
   });
 
-  test('인덱스 충돌: 롤백 후 별도 트랜잭션에서 VERIFIED_OWNER_EXISTS로 끝나고 임시값이 지워진다', async () => {
+  test('인덱스 충돌: 롤백 후 별도 트랜잭션에서 VERIFIED_OWNER_EXISTS로 끝난다', async () => {
     const user = await createUser();
     const rival = await createUser();
     const property = await createProperty();
@@ -410,7 +401,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const failed = await getAttempt(attempt.id);
     assert.equal(failed.status, 'FAILED');
     assert.equal(failed.reasonCode, 'VERIFIED_OWNER_EXISTS');
-    assert.equal(failed.birthDateEnc, null);
     assert.equal((await getOwnership(mine.id)).verificationStatus, 'UNVERIFIED');
     assert.equal(await prisma.ownership.count({ where: { propertyId: property.id, userId: rival.id } }), 0);
     assert.equal((await auditsOf(mine, 'OWNERSHIP_VERIFICATION_FAILED')).length, 1);
@@ -431,7 +421,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     await Promise.all([receiveRunnerResult(racedAttempt.id, matched), revokeOwnership(admin, raced.id, { reason: '테스트' }, null)]);
     // 어느 순서든 철회가 이긴다: 철회가 먼저면 시도 실패, 인증이 먼저면 철회가 덮는다.
     assert.equal((await getOwnership(raced.id)).verificationStatus, 'REVOKED');
-    assert.equal((await getAttempt(racedAttempt.id)).birthDateEnc, null);
   });
 
   test('앞선 REVOKED 행이 있으면 다음 사람은 NOT_FIRST_REGISTRANT', async () => {
@@ -454,14 +443,24 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal((await getAttempt(attempt.id)).reasonCode, 'VERIFIED_OWNER_EXISTS');
   });
 
-  test('복호화 실패는 INTERNAL', async () => {
+  test('회원 생년월일이 없으면 422이고 시도·동의를 남기지 않는다', async () => {
+    const user = await createUser();
+    await prisma.user.update({ where: { id: user.id }, data: { birthDate: null } });
+    const ownership = await own(user, await createProperty());
+    const { deps } = inline();
+    await rejectsWith(startOwnershipVerification(user, input(ownership), null, deps), 'OWNERSHIP_VERIFICATION_BIRTH_DATE_REQUIRED');
+    assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: ownership.id } }), 0);
+    assert.equal(await prisma.consent.count({ where: { userId: user.id } }), 0);
+  });
+
+  test('회원 생년월일 복호화 실패는 INTERNAL', async () => {
     const user = await createUser();
     const ownership = await own(user, await createProperty());
-    const attempt = await runningAttempt(user, ownership, { birthDateEnc: 'enc:v1:00:00:00' });
+    const attempt = await runningAttempt(user, ownership);
+    await prisma.user.update({ where: { id: user.id }, data: { birthDate: 'enc:v1:00:00:00' } });
     await receiveRunnerResult(attempt.id, matched);
     const failed = await getAttempt(attempt.id);
     assert.equal(failed.reasonCode, 'INTERNAL');
-    assert.equal(failed.birthDateEnc, null);
   });
 
   test('remote: 전송 실패는 ISSUE_FAILED, 성공이면 RUNNING으로 기다린다', async () => {
@@ -759,7 +758,6 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(items[0].id, failed.attempt.id);
     assert.equal(items[0].reasonCode, 'NOT_MATCHED');
     assert.equal(items[0].requester.id, user.id);
-    assert.ok(!('birthDateEnc' in items[0]));
     assert.equal(meta.hasNext, false);
     assert.equal((await findOwnershipVerificationAttempts({ status: 'VERIFIED', ownershipId: ownership.id, size: 10 })).items[0].id, attempt.id);
   });
