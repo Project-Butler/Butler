@@ -24,15 +24,19 @@ test('러너 선택: 미설정·Vercel local·운영 fixture는 쓸 수 없다',
   assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture' }), 'fixture');
   assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture', VERCEL: '1' }), null);
   assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'fixture', NODE_ENV: 'production' }), null);
-  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'local' }), 'local');
-  assert.equal(resolveRunnerKind({ OWNERSHIP_VERIFICATION_RUNNER: 'local', VERCEL: '1' }), null);
+  const LOCAL = { OWNERSHIP_VERIFICATION_RUNNER: 'local', EAIS_ID: 'x', EAIS_PW: 'x', CLOVA_OCR_INVOKE_URL: 'x', CLOVA_OCR_SECRET: 'x' };
+  assert.equal(resolveRunnerKind(LOCAL), 'local');
+  assert.equal(resolveRunnerKind({ ...LOCAL, VERCEL: '1' }), null);
+  for (const key of ['EAIS_ID', 'EAIS_PW', 'CLOVA_OCR_INVOKE_URL', 'CLOVA_OCR_SECRET']) {
+    assert.equal(resolveRunnerKind({ ...LOCAL, [key]: '' }), null, key);
+  }
   assert.equal(resolveRunnerKind({ ...REMOTE_ENV, VERCEL: '1', NODE_ENV: 'production' }), 'remote');
   assert.equal(resolveRunnerKind({ ...REMOTE_ENV, OWNERSHIP_VERIFICATION_RUNNER_SECRET: '' }), null);
   assert.equal(resolveRunnerKind({ ...REMOTE_ENV, OWNERSHIP_VERIFICATION_RUNNER_URL: '' }), null);
   assert.equal(selectRunner({}), null);
   assert.equal(selectRunner(REMOTE_ENV).kind, 'remote');
   assert.equal(selectRunner(REMOTE_ENV).awaitDispatch, true);
-  assert.equal(selectRunner({ OWNERSHIP_VERIFICATION_RUNNER: 'local' }).kind, 'local');
+  assert.equal(selectRunner({ OWNERSHIP_VERIFICATION_RUNNER: 'local', EAIS_ID: 'x', EAIS_PW: 'x', CLOVA_OCR_INVOKE_URL: 'x', CLOVA_OCR_SECRET: 'x' }).kind, 'local');
 });
 
 test('fixture: 호 끝 두 자리로 결과를 고르고 원문을 돌려주지 않는다', async () => {
