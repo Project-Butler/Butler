@@ -1,5 +1,6 @@
 // 관리 로그 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
 import { AppError } from '../../platform/AppError.js';
+import { MAX_LOG_ATTACHMENTS } from '../documents/fileRules.js';
 import {
   isValidLogDate,
   MANAGEMENT_LOG_EDITABLE_FIELDS,
@@ -25,6 +26,8 @@ import {
 } from './service.js';
 
 const CREATE_FIELDS = ['scope', ...MANAGEMENT_LOG_EDITABLE_FIELDS, 'attachmentDocumentIds'];
+// 수정은 첨부의 최종 목록을 받는다(빠진 문서는 삭제, 새 문서는 붙임).
+const UPDATE_FIELDS = [...MANAGEMENT_LOG_EDITABLE_FIELDS, 'attachmentDocumentIds'];
 const MAX_TITLE_LENGTH = 100;
 const MAX_CONTENT_LENGTH = 5000;
 const SORT_PATTERN = /^occurredOn:(asc|desc)$/;
@@ -69,6 +72,19 @@ const FIELD_PARSERS = {
   },
 };
 
+// 미연결 문서 id 목록. 최대 10개, 중복 없음.
+const parseAttachmentIds = (value, details) => {
+  const field = 'attachmentDocumentIds';
+  if (!Array.isArray(value)) {
+    details.push({ field, reason: '문서 id 배열이어야 합니다.' });
+    return undefined;
+  }
+  if (value.length > MAX_LOG_ATTACHMENTS) details.push({ field, reason: `${MAX_LOG_ATTACHMENTS}개까지 붙일 수 있습니다.` });
+  else if (!value.every(isUuid)) details.push({ field, reason: 'UUID 배열이어야 합니다.' });
+  else if (new Set(value).size !== value.length) details.push({ field, reason: '같은 문서를 두 번 넣을 수 없습니다.' });
+  return value;
+};
+
 const parseFields = (body, details) => {
   const data = {};
   for (const field of MANAGEMENT_LOG_EDITABLE_FIELDS) {
@@ -89,21 +105,17 @@ const parseCreateBody = (body) => {
   if (!MANAGEMENT_LOG_SCOPES.includes(scope)) {
     details.push({ field: 'scope', reason: `${MANAGEMENT_LOG_SCOPES.join(', ')} 중 하나여야 합니다.` });
   }
-  // 문서 기능 전이라 첨부는 받지 않는다(명세 D-03). TODO(documents)
-  const attachments = body.attachmentDocumentIds ?? [];
-  if (!Array.isArray(attachments) || attachments.length > 0) {
-    details.push({ field: 'attachmentDocumentIds', reason: 'ATTACHMENTS_NOT_SUPPORTED' });
-  }
+  const attachmentDocumentIds = parseAttachmentIds(body.attachmentDocumentIds ?? [], details);
   const data = parseFields(body, details);
   throwIfInvalid(details);
-  return { scope, ...data };
+  return { scope, ...data, attachmentDocumentIds };
 };
 
 const parseUpdateBody = (body) => {
-  assertAllowedBody(body, MANAGEMENT_LOG_EDITABLE_FIELDS);
+  assertAllowedBody(body, UPDATE_FIELDS);
   if (Object.keys(body).length === 0) {
     throw new AppError('VALIDATION_ERROR', 400, '수정할 값이 없습니다.', [
-      { field: 'body', reason: `${MANAGEMENT_LOG_EDITABLE_FIELDS.join(', ')} 중 하나 이상이 필요합니다.` },
+      { field: 'body', reason: `${UPDATE_FIELDS.join(', ')} 중 하나 이상이 필요합니다.` },
     ]);
   }
   const details = [];
@@ -112,6 +124,7 @@ const parseUpdateBody = (body) => {
   }
   throwIfInvalid(details);
   const data = parseFields(body, details);
+  if (body.attachmentDocumentIds !== undefined) data.attachmentDocumentIds = parseAttachmentIds(body.attachmentDocumentIds, details);
   throwIfInvalid(details);
   return data;
 };

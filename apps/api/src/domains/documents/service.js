@@ -8,7 +8,7 @@ import { assertDocumentsDeletable, softDeleteDocumentsInTx } from '../../platfor
 import { prisma } from '../../platform/prismaClient.js';
 import { AUDITED_DOWNLOAD_TYPES, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
 import { getResourcePolicy } from './resourcePolicies.js';
-import { selectStorage } from './storage/index.js';
+import { removeStoredObjects, selectStorage } from './storage/index.js';
 
 // 결정 Q2: 업로드 15분, 다운로드 5분
 export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
@@ -51,20 +51,6 @@ export const toDocumentResponse = (document) => ({
   uploaderId: document.uploaderId,
   createdAt: document.createdAt.toISOString(),
 });
-
-// 파일 삭제는 행을 숨긴 뒤 트랜잭션 밖에서 한다. 실패해도 응답은 성공(행은 이미 숨김). 저장소가 없으면 건너뛴다.
-export const removeStoredObjects = async (storagePaths) => {
-  if (storagePaths.length === 0) return;
-  const storage = selectStorage();
-  if (!storage) return;
-  for (const storagePath of storagePaths) {
-    try {
-      await storage.deleteObject(storagePath);
-    } catch (error) {
-      console.error('[documents] 파일 삭제 실패', storagePath, error?.code ?? error?.message);
-    }
-  }
-};
 
 // POST /files/upload-sessions
 export const createUploadSession = async (user, { fileName, mimeType, sizeBytes, documentType }) => {

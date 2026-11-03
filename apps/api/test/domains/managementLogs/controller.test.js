@@ -43,8 +43,12 @@ test('D-10: 오래된 날짜도 형식이 맞으면 형식 검사를 통과한�
   assert.equal(error.details.some((item) => item.field === 'occurredOn'), false);
 });
 
-test('R-02: 첨부는 받지 않는다', async () => {
-  assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: ['x'] }), 'attachmentDocumentIds', 'ATTACHMENTS_NOT_SUPPORTED');
+test('첨부: 문서 id 배열, 최대 10개, 중복 없음', async () => {
+  const ids = Array.from({ length: 11 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
+  assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: 'x' }), 'attachmentDocumentIds');
+  assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: ['x'] }), 'attachmentDocumentIds');
+  assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: ids }), 'attachmentDocumentIds', '10개까지 붙일 수 있습니다.');
+  assertInvalid(await callPost({ ...VALID, attachmentDocumentIds: [ids[0], ids[0]] }), 'attachmentDocumentIds');
 });
 
 test('수정: scope는 바꿀 수 없고 필수 칸을 비울 수 없다', async () => {
@@ -58,4 +62,6 @@ test('수정: scope는 바꿀 수 없고 필수 칸을 비울 수 없다', async
   assertInvalid(await callPatch({ scope: 'PRIVATE' }), 'scope');
   assertInvalid(await callPatch({ title: null }), 'title');
   assert.equal((await callPatch({})).code, 'VALIDATION_ERROR');
+  assertInvalid(await callPatch({ attachmentDocumentIds: ['x'] }), 'attachmentDocumentIds');
+  assertInvalid(await callPatch({ attachmentDocumentIds: null }), 'attachmentDocumentIds');
 });

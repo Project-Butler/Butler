@@ -3,14 +3,23 @@ import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow, toDateOnlyString } from '../../platform/dateUtils.js';
+import {
+  assertDocumentsDeletable,
+  attachDocumentsInTx,
+  findAttachedDocuments,
+  MANAGEMENT_LOG_RESOURCE,
+  softDeleteDocumentsInTx,
+  withAttachments,
+} from '../../platform/documentAttachments.js';
 import { canEditLog, isOwnershipVerified, toVisibleLogWhere } from '../../platform/managementLogRules.js';
 import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/managementLogSerializer.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { insertPropertyLog, toDbDate } from '../../platform/propertyHistory.js';
+import { removeStoredObjects } from '../documents/storage/index.js';
 
 // 감사 로그 summary에 쓰는 칸 이름(값은 넣지 않는다, 명세 D-04)
-const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용' };
+const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용', attachments: '첨부' };
 
 const isSameFieldValue = (log, field, value) =>
   field === 'occurredOn' ? toDateOnlyString(log.occurredOn) === value : log[field] === value;
@@ -58,14 +67,19 @@ const findPage = async (user, ownerships, filters, { sortDirection, page, size }
       take: size,
     }),
   ]);
+  const logs = await withAttachments(prisma, MANAGEMENT_LOG_RESOURCE, rows);
   return {
-    items: rows.map((log) => toManagementLogResponse(log, user, now)),
+    items: logs.map((log) => toManagementLogResponse(log, user, now)),
     meta: { page, size, total, hasNext: page * size < total },
   };
 };
 
+const attachLogDocuments = (tx, user, logId, documentIds) =>
+  attachDocumentsInTx(tx, user, { resourceType: MANAGEMENT_LOG_RESOURCE, resourceId: logId, documentIds, now: getNow() });
+
 // POST /properties/:propertyId/management-logs
-export const createManagementLog = async (user, propertyId, input) => {
+// 사진은 먼저 미연결 문서로 올리고(POST /documents) 그 id를 attachmentDocumentIds로 넘긴다. 같은 트랜잭션에서 붙인다.
+export const createManagementLog = async (user, propertyId, { attachmentDocumentIds = [], ...input }) => {
   const created = await prisma.$transaction(async (tx) => {
     const active = await tx.ownership.findFirst({ where: { userId: user.id, propertyId, endedAt: null }, select: { id: true } });
     if (!active) throwPropertyNotFound();
@@ -80,8 +94,10 @@ export const createManagementLog = async (user, propertyId, input) => {
       authorId: user.id,
       include: MANAGEMENT_LOG_INCLUDE,
     });
+    await attachLogDocuments(tx, user, log.id, attachmentDocumentIds);
     await recordLogActivity(tx, user, ACTIVITY_TYPES.MANAGEMENT_LOG_CREATED, log);
-    return log;
+    const [withDocuments] = await withAttachments(tx, MANAGEMENT_LOG_RESOURCE, [log]);
+    return withDocuments;
   });
   return toManagementLogResponse(created, user);
 };
@@ -109,7 +125,9 @@ export const findManagementLogForUser = async (user, logId) => {
     where: { AND: [{ id: logId }, toVisibleLogWhere(user, ownerships, now)] },
     include: MANAGEMENT_LOG_INCLUDE,
   });
-  return log ? toManagementLogResponse(log, user, now) : null;
+  if (!log) return null;
+  const [withDocuments] = await withAttachments(prisma, MANAGEMENT_LOG_RESOURCE, [log]);
+  return toManagementLogResponse(withDocuments, user, now);
 };
 
 // 쓰기 공통: 기록을 찾고 그 소유 관계를 잠근 뒤 다시 읽는다.
@@ -150,18 +168,38 @@ export const canViewManagementLog = async (user, logId) => {
   return Boolean(log);
 };
 
-// PATCH /management-logs/:logId — data는 컨트롤러가 검증한 값(보낸 칸만).
-export const updateManagementLog = async (user, logId, data, req) => {
+// 첨부 목록을 attachmentDocumentIds(최종 목록)로 맞춘다. 빠진 문서는 숨기고(잠긴 문서는 422), 새 문서는 붙인다.
+// 바뀌었으면 지울 파일 경로와 함께 changed: true.
+const syncLogAttachments = async (tx, user, log, attachmentDocumentIds) => {
+  const current = await findAttachedDocuments(tx, MANAGEMENT_LOG_RESOURCE, log.id);
+  const currentIds = current.map((document) => document.id);
+  const removed = current.filter((document) => !attachmentDocumentIds.includes(document.id));
+  const added = attachmentDocumentIds.filter((id) => !currentIds.includes(id));
+  assertDocumentsDeletable(removed, user);
+  const removedPaths = await softDeleteDocumentsInTx(tx, removed, getNow());
+  await attachLogDocuments(tx, user, log.id, added);
+  return { changed: removed.length + added.length > 0, removedPaths };
+};
+
+// PATCH /management-logs/:logId — data는 컨트롤러가 검증한 값(보낸 칸만). attachmentDocumentIds는 첨부의 최종 목록.
+export const updateManagementLog = async (user, logId, { attachmentDocumentIds, ...data }, req) => {
+  let removedPaths = [];
   const updated = await prisma.$transaction(async (tx) => {
     const log = await lockWritableLog(tx, user, logId);
 
     // 화면은 칸을 전부 보내므로 실제로 바뀐 칸만 고르고 기록한다. 바뀐 게 없으면 활동·감사도 남기지 않는다.
     const fields = Object.keys(data).filter((field) => !isSameFieldValue(log, field, data[field]));
+    if (attachmentDocumentIds) {
+      const synced = await syncLogAttachments(tx, user, log, attachmentDocumentIds);
+      removedPaths = synced.removedPaths;
+      if (synced.changed) fields.push('attachments');
+    }
     if (fields.length === 0) return log;
 
     const row = await tx.propertyLog.update({
       where: { id: log.id },
-      data: { ...data, ...(data.occurredOn ? { occurredOn: toDbDate(data.occurredOn) } : {}) },
+      // 첨부만 바뀌어도 수정 시각은 바뀐다.
+      data: { ...data, ...(data.occurredOn ? { occurredOn: toDbDate(data.occurredOn) } : {}), updatedAt: getNow() },
       include: MANAGEMENT_LOG_INCLUDE,
     });
     await recordLogActivity(tx, user, ACTIVITY_TYPES.MANAGEMENT_LOG_UPDATED, row, { fields });
@@ -178,18 +216,25 @@ export const updateManagementLog = async (user, logId, data, req) => {
     }
     return row;
   });
-  return toManagementLogResponse(updated, user);
+  await removeStoredObjects(removedPaths);
+  const [withDocuments] = await withAttachments(prisma, MANAGEMENT_LOG_RESOURCE, [updated]);
+  return toManagementLogResponse(withDocuments, user);
 };
 
 // DELETE /management-logs/:logId — 작성자면 소유가 끝난 뒤에도 지울 수 있다(D-13). 호실 이력과 시스템 기록은 못 지운다.
+// 붙은 문서도 숨기고 파일을 지운다.
 export const deleteManagementLog = async (user, logId) => {
-  await prisma.$transaction(async (tx) => {
+  const removedPaths = await prisma.$transaction(async (tx) => {
     const log = await lockLogForWriter(tx, user, logId);
     if (log.scope === 'PROPERTY_HISTORY' || log.authorId !== user.id) {
       throw new AppError('MANAGEMENT_LOG_NOT_DELETABLE', 422, '호실 이력과 시스템이 만든 기록은 삭제할 수 없습니다.');
     }
     await recordLogActivity(tx, user, ACTIVITY_TYPES.MANAGEMENT_LOG_DELETED, log);
     // 지워지는 기록을 가리키는 티켓이 있으면 DB가 log_id를 비운다(ON DELETE SET NULL).
+    const documents = await findAttachedDocuments(tx, MANAGEMENT_LOG_RESOURCE, log.id);
+    const paths = await softDeleteDocumentsInTx(tx, documents, getNow());
     await tx.propertyLog.delete({ where: { id: log.id } });
+    return paths;
   });
+  await removeStoredObjects(removedPaths);
 };
