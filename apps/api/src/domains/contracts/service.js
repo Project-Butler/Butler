@@ -15,7 +15,7 @@ import {
 import { CONTRACT_INCLUDE, resolveContractViewer, toContractResponse } from '../../platform/contractSerializer.js';
 import { computeContractStatus } from '../../platform/contractStatus.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
-import { compareDateStrings, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
+import { compareDateStrings, getNow, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 
@@ -160,7 +160,7 @@ export const createContract = async (user, input, req) => {
     if (ownership.endedAt) {
       throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
     }
-    if (computeOwnershipVerificationStatus(ownership, new Date()) !== 'VERIFIED') {
+    if (computeOwnershipVerificationStatus(ownership, getNow()) !== 'VERIFIED') {
       throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증을 마친 호실만 계약을 등록할 수 있습니다.');
     }
     await assertNoOverlap(tx, input);
