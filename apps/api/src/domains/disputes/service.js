@@ -220,19 +220,35 @@ export const findReferenceSummariesBySourceKeys = async (sourceKeys) => {
 };
 
 // 관련 자료를 고를 때 쓰는 기준 자료의 임베딩과 분쟁 유형. 없는 자료면 null.
-export const findReferenceForRelated = (referenceId) =>
-  prisma.disputeReference.findUnique({
+// embedding 컬럼이 pgvector 타입이라 Prisma Client로 읽지 못해서 SQL로 숫자 배열로 바꿔 읽는다.
+// 임베딩이 없으면(embed:disputes 실행 전) 예전과 같이 빈 배열이다.
+export const findReferenceForRelated = async (referenceId) => {
+  const reference = await prisma.disputeReference.findUnique({
     where: { id: referenceId },
-    select: { id: true, category: true, embedding: true },
+    select: { id: true, category: true },
   });
+  if (!reference) return null;
+
+  const [row] = await prisma.$queryRaw`
+    SELECT embedding::real[] AS embedding FROM dispute_references WHERE id = ${referenceId}::uuid
+  `;
+  return { ...reference, embedding: row?.embedding ?? [] };
+};
 
 // 관련 자료 후보(기준 자료 제외). 목록과 같은 필드에 유사도 계산용 임베딩을 더한다.
+// 임베딩은 위와 같은 이유로 SQL로 읽어서 붙인다.
 export const findRelatedCandidates = async (excludeId) => {
+  const embeddings = await prisma.$queryRaw`
+    SELECT id, embedding::real[] AS embedding
+    FROM dispute_references
+    WHERE id <> ${excludeId}::uuid AND embedding IS NOT NULL
+  `;
+  const embeddingById = new Map(embeddings.map(({ id, embedding }) => [id, embedding]));
   const candidates = await prisma.disputeReference.findMany({
-    where: { id: { not: excludeId }, embedding: { isEmpty: false } },
-    select: { ...LIST_SELECT, embedding: true },
+    where: { id: { in: [...embeddingById.keys()] } },
+    select: LIST_SELECT,
   });
-  return candidates.map(toListItem);
+  return candidates.map((candidate) => toListItem({ ...candidate, embedding: embeddingById.get(candidate.id) }));
 };
 
 // 임베딩이 아직 없을 때(embed:disputes 실행 전) 쓰는 대체: 같은 분쟁 유형의 최근 자료.
@@ -254,10 +270,19 @@ const CHAT_TITLE_LENGTH = 50;
 
 const REFERENCE_SUMMARY_SELECT = { id: true, type: true, title: true, sourceTitle: true, sourcePage: true };
 
-// RAG 검색 후보 전체(임베딩 포함). 임베딩이 아직 없는 자료(embed:disputes 실행 전)는 뺀다.
-export const findReferencesForRetrieval = () =>
-  prisma.disputeReference.findMany({
-    where: { embedding: { isEmpty: false } },
+// 질문 임베딩과 가까운 자료를 유사도 높은 순서로 limit건(similarity는 코사인 유사도).
+// 임베딩이 아직 없는 자료(embed:disputes 실행 전)는 뺀다.
+export const findReferencesForRetrieval = async (queryEmbedding, limit) => {
+  const vector = `[${queryEmbedding}]`;
+  const nearest = await prisma.$queryRaw`
+    SELECT id, 1 - (embedding <=> ${vector}::vector) AS similarity
+    FROM dispute_references
+    WHERE embedding IS NOT NULL
+    ORDER BY embedding <=> ${vector}::vector
+    LIMIT ${limit}
+  `;
+  const references = await prisma.disputeReference.findMany({
+    where: { id: { in: nearest.map(({ id }) => id) } },
     select: {
       id: true,
       type: true,
@@ -269,9 +294,11 @@ export const findReferencesForRetrieval = () =>
       relatedLaws: true,
       sourceTitle: true,
       sourcePage: true,
-      embedding: true,
     },
   });
+  const byId = new Map(references.map((reference) => [reference.id, reference]));
+  return nearest.map(({ id, similarity }) => ({ ...byId.get(id), similarity }));
+};
 
 const toChatSummary = (chat) => ({
   id: chat.id,
