@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
+import { PropertyContractCell } from '../components/PropertyContractCell/PropertyContractCell';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
 import { getUnitTypeLabel } from '../utils/unitListing';
@@ -19,7 +19,7 @@ const RELATION_TABS = [
 const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetPropertyList({ relation, page, size: PAGE_SIZE }, { onUnauthorized });
-  const { getPropertyName } = useBuildingNames({ onUnauthorized });
+  const [contractNotice, setContractNotice] = useState(null);
   const isFormer = relation === 'FORMER_OWNER';
   const items = data?.items ?? [];
 
@@ -56,6 +56,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
           <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
             <th className="px-5 py-2.5 font-medium">호실</th>
             <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
+            {!isFormer && <th className="px-3 py-2.5 font-medium">계약</th>}
             <th className="px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
           </tr>
         </thead>
@@ -71,8 +72,18 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3.5 font-semibold text-ink">{getPropertyName(property)}</td>
+                <td className="px-5 py-3.5 font-semibold text-ink">{property.displayName}</td>
                 <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                {!isFormer && (
+                  <td className="px-3 py-3.5" onClick={(event) => event.stopPropagation()}>
+                    <PropertyContractCell
+                      property={property}
+                      onNavigate={onNavigate}
+                      onUnauthorized={onUnauthorized}
+                      onNotice={setContractNotice}
+                    />
+                  </td>
+                )}
                 <td className="px-5 py-3.5">
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                 </td>
@@ -81,6 +92,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
           })}
         </tbody>
       </table>
+      {contractNotice && <NoticeBox className="m-5">{contractNotice}</NoticeBox>}
       {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
       {data.meta.hasNext && (
         // 다음 페이지 로드가 실패했으면 page는 이미 N이므로 N+1로 건너뛰지 않고 같은 페이지를 다시 불러온다.

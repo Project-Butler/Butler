@@ -16,7 +16,10 @@ const LAW_NAMES = [
 
 // sourceKey 앞부분 → 책을 받을 수 있는 게시글
 const BOOK_URLS = [
-  [/^klac-/, 'https://www.hldcc.or.kr/hp/li/arrCaseList.do'],
+  [/^klac-2025-/, 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=1831'],
+  [/^klac-2023-/, 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=1070'],
+  // 2018년판은 국토부 2021 사례집과 한 글에 함께 올라와 있다(첨부 HWP).
+  [/^klac-2018-/, 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=867'],
   [/^seoul-2020-/, 'https://news.seoul.go.kr/citybuild/archives/511154'],
   [/^seoul-2023-counsel-/, 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419'],
   [
@@ -28,8 +31,11 @@ const BOOK_URLS = [
     'https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10501000000002022101718&boardNo=4&boardIdx=170',
   ],
   [/^molit-2022-/, 'https://www.molit.go.kr/USR/policyData/m_34681/dtl.jsp?id=4675'],
-  // 2025 조정사례집(disputes.json)은 게시글을 찾지 못해 한국부동산원 임대차분쟁조정위원회 홈으로 보낸다.
-  [/^casebook-2025-/, 'https://adrhome.reb.or.kr'],
+  // 2025 조정사례집(disputes.json)은 같은 글이 179·180번 두 번 올라와 있어 조회수가 많은 180번으로 보낸다.
+  [
+    /^casebook-2025-/,
+    'https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10501000000002022101718&boardNo=4&boardIdx=180',
+  ],
 ];
 
 // 2025 조정사례집에 인용된 판례 중 국가법령정보센터에 있는 것(사건번호 → 판례 일련번호, 2026-10-30 확인).

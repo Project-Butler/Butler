@@ -12,10 +12,20 @@ const FIELD_LABEL = {
   unitType: '방 구성',
   equipment: '설비',
   equipmentEtc: '기타 설비',
+  leaseType: '계약 유형',
+  deposit: '보증금',
+  monthlyRent: '월세',
+  startDate: '시작일',
+  endDate: '종료일',
+  tenantName: '임차인 이름',
+  tenantPhone: '임차인 연락처',
 };
 
-const formatFields = (fields) =>
-  Array.isArray(fields) && fields.length > 0 ? ` (${fields.map((field) => FIELD_LABEL[field] ?? field).join(', ')})` : '';
+// labels: 활동마다 다르게 부를 칸 이름(계약 memo는 '메모')
+const formatFields = (fields, labels = {}) =>
+  Array.isArray(fields) && fields.length > 0
+    ? ` (${fields.map((field) => labels[field] ?? FIELD_LABEL[field] ?? field).join(', ')})`
+    : '';
 
 // 건물명이 기록돼 있으면 앞에 붙인다: '항여울 116동 712호'
 const unitOf = (params) => {
@@ -23,6 +33,8 @@ const unitOf = (params) => {
   const unit = formatUnitLabel(params.buildingNo ?? '', params.unitNo);
   return params.buildingName ? `${params.buildingName} ${unit}` : unit;
 };
+
+const tenantOf = (params) => (params.tenantName ? ` ${params.tenantName}님` : '');
 
 export const formatActivity = ({ type, params = {} }) => {
   switch (type) {
@@ -42,6 +54,13 @@ export const formatActivity = ({ type, params = {} }) => {
       return `${unitOf(params)} 임대 조건을 수정했어요${formatFields(params.fields)}`;
     case 'OWNERSHIP_ENDED':
       return `${unitOf(params)}를 삭제했어요(소유 종료)`;
+    // 계약 활동 params에는 금액·연락처가 없다(명세 3-6). 임차인 이름이 있으면 붙인다.
+    case 'CONTRACT_CREATED':
+      return `${unitOf(params)}${tenantOf(params)} 계약을 등록했어요`;
+    case 'CONTRACT_UPDATED':
+      return `${unitOf(params)}${tenantOf(params)} 계약을 수정했어요${formatFields(params.fields, { memo: '메모' })}`;
+    case 'CONTRACT_TERMINATED':
+      return `${unitOf(params)}${tenantOf(params)} 계약을 해지했어요`;
     default:
       return '활동';
   }

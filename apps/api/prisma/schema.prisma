@@ -9,8 +9,8 @@ datasource db {
 }
 
 // id·FK는 uuid 타입(@db.Uuid), 시각은 timestamptz(UTC, @db.Timestamptz(3))로 저장한다.
-// Prisma로 표현하지 못하는 부분 인덱스(uq_ownership_active_user, ix_jobs_pending)는
-// 마이그레이션 SQL에 직접 넣었다(노션 6번 16장).
+// Prisma로 표현하지 못하는 부분 인덱스·제약(uq_ownership_active_user, uq_ownership_verified,
+// ix_jobs_pending, ex_contract_period, ix_documents_unattached)은 마이그레이션 SQL에 직접 넣었다(노션 6번 16장).
 // 이름 규칙은 노션 6번 2장을 따른다.
 
 enum Role {
@@ -80,6 +80,8 @@ model User {
   name         String
   // 애플리케이션 레벨에서 암호화한 값을 저장한다 (ERD 공통 설계 규칙)
   phone        String?
+  // 소유주 인증(이름+생년월일 대조)용. "YYYY-MM-DD"를 phone처럼 암호화해 저장한다. 기존 사용자·시드 계정은 null.
+  birthDate    String?    @map("birth_date")
   role         Role
   status       UserStatus @default(ACTIVE)
 
@@ -90,12 +92,16 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions        Session[]
-  requestedJobs   Job[]
-  ownerships      Ownership[]
-  tenantContracts Contract[]   @relation("TenantContracts")
-  myBuildings     MyBuilding[]
-  activities      Activity[]
+  sessions          Session[]
+  consents          Consent[]
+  requestedJobs     Job[]
+  ownerships        Ownership[]
+  tenantContracts   Contract[]   @relation("TenantContracts")
+  myBuildings       MyBuilding[]
+  activities        Activity[]
+  requestedTickets  Ticket[]     @relation("RequestedTickets")
+  uploads           Upload[]
+  uploadedDocuments Document[]   @relation("UploadedDocuments")
 
   @@map("users")
 }
@@ -116,6 +122,24 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+// 약관 동의 이력. 지우지 않고 행을 쌓는다(동의/철회마다 새 행 또는 withdrawnAt).
+// type: TERMS, PRIVACY_REQUIRED (가입 시 필수). version은 동의한 약관 버전.
+model Consent {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  type        String
+  version     String
+  agreed      Boolean
+  agreedAt    DateTime  @map("agreed_at") @db.Timestamptz(3)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(3)
+  ip          String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("consents")
 }
 
 // 법정동. 행정안전부 "법정동코드 전체자료"로 셋업 시점에 시딩한다(prisma/seed.js).
@@ -317,10 +341,10 @@ model JusoBuildingLink {
 
 // 참고 데이터 가져오기 실행 기록이자 실행 단위 잠금.
 // 부분 유니크 (lock_key) WHERE status='RUNNING', (source, file_date) WHERE status='SUCCEEDED'
-// AND source='JUSO_DELTA'는 마이그레이션 SQL에 있다.
+// AND source IN ('JUSO_DELTA','JUSO_LINK')는 마이그레이션 SQL에 있다.
 model DataImport {
   id          String    @id @default(uuid()) @db.Uuid
-  source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_DELTA / KAPT_API_BASIS
+  source      String    @db.VarChar(20) // KAPT_EXCEL / JUSO_FULL / JUSO_LINK / KAPT_API_BASIS
   lockKey     String    @map("lock_key") @db.VarChar(100)
   fileName    String?   @map("file_name")
   fileDate    DateTime? @map("file_date") @db.Date
@@ -361,7 +385,6 @@ model Property {
 
   ownerships Ownership[]
   tickets    Ticket[]
-  documents  Document[]
 
   // 같은 단지·동·호는 한 Property로 합친다(POST /properties가 이 키로 찾아 재사용).
   @@unique([complexId, buildingNo, unitNo])
@@ -382,10 +405,11 @@ model Ownership {
   verifiedAt            DateTime?          @map("verified_at") @db.Timestamptz(3)
   verificationExpiresAt DateTime?          @map("verification_expires_at") @db.Timestamptz(3)
 
-  // 등기부 증빙 문서. Document는 Step 4에서 다시 설계하므로 FK는 그때 건다.
-  evidenceDocumentId String? @map("evidence_document_id") @db.Uuid
+  // 등기부 증빙 문서
+  evidenceDocumentId String?   @map("evidence_document_id") @db.Uuid
+  evidenceDocument   Document? @relation(fields: [evidenceDocumentId], references: [id])
   // 권리자 인증 피처의 OwnershipCheck.id. 피처 테이블이라 FK 없이 값만 둔다.
-  checkId            String? @map("check_id")
+  checkId            String?   @map("check_id")
 
   // 같은 호실에 내 활성 소유 관계(endedAt null)는 1개 — uq_ownership_active_user (마이그레이션 SQL)
   startedAt DateTime   @default(now()) @map("started_at") @db.Timestamptz(3)
@@ -399,6 +423,7 @@ model Ownership {
   equipmentEtc String?  @map("equipment_etc") @db.VarChar(200)
 
   contracts Contract[]
+  tickets   Ticket[]
 
   @@index([propertyId])
   @@index([userId])
@@ -435,31 +460,98 @@ model Contract {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  tickets Ticket[]
+
+  // 같은 소유 관계 안에서 해지 안 된 계약끼리 기간 겹침 금지 — ex_contract_period (마이그레이션 SQL)
   @@index([ownershipId])
   @@index([tenantId])
   @@map("contracts")
 }
 
+// 수리·점검 요청 (노션 6번 10장, 계약 5장).
+// category는 등록형 문자열(REPAIR, INSPECTION, OTHER, 피처가 추가)이라 enum이 아니다.
 model Ticket {
-  id          String       @id @default(uuid()) @db.Uuid
-  propertyId  String       @map("property_id") @db.Uuid
-  property    Property     @relation(fields: [propertyId], references: [id])
-  title       String
-  description String
-  status      TicketStatus @default(OPEN)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @map("property_id") @db.Uuid
+  property    Property  @relation(fields: [propertyId], references: [id])
+  // 처리할 소유 관계. 임차인이 만들면 그 계약의 소유 관계, 임대인이 만들면 본인 활성 소유 관계.
+  ownershipId String    @map("ownership_id") @db.Uuid
+  ownership   Ownership @relation(fields: [ownershipId], references: [id])
+  // 임차인이 요청했을 때의 계약. 임대인이 만들면 null.
+  contractId  String?   @map("contract_id") @db.Uuid
+  contract    Contract? @relation(fields: [contractId], references: [id])
+  requesterId String    @map("requester_id") @db.Uuid
+  requester   User      @relation("RequestedTickets", fields: [requesterId], references: [id])
 
+  category       String       @db.VarChar(30)
+  title          String
+  description    String
+  status         TicketStatus @default(OPEN)
+  resolutionNote String?      @map("resolution_note")
+  cost           BigInt? // 임대인에게만 보인다
+  // DONE이 되면 자동 생성되는 TICKET_SUMMARY 관리 로그(응답의 historyLogId).
+  // property_logs는 아직 없어서 FK 없이 값만 두고, 그 테이블을 만들 때 건다.
+  logId          String?      @map("log_id") @db.Uuid
+  closedAt       DateTime?    @map("closed_at") @db.Timestamptz(3) // DONE·CANCELED가 된 시각
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([propertyId])
+  @@index([ownershipId])
+  @@index([contractId])
+  @@index([requesterId])
   @@map("tickets")
 }
 
-model Document {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @map("property_id") @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  fileUrl    String   @map("file_url")
-  type       String
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+// 업로드 세션 (노션 6번 12장, 계약 6장 POST /files/upload-sessions).
+// 세션 발급 → 브라우저가 Storage 서명 URL로 직접 업로드 → POST /documents로 문서 등록.
+model Upload {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  fileName    String    @map("file_name")
+  mimeType    String    @map("mime_type") // JPEG, PNG, WEBP, HEIC, PDF
+  sizeBytes   BigInt    @map("size_bytes") // 최대 20MB
+  // documentType(CONTRACT_DOCUMENT, REGISTRY_CERTIFICATE, PHOTO, OTHER). 등록형 문자열.
+  type        String    @db.VarChar(40)
+  storagePath String    @map("storage_path")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  document Document?
+
+  @@index([userId])
+  @@map("uploads")
+}
+
+// 등록된 문서 (노션 6번 12장). 붙는 곳은 resourceType + resourceId 다형 참조라 FK가 없다.
+// resourceType이 null이면 미연결 문서 — 24시간 안에 안 붙으면 정리한다(ix_documents_unattached, 마이그레이션 SQL).
+model Document {
+  id           String    @id @default(uuid()) @db.Uuid
+  uploadId     String    @unique @map("upload_id") @db.Uuid
+  upload       Upload    @relation(fields: [uploadId], references: [id])
+  uploaderId   String    @map("uploader_id") @db.Uuid
+  uploader     User      @relation("UploadedDocuments", fields: [uploaderId], references: [id])
+  type         String    @db.VarChar(40) // documentType, Upload.type과 같은 값
+  // PROPERTY, OWNERSHIP, CONTRACT, TICKET, MANAGEMENT_LOG, THREAD_MESSAGE 등(등록형)
+  resourceType String?   @map("resource_type") @db.VarChar(40)
+  resourceId   String?   @map("resource_id") @db.Uuid
+  storagePath  String    @map("storage_path")
+  fileName     String    @map("file_name")
+  mimeType     String    @map("mime_type")
+  sizeBytes    BigInt    @map("size_bytes")
+  // 이력 승계된 문서·인증 증빙은 잠근다(삭제 불가, 계약 6장 DOCUMENT_NOT_DELETABLE).
+  isLocked     Boolean   @default(false) @map("is_locked")
+  attachedAt   DateTime? @map("attached_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  evidenceFor Ownership[]
+
+  @@index([resourceType, resourceId])
+  @@index([uploaderId])
   @@map("documents")
 }
 
@@ -484,6 +576,38 @@ model Job {
 
   @@index([requestedById])
   @@map("jobs")
+}
+
+// 감사 로그를 남긴 주체. 시스템 작업(cron 등)은 SYSTEM이고 actorId가 null이다.
+enum AuditActorType {
+  USER
+  SYSTEM
+
+  @@map("audit_actor_type")
+}
+
+// 감사 로그(노션 5번 API Spec 8·10장). 쓰기는 src/platform/audit.js의 audit.record()로만 하고 수정·삭제하지 않는다.
+// action·resourceType은 피처 접두어를 붙여 값을 늘리는 등록형이라 enum이 아니라 문자열이다.
+// resourceType + resourceId로 아무 리소스나 가리키므로 FK가 없다(대상이 지워져도 기록은 남김).
+model AuditLog {
+  id           String         @id @default(uuid()) @db.Uuid
+  actorType    AuditActorType @map("actor_type")
+  actorId      String?        @map("actor_id") @db.Uuid
+  action       String         @db.VarChar(60)
+  resourceType String         @map("resource_type") @db.VarChar(40)
+  resourceId   String?        @map("resource_id") @db.Uuid
+  summary      String?
+  // 비밀번호·토큰·연락처 원문은 넣지 않는다
+  before       Json?
+  after        Json?
+  requestId    String?        @map("request_id") @db.Uuid
+  ip           String?
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([resourceType, resourceId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
 }
 
 // 요청 한도(rate limit) 카운터. 서버리스 환경이라 메모리에 못 두고 DB에 둔다

@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
-import { getTodayKST } from '../../platform/dateUtils.js';
+import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { compareUnits } from '../../platform/naturalSort.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -68,16 +68,14 @@ const isUniqueViolation = (error) =>
 
 // 그 단지에 내 건물 설정이 없으면 기본값(이름 = 단지 이름, 정원 없음)으로 만든다(명세 변경 C5).
 // 숨긴(삭제한) 설정이 있으면 이름을 그대로 두고 되살린다. 동시에 같은 단지로 등록해도 행은 하나다.
-// 새로 만들었거나 되살렸으면 true.
 const ensureLandlordBuilding = async (tx, user, complex) => {
   const name = complex.name.slice(0, MAX_BUILDING_NAME_LENGTH);
-  const inserted = await tx.$queryRaw`
+  await tx.$queryRaw`
     INSERT INTO my_buildings (id, user_id, complex_id, name, created_at, updated_at)
     VALUES (gen_random_uuid(), ${user.id}::uuid, ${complex.id}::uuid, ${name}, now(), now())
     ON CONFLICT (user_id, complex_id) DO UPDATE SET deleted_at = NULL, updated_at = now()
       WHERE my_buildings.deleted_at IS NOT NULL
     RETURNING id`;
-  return inserted.length > 0;
 };
 
 // 방 구성·설비가 요청에 없으면 같은 호실에서 내가 가장 최근에 끝낸 소유 관계의 값을 이어받는다.
@@ -115,21 +113,13 @@ export const createPropertyWithOwnership = async (user, input) => {
         if (!complex) throw new AppError('COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
 
         stage = 'landlordBuilding';
-        let buildingCreated = await ensureLandlordBuilding(tx, user, complex);
+        await ensureLandlordBuilding(tx, user, complex);
         let building = await lockLandlordBuilding(tx, { userId: user.id, complexId: complex.id });
         if (!building) {
           // 만든 직후 다른 요청(DELETE /landlord-buildings)이 지웠으면 한 번 더 만들고 잠근다.
-          buildingCreated = (await ensureLandlordBuilding(tx, user, complex)) || buildingCreated;
+          await ensureLandlordBuilding(tx, user, complex);
           building = await lockLandlordBuilding(tx, { userId: user.id, complexId: complex.id });
           if (!building) throw new AppError('LANDLORD_BUILDING_NOT_FOUND', 404, '건물 설정을 찾을 수 없습니다. 다시 시도해 주세요.');
-        }
-        if (buildingCreated) {
-          await recordActivity(tx, {
-            userId: user.id,
-            type: ACTIVITY_TYPES.LANDLORD_BUILDING_CREATED,
-            complexId: complex.id,
-            params: { buildingName: building.name, auto: true },
-          });
         }
 
         stage = 'propertyUpsert';
@@ -211,7 +201,7 @@ export const createPropertyWithOwnership = async (user, input) => {
       });
 
       // TODO(audit): OWNERSHIP_CREATED — audit.record()가 생기면 여기서 기록한다.
-      const now = new Date();
+      const now = getNow();
       const summary = toPropertySummary(property);
       return {
         property: toPropertyResponse(
@@ -250,7 +240,7 @@ const findOwnerProperties = async (user, { page, size, complexId }) => {
     include: { property: { include: { complex: true } }, contracts: CONTRACT_SELECT },
   });
 
-  const now = new Date();
+  const now = getNow();
   const today = getTodayKST();
   const sorted = [...ownerships].sort((a, b) => compareUnits(a.property, b.property));
   const items = sorted
@@ -316,7 +306,7 @@ const findFormerOwnerProperties = async (user, { page, size, complexId }) => {
     }),
   ]);
 
-  const now = new Date();
+  const now = getNow();
   const today = getTodayKST();
   // CTE가 정한 순서를 유지한다.
   const items = propertyIds.map((propertyId) => {
@@ -364,7 +354,7 @@ export const findPropertyForUser = async (user, propertyId) => {
   if (!property) return null;
 
   const rows = await loadRelationRows(user, propertyId);
-  return buildPropertyView({ user, property, ...rows, now: new Date(), today: getTodayKST() });
+  return buildPropertyView({ user, property, ...rows, now: getNow(), today: getTodayKST() });
 };
 
 // PATCH /properties/:propertyId — ADMIN 또는 이 호실의 "계산된" VERIFIED 활성 소유자만.
@@ -392,5 +382,5 @@ export const updateProperty = async (user, propertyId, data) => {
     });
     return row;
   });
-  return buildPropertyView({ user, property: updated, ...rows, now: new Date(), today: getTodayKST() });
+  return buildPropertyView({ user, property: updated, ...rows, now: getNow(), today: getTodayKST() });
 };

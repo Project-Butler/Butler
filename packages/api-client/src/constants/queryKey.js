@@ -13,4 +13,10 @@ export const queryKey = {
   PROPERTY_OWNERSHIP_DETAIL: 'property_ownership',
   DISPUTE_CHATS: 'dispute_chats',
   DISPUTE_CHAT_DETAIL: 'dispute_chat',
+  ADMIN_DASHBOARD: 'admin_dashboard',
+  ADMIN_USERS: 'admin_users',
+  ADMIN_USER_DETAIL: 'admin_user',
+  ADMIN_AUDIT_LOGS: 'admin_audit_logs',
+  ADMIN_OWNERSHIPS: 'admin_property_ownerships',
+  ADMIN_JOBS: 'admin_jobs',
 };

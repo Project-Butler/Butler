@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useBuildingNames } from '../hooks/useBuildingNames';
 import { useGetComplex } from '../hooks/useGetComplex';
+import { useGetContractList } from '../hooks/useGetContractList';
 import { useGetProperty } from '../hooks/useGetProperty';
 import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
 import { usePatchProperty } from '../hooks/usePatchProperty';
 import { usePatchPropertyOwnership } from '../hooks/usePatchPropertyOwnership';
 import { usePostPropertyOwnershipEnd } from '../hooks/usePostPropertyOwnershipEnd';
 import { toFieldErrors } from '../utils/apiError';
+import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../utils/contract';
 import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '../utils/floor';
 import { formatDateKST, formatNumber } from '../utils/format';
 import {
@@ -453,26 +454,69 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
   );
 };
 
-// 임대 정보·임차인·계약 자리. TODO(#4 계약 관리): 계약 데이터가 생기면 채운다.
-const LeaseSection = () => (
-  <Card className="space-y-4 p-6">
-    <SectionTitle>임대 정보</SectionTitle>
-    <dl className="divide-y divide-line">
-      <InfoRow label="계약 상태" value="계약 등록 전" />
-      <InfoRow label="임차인" value={null} />
-      <InfoRow label="계약" value={null} />
-    </dl>
-  </Card>
-);
+// 내 소유 관계의 지금 계약(진행 중 → 시작 전). 기간이 겹치지 않으므로 종료일이 가장 가까운 것이 지금 계약이다.
+// 연락처·메모는 계약 상세에서 본다.
+const LeaseSection = ({ propertyId, ownershipId, canRegister, onNavigate, onUnauthorized }) => {
+  const contractList = useGetContractList(
+    { ownershipId, status: 'ACTIVE,EXPIRING_SOON,UPCOMING', sort: 'endDate:asc', size: 1 },
+    { onUnauthorized },
+  );
+  const contract = contractList.data?.items[0];
+  const status = contract && getContractStatusBadge(contract.status);
+  const dday = contract && getContractDdayBadge(contract);
 
-// 호실 상세. 소유 정보·임대 조건은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
-export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
+  const action = contract ? (
+    <Button variant="secondary" size="sm" onClick={() => onNavigate('contractDetail', { contractId: contract.id })}>
+      계약 보기
+    </Button>
+  ) : (
+    canRegister &&
+    contractList.data && (
+      <Button variant="secondary" size="sm" onClick={() => onNavigate('contractRegister', { propertyId })}>
+        계약 등록
+      </Button>
+    )
+  );
+
+  return (
+    <Card className="space-y-4 p-6">
+      <SectionTitle action={action}>임대 정보</SectionTitle>
+      {contractList.error && <NoticeBox>{contractList.error.message}</NoticeBox>}
+      {contractList.isLoading && !contractList.data ? (
+        <p className="py-2.5 text-body text-ink-3">불러오는 중입니다</p>
+      ) : (
+        <dl className="divide-y divide-line">
+          <InfoRow
+            label="계약 상태"
+            value={
+              contract && (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <Badge tone={status.tone}>{status.label}</Badge>
+                  {dday && (
+                    <Badge tone={dday.tone} className="font-num tabular-nums">
+                      {dday.label}
+                    </Badge>
+                  )}
+                </span>
+              )
+            }
+          />
+          <InfoRow label="임차인" value={contract?.tenantName} />
+          <InfoRow label="금액" value={contract && formatContractAmount(contract)} numeric />
+          <InfoRow label="기간" value={contract && formatPeriod(contract)} numeric />
+        </dl>
+      )}
+    </Card>
+  );
+};
+
+// 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
+export const PropertyDetailPage = ({ propertyId, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
   const property = propertyQuery.data;
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipQuery = useGetPropertyOwnership(property?.myRelation?.ownershipId, hookOptions);
-  const { getPropertyName } = useBuildingNames(hookOptions);
 
   const goBack = () => window.history.back();
 
@@ -495,7 +539,7 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   return (
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
-        title={getPropertyName(property)}
+        title={property.displayName}
         description={complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress}
         onBack={goBack}
         actions={
@@ -528,13 +572,21 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
         </div>
 
         <div className="space-y-6">
-          <LeaseSection />
+          {property.myRelation?.ownershipId && (
+            <LeaseSection
+              propertyId={property.id}
+              ownershipId={property.myRelation.ownershipId}
+              canRegister={property.myRelation.type === 'OWNER'}
+              onNavigate={onNavigate}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
           {ownershipQuery.data && (
             <OwnershipSection
               key={ownershipQuery.data.id}
               ownership={ownershipQuery.data}
               onSaved={ownershipQuery.refetch}
-              // 들어온 화면(건물 상세·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
+              // 들어온 화면(내 부동산·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
               onEnded={goBack}
               onUnauthorized={onUnauthorized}
             />
