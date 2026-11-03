@@ -34,6 +34,8 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized }
   const [notice, setNotice] = useState(null);
   const existingIds = useRef(new Set(initialAttachments.map((attachment) => attachment.id)));
   const previewUrls = useRef(new Set());
+  // 올리는 중에 뺀 항목. 등록 전이면 등록하지 않고, 이미 등록됐으면 바로 지운다.
+  const cancelledKeys = useRef(new Set());
 
   useEffect(
     () => () => {
@@ -62,14 +64,23 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized }
       try {
         const session = await postUploadSession({ fileName: file.name, mimeType, sizeBytes: file.size, documentType: toDocumentType(mimeType) });
         await putUploadContent(session, file, { onProgress: (progress) => patchItem(key, { progress }) });
+        // 등록 안 한 업로드 세션은 서버 정리 작업이 지운다.
+        if (cancelledKeys.current.delete(key)) return;
         const document = await postDocument({ uploadSessionId: session.id });
-        patchItem(key, { documentId: document.id, status: 'done', progress: 1 });
-      } catch (error) {
-        if (isUnauthorizedError(error)) {
-          onUnauthorized?.();
+        if (cancelledKeys.current.delete(key)) {
+          deleteDocument(document.id).catch(() => {});
           return;
         }
+        patchItem(key, { documentId: document.id, status: 'done', progress: 1 });
+      } catch (error) {
+        cancelledKeys.current.delete(key);
         const apiError = toApiError(error);
+        // 로그인이 풀려도 올리는 중으로 남겨 두지 않는다(저장 버튼이 계속 막히지 않게).
+        if (isUnauthorizedError(error)) {
+          onUnauthorized?.();
+          patchItem(key, { status: 'error', error: apiError.message });
+          return;
+        }
         if (apiError.code === 'STORAGE_UNAVAILABLE') {
           setStorageUnavailable(true);
           dropItem(key);
@@ -125,6 +136,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized }
   const remove = useCallback(
     (key) => {
       const target = items.find((item) => item.key === key);
+      if (target?.status === 'uploading') cancelledKeys.current.add(key);
       if (target?.documentId && !existingIds.current.has(target.documentId)) {
         deleteDocument(target.documentId).catch(() => {});
       }

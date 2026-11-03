@@ -13,6 +13,7 @@ import { MAX_FILE_BYTES } from '../../../src/domains/documents/fileRules.js';
 import { cleanupExpiredUploads } from '../../../src/domains/documents/service.js';
 import { createStorageToken } from '../../../src/domains/documents/storage/signature.js';
 import { createManagementLog } from '../../../src/domains/managementLogs/service.js';
+import { softDeleteDocumentsInTx } from '../../../src/platform/documentAttachments.js';
 import { getTodayKST } from '../../../src/platform/dateUtils.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
 
@@ -22,6 +23,8 @@ const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 const PDF = Buffer.from('%PDF-1.7\n테스트 계약서');
 const FUTURE_EXPIRY = new Date(Date.now() + 86400000 * 365);
 const STORAGE_KEYS = ['STORAGE_DRIVER', 'STORAGE_SIGNING_SECRET', 'LOCAL_STORAGE_DIR', 'VERCEL'];
+// 서명 경로는 IP 기준 한도라 테스트 앞뒤로 카운터를 비운다.
+const clearStorageContentLimits = () => prisma.rateLimit.deleteMany({ where: { id: { startsWith: 'storage-content:' } } });
 
 describe('파일·문서 API', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
@@ -36,6 +39,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     storageDir = await mkdtemp(path.join(os.tmpdir(), 'butler-documents-'));
     Object.assign(process.env, { STORAGE_DRIVER: 'local', STORAGE_SIGNING_SECRET: SECRET, LOCAL_STORAGE_DIR: storageDir });
     delete process.env.VERCEL;
+    await clearStorageContentLimits();
     server = await new Promise((resolve) => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
     });
@@ -52,6 +56,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     await prisma.document.deleteMany({ where: { uploaderId: { in: userIds } } });
     await prisma.upload.deleteMany({ where: { userId: { in: userIds } } });
     for (const id of userIds) await prisma.rateLimit.deleteMany({ where: { id: { contains: id } } });
+    await clearStorageContentLimits();
     await fixture.cleanup();
     await rm(storageDir, { recursive: true, force: true });
   });
@@ -161,6 +166,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     assert.equal(content.status, 200);
     assert.equal(content.headers.get('content-type'), 'image/jpeg');
     assert.equal(content.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(content.headers.get('content-security-policy'), "sandbox; default-src 'none'");
     assert.ok(content.headers.get('content-disposition').includes(encodeURIComponent('욕실 사진.jpg')));
     assert.deepEqual(Buffer.from(await content.arrayBuffer()), JPEG);
 
@@ -206,6 +212,32 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
 
     const wrongSize = await createSession(user, { sizeBytes: JPEG.length + 5 });
     assert.equal((await putContent(wrongSize.body.data.uploadUrl, JPEG)).status, 400);
+
+    // 서명이 맞아도 본문이 20MB를 넘으면 400이 아니라 422 FILE_TOO_LARGE
+    const oversized = await createSession(user);
+    const huge = Buffer.concat([JPEG, Buffer.alloc(MAX_FILE_BYTES + 1 - JPEG.length)]);
+    const hugePut = await putContent(oversized.body.data.uploadUrl, huge);
+    assert.equal(hugePut.status, 422);
+    assert.equal((await hugePut.json()).error.code, 'FILE_TOO_LARGE');
+    assert.equal((await storedFiles()).includes(oversized.body.data.id), false);
+  });
+
+  test('파일 이름: 깨진 유니코드·제어 문자는 400, 다운로드 헤더는 RFC 5987로 인코딩', async () => {
+    const user = await landlord();
+    for (const fileName of ['깨진\uD800이름.jpg', '줄\n바꿈.jpg', 'tab\t.jpg', 'del\u007f.jpg']) {
+      const rejected = await createSession(user, { fileName });
+      assert.equal(rejected.status, 400, JSON.stringify(fileName));
+      assert.equal(rejected.body.error.details[0].field, 'fileName');
+    }
+
+    const session = await createSession(user, { fileName: "it's (1)*.jpg" });
+    assert.equal(session.status, 201);
+    await putContent(session.body.data.uploadUrl, JPEG);
+    const document = (await postJson(user, '/documents', { uploadSessionId: session.body.data.id })).body.data;
+    const { url } = (await postJson(user, `/documents/${document.id}/download-url`, {})).body.data;
+    const content = await fetch(`${origin}${url}`);
+    assert.equal(content.headers.get('content-disposition'), "inline; filename*=UTF-8''it%27s%20%281%29%2A.jpg");
+    await content.arrayBuffer();
   });
 
   test('서명: 위조·만료 토큰, 만료된 세션 등록, 다운로드 주소 위조', async () => {
@@ -218,6 +250,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     assert.equal(forged.status, 403);
     assert.equal((await forged.json()).error.code, 'STORAGE_SIGNATURE_INVALID');
     assert.equal((await putContent(`/api/v1/files/upload-sessions/${id}/content`, JPEG)).status, 403);
+    assert.equal((await putContent(`/api/v1/files/upload-sessions/not-a-uuid/content?token=${token}`, JPEG)).status, 404);
     // 다른 세션의 토큰으로는 못 올린다
     const otherSession = await createSession(user);
     assert.equal((await putContent(`/api/v1/files/upload-sessions/${otherSession.body.data.id}/content?token=${token}`, JPEG)).status, 403);
@@ -288,6 +321,8 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
       assert.equal(unavailable.status, 503);
       assert.equal(unavailable.body.error.code, 'STORAGE_UNAVAILABLE');
       assert.equal((await postJson(user, `/documents/${document.id}/download-url`, {})).status, 503);
+      // 업로드 본문도 읽기 전에 503
+      assert.equal((await putContent(`/api/v1/files/upload-sessions/${randomUUID()}/content?token=1.${'0'.repeat(64)}`, JPEG)).status, 503);
       assert.equal((await api(user, `/documents/${document.id}`)).status, 200);
     } finally {
       delete process.env.VERCEL;
@@ -300,7 +335,10 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     await putContent(expiredSession.body.data.uploadUrl, JPEG);
     const neverUploaded = await createSession(user);
     const freshSession = await createSession(user);
-    const past = new Date(Date.now() - 60_000);
+    // 만료 후 1시간은 남긴다
+    const graceSession = await createSession(user);
+    await prisma.upload.update({ where: { id: graceSession.body.data.id }, data: { expiresAt: new Date(Date.now() - 30 * 60_000) } });
+    const past = new Date(Date.now() - 2 * 3600_000);
     await prisma.upload.updateMany({ where: { id: { in: [expiredSession.body.data.id, neverUploaded.body.data.id] } }, data: { expiresAt: past } });
 
     const stale = await uploadDocument(user);
@@ -317,7 +355,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     const remaining = await prisma.upload.findMany({ where: { userId: user.id }, select: { id: true } });
     assert.deepEqual(
       remaining.map((row) => row.id).sort(),
-      [freshSession.body.data.id, staleUpload.uploadId, freshUpload.uploadId].sort(),
+      [freshSession.body.data.id, graceSession.body.data.id, staleUpload.uploadId, freshUpload.uploadId].sort(),
     );
     const files = await storedFiles();
     assert.equal(files.includes(expiredSession.body.data.id), false);
@@ -346,5 +384,50 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     await mkdir(path.join(storageDir, 'uploads'), { recursive: true });
     await writeFile(path.join(storageDir, ...row.storagePath.split('/')), JPEG);
     assert.equal((await fetch(`${origin}${url}`)).status, 200);
+  });
+
+  test('경합: 읽은 뒤 붙거나 잠긴 문서는 숨기지 않는다(404로 되돌림), 같은 업로드 동시 등록은 하나만', async () => {
+    const user = await landlord();
+    const property = await createProperty();
+    await own(user, property);
+    const log = await writeLog(user, property);
+    const document = await uploadDocument(user);
+    const stale = await prisma.document.findUnique({ where: { id: document.id } });
+    // 삭제 요청이 읽은 뒤 다른 요청이 관리 로그에 붙였다
+    await prisma.document.update({ where: { id: document.id }, data: { resourceType: 'MANAGEMENT_LOG', resourceId: log.id, attachedAt: new Date() } });
+    await assert.rejects(
+      prisma.$transaction((tx) => softDeleteDocumentsInTx(tx, [stale], new Date())),
+      (error) => error.code === 'DOCUMENT_NOT_FOUND' && error.httpStatus === 404,
+    );
+    assert.equal((await prisma.document.findUnique({ where: { id: document.id } })).deletedAt, null);
+    // 읽은 뒤 잠긴 문서도 숨기지 않는다
+    const attached = await prisma.document.findUnique({ where: { id: document.id } });
+    await prisma.document.update({ where: { id: document.id }, data: { isLocked: true } });
+    await assert.rejects(prisma.$transaction((tx) => softDeleteDocumentsInTx(tx, [attached], new Date())));
+    assert.equal((await prisma.document.findUnique({ where: { id: document.id } })).deletedAt, null);
+
+    const session = await createSession(user);
+    await putContent(session.body.data.uploadUrl, JPEG);
+    const results = await Promise.all([0, 1].map(() => postJson(user, '/documents', { uploadSessionId: session.body.data.id })));
+    assert.deepEqual(results.map((result) => result.status).sort(), [201, 404]);
+    assert.equal(results.find((result) => result.status === 404).body.error.code, 'UPLOAD_SESSION_NOT_FOUND');
+  });
+
+  test('서명 경로는 IP 기준 요청 한도(429)', async () => {
+    const user = await landlord();
+    const document = await uploadDocument(user);
+    const { url } = (await postJson(user, `/documents/${document.id}/download-url`, {})).body.data;
+    const windowMs = 60_000;
+    const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs);
+    const expiresAt = new Date(windowStart.getTime() + windowMs);
+    const id = 'storage-content:127.0.0.1';
+    await prisma.rateLimit.upsert({ where: { id }, create: { id, count: 120, windowStart, expiresAt }, update: { count: 120, windowStart, expiresAt } });
+    try {
+      const limited = await fetch(`${origin}${url}`);
+      assert.equal(limited.status, 429);
+      assert.equal((await limited.json()).error.code, 'RATE_LIMITED');
+    } finally {
+      await clearStorageContentLimits();
+    }
   });
 });

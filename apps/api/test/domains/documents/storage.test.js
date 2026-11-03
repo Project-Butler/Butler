@@ -106,6 +106,16 @@ test('local: 업로드 주소·쓰기·확인·다운로드 주소·삭제', asy
   assert.equal(await storage.confirmObject({ storagePath, sizeBytes: JPEG.length, mimeType: 'image/jpeg' }), false);
 });
 
+test('local: 같은 경로에 동시에 써도 임시 파일이 겹치지 않고 남지 않는다', async () => {
+  const dir = await makeTempDir();
+  const storage = createLocalStorage({ dir, secret: SECRET });
+  const uploadId = randomUUID();
+  const storagePath = toStoragePath(uploadId);
+  await Promise.all([storage.writeObject(storagePath, JPEG), storage.writeObject(storagePath, JPEG)]);
+  assert.deepEqual(await readdir(path.join(dir, 'uploads')), [uploadId]);
+  assert.equal(await storage.confirmObject({ storagePath, sizeBytes: JPEG.length, mimeType: 'image/jpeg' }), true);
+});
+
 test('local: 업로드 id 모양이 아닌 경로는 거절한다', async () => {
   const storage = createLocalStorage({ dir: await makeTempDir(), secret: SECRET });
   await assert.rejects(storage.writeObject('../escape', JPEG));

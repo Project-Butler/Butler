@@ -54,9 +54,18 @@ export const assertDocumentsDeletable = (documents, user) => {
 };
 
 // 숨김 처리하고 지울 파일의 저장 경로를 돌려준다.
+// 읽은 뒤 다른 요청이 붙이거나(미연결 문서) 잠그거나 지웠으면 하나도 숨기지 않고 404로 트랜잭션을 되돌린다.
 export const softDeleteDocumentsInTx = async (tx, documents, now) => {
   if (documents.length === 0) return [];
-  await tx.document.updateMany({ where: { id: { in: documents.map((document) => document.id) }, deletedAt: null }, data: { deletedAt: now } });
+  const { count } = await tx.document.updateMany({
+    where: {
+      OR: documents.map((document) => ({ id: document.id, resourceType: document.resourceType, resourceId: document.resourceId })),
+      isLocked: false,
+      deletedAt: null,
+    },
+    data: { deletedAt: now },
+  });
+  if (count !== documents.length) throw new AppError('DOCUMENT_NOT_FOUND', 404, '문서를 찾을 수 없습니다.');
   return documents.map((document) => document.storagePath);
 };
 

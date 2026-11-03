@@ -40,6 +40,23 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
     load();
   };
 
+  // 썸네일 주소는 5분 뒤 만료되므로 원본은 누를 때 주소를 새로 받아 연다(href는 접근성용으로 남긴다).
+  // 응답을 기다린 뒤 창을 열면 팝업 차단에 걸려서 빈 창을 먼저 열고 주소를 넣는다.
+  const handleOpen = async (event) => {
+    event.preventDefault();
+    const opened = window.open('', '_blank');
+    if (opened) opened.opener = null;
+    try {
+      const issued = await postDocumentDownloadUrl(document.id);
+      setUrl(issued.url);
+      if (opened) opened.location.href = issued.url;
+      else window.open(issued.url, '_blank', 'noopener,noreferrer');
+    } catch (requestError) {
+      opened?.close();
+      if (isUnauthorizedError(requestError)) onUnauthorized?.();
+    }
+  };
+
   const frame = `flex aspect-square items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2 ${className}`;
 
   if (error) {
@@ -58,13 +75,13 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
   }
   if (renderable) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className={`${frame} hover:opacity-90`} title={`${document.fileName} 원본 보기`}>
+      <a href={url} target="_blank" rel="noreferrer" onClick={handleOpen} className={`${frame} hover:opacity-90`} title={`${document.fileName} 원본 보기`}>
         <img src={url} alt={document.fileName} onError={handleImageError} className="h-full w-full object-cover" />
       </a>
     );
   }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className={`${frame} flex-col gap-1.5 px-2 hover:bg-surface`} title={document.fileName}>
+    <a href={url} target="_blank" rel="noreferrer" onClick={handleOpen} className={`${frame} flex-col gap-1.5 px-2 hover:bg-surface`} title={document.fileName}>
       <FileText size={24} className="text-ink-3" />
       <span className="w-full truncate text-center text-chip text-ink-2">{document.fileName}</span>
       <span className="text-chip font-semibold text-accent-strong">다운로드</span>

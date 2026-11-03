@@ -15,6 +15,8 @@ export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
 export const DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
 // 미연결 문서는 24시간 안에 안 붙으면 정리한다(계약 6장)
 export const UNATTACHED_DOCUMENT_TTL_MS = 24 * 60 * 60 * 1000;
+// 만료된 업로드 세션은 1시간 더 두고 지운다(만료 직전에 시작한 업로드·등록이 끝날 여유)
+export const UPLOAD_CLEANUP_GRACE_MS = 60 * 60 * 1000;
 const CLEANUP_BATCH = 200;
 
 export const requireStorage = () => {
@@ -64,14 +66,20 @@ export const createUploadSession = async (user, { fileName, mimeType, sizeBytes,
   return { id, ...target, expiresAt: expiresAt.toISOString() };
 };
 
-// PUT /files/upload-sessions/:id/content — 임시 로컬 저장소 전용. 쿠키 대신 서명으로 판단한다.
-export const receiveUploadContent = async (uploadId, token, body) => {
+// 업로드 본문 서명 확인. 본문(최대 20MB)을 읽기 전에 라우터가 먼저 부르고(controller.checkUploadContent), 받은 뒤에도 다시 본다.
+export const verifyUploadRequest = (uploadId, token, now) => {
   const storage = requireStorage();
   if (!storage.servesContent) throwUploadSessionNotFound();
-  const now = getNow();
   const tokenState = storage.verifyUploadToken({ uploadId, token, now });
   if (tokenState === 'invalid') throwSignatureInvalid();
   if (tokenState === 'expired') throwUploadSessionExpired();
+  return storage;
+};
+
+// PUT /files/upload-sessions/:id/content — 임시 로컬 저장소 전용. 쿠키 대신 서명으로 판단한다.
+export const receiveUploadContent = async (uploadId, token, body) => {
+  const now = getNow();
+  const storage = verifyUploadRequest(uploadId, token, now);
 
   const upload = await prisma.upload.findUnique({ where: { id: uploadId }, include: { document: { select: { id: true } } } });
   // 이미 등록한 업로드는 다시 쓰지 않는다.
@@ -136,6 +144,10 @@ export const registerDocument = async (user, { uploadSessionId, resourceType, re
         attachedAt: policy ? now : null,
       },
     });
+  }).catch((error) => {
+    // 같은 업로드를 동시에 두 번 등록하면 뒤 요청은 uploadId 유니크에 걸린다. 이미 등록한 업로드와 같게 404.
+    if (error?.code === 'P2002') throwUploadSessionNotFound();
+    throw error;
   });
   return toDocumentResponse(document);
 };
@@ -188,14 +200,15 @@ export const issueDownloadUrl = async (user, documentId, req) => {
   return { url, expiresAt: expiresAt.toISOString() };
 };
 
-// GET /documents/:documentId/content?token= — 임시 로컬 저장소 전용 서명 다운로드. 문서 행과 열 파일 스트림을 돌려준다.
+// GET /documents/:documentId/content?token= — 임시 로컬 저장소 전용 서명 다운로드. 문서 행과 파일 스트림을 여는 함수를 돌려준다.
+// 스트림은 응답 헤더를 다 만든 뒤에 연다(그 사이 에러가 나면 열린 파일이 남지 않게).
 export const openDocumentContent = async (documentId, token) => {
   const storage = requireStorage();
   if (!storage.servesContent) throwDocumentNotFound();
   if (storage.verifyDownloadToken({ documentId, token, now: getNow() }) !== 'ok') throwSignatureInvalid();
   const document = await prisma.document.findFirst({ where: { id: documentId, deletedAt: null } });
   if (!document) throwDocumentNotFound();
-  return { document, stream: storage.openObjectStream(document.storagePath) };
+  return { document, openStream: () => storage.openObjectStream(document.storagePath) };
 };
 
 // DELETE /documents/:documentId — 올린 사람, 연결된 리소스를 수정할 수 있을 때. 잠긴 문서는 422.
@@ -227,23 +240,25 @@ export const deleteDocument = async (user, documentId, req) => {
 
 // 매일 cron: 만료된 업로드 세션(등록 안 된 것)과 24시간 안에 안 붙은 미연결 문서를 정리한다(결정 Q5).
 // 저장소를 쓸 수 없으면 파일을 지울 수 없으므로 아무것도 하지 않는다.
+// 행을 먼저 지우고(그 사이 등록·연결된 것은 남김) 지운 행의 파일만 지운다. 파일 삭제 실패는 다음 정리를 막지 않는다.
 export const cleanupExpiredUploads = async ({ client = prisma, now = getNow() } = {}) => {
-  const storage = selectStorage();
-  if (!storage) return { skipped: 'storage unavailable' };
+  if (!selectStorage()) return { skipped: 'storage unavailable' };
+  const removedPaths = [];
 
   const uploads = await client.upload.findMany({
-    where: { expiresAt: { lt: now }, document: null },
+    where: { expiresAt: { lt: new Date(now.getTime() - UPLOAD_CLEANUP_GRACE_MS) }, document: null },
     select: { id: true, storagePath: true },
     orderBy: { expiresAt: 'asc' },
     take: CLEANUP_BATCH,
   });
+  let uploadsDeleted = 0;
   for (const upload of uploads) {
-    await storage.deleteObject(upload.storagePath);
+    // 조회와 삭제 사이에 등록된 업로드는 남긴다(document: null 조건).
+    const { count } = await client.upload.deleteMany({ where: { id: upload.id, document: null } });
+    if (count === 0) continue;
+    uploadsDeleted += 1;
+    removedPaths.push(upload.storagePath);
   }
-  // 그 사이 등록된 업로드는 남긴다(document: null 조건).
-  const { count: uploadsDeleted } = await client.upload.deleteMany({
-    where: { id: { in: uploads.map((upload) => upload.id) }, document: null },
-  });
 
   const unattached = await client.document.findMany({
     where: { resourceType: null, deletedAt: null, createdAt: { lt: new Date(now.getTime() - UNATTACHED_DOCUMENT_TTL_MS) } },
@@ -259,7 +274,8 @@ export const cleanupExpiredUploads = async ({ client = prisma, now = getNow() } 
     });
     if (count === 0) continue;
     documentsDeleted += 1;
-    await storage.deleteObject(document.storagePath);
+    removedPaths.push(document.storagePath);
   }
+  await removeStoredObjects(removedPaths);
   return { uploadsDeleted, documentsDeleted };
 };

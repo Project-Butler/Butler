@@ -90,6 +90,30 @@ describe('AttachmentPicker', () => {
     expect(screen.getByTestId('ids')).toHaveTextContent('');
   });
 
+  it('올리는 중에 뺀 사진은 등록이 끝나면 바로 지운다', async () => {
+    let resolveDocument;
+    api.postDocument.mockReturnValue(new Promise((resolve) => (resolveDocument = resolve)));
+    render(<Harness />);
+    await userEvent.upload(screen.getByLabelText('사진 파일 선택'), jpeg());
+    await waitFor(() => expect(api.postDocument).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole('button', { name: '욕실.jpg 빼기' }));
+    expect(api.deleteDocument).not.toHaveBeenCalled();
+    resolveDocument({ id: 'doc-late' });
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith('doc-late'));
+    expect(screen.getByTestId('ids')).toHaveTextContent('');
+    expect(screen.getByTestId('uploading')).toHaveTextContent('false');
+  });
+
+  it('로그인이 풀리면(401) 올리는 중으로 남기지 않고 실패로 표시한다', async () => {
+    api.postUploadSession.mockRejectedValue(apiError(401, 'UNAUTHENTICATED', '로그인이 필요합니다.'));
+    render(<Harness />);
+    await userEvent.upload(screen.getByLabelText('사진 파일 선택'), jpeg());
+
+    expect(await screen.findByText('로그인이 필요합니다.')).toBeInTheDocument();
+    expect(screen.getByTestId('uploading')).toHaveTextContent('false');
+  });
+
   it('잠긴 사진(넘어간 이력)은 뺄 수 없다', () => {
     render(<Harness initial={[{ id: 'locked', fileName: '이력.jpg', mimeType: 'image/jpeg', sizeBytes: 100, isLocked: true }]} />);
     expect(screen.queryByRole('button', { name: '이력.jpg 빼기' })).not.toBeInTheDocument();
@@ -115,5 +139,21 @@ describe('DocumentThumbnail', () => {
     const link = await screen.findByRole('link', { name: /다운로드/ });
     expect(link).toHaveAttribute('href', 'http://api/content/doc');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('원본을 열 때는 주소를 새로 받아 미리 연 창에 넣는다(만료된 주소를 열지 않게)', async () => {
+    const opened = { opener: 'parent', location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened);
+    render(<DocumentThumbnail document={{ id: 'doc', fileName: '사진.jpg', mimeType: 'image/jpeg' }} />);
+    const link = (await screen.findByAltText('사진.jpg')).closest('a');
+    expect(link).toHaveAttribute('href', 'http://api/content/doc');
+
+    api.postDocumentDownloadUrl.mockResolvedValue({ url: 'http://api/content/fresh', expiresAt: '2026-11-04T00:10:00Z' });
+    await userEvent.click(link);
+    expect(open).toHaveBeenCalledWith('', '_blank');
+    await waitFor(() => expect(opened.location.href).toBe('http://api/content/fresh'));
+    expect(opened.opener).toBeNull();
+    expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(2);
+    open.mockRestore();
   });
 });

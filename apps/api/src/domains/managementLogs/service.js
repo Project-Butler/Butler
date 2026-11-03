@@ -99,7 +99,7 @@ export const createManagementLog = async (user, propertyId, { attachmentDocument
     const [withDocuments] = await withAttachments(tx, MANAGEMENT_LOG_RESOURCE, [log]);
     return withDocuments;
   });
-  return toManagementLogResponse(created, user);
+  return toManagementLogResponse(created, user, getNow());
 };
 
 // GET /properties/:propertyId/management-logs — 활성·이전 소유자, 운영자. 그 밖에는 호실을 숨긴다.
@@ -150,7 +150,7 @@ const throwLogReadOnly = () => {
 // 수정(첨부 추가·삭제 포함)할 수 있는 기록을 잠가서 돌려준다. 문서 API도 같은 규칙을 쓴다(documents/resourcePolicies.js).
 export const lockWritableLog = async (tx, user, logId) => {
   const log = await lockLogForWriter(tx, user, logId);
-  if (!canEditLog(log, user)) {
+  if (!canEditLog(log, user, getNow())) {
     // 활성 소유자 본인이 쓴 호실 이력인데 수정 못 하는 경우는 인증이 끊긴 것뿐이다(D-16).
     if (log.authorId === user.id && !log.ownership.endedAt) throwVerificationRequired();
     throwLogReadOnly();
@@ -218,7 +218,7 @@ export const updateManagementLog = async (user, logId, { attachmentDocumentIds, 
   });
   await removeStoredObjects(removedPaths);
   const [withDocuments] = await withAttachments(prisma, MANAGEMENT_LOG_RESOURCE, [updated]);
-  return toManagementLogResponse(withDocuments, user);
+  return toManagementLogResponse(withDocuments, user, getNow());
 };
 
 // DELETE /management-logs/:logId — 작성자면 소유가 끝난 뒤에도 지울 수 있다(D-13). 호실 이력과 시스템 기록은 못 지운다.

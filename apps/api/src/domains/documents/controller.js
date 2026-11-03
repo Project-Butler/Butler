@@ -1,5 +1,7 @@
 // 파일·문서 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
+import { pipeline } from 'node:stream';
 import { AppError } from '../../platform/AppError.js';
+import { getNow } from '../../platform/dateUtils.js';
 import {
   assertAllowedBody,
   assertSingleValues,
@@ -25,6 +27,7 @@ import {
   openDocumentContent,
   receiveUploadContent,
   registerDocument,
+  verifyUploadRequest,
 } from './service.js';
 
 const UPLOAD_SESSION_FIELDS = ['fileName', 'mimeType', 'sizeBytes', 'documentType'];
@@ -34,12 +37,25 @@ const throwDocumentNotFound = () => {
   throw new AppError('DOCUMENT_NOT_FOUND', 404, '문서를 찾을 수 없습니다.');
 };
 
+const throwUploadSessionNotFound = () => {
+  throw new AppError('UPLOAD_SESSION_NOT_FOUND', 404, '업로드 세션을 찾을 수 없습니다.');
+};
+
+// 다운로드 응답의 Content-Disposition·화면 표시에 쓰므로 깨진 유니코드(짝 없는 서로게이트)와 제어 문자는 받지 않는다.
+const CONTROL_CHAR_PATTERN = /\p{Cc}/u;
+const isValidFileName = (fileName) =>
+  typeof fileName === 'string' &&
+  fileName.trim().length > 0 &&
+  fileName.length <= MAX_FILE_NAME_LENGTH &&
+  fileName.isWellFormed() &&
+  !CONTROL_CHAR_PATTERN.test(fileName);
+
 const parseUploadSessionBody = (body) => {
   assertAllowedBody(body, UPLOAD_SESSION_FIELDS);
   const details = [];
   const { fileName, mimeType, sizeBytes, documentType } = body;
-  if (typeof fileName !== 'string' || fileName.trim().length === 0 || fileName.length > MAX_FILE_NAME_LENGTH) {
-    details.push({ field: 'fileName', reason: `1~${MAX_FILE_NAME_LENGTH}자 문자열이어야 합니다.` });
+  if (!isValidFileName(fileName)) {
+    details.push({ field: 'fileName', reason: `제어 문자 없는 1~${MAX_FILE_NAME_LENGTH}자 문자열이어야 합니다.` });
   }
   if (typeof mimeType !== 'string') details.push({ field: 'mimeType', reason: '필수 값입니다.' });
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 1) details.push({ field: 'sizeBytes', reason: '1 이상의 정수여야 합니다.' });
@@ -93,8 +109,10 @@ const parseListQuery = (query) => {
   return { ...resource, page, size };
 };
 
-// 브라우저가 이름을 그대로 보여 주도록 RFC 5987 형식으로 넣는다.
-const toContentDisposition = (fileName) => `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+// 브라우저가 이름을 그대로 보여 주도록 RFC 5987 형식으로 넣는다. encodeURIComponent가 남기는 '()*도 RFC 5987에서는 인코딩한다.
+const encodeRfc5987 = (value) =>
+  encodeURIComponent(value).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+const toContentDisposition = (fileName) => `inline; filename*=UTF-8''${encodeRfc5987(fileName)}`;
 
 // Express 4는 async 핸들러의 에러를 자동으로 넘기지 않아서 next(error)로 넘긴다.
 export const postUploadSession = async (req, res, next) => {
@@ -105,10 +123,31 @@ export const postUploadSession = async (req, res, next) => {
   }
 };
 
+// 업로드 본문(최대 20MB)을 읽기 전에 경로·서명·저장소부터 본다. 틀리면 본문을 받지 않고 바로 거절한다.
+export const checkUploadContent = (req, res, next) => {
+  try {
+    const { uploadId } = req.params;
+    if (!isUuid(uploadId)) throwUploadSessionNotFound();
+    verifyUploadRequest(uploadId, req.query.token, getNow());
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// express.raw의 크기 초과(413)는 공통 처리에서 400이 되므로, 업로드 본문 경로에서는 계약대로 422 FILE_TOO_LARGE로 바꾼다.
+export const mapUploadBodyError = (error, req, res, next) => {
+  if (error?.type === 'entity.too.large') {
+    next(new AppError('FILE_TOO_LARGE', 422, '파일은 20MB까지 올릴 수 있습니다.'));
+    return;
+  }
+  next(error);
+};
+
 export const putUploadContent = async (req, res, next) => {
   try {
     const { uploadId } = req.params;
-    if (!isUuid(uploadId)) throw new AppError('UPLOAD_SESSION_NOT_FOUND', 404, '업로드 세션을 찾을 수 없습니다.');
+    if (!isUuid(uploadId)) throwUploadSessionNotFound();
     await receiveUploadContent(uploadId, req.query.token, req.body);
     res.status(204).end();
   } catch (error) {
@@ -157,24 +196,31 @@ export const getDocumentContent = async (req, res, next) => {
   try {
     const { documentId } = req.params;
     if (!isUuid(documentId)) throwDocumentNotFound();
-    const { document, stream } = await openDocumentContent(documentId, req.query.token);
-    stream.on('error', (error) => {
-      if (res.headersSent) {
-        res.destroy(error);
-        return;
-      }
+    const { document, openStream } = await openDocumentContent(documentId, req.query.token);
+    const headers = {
+      'Content-Type': document.mimeType,
+      'Content-Length': String(document.sizeBytes),
+      'Content-Disposition': toContentDisposition(document.fileName),
+      'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
+      // 주소를 직접 열어도 스크립트가 돌지 않게 한다(PDF 등).
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+    };
+    const stream = openStream();
+    let started = false;
+    // 다 보내기 전에 연결이 끊기면 파일을 닫는다.
+    res.once('close', () => stream.destroy());
+    // 열기 전 에러(파일 없음 등)만 여기서 응답한다. 보내기 시작한 뒤의 에러는 pipeline이 응답을 끊는다.
+    stream.once('error', (error) => {
+      if (started) return;
       next(error.code === 'ENOENT' ? new AppError('DOCUMENT_NOT_FOUND', 404, '문서를 찾을 수 없습니다.') : error);
     });
-    stream.on('open', () => {
-      res.status(200);
-      res.set({
-        'Content-Type': document.mimeType,
-        'Content-Length': String(document.sizeBytes),
-        'Content-Disposition': toContentDisposition(document.fileName),
-        'Cache-Control': 'private, max-age=300',
-        'X-Content-Type-Options': 'nosniff',
+    stream.once('open', () => {
+      started = true;
+      res.status(200).set(headers);
+      pipeline(stream, res, (error) => {
+        if (error && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error('[documents] 다운로드 전송 실패', error.code ?? error.message);
       });
-      stream.pipe(res);
     });
   } catch (error) {
     next(error);
