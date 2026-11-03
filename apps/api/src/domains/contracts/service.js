@@ -8,6 +8,7 @@ import {
   isContractReadOnly,
   isValidAmount,
   isValidPeriod,
+  isValidRentPaymentDay,
   isValidTermination,
   lockedFieldsForStatus,
   statusToWhere,
@@ -51,6 +52,16 @@ const assertAmount = (contract) => {
 const assertPeriod = (contract) => {
   if (!isValidPeriod(contract)) {
     throw new AppError('CONTRACT_INVALID_PERIOD', 422, '종료일은 시작일보다 뒤여야 합니다.');
+  }
+};
+
+// 월세 입금일은 계약 유형과 합쳐 본다(형식 R-01 단계, 400). 1~31 범위는 컨트롤러가 이미 봤고,
+// 여기서는 전세에 값이 있는 경우만 남는다.
+const assertRentPaymentDay = (contract) => {
+  if (!isValidRentPaymentDay(contract)) {
+    throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', [
+      { field: 'rentPaymentDay', reason: 'NOT_ALLOWED_FOR_JEONSE' },
+    ]);
   }
 };
 
@@ -119,13 +130,23 @@ const recordContractActivity = (tx, user, type, contract, extra = {}) =>
 
 // 감사 로그 before/after에는 이 칸만 넣는다(계약 객체를 통째로 넘기지 않는다).
 // 메모(운영자에게 숨김, D-19)·해지 사유·임차인 이름·연락처는 어디에도 넣지 않는다.
-const AUDIT_FIELDS = ['leaseType', 'deposit', 'monthlyRent', 'startDate', 'endDate', 'previousContractId', 'terminatedOn'];
+const AUDIT_FIELDS = [
+  'leaseType',
+  'deposit',
+  'monthlyRent',
+  'rentPaymentDay',
+  'startDate',
+  'endDate',
+  'previousContractId',
+  'terminatedOn',
+];
 const AUDIT_DATE_FIELDS = ['startDate', 'endDate', 'terminatedOn'];
 // 수정 summary에 쓰는 칸 이름(값은 넣지 않는다)
 const FIELD_LABELS = {
   leaseType: '계약 유형',
   deposit: '보증금',
   monthlyRent: '월세',
+  rentPaymentDay: '월세 입금일',
   startDate: '시작일',
   endDate: '종료일',
   tenantName: '임차인 이름',
@@ -151,6 +172,7 @@ const respond = (contract, user, todayKST = getTodayKST()) =>
 
 // POST /contracts
 export const createContract = async (user, input, req) => {
+  assertRentPaymentDay(input);
   const created = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const ownership = await lockOwnershipRow(tx, input.ownershipId);
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
@@ -171,6 +193,7 @@ export const createContract = async (user, input, req) => {
         leaseType: input.leaseType,
         deposit: input.deposit,
         monthlyRent: input.monthlyRent,
+        rentPaymentDay: input.rentPaymentDay ?? null,
         startDate: toDbDate(input.startDate),
         endDate: toDbDate(input.endDate),
         tenantName: input.tenantName,
@@ -246,18 +269,24 @@ const lockContractForOwner = async (tx, user, contractId) => {
   return { contract, ownership };
 };
 
-// PATCH /contracts/:contractId — data는 컨트롤러가 검증·변환한 값(보낸 칸만).
-export const updateContract = async (user, contractId, data, req) => {
+// PATCH /contracts/:contractId — input은 컨트롤러가 검증·변환한 값(보낸 칸만).
+export const updateContract = async (user, contractId, input, req) => {
   const updated = await withPeriodConflictAs409(() => prisma.$transaction(async (tx) => {
     const { contract, ownership } = await lockContractForOwner(tx, user, contractId);
     const status = computeContractStatus(contract, getTodayKST());
     if (isContractReadOnly(status, Boolean(ownership.endedAt))) throwReadOnly();
-    const locked = lockedFieldsForStatus(status, Object.keys(data));
+    const locked = lockedFieldsForStatus(status, Object.keys(input));
     if (locked.length > 0) throwReadOnly(locked.map((field) => ({ field, reason: 'LOCKED_WHILE_ACTIVE' })));
+
+    const leaseType = input.leaseType ?? contract.leaseType;
+    if (input.rentPaymentDay !== undefined) assertRentPaymentDay({ leaseType, rentPaymentDay: input.rentPaymentDay });
+    // 시작 전 계약을 전세로 바꾸면 입금일을 서버가 비운다(#76 Q5). 바뀐 칸이라 감사 로그에도 남는다.
+    const clearsRentPaymentDay = leaseType === 'JEONSE' && input.rentPaymentDay === undefined && contract.rentPaymentDay !== null;
+    const data = clearsRentPaymentDay ? { ...input, rentPaymentDay: null } : input;
 
     // 보낸 칸과 저장된 값을 합친 결과로 다시 검사한다.
     const merged = {
-      leaseType: data.leaseType ?? contract.leaseType,
+      leaseType,
       deposit: data.deposit ?? contract.deposit,
       monthlyRent: data.monthlyRent ?? contract.monthlyRent,
       startDate: data.startDate ?? toDateOnlyString(contract.startDate),

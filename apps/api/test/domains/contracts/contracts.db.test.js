@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, test } from 'node:test';
 import { getTodayKST } from '../../../src/platform/dateUtils.js';
+import { computeNextRentPaymentDate } from '../../../src/platform/rentPayment.js';
 import { lockOwnershipRow } from '../../../src/platform/ownershipLock.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
 import { findLandlordSetup } from '../../../src/domains/dashboard/service.js';
@@ -280,6 +281,126 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     await rejectsWith(updateContract(user, upcoming.id, { startDate: shift(600) }), 'CONTRACT_PERIOD_OVERLAP');
   });
 
+  describe('월세 입금일(#76)', () => {
+    const day = (value) => new Date(`${value}T00:00:00Z`);
+    const expectedNext = (rentPaymentDay, startDate, endDate) =>
+      computeNextRentPaymentDate(
+        { leaseType: 'MONTHLY', rentPaymentDay, startDate: day(startDate), endDate: day(endDate), terminatedOn: null },
+        { todayKST: TODAY },
+      );
+    const notAllowed = [{ field: 'rentPaymentDay', reason: 'NOT_ALLOWED_FOR_JEONSE' }];
+    const rejectsWithDetails = (promise, code, details) =>
+      assert.rejects(promise, (error) => {
+        assert.equal(error.code, code);
+        assert.deepEqual(error.details, details);
+        return true;
+      });
+
+    test('등록·수정 때 저장하고 응답에 nextRentPaymentDate가 온다', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id, { rentPaymentDay: 25 }));
+      assert.equal(created.rentPaymentDay, 25);
+      assert.equal(created.nextRentPaymentDate, expectedNext(25, shift(-30), shift(700)));
+      assert.ok(created.nextRentPaymentDate >= TODAY);
+
+      const patched = await updateContract(user, created.id, { rentPaymentDay: 31 });
+      assert.equal(patched.rentPaymentDay, 31);
+      assert.equal(patched.nextRentPaymentDate, expectedNext(31, shift(-30), shift(700)));
+      assert.equal((await findContractForUser(user, created.id)).rentPaymentDay, 31);
+      const { items } = await findContracts(user, LIST_DEFAULTS);
+      assert.equal(items[0].nextRentPaymentDate, patched.nextRentPaymentDate);
+    });
+
+    test('입금일 없는 계약(기존 계약)은 둘 다 null', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id));
+      assert.equal(created.rentPaymentDay, null);
+      assert.equal(created.nextRentPaymentDate, null);
+    });
+
+    test('전세에 입금일을 보내면 400 NOT_ALLOWED_FOR_JEONSE', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const jeonse = { leaseType: 'JEONSE', deposit: 300000000n, monthlyRent: 0n };
+      await rejectsWithDetails(createContract(user, contractInput(ownership.id, { ...jeonse, rentPaymentDay: 5 })), 'VALIDATION_ERROR', notAllowed);
+
+      const created = await createContract(user, contractInput(ownership.id, jeonse));
+      assert.equal(created.rentPaymentDay, null);
+      assert.equal(created.nextRentPaymentDate, null);
+      // 진행 중 전세 계약도 입금일 칸은 잠기지 않지만 값은 둘 수 없다
+      await rejectsWithDetails(updateContract(user, created.id, { rentPaymentDay: 5 }), 'VALIDATION_ERROR', notAllowed);
+      assert.equal(await prisma.auditLog.count({ where: { resourceId: created.id, action: 'CONTRACT_UPDATED' } }), 0);
+    });
+
+    test('시작 전 월세 계약을 전세로 바꾸면 입금일을 비우고 감사 로그에 남긴다', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const upcoming = await createContract(
+        user,
+        contractInput(ownership.id, { startDate: shift(10), endDate: shift(700), rentPaymentDay: 10 }),
+      );
+      assert.equal(upcoming.nextRentPaymentDate, expectedNext(10, shift(10), shift(700)));
+      assert.ok(upcoming.nextRentPaymentDate >= shift(10));
+
+      await rejectsWithDetails(
+        updateContract(user, upcoming.id, { leaseType: 'JEONSE', monthlyRent: 0n, rentPaymentDay: 10 }),
+        'VALIDATION_ERROR',
+        notAllowed,
+      );
+      const changed = await updateContract(user, upcoming.id, { leaseType: 'JEONSE', monthlyRent: 0n });
+      assert.equal(changed.leaseType, 'JEONSE');
+      assert.equal(changed.rentPaymentDay, null);
+      assert.equal(changed.nextRentPaymentDate, null);
+
+      const [row] = await prisma.auditLog.findMany({ where: { resourceId: upcoming.id, action: 'CONTRACT_UPDATED' } });
+      assert.deepEqual(row.before, { leaseType: 'MONTHLY', monthlyRent: '800000', rentPaymentDay: 10 });
+      assert.deepEqual(row.after, { leaseType: 'JEONSE', monthlyRent: '0', rentPaymentDay: null });
+      assert.equal(row.summary, '계약 수정: 계약 유형, 월세, 월세 입금일');
+    });
+
+    test('진행 중 계약도 입금일은 바꿀 수 있고(200) 다른 조건은 여전히 422, 감사 로그 before/after', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const active = await createContract(user, contractInput(ownership.id, { rentPaymentDay: 25 }));
+      assert.equal(active.status, 'ACTIVE');
+
+      const patched = await updateContract(user, active.id, { rentPaymentDay: 5 });
+      assert.equal(patched.rentPaymentDay, 5);
+      await rejectsWithDetails(updateContract(user, active.id, { rentPaymentDay: 6, monthlyRent: 900000n }), 'CONTRACT_READ_ONLY', [
+        { field: 'monthlyRent', reason: 'LOCKED_WHILE_ACTIVE' },
+      ]);
+      // 비우기(null)도 된다
+      const cleared = await updateContract(user, active.id, { rentPaymentDay: null });
+      assert.equal(cleared.rentPaymentDay, null);
+      assert.equal(cleared.nextRentPaymentDate, null);
+
+      const rows = await prisma.auditLog.findMany({
+        where: { resourceId: active.id, action: 'CONTRACT_UPDATED' },
+        orderBy: { createdAt: 'asc' },
+      });
+      assert.equal(rows.length, 2);
+      assert.equal(rows[0].summary, '계약 수정: 월세 입금일');
+      assert.deepEqual(rows[0].before, { rentPaymentDay: 25 });
+      assert.deepEqual(rows[0].after, { rentPaymentDay: 5 });
+      assert.deepEqual(rows[1].before, { rentPaymentDay: 5 });
+      assert.deepEqual(rows[1].after, { rentPaymentDay: null });
+      const [createdRow] = await prisma.auditLog.findMany({ where: { resourceId: active.id, action: 'CONTRACT_CREATED' } });
+      assert.equal(createdRow.after.rentPaymentDay, 25);
+    });
+
+    test('소유 관계가 끝나면 nextRentPaymentDate는 null', async () => {
+      const user = await fixture.createUser();
+      const { ownership } = await createOwnedUnit(user);
+      const created = await createContract(user, contractInput(ownership.id, { rentPaymentDay: 25 }));
+      await prisma.ownership.update({ where: { id: ownership.id }, data: { endedAt: new Date(), endReason: 'SOLD' } });
+      const view = await findContractForUser(user, created.id);
+      assert.equal(view.rentPaymentDay, 25);
+      assert.equal(view.nextRentPaymentDate, null);
+    });
+  });
+
   test('해지일 규칙과 해지 뒤 상태', async () => {
     const user = await fixture.createUser();
     const { property, ownership } = await createOwnedUnit(user);
@@ -356,6 +477,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
         leaseType: 'MONTHLY',
         deposit: '50000000',
         monthlyRent: '800000',
+        rentPaymentDay: null,
         startDate: shift(-30),
         endDate: shift(700),
         previousContractId: null,
