@@ -15,8 +15,8 @@ import { useGetContract } from '../hooks/useGetContract';
 import { usePatchContract } from '../hooks/usePatchContract';
 import { getContractStatusBadge, isContractInProgress } from '../utils/contract';
 
-// 진행 중 계약은 연락처·메모만 바꿀 수 있다(D-13, 서버 contractRules.js와 같은 허용 목록). 나머지 칸은 보기만.
-const EDITABLE_WHILE_ACTIVE = ['tenantPhone', 'memo'];
+// 진행 중 계약은 연락처·메모·월세 입금일만 바꿀 수 있다(D-13, 서버 contractRules.js와 같은 허용 목록). 나머지 칸은 보기만.
+const EDITABLE_WHILE_ACTIVE = ['tenantPhone', 'memo', 'rentPaymentDay'];
 const LOCKED_WHILE_ACTIVE = CONTRACT_FORM_FIELDS.filter((field) => !EDITABLE_WHILE_ACTIVE.includes(field));
 
 // 바뀐 칸만 보낸다(PATCH). 진행 중이면 잠긴 칸은 아예 보지 않는다.
@@ -77,7 +77,9 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
         </div>
 
         {isActive && (
-          <NoticeBox tone="warn">진행 중인 계약은 조건을 바꿀 수 없어요. 해지 후 새로 등록하거나 갱신하세요</NoticeBox>
+          <NoticeBox tone="warn">
+            진행 중인 계약은 월세 입금일·연락처·메모만 바꿀 수 있어요. 다른 조건은 해지 후 새로 등록하거나 갱신하세요
+          </NoticeBox>
         )}
 
         <ContractForm

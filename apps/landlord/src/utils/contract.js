@@ -64,6 +64,19 @@ export const formatContractAmount = ({ leaseType, deposit, monthlyRent }) =>
 
 export const formatPeriod = ({ startDate, endDate }) => `${startDate} ~ ${endDate}`;
 
+// 월세 입금일(#76): 1~31, 31은 '말일'(그달에 없는 날은 그달 말일, 서버 rentPayment.js).
+export const RENT_PAYMENT_LAST_DAY = 31;
+export const RENT_PAYMENT_DAY_OPTIONS = Array.from({ length: RENT_PAYMENT_LAST_DAY }, (_, index) => {
+  const day = index + 1;
+  return { value: String(day), label: day === RENT_PAYMENT_LAST_DAY ? '말일' : `${day}일` };
+});
+
+// 25 → '매월 25일', 31 → '매월 말일', 없으면 null
+export const formatRentPaymentDay = (day) => {
+  if (day == null) return null;
+  return day === RENT_PAYMENT_LAST_DAY ? '매월 말일' : `매월 ${day}일`;
+};
+
 // 연락처: 숫자만 남긴다(최대 11자리). 서버도 숫자만 저장한다(D-03).
 export const toPhoneDigits = (value) => (value ?? '').replace(/\D/g, '').slice(0, 11);
 

@@ -5,7 +5,8 @@ import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
 import { formatAttachmentCount } from '../utils/attachment';
-import { addDays, daysBetween, formatDday, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
+import { daysBetween, formatDday, formatManwon, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
+import { getRentDueToday, toScheduleEvents } from '../utils/dashboard';
 import { formatNumber, formatUnitSpec } from '../utils/format';
 import { formatLogDate } from '../utils/managementLog';
 import { getUnitTypeLabel } from '../utils/unitListing';
@@ -17,8 +18,6 @@ const TABLE_SIZE = 5;
 const OWNERSHIP_COUNT_SIZE = 100;
 // 계약 카드는 목록 API 최대 크기(100건)로 받아 화면에서 합산한다(D-11). 넘으면 '100건 이상'으로 알린다.
 const CONTRACT_SUM_SIZE = 100;
-// 예정 일정에 보여 줄 기간(D-12)
-const SCHEDULE_DAYS = 30;
 const RECENT_LOG_SIZE = 5;
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -75,21 +74,6 @@ const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
       </div>
     </Card>
   );
-};
-
-// 예정 일정(D-12): 오늘~30일 안의 계약 시작일·종료일. 시작일은 시작 전 계약만.
-const toScheduleEvents = (contracts, today) => {
-  const last = addDays(today, SCHEDULE_DAYS);
-  const inRange = (date) => date >= today && date <= last;
-  return contracts
-    .flatMap((contract) => [
-      contract.status === 'UPCOMING' && inRange(contract.startDate)
-        ? { key: `${contract.id}-start`, date: contract.startDate, title: '계약 시작', contract }
-        : null,
-      inRange(contract.endDate) ? { key: `${contract.id}-end`, date: contract.endDate, title: '계약 종료', contract } : null,
-    ])
-    .filter(Boolean)
-    .sort((a, b) => a.date.localeCompare(b.date));
 };
 
 const countVerified = (ownershipList) =>
@@ -154,6 +138,9 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
   const depositSum = contracts.reduce((sum, contract) => sum + contract.deposit, 0);
   // 종료일 오름차순으로 받았으므로 그대로 쓴다.
   const expiringContracts = contracts.filter((contract) => contract.status === 'EXPIRING_SOON');
+  // 오늘이 월세 입금일인 계약(당일에만, #76)
+  const rentDueContracts = getRentDueToday(contracts, today);
+  const taskCount = rentDueContracts.length + expiringContracts.length;
   const contractByPropertyId = new Map(contracts.map((contract) => [contract.property.id, contract]));
   const schedules = toScheduleEvents(liveItems, today);
   const depositHint = liveContracts.error
@@ -172,9 +159,11 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         </p>
         <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, {userName}님</h2>
         <p className="mt-1 text-body text-ink-2">
-          {expiringContracts.length > 0
-            ? `오늘 확인할 일이 ${expiringContracts.length}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
-            : '오늘 확인할 일이 없습니다.'}
+          {taskCount === 0
+            ? '오늘 확인할 일이 없습니다.'
+            : expiringContracts.length > 0
+              ? `오늘 확인할 일이 ${taskCount}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
+              : `오늘 확인할 일이 ${taskCount}건 있습니다. 오늘 월세 입금일인 계약을 확인해 주세요.`}
         </p>
       </div>
 
@@ -214,13 +203,32 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         <Card className="col-span-2 p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-body font-semibold text-ink">오늘 할 일</h3>
-            <span className="font-num text-chip tabular-nums text-ink-3">{expiringContracts.length}건</span>
+            <span className="font-num text-chip tabular-nums text-ink-3">{taskCount}건</span>
           </div>
           <div className="mt-4 space-y-3">
             {liveContracts.error && <p className="text-body text-crit-ink">{liveContracts.error.message}</p>}
-            {liveContracts.data && expiringContracts.length === 0 && (
+            {liveContracts.data && taskCount === 0 && (
               <p className="py-4 text-center text-body text-ink-3">종료가 가까운 계약이 없습니다</p>
             )}
+            {rentDueContracts.map((contract) => (
+              <div key={`${contract.id}-rent`} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">
+                <div className="min-w-0">
+                  <Badge tone="warning">오늘</Badge>
+                  <p className="mt-1.5 text-body font-semibold text-ink">오늘 월세 입금일이에요</p>
+                  <p className="mt-0.5 text-chip text-ink-3">
+                    {contract.property.displayName} · <span className="font-num tabular-nums">{formatManwon(contract.monthlyRent)}</span>
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0 whitespace-nowrap"
+                  onClick={() => onNavigate('contractDetail', { contractId: contract.id })}
+                >
+                  계약 보기
+                </Button>
+              </div>
+            ))}
             {expiringContracts.map((contract) => (
               <div key={contract.id} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">
                 <div className="min-w-0">
@@ -271,7 +279,10 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-body font-medium text-ink">{event.title}</p>
-                    <p className="truncate text-chip text-ink-3">{event.contract.property.displayName}</p>
+                    <p className="truncate text-chip text-ink-3">
+                      {event.contract.property.displayName}
+                      {event.detail && <span className="font-num tabular-nums"> · {event.detail}</span>}
+                    </p>
                   </div>
                   <Badge tone={getDdayTone(days)} className="font-num tabular-nums">
                     {formatDday(days)}

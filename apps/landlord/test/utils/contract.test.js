@@ -6,6 +6,7 @@ import {
   formatDday,
   formatManwon,
   formatPhone,
+  formatRentPaymentDay,
   formatWon,
   getContractDdayBadge,
   getContractStatusBadge,
@@ -35,6 +36,17 @@ describe('계약 금액 표기', () => {
   it('월세는 보증금 / 월세, 전세는 보증금만', () => {
     expect(formatContractAmount({ leaseType: 'MONTHLY', deposit: 10000000, monthlyRent: 500000 })).toBe('1,000만 / 50만');
     expect(formatContractAmount({ leaseType: 'JEONSE', deposit: 200000000, monthlyRent: 0 })).toBe('전세 2억');
+  });
+});
+
+describe('월세 입금일 표기(#76)', () => {
+  it("매월 N일, 31은 '말일', 없으면 null", () => {
+    expect(formatRentPaymentDay(25)).toBe('매월 25일');
+    expect(formatRentPaymentDay(1)).toBe('매월 1일');
+    expect(formatRentPaymentDay(30)).toBe('매월 30일');
+    expect(formatRentPaymentDay(31)).toBe('매월 말일');
+    expect(formatRentPaymentDay(null)).toBeNull();
+    expect(formatRentPaymentDay(undefined)).toBeNull();
   });
 });
 
