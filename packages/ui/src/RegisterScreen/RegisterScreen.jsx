@@ -10,10 +10,19 @@ const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_BYTES = 72;
 const NAME_MAX_LENGTH = 50;
 // 서버 details 필드 중 화면 칸과 이름이 같은 것만 칸 아래에 보여 준다.
-const FIELD_NAMES = ['name', 'email', 'password', 'phone', 'termsAgreed', 'privacyAgreed'];
+const FIELD_NAMES = ['name', 'email', 'password', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
+const BIRTH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const BIRTH_YEAR_MIN = 1900;
+
+// 오늘 날짜(YYYY-MM-DD). 기기 시간대 기준이라 date 입력의 max로 쓴다.
+const todayString = () => {
+  const now = new Date();
+  const pad = (number) => String(number).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
 
 // 서버(registerValidation.js)와 같은 규칙. 최종 판단은 서버가 하고, 여기서는 빠른 안내용이다.
-const validate = ({ name, email, password, passwordConfirm, phone, termsAgreed, privacyAgreed }) => {
+const validate = ({ name, email, password, passwordConfirm, phone, birthDate, termsAgreed, privacyAgreed }) => {
   const errors = {};
   const trimmedName = name.trim();
   if (!trimmedName) errors.name = '이름을 입력해주세요.';
@@ -31,6 +40,11 @@ const validate = ({ name, email, password, passwordConfirm, phone, termsAgreed, 
 
   const phoneDigits = phone.replace(/[\s-]/g, '');
   if (phoneDigits && !PHONE_PATTERN.test(phoneDigits)) errors.phone = '휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)';
+
+  if (!birthDate) errors.birthDate = '생년월일을 입력해주세요.';
+  else if (!BIRTH_DATE_PATTERN.test(birthDate) || Number(birthDate.slice(0, 4)) < BIRTH_YEAR_MIN || birthDate > todayString()) {
+    errors.birthDate = '생년월일이 올바르지 않습니다.';
+  }
 
   if (!termsAgreed) errors.termsAgreed = '이용약관에 동의해야 가입할 수 있습니다.';
   if (!privacyAgreed) errors.privacyAgreed = '개인정보 수집·이용에 동의해야 가입할 수 있습니다.';
@@ -59,7 +73,7 @@ const AgreementCheckbox = ({ id, checked, onChange, error, children }) => (
   </div>
 );
 
-// 회원가입 화면. onSubmit({ name, email, password, phone, termsAgreed, privacyAgreed })이 던진 오류의
+// 회원가입 화면. onSubmit({ name, email, password, phone, birthDate, termsAgreed, privacyAgreed })이 던진 오류의
 // error.response.data.error(code, message, details)를 칸별 오류와 위쪽 안내로 나눠 보여 준다.
 export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit }) => {
   const [values, setValues] = useState({
@@ -68,6 +82,7 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit })
     password: '',
     passwordConfirm: '',
     phone: '',
+    birthDate: '',
     termsAgreed: false,
     privacyAgreed: false,
   });
@@ -98,6 +113,7 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit })
         email: values.email.trim(),
         password: values.password,
         phone: values.phone.trim() || null,
+        birthDate: values.birthDate,
         termsAgreed: values.termsAgreed,
         privacyAgreed: values.privacyAgreed,
       });
@@ -170,6 +186,18 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit })
             error={fieldErrors.passwordConfirm}
           />
           <TextField
+            label="생년월일"
+            type="date"
+            required
+            autoComplete="bday"
+            hint="소유주 인증에 사용합니다"
+            min={`${BIRTH_YEAR_MIN}-01-01`}
+            max={todayString()}
+            value={values.birthDate}
+            onChange={setValue('birthDate')}
+            error={fieldErrors.birthDate}
+          />
+          <TextField
             label="휴대폰 번호 (선택)"
             type="tel"
             autoComplete="tel"
@@ -195,7 +223,7 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit })
               error={fieldErrors.privacyAgreed}
             >
               <span className="font-semibold text-accent-strong">[필수]</span> 개인정보 수집·이용에 동의합니다
-              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
+              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 생년월일(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
             </AgreementCheckbox>
           </div>
 

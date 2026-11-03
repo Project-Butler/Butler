@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { after, describe, test } from 'node:test';
 import { decryptField } from '../../../src/platform/fieldCrypto.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
-import { findUserByCredentials, hashRefreshToken, registerUser } from '../../../src/domains/auth/service.js';
+import { findUserByCredentials, hashRefreshToken, registerUser, toPublicUser } from '../../../src/domains/auth/service.js';
 
 process.env.FIELD_ENCRYPTION_KEY ??= 'c'.repeat(64);
 
@@ -21,6 +21,7 @@ const input = (overrides = {}) => ({
   password: 'abcd1234',
   name: '가입 테스트',
   phone: null,
+  birthDate: '1990-01-31',
   role: 'LANDLORD',
   ...overrides,
 });
@@ -83,6 +84,16 @@ describe('registerUser', { skip: dbTestSkip }, () => {
     assert.ok(row.phone.startsWith('enc:v1:'));
     assert.ok(!row.phone.includes('01012345678'));
     assert.equal(decryptField(row.phone), '01012345678');
+  });
+
+  test('생년월일은 암호문으로 저장되고 복호화하면 원래 값, 응답(toPublicUser)에는 나오지 않는다', async () => {
+    const { req, res } = fakeHttp();
+    const user = await registerUser(req, res, input({ birthDate: '1985-12-05' }));
+    const row = await prisma.user.findUnique({ where: { id: user.id } });
+    assert.ok(row.birthDate.startsWith('enc:v1:'));
+    assert.ok(!row.birthDate.includes('1985'));
+    assert.equal(decryptField(row.birthDate), '1985-12-05');
+    assert.equal('birthDate' in toPublicUser(row), false);
   });
 
   test('휴대폰 번호를 안 넣으면 null', async () => {
