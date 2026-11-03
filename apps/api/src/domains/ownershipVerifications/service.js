@@ -9,7 +9,7 @@ import { applyOwnershipVerification, expireStaleAttempts, failAttemptInTx } from
 import {
   ACTIVE_ATTEMPT_STATUSES,
   buildLedgerTarget,
-  canStartInOrder,
+  getStartBlockReason,
   matchOwner,
   RENEWAL_WINDOW_DAYS,
   resolveIdentity,
@@ -127,13 +127,13 @@ const createAttemptInTx = async (tx, user, { ownershipId, birthDateEnc }, req) =
     where: { propertyId: ownership.propertyId, endedAt: null },
     select: { id: true, startedAt: true, verificationStatus: true, verificationExpiresAt: true },
   });
-  const inOrder = canStartInOrder(rows, ownershipId, now);
+  const blockReason = getStartBlockReason(rows, ownershipId, now);
 
   await tx.consent.create({
     data: { userId: user.id, type: CONSENT_TYPE, version: CONSENT_VERSION, agreed: true, agreedAt: now, ip: req?.ip ?? null },
   });
   const attempt = await tx.ownershipVerificationAttempt.create({
-    data: { ownershipId, requestedBy: user.id, birthDateEnc: inOrder ? birthDateEnc : null },
+    data: { ownershipId, requestedBy: user.id, birthDateEnc: blockReason ? null : birthDateEnc },
   });
 
   const property = await tx.property.findUnique({
@@ -157,9 +157,9 @@ const createAttemptInTx = async (tx, user, { ownershipId, birthDateEnc }, req) =
     params: { attemptId: attempt.id, buildingNo: property.buildingNo, unitNo: property.unitNo },
   });
 
-  // 나중에 등록한 사람은 발급 없이 끝낸다.
-  if (!inOrder) await failAttemptInTx(tx, attempt.id, 'PENDING', 'NOT_FIRST_REGISTRANT');
-  return { attempt, created: inOrder };
+  // 인증할 수 없는 사람은 발급 없이 끝낸다.
+  if (blockReason) await failAttemptInTx(tx, attempt.id, 'PENDING', blockReason);
+  return { attempt, created: !blockReason };
 };
 
 // POST /ownership-verifications. 러너 확인 → 시도 저장 → 실행. 진행 중 시도가 있으면 그 시도를 돌려준다.

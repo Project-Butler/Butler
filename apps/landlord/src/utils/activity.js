@@ -55,8 +55,8 @@ export const formatActivity = ({ type, params = {} }) => {
     case 'OWNERSHIP_UPDATED':
       return `${unitOf(params)} 임대 조건을 수정했어요${formatFields(params.fields)}`;
     case 'OWNERSHIP_ENDED':
-      // 새 소유자 인증으로 자동 종료(SUPERSEDED)된 경우는 본인이 삭제한 것이 아니다.
-      return params.endReason === 'SUPERSEDED'
+      // 새 소유자 인증·미인증 기간 초과로 자동 종료된 경우는 본인이 삭제한 것이 아니다.
+      return params.endReason === 'SUPERSEDED' || params.endReason === 'UNVERIFIED_EXPIRED'
         ? `${unitOf(params)} 소유 관계가 종료됐어요`
         : `${unitOf(params)}를 삭제했어요(소유 종료)`;
     // 인증 활동 params에는 상세 사유가 없다(계획 5장).

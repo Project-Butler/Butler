@@ -44,6 +44,7 @@ enum EndReason {
   SUPERSEDED
   ADMIN_ENDED
   SOLD
+  UNVERIFIED_EXPIRED
 
   @@map("end_reason")
 }

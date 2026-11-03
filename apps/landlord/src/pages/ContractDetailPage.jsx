@@ -131,7 +131,7 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
     );
   }
 
-  const status = getContractStatusBadge(contract.status);
+  const status = getContractStatusBadge(contract);
   const dday = getContractDdayBadge(contract);
   const canEdit = !contract.isReadOnly;
   const canRenew = canEdit && isContractInProgress(contract.status);

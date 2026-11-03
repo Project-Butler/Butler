@@ -36,6 +36,7 @@ export const END_REASON_LABEL = {
   SOLD: '매도',
   SUPERSEDED: '새 소유자 인증',
   ADMIN_ENDED: '운영자 종료',
+  UNVERIFIED_EXPIRED: '미인증 자동 종료',
 };
 
 export const LEASE_TYPE_LABEL = {
@@ -140,7 +141,7 @@ export const VERIFICATION_ATTEMPT_STATUS_TONE = {
 export const VERIFICATION_REASON_LABEL = {
   NOT_MATCHED: '소유자 불일치',
   UNREADABLE: '대장 판독 불가',
-  NOT_FIRST_REGISTRANT: '먼저 등록한 사람 아님',
+  NOT_FIRST_REGISTRANT: '앞선 소유자 인증 취소 처리 전',
   NO_JIBUN_ADDRESS: '지번 주소 없음',
   ISSUE_INVALID: '발급 입력 오류',
   ISSUE_STOPPED: '발급 중단',

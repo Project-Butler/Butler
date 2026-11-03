@@ -24,6 +24,8 @@ export const LEDGER_KINDS = Object.freeze(['GENERAL', 'UNIT_EXCLUSIVE']);
 
 export const STALE_ATTEMPT_MS = 10 * 60 * 1000;
 export const RENEWAL_WINDOW_DAYS = 30;
+// 이 기간 안에 인증하지 않은 등록은 자동으로 끝낸다.
+export const UNVERIFIED_RETENTION_DAYS = 30;
 export const DEFAULT_VALIDITY_YEARS = 3;
 // 날짜 계산이 깨지지 않게 두는 상한.
 export const MAX_VALIDITY_YEARS = 100;
@@ -65,15 +67,14 @@ const isBefore = (a, b) => {
   return diff !== 0 ? diff < 0 : a.id < b.id;
 };
 
-// 인증을 시작할 수 있는 순서인지. rows: 같은 호실의 활성 소유 관계 전부.
-// 저장값이 VERIFIED인 본인(만료 포함)은 면제. 다른 사람 중 만료된 행은 순서에서 뺀다. REVOKED·미인증은 포함한다.
-export const canStartInOrder = (rows, ownershipId, now = new Date()) => {
+// 먼저 인증한 사람이 소유자다. 인증을 시작할 수 없으면 사유를, 있으면 null을 돌려준다(발급 없이 끝낸다).
+// rows: 같은 호실의 활성 소유 관계 전부. 저장값이 VERIFIED인 본인(만료 포함)은 면제. 미인증·만료된 다른 사람은 막지 않는다.
+export const getStartBlockReason = (rows, ownershipId, now = new Date()) => {
   const mine = rows.find((row) => row.id === ownershipId);
-  if (!mine) return false;
-  if (mine.verificationStatus === 'VERIFIED') return true;
-  return !rows.some(
-    (row) => row.id !== ownershipId && computeOwnershipVerificationStatus(row, now) !== 'EXPIRED' && isBefore(row, mine),
-  );
+  if (!mine) return 'OWNERSHIP_CHANGED';
+  if (mine.verificationStatus === 'VERIFIED') return null;
+  if (rows.some((row) => row.id !== ownershipId && computeOwnershipVerificationStatus(row, now) === 'VERIFIED')) return 'VERIFIED_OWNER_EXISTS';
+  return hasEarlierRevokedOwner(rows, mine) ? 'NOT_FIRST_REGISTRANT' : null;
 };
 
 export const hasEarlierRevokedOwner = (rows, mine) =>

@@ -8,7 +8,7 @@ import app from '../../app.js';
 import { errorHandler } from '../../middlewares/errorHandler.js';
 import { requireRegionMember } from '../../middlewares/requireRegionMember.js';
 import { encryptField } from '../../platform/fieldCrypto.js';
-import { applyOwnershipVerification, expireStaleAttempts, VALIDITY_SETTING_KEY } from '../../platform/ownershipVerification.js';
+import { applyOwnershipVerification, endAbandonedUnverifiedOwnerships, expireStaleAttempts, VALIDITY_SETTING_KEY } from '../../platform/ownershipVerification.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toContractResponse, CONTRACT_INCLUDE } from '../../platform/contractSerializer.js';
 import { getOwnershipVerificationSetting, findOwnershipVerificationAttempts, revokeOwnership, updateOwnershipVerificationSetting } from '../admin/service.js';
@@ -244,19 +244,49 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(attempt.birthDateEnc, null);
   });
 
-  test('나중에 등록한 사람은 발급 없이 NOT_FIRST_REGISTRANT, 임시값을 저장하지 않는다', async () => {
+  test('유효한 인증자가 있으면 발급 없이 VERIFIED_OWNER_EXISTS, 임시값을 저장하지 않는다', async () => {
     const first = await createUser();
     const second = await createUser();
     const property = await createProperty();
-    await own(first, property, { startedAtOffset: -2000 });
+    await own(first, property, { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE() });
     const ownership = await own(second, property);
 
     const runner = { kind: 'fake', awaitDispatch: true, run: async () => assert.fail('발급하면 안 된다') };
     const response = await startOwnershipVerification(second, input(ownership), null, { selectRunner: () => runner });
     assert.equal(response.status, 'FAILED');
     const attempt = await getAttempt(response.id);
-    assert.equal(attempt.reasonCode, 'NOT_FIRST_REGISTRANT');
+    assert.equal(attempt.reasonCode, 'VERIFIED_OWNER_EXISTS');
     assert.equal(attempt.birthDateEnc, null);
+  });
+
+  test('먼저 인증한 사람이 소유자다: 나중에 등록해도 인증되고 앞선 미인증 행과 계약은 끝난다', async () => {
+    const first = await createUser('먼저등록자');
+    const second = await createUser();
+    const property = await createProperty();
+    const earlier = await own(first, property, { startedAtOffset: -2000 });
+    const mine = await own(second, property);
+
+    const { attempt } = await start(second, mine);
+    assert.equal(attempt.status, 'VERIFIED');
+    assert.equal((await getOwnership(mine.id)).verificationStatus, 'VERIFIED');
+    assert.equal((await getOwnership(earlier.id)).endReason, 'SUPERSEDED');
+  });
+
+  test('30일이 지난 미인증 등록만 끝난다. 진행 중 시도·인증·최근 등록은 그대로다', async () => {
+    const user = await createUser();
+    const old = -31 * DAY;
+    const abandoned = await own(user, await createProperty(), { startedAtOffset: old });
+    const running = await own(user, await createProperty(), { startedAtOffset: old });
+    const verified = await own(user, await createProperty(), { startedAtOffset: old, verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE() });
+    const recent = await own(user, await createProperty(), { startedAtOffset: -29 * DAY });
+    const attempt = await runningAttempt(user, running);
+
+    const { ended } = await endAbandonedUnverifiedOwnerships();
+    assert.ok(ended >= 1);
+    assert.equal((await getOwnership(abandoned.id)).endReason, 'UNVERIFIED_EXPIRED');
+    assert.equal((await auditsOf(abandoned, 'OWNERSHIP_ENDED')).length, 1);
+    for (const { id } of [running, verified, recent]) assert.equal((await getOwnership(id)).endedAt, null);
+    await receiveRunnerResult(attempt.id, { kind: 'ISSUE_FAILED' });
   });
 
   test('만료된 본인은 뒤 등록자가 있어도 재인증을 시작하고, 실패해도 저장값이 그대로다', async () => {
@@ -275,7 +305,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(after.verificationExpiresAt.getTime(), expiresAt.getTime());
   });
 
-  test('만료된 이전 소유자는 SUPERSEDED로 끝나고 미인증 행은 남는다. 감사·활동에 새 소유자 정보 없음', async () => {
+  test('만료된 이전 소유자와 미인증 행은 SUPERSEDED로 끝난다. 감사·활동에 새 소유자 정보 없음', async () => {
     const oldOwner = await createUser('이전소유자');
     const newOwner = await createUser();
     const bystander = await createUser('뒤등록자');
@@ -288,7 +318,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(attempt.status, 'VERIFIED');
     const ended = await getOwnership(oldOwnership.id);
     assert.equal(ended.endReason, 'SUPERSEDED');
-    assert.equal((await getOwnership(other.id)).endedAt, null);
+    assert.equal((await getOwnership(other.id)).endReason, 'SUPERSEDED');
 
     const [endAudit] = await auditsOf(oldOwnership, 'OWNERSHIP_ENDED');
     assert.equal(endAudit.summary, 'SUPERSEDED');

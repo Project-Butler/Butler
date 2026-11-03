@@ -4,8 +4,8 @@ import { parseTarget } from '../domains/ownershipVerifications/eais/issueCore.js
 import {
   buildJibunAddress,
   buildLedgerTarget,
-  canStartInOrder,
   computeVerificationExpiry,
+  getStartBlockReason,
   hasEarlierRevokedOwner,
   isValidBirthDate,
   matchOwner,
@@ -62,31 +62,25 @@ const row = (id, startedAt, extra = {}) => ({
   ...extra,
 });
 
-test('canStartInOrder: 가장 앞선 사람만 시작한다', () => {
+test('getStartBlockReason: 미인증은 등록 순서와 무관하게 서로 막지 않는다', () => {
   const rows = [row('b', '2026-02-01'), row('a', '2026-01-01')];
-  assert.equal(canStartInOrder(rows, 'a', NOW), true);
-  assert.equal(canStartInOrder(rows, 'b', NOW), false);
-  assert.equal(canStartInOrder(rows, 'x', NOW), false);
+  assert.equal(getStartBlockReason(rows, 'a', NOW), null);
+  assert.equal(getStartBlockReason(rows, 'b', NOW), null);
+  assert.equal(getStartBlockReason(rows, 'x', NOW), 'OWNERSHIP_CHANGED');
 });
 
-test('canStartInOrder: 시작 시각이 같으면 id 순서', () => {
-  const rows = [row('b', '2026-01-01'), row('a', '2026-01-01')];
-  assert.equal(canStartInOrder(rows, 'a', NOW), true);
-  assert.equal(canStartInOrder(rows, 'b', NOW), false);
-});
-
-test('canStartInOrder: 저장값 VERIFIED인 본인은 면제, 만료된 다른 사람은 빠지고 REVOKED는 남는다', () => {
+test('getStartBlockReason: 저장값 VERIFIED인 본인은 면제, 만료된 사람은 막지 않고, 유효한 인증자·앞선 REVOKED는 막는다', () => {
   const expiredMe = row('b', '2026-02-01', { verificationStatus: 'VERIFIED', verificationExpiresAt: PAST });
-  assert.equal(canStartInOrder([row('a', '2026-01-01'), expiredMe], 'b', NOW), true);
+  assert.equal(getStartBlockReason([row('a', '2026-01-01'), expiredMe], 'b', NOW), null);
 
   const expiredOther = row('a', '2026-01-01', { verificationStatus: 'VERIFIED', verificationExpiresAt: PAST });
-  assert.equal(canStartInOrder([expiredOther, row('b', '2026-02-01')], 'b', NOW), true);
+  assert.equal(getStartBlockReason([expiredOther, row('b', '2026-02-01')], 'b', NOW), null);
 
-  const validOther = row('a', '2026-01-01', { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE });
-  assert.equal(canStartInOrder([validOther, row('b', '2026-02-01')], 'b', NOW), false);
+  const validOther = row('b', '2026-02-01', { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE });
+  assert.equal(getStartBlockReason([row('a', '2026-01-01'), validOther], 'a', NOW), 'VERIFIED_OWNER_EXISTS');
 
   const revokedOther = row('a', '2026-01-01', { verificationStatus: 'REVOKED' });
-  assert.equal(canStartInOrder([revokedOther, row('b', '2026-02-01')], 'b', NOW), false);
+  assert.equal(getStartBlockReason([revokedOther, row('b', '2026-02-01')], 'b', NOW), 'NOT_FIRST_REGISTRANT');
 });
 
 test('hasEarlierRevokedOwner: 나보다 앞선 REVOKED만 본다', () => {

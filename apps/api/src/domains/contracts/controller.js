@@ -144,6 +144,9 @@ const parseListQuery = (query) => {
   if (query.activeOwnership !== undefined && query.activeOwnership !== 'true') {
     details.push({ field: 'activeOwnership', reason: 'true만 받습니다.' });
   }
+  if (query.includeEndedOwnership !== undefined && query.includeEndedOwnership !== 'true') {
+    details.push({ field: 'includeEndedOwnership', reason: 'true만 받습니다.' });
+  }
   const sortMatch = SORT_PATTERN.exec(query.sort ?? 'endDate:asc');
   if (!sortMatch) details.push({ field: 'sort', reason: 'endDate|startDate|createdAt:asc|desc 형식이어야 합니다.' });
   const { page, size } = parsePagination(query, details);
@@ -153,6 +156,7 @@ const parseListQuery = (query) => {
     propertyId: query.propertyId ?? null,
     ownershipId: query.ownershipId ?? null,
     activeOwnership: query.activeOwnership === 'true',
+    includeEndedOwnership: query.includeEndedOwnership === 'true',
     statuses,
     sort: { field: sortMatch[1], direction: sortMatch[2] },
     page,

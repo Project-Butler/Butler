@@ -19,7 +19,7 @@ const PAGE_SIZE = 20;
 const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetContractList(
-    { status: filter.status, sort: 'endDate:asc', page, size: PAGE_SIZE },
+    { ...filter.query, sort: 'endDate:asc', page, size: PAGE_SIZE },
     { onUnauthorized },
   );
   const items = data?.items ?? [];
@@ -62,7 +62,7 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
         </thead>
         <tbody>
           {items.map((contract) => {
-            const status = getContractStatusBadge(contract.status);
+            const status = getContractStatusBadge(contract);
             const dday = getContractDdayBadge(contract);
             return (
               <tr

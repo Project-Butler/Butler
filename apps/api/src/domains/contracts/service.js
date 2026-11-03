@@ -14,6 +14,7 @@ import {
 } from '../../platform/contractRules.js';
 import { CONTRACT_INCLUDE, resolveContractViewer, toContractResponse } from '../../platform/contractSerializer.js';
 import { computeContractStatus } from '../../platform/contractStatus.js';
+import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { compareDateStrings, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -159,6 +160,9 @@ export const createContract = async (user, input, req) => {
     if (ownership.endedAt) {
       throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
     }
+    if (computeOwnershipVerificationStatus(ownership, new Date()) !== 'VERIFIED') {
+      throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증을 마친 호실만 계약을 등록할 수 있습니다.');
+    }
     await assertNoOverlap(tx, input);
 
     const contract = await tx.contract.create({
@@ -193,14 +197,18 @@ export const createContract = async (user, input, req) => {
 const SORT_FIELDS = { endDate: 'endDate', startDate: 'startDate', createdAt: 'createdAt' };
 
 // GET /contracts — 내 소유 관계(활성·종료)의 계약 + 내가 임차인인 계약.
-export const findContracts = async (user, { propertyId, ownershipId, activeOwnership, statuses, sort, page, size }) => {
+export const findContracts = async (user, { propertyId, ownershipId, activeOwnership, includeEndedOwnership, statuses, sort, page, size }) => {
   const todayKST = getTodayKST();
   const filters = [{ OR: [{ ownership: { userId: user.id } }, { tenantId: user.id }] }];
   if (propertyId) filters.push({ ownership: { propertyId } });
   if (ownershipId) filters.push({ ownershipId });
   // 매도 등으로 끝난 소유 관계의 계약은 읽기 전용이라 만료 임박 배지에서 뺀다.
   if (activeOwnership) filters.push({ ownership: { endedAt: null } });
-  if (statuses.length > 0) filters.push(statusToWhere(statuses, todayKST));
+  if (statuses.length > 0) {
+    const statusWhere = statusToWhere(statuses, todayKST);
+    // 임대인 화면의 '끝남': status와 무관하게 소유 관계가 끝난 계약도 함께 받는다.
+    filters.push(includeEndedOwnership ? { OR: [statusWhere, { ownership: { endedAt: { not: null } } }] } : statusWhere);
+  }
   const where = { AND: filters };
 
   const [total, rows] = await Promise.all([

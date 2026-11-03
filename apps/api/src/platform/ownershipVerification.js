@@ -3,7 +3,7 @@ import { ACTIVITY_TYPES, recordActivity } from './activityLog.js';
 import { audit } from './audit.js';
 import { getNow } from './dateUtils.js';
 import { endOwnershipInTx } from './ownershipEnd.js';
-import { lockActiveOwnershipRows } from './ownershipLock.js';
+import { lockActiveOwnershipRows, lockOwnershipRow } from './ownershipLock.js';
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 import {
   ACTIVE_ATTEMPT_STATUSES,
@@ -12,12 +12,14 @@ import {
   hasEarlierRevokedOwner,
   parseValidityYears,
   STALE_ATTEMPT_MS,
+  UNVERIFIED_RETENTION_DAYS,
 } from './ownershipVerificationRules.js';
 import { prisma } from './prismaClient.js';
 
 export const VALIDITY_SETTING_KEY = 'OWNERSHIP_VERIFICATION_VALIDITY_YEARS';
 const TX_OPTIONS = { maxWait: 10_000, timeout: 20_000 };
 const STALE_SWEEP_LIMIT = 200;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const readValiditySetting = async (client = prisma) => {
   const row = await client.platformSetting.findUnique({ where: { key: VALIDITY_SETTING_KEY } });
@@ -110,14 +112,14 @@ const defaultSaveVerified = (tx, { ownershipId, attemptId, verifiedAt, expiresAt
     data: { verificationStatus: 'VERIFIED', verifiedAt, verificationExpiresAt: expiresAt, checkId: attemptId },
   });
 
-const supersedeExpiredOwner = async (tx, row) => {
-  const ended = await endOwnershipInTx(tx, row, { endReason: 'SUPERSEDED', note: null, checkActiveContracts: false });
+const endOwnerAutomatically = async (tx, row, endReason) => {
+  const ended = await endOwnershipInTx(tx, row, { endReason, note: null, checkActiveContracts: false });
   await audit.record({
     action: 'OWNERSHIP_ENDED',
     resourceType: 'OWNERSHIP',
     resourceId: row.id,
-    summary: 'SUPERSEDED',
-    after: { endReason: 'SUPERSEDED' },
+    summary: endReason,
+    after: { endReason },
     client: tx,
   });
   await recordActivity(tx, {
@@ -125,8 +127,34 @@ const supersedeExpiredOwner = async (tx, row) => {
     type: ACTIVITY_TYPES.OWNERSHIP_ENDED,
     complexId: ended.property.complexId,
     propertyId: ended.propertyId,
-    params: { ...toUnitParams(ended.property), endReason: 'SUPERSEDED' },
+    params: { ...toUnitParams(ended.property), endReason },
   });
+};
+
+// 기간 안에 인증하지 않은 등록을 끝낸다(cron). 진행 중 시도가 있으면 이번에는 건너뛴다.
+export const endAbandonedUnverifiedOwnerships = async ({ now = getNow() } = {}) => {
+  const startedBefore = new Date(now.getTime() - UNVERIFIED_RETENTION_DAYS * MS_PER_DAY);
+  const noActiveAttempt = { verificationAttempts: { none: { status: { in: [...ACTIVE_ATTEMPT_STATUSES] } } } };
+  const candidates = await prisma.ownership.findMany({
+    where: { endedAt: null, verificationStatus: 'UNVERIFIED', startedAt: { lt: startedBefore }, ...noActiveAttempt },
+    select: { id: true },
+    orderBy: { startedAt: 'asc' },
+    take: STALE_SWEEP_LIMIT,
+  });
+
+  let ended = 0;
+  for (const { id } of candidates) {
+    const didEnd = await prisma.$transaction(async (tx) => {
+      const row = await lockOwnershipRow(tx, id);
+      if (!row || row.endedAt || row.verificationStatus !== 'UNVERIFIED') return false;
+      const active = await tx.ownershipVerificationAttempt.count({ where: { ownershipId: id, status: { in: [...ACTIVE_ATTEMPT_STATUSES] } } });
+      if (active > 0) return false;
+      await endOwnerAutomatically(tx, row, 'UNVERIFIED_EXPIRED');
+      return true;
+    });
+    if (didEnd) ended += 1;
+  }
+  return { ended };
 };
 
 const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }) => {
@@ -156,9 +184,9 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
   if (others.some((row) => computeOwnershipVerificationStatus(row, now) === 'VERIFIED')) return fail('VERIFIED_OWNER_EXISTS');
   if (mine.verificationStatus !== 'VERIFIED' && hasEarlierRevokedOwner(rows, mine)) return fail('NOT_FIRST_REGISTRANT');
 
-  // 5. 만료된 다른 행을 자동 종료한다.
+  // 5. 먼저 인증한 사람이 소유자다. 만료·미인증인 다른 행을 자동 종료한다(REVOKED는 관리자 처리까지 남긴다).
   for (const row of others) {
-    if (computeOwnershipVerificationStatus(row, now) === 'EXPIRED') await supersedeExpiredOwner(tx, row);
+    if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) await endOwnerAutomatically(tx, row, 'SUPERSEDED');
   }
 
   // 6. 내 행을 인증으로 저장하고 시도를 끝낸다. 유효기간은 지금 값으로 계산해 저장한다.

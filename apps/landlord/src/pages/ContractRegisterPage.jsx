@@ -18,7 +18,7 @@ import { usePostContract } from '../hooks/usePostContract';
 import { CONTRACT_LEGAL_NOTICE, formatContractAmount, formatPeriod, formatPhone, getRenewalPeriod } from '../utils/contract';
 import { getPropertyStatusBadge } from '../utils/unitListing';
 
-// 호실 선택은 내 활성 소유 호실 전부(목록 API 최대 크기)
+// 호실 선택은 내 활성 소유 호실 중 인증 완료된 것(목록 API 최대 크기)
 const PROPERTY_PICKER_SIZE = 100;
 
 // 갱신(D-14): 호실·임차인·유형·금액은 이전 계약 그대로, 기간은 이전 종료일 다음 날부터 2년
@@ -32,7 +32,7 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
   const hookOptions = { onUnauthorized };
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
   const register = usePostContract(hookOptions);
-  const properties = propertyList.data?.items ?? [];
+  const properties = (propertyList.data?.items ?? []).filter((item) => item.myRelation?.verificationStatus === 'VERIFIED');
 
   const [propertyId, setPropertyId] = useState(previous?.property.id ?? initialPropertyId ?? '');
   const [form, setForm] = useState(() => (previous ? toRenewalForm(previous) : EMPTY_CONTRACT_FORM));
@@ -97,9 +97,14 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
             ))}
           </select>
           {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
-          {isPropertyMissing && <p className="text-chip text-crit-ink">지금 소유한 호실 중에 없어요. 다시 선택해 주세요.</p>}
+          {isPropertyMissing && <p className="text-chip text-crit-ink">인증 완료된 호실 중에 없어요. 권리자 인증을 먼저 완료해 주세요.</p>}
           {propertyList.data && properties.length === 0 && (
-            <p className="text-chip text-ink-3">먼저 호실을 등록해 주세요</p>
+            <p className="text-chip text-ink-3">
+              계약할 수 있는 호실이 없어요. 호실을 등록하고 권리자 인증을 완료해 주세요.{' '}
+              <button type="button" onClick={() => onNavigate('buildingList')} className="font-medium text-accent hover:text-accent-strong">
+                내 부동산으로 가기
+              </button>
+            </p>
           )}
         </div>
 

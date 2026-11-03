@@ -7,7 +7,7 @@ import { isUnauthorizedError, toApiError } from '../utils/apiError';
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.
 // refetch()는 같은 page를 다시 불러온다(오류가 난 페이지 재시도용).
 export const useGetContractList = (
-  { propertyId, ownershipId, status, sort, activeOwnership, page = 1, size = 20 } = {},
+  { propertyId, ownershipId, status, sort, activeOwnership, includeEndedOwnership, page = 1, size = 20 } = {},
   { onUnauthorized } = {},
 ) => {
   const [state, setState] = useState({ data: null, error: null, isLoading: true });
@@ -19,7 +19,16 @@ export const useGetContractList = (
 
     const load = async () => {
       try {
-        const { data: items, meta } = await getContractList({ propertyId, ownershipId, status, sort, activeOwnership, page, size });
+        const { data: items, meta } = await getContractList({
+          propertyId,
+          ownershipId,
+          status,
+          sort,
+          activeOwnership,
+          includeEndedOwnership,
+          page,
+          size,
+        });
         if (ignore) return;
         setState((prev) => ({
           data: { items: page > 1 && prev.data ? [...prev.data.items, ...items] : items, meta },
@@ -40,7 +49,7 @@ export const useGetContractList = (
     return () => {
       ignore = true;
     };
-  }, [propertyId, ownershipId, status, sort, activeOwnership, page, size, reloadCount, onUnauthorized]);
+  }, [propertyId, ownershipId, status, sort, activeOwnership, includeEndedOwnership, page, size, reloadCount, onUnauthorized]);
 
   const refetch = useCallback(() => setReloadCount((count) => count + 1), []);
 

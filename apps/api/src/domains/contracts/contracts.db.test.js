@@ -71,7 +71,8 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const complex = await fixture.createComplex();
     unitSeq += 1;
     const property = await prisma.property.create({ data: { complexId: complex.id, buildingNo: '101', unitNo: `${1000 + unitSeq}` } });
-    const ownership = await prisma.ownership.create({ data: { propertyId: property.id, userId: user.id } });
+    const verified = { verificationStatus: 'VERIFIED', verifiedAt: new Date(), verificationExpiresAt: new Date(Date.now() + 86400000 * 365) };
+    const ownership = await prisma.ownership.create({ data: { propertyId: property.id, userId: user.id, ...verified } });
     return { complex, property, ownership };
   };
 
@@ -81,7 +82,21 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const row = await prisma.$transaction((tx) => lockOwnershipRow(tx, ownership.id));
     assert.deepEqual(Object.keys(row).sort(), ['endedAt', 'id', 'propertyId', 'userId', 'verificationExpiresAt', 'verificationStatus']);
     assert.equal(row.userId, user.id);
-    assert.equal(row.verificationStatus, 'UNVERIFIED');
+    assert.equal(row.verificationStatus, 'VERIFIED');
+  });
+
+  test('미인증·만료·취소된 호실은 계약을 등록할 수 없다', async () => {
+    const user = await fixture.createUser();
+    const statuses = [
+      { verificationStatus: 'UNVERIFIED', verifiedAt: null, verificationExpiresAt: null },
+      { verificationExpiresAt: new Date(Date.now() - 86400000) },
+      { verificationStatus: 'REVOKED' },
+    ];
+    for (const data of statuses) {
+      const { ownership } = await createOwnedUnit(user);
+      await prisma.ownership.update({ where: { id: ownership.id }, data });
+      await rejectsWith(createContract(user, contractInput(ownership.id)), 'OWNERSHIP_VERIFICATION_REQUIRED');
+    }
   });
 
   test('등록 → 진행 중, 호실 임대중, 초기 세팅 계약 단계 완료, 활동 1행', async () => {
@@ -91,7 +106,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
 
     assert.equal(contract.status, 'ACTIVE');
     assert.equal(contract.deposit, 50000000);
-    assert.equal(contract.landlordVerified, false);
+    assert.equal(contract.landlordVerified, true);
     assert.equal(contract.isReadOnly, false);
     assert.equal(contract.tenant.invitationStatus, null);
     const view = await findPropertyForUser(user, property.id);
@@ -127,6 +142,21 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     await prisma.ownership.update({ where: { id: ownership.id }, data: { endedAt: new Date(), endReason: 'SELF_ENDED' } });
     await rejectsWith(createContract(user, contractInput(ownership.id, { monthlyRent: 0n })), 'CONTRACT_INVALID_AMOUNT');
     await rejectsWith(createContract(user, contractInput(ownership.id)), 'OWNERSHIP_ENDED');
+  });
+
+  test('소유가 끝난 진행 중 계약은 끝남 조회에 들어오고 activeOwnership에서는 빠진다', async () => {
+    const user = await fixture.createUser();
+    const { ownership } = await createOwnedUnit(user);
+    const contract = await createContract(user, contractInput(ownership.id));
+    await prisma.ownership.update({ where: { id: ownership.id }, data: { endedAt: new Date(), endReason: 'SOLD' } });
+    const ended = { ...LIST_DEFAULTS, statuses: ['EXPIRED', 'TERMINATED'] };
+
+    assert.equal((await findContracts(user, ended)).items.length, 0);
+    const { items } = await findContracts(user, { ...ended, includeEndedOwnership: true });
+    assert.deepEqual(items.map(({ id }) => id), [contract.id]);
+    assert.equal(items[0].endReason, 'SOLD');
+    const current = await findContracts(user, { ...LIST_DEFAULTS, statuses: [items[0].status], activeOwnership: true });
+    assert.equal(current.items.length, 0);
   });
 
   test('기간 겹침 409, 해지된 계약과는 겹쳐도 된다', async () => {

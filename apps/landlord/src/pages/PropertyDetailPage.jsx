@@ -494,7 +494,7 @@ const LeaseSection = ({ propertyId, ownershipId, canRegister, onNavigate, onUnau
     { onUnauthorized },
   );
   const contract = contractList.data?.items[0];
-  const status = contract && getContractStatusBadge(contract.status);
+  const status = contract && getContractStatusBadge(contract);
   const dday = contract && getContractDdayBadge(contract);
 
   const action = contract ? (
@@ -681,7 +681,7 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
             <LeaseSection
               propertyId={property.id}
               ownershipId={property.myRelation.ownershipId}
-              canRegister={property.myRelation.type === 'OWNER'}
+              canRegister={property.myRelation.type === 'OWNER' && property.myRelation.verificationStatus === 'VERIFIED'}
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />
