@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseTarget } from '../../src/domains/ownershipVerifications/eais/issueCore.js';
 import {
   buildJibunAddress,
   buildLedgerTarget,
@@ -78,14 +77,9 @@ test('hasEarlierRevokedOwner: 나보다 앞선 REVOKED만 본다', () => {
   assert.equal(hasEarlierRevokedOwner([row('c', '2026-03-01', { verificationStatus: 'REVOKED' }), mine], mine), false);
 });
 
-test('buildJibunAddress: 건물명이 붙은 주소도 parseTarget을 통과한다', () => {
+test('buildJibunAddress: 건물명이 붙은 주소는 건물명을 떼고 지번 주소만 남긴다', () => {
   const address = buildJibunAddress({ jibunAddress: '서울특별시 송파구 신천동 17 잠실파크리오', isMountain: false, mainLot: 17, subLot: 0 });
   assert.equal(address, '서울특별시 송파구 신천동 17');
-  const parsed = parseTarget({ address, dong: '101', ho: '1203' });
-  assert.equal(parsed.query, '서울 송파구 신천동 17');
-  assert.equal(parsed.target.ledgerKind, 'UNIT_EXCLUSIVE');
-  // 건물명을 지우지 않으면 거절되던 입력이다.
-  assert.equal(typeof parseTarget({ address: '서울특별시 송파구 신천동 17 잠실파크리오', dong: '101', ho: '1203' }), 'string');
 });
 
 test('buildJibunAddress: 주소는 산인데 칸이 산이 아니면 조립하지 않는다', () => {

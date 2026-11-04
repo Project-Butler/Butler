@@ -1,23 +1,11 @@
-// 러너 선택(OWNERSHIP_VERIFICATION_RUNNER). 쓸 수 없으면 null이고, service가 시도 저장 전에 503으로 거절한다.
-// 실제 발급만 한다(local·remote). 미설정, Vercel의 local, 세움터·OCR 값이 빠진 local, 설정이 빠진 remote는 쓸 수 없다.
-import { createLocalRunner } from './local.js';
+// Created: 2026-11-04 16:55
+// 러너 선택. 발급·OCR은 외부 발급 서버가 하고, API는 remote 러너로 요청만 보낸다.
+// 발급 서버 주소(OWNERSHIP_VERIFICATION_RUNNER_URL)와 서명 비밀값(OWNERSHIP_VERIFICATION_RUNNER_SECRET)이 둘 다 있어야 쓸 수 있다.
+// 쓸 수 없으면 null이고, service가 시도 저장 전에 503으로 거절한다.
 import { createRemoteRunner } from './remote.js';
 
-// local이 세움터 로그인과 OCR에 쓰는 값. 하나라도 없으면 발급 오류로 끝나므로 시작 전에 503(준비 중)으로 거절한다.
-const LOCAL_REQUIRED_KEYS = ['EAIS_ID', 'EAIS_PW', 'CLOVA_OCR_INVOKE_URL', 'CLOVA_OCR_SECRET'];
-
-export const resolveRunnerKind = (env) => {
-  const kind = env.OWNERSHIP_VERIFICATION_RUNNER;
-  if (kind === 'local') return env.VERCEL || !LOCAL_REQUIRED_KEYS.every((key) => env[key]) ? null : 'local';
-  if (kind === 'remote') return env.OWNERSHIP_VERIFICATION_RUNNER_URL && env.OWNERSHIP_VERIFICATION_RUNNER_SECRET ? 'remote' : null;
-  return null;
-};
-
 export const selectRunner = (env = process.env) => {
-  const kind = resolveRunnerKind(env);
-  if (kind === 'local') return createLocalRunner();
-  if (kind === 'remote') {
-    return createRemoteRunner({ url: env.OWNERSHIP_VERIFICATION_RUNNER_URL, secret: env.OWNERSHIP_VERIFICATION_RUNNER_SECRET });
-  }
-  return null;
+  const url = env.OWNERSHIP_VERIFICATION_RUNNER_URL;
+  const secret = env.OWNERSHIP_VERIFICATION_RUNNER_SECRET;
+  return url && secret ? createRemoteRunner({ url, secret }) : null;
 };
