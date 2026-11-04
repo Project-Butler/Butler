@@ -30,7 +30,8 @@ export const findUserByCredentials = async (email, password) => {
   const passwordHash = user?.passwordHash ?? DUMMY_PASSWORD_HASH;
   const isMatch = typeof password === 'string' && (await bcrypt.compare(password, passwordHash));
 
-  return user && isMatch ? user : null;
+  // 소셜 로그인으로만 가입한 계정(passwordHash null)은 더미 해시와 비교한 결과를 믿지 않고 항상 실패시킨다.
+  return user?.passwordHash && isMatch ? user : null;
 };
 
 export const findUserById = (id) => prisma.user.findUnique({ where: { id } });
@@ -84,13 +85,13 @@ export const revokeSessionByToken = (token) =>
     data: { revokedAt: new Date() },
   });
 
-const setCookies = (res, user, refreshToken) => {
+export const setCookies = (res, user, refreshToken) => {
   res.cookie('access_token', signAccessToken(user), { ...cookieOptions, maxAge: ACCESS_TOKEN_TTL_MS });
   res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_TTL_MS });
 };
 
 // 세션 행을 만들고 refresh 토큰 원문을 돌려준다. db는 prisma 또는 트랜잭션 tx(가입이 사용자와 같이 만든다).
-const createSessionRecord = async (db, req, user) => {
+export const createSessionRecord = async (db, req, user) => {
   const refreshToken = signRefreshToken(user);
   await db.session.create({
     data: {

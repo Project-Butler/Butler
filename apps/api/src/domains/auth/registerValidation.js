@@ -175,3 +175,21 @@ export const parseRegisterBody = (body) => {
 
   return { email, password, name, phone, birthDate, role };
 };
+
+// 소셜 가입 마무리(POST /auth/oauth/signup) 입력. 이메일은 제공자가 준 값을 쓰므로 받지 않는다.
+// 이름은 제공자가 준 값이 기본이고, 보내면 그 값으로 바꾼다. role은 LANDLORD로 고정이다(임차인은 초대 가입).
+export const OAUTH_SIGNUP_FIELDS = ['name', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
+
+export const parseOAuthSignupBody = (body, defaultName) => {
+  assertAllowedBody(body, OAUTH_SIGNUP_FIELDS);
+
+  const details = [];
+  const name = validateName(isBlank(body.name) ? defaultName : body.name, details);
+  const phone = validatePhone(body.phone, details);
+  const birthDate = validateBirthDate(body.birthDate, details);
+  validateAgreement(body.termsAgreed, 'termsAgreed', '이용약관', details);
+  validateAgreement(body.privacyAgreed, 'privacyAgreed', '개인정보 수집·이용', details);
+  throwIfInvalid(details);
+
+  return { name, phone, birthDate, role: 'LANDLORD' };
+};
