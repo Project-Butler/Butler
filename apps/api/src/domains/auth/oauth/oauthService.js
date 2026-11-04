@@ -48,7 +48,8 @@ const isUniqueViolation = (error, column) =>
 
 // 소셜 프로필로 누구인지 정한다.
 //  1) 이미 연결된 소셜 계정이면 그 사용자로 로그인
-//  2) 검증된 이메일이 기존 계정과 같으면 거절한다(임시 — #78에서 이메일을 인증한 계정에만 연결하도록 바꾼다)
+//  2) 검증된 이메일이 기존 계정과 같고, 그 계정의 이메일도 인증번호로 확인된(email_verified_at) 계정이면 그 계정에 연결
+//     확인된 적 없는 계정이면 연결하지 않고 거절한다(OAUTH_EMAIL_IN_USE)
 //  3) 둘 다 아니면 가입이 필요하다 → { user: null }
 // 카카오는 is_email_valid·is_email_verified가 모두 true일 때만 검증된 이메일로 본다.
 // 이메일이 없거나 검증되지 않았으면 2)·3)을 하지 않고 거절한다(남의 이메일로 계정을 선점하는 것을 막는다).
@@ -69,13 +70,32 @@ export const resolveOAuthUser = async (provider, profile) => {
     throw new AppError('OAUTH_EMAIL_NOT_VERIFIED', 422, '인증된 이메일이 아니어서 소셜 로그인을 사용할 수 없습니다.');
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: profile.email }, select: { id: true, status: true } });
+  const existing = await prisma.user.findUnique({
+    where: { email: profile.email },
+    select: { id: true, status: true, emailVerifiedAt: true, oauthAccounts: { select: { provider: true } } },
+  });
   if (!existing) return { user: null };
 
   assertUserUsable(existing);
-  // 기존 계정의 이메일은 가입 때 소유 검증을 하지 않았다. 자동으로 연결하면 남의 이메일로 먼저 가입해 둔 사람이
-  // 소셜 로그인한 본인 계정에 들어올 수 있으므로, 이메일 인증번호 가입(#78)이 생기기 전까지는 연결하지 않고 거절한다.
-  throw new AppError('OAUTH_EMAIL_IN_USE', 409, '이미 가입된 이메일입니다. 이메일과 비밀번호로 로그인해주세요.');
+  // 기존 계정의 이메일을 인증번호로 확인한 적이 없으면 연결하지 않는다. 인증 없이 가입할 수 있던 때는
+  // 남의 이메일로 먼저 가입해 둔 사람이 소셜 로그인한 본인 계정에 들어올 수 있기 때문이다.
+  if (!existing.emailVerifiedAt) {
+    throw new AppError('OAUTH_EMAIL_IN_USE', 409, '이미 가입된 이메일입니다. 이메일과 비밀번호로 로그인해주세요.');
+  }
+  // 같은 제공자의 다른 소셜 계정이 이미 붙어 있으면 덮어쓰지 않는다.
+  if (existing.oauthAccounts.some((account) => account.provider === provider)) {
+    throw new AppError('OAUTH_ACCOUNT_CONFLICT', 409, '이미 다른 소셜 계정이 연결된 사용자입니다.');
+  }
+
+  try {
+    await prisma.oAuthAccount.create({
+      data: { userId: existing.id, provider, providerUserId: profile.providerUserId, email: profile.email },
+    });
+  } catch (error) {
+    if (error?.code === 'P2002') throw new AppError('OAUTH_ACCOUNT_CONFLICT', 409, '이미 연결된 소셜 계정입니다.');
+    throw error;
+  }
+  return { user: await prisma.user.findUnique({ where: { id: existing.id } }) };
 };
 
 // 소셜로 처음 오는 사람의 가입을 마무리한다. 사용자·소셜 연결·약관 동의·첫 세션을 한 트랜잭션으로 만들고 쿠키를 내려준다.
@@ -91,7 +111,16 @@ export const registerOAuthUser = async (req, res, ticket, { name, phone, birthDa
   try {
     ({ created, refreshToken } = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { email: ticket.email, passwordHash: null, name, phone: encryptedPhone, birthDate: encryptedBirthDate, role },
+        data: {
+          email: ticket.email,
+          passwordHash: null,
+          name,
+          phone: encryptedPhone,
+          birthDate: encryptedBirthDate,
+          role,
+          // 제공자가 인증된 이메일이라고 알려 준 경우만 가입 티켓이 만들어진다(resolveOAuthUser).
+          emailVerifiedAt: agreedAt,
+        },
       });
       await tx.oAuthAccount.create({
         data: { userId: user.id, provider: ticket.provider, providerUserId: ticket.providerUserId, email: ticket.email },
