@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { loadCurrentComplexId, pickCurrentBuilding, saveCurrentComplexId } from '../utils/communityCurrentBuilding';
+import { getRegionPreview } from '../utils/communityPreview';
 import { CommunityPostListPage } from './CommunityPostListPage';
 import { CommunityBuildingSelectPage } from './CommunityBuildingSelectPage';
 import { CommunityMarketPage } from './CommunityMarketPage';
@@ -19,7 +20,7 @@ import { CommunityPostWritePage } from './CommunityPostWritePage';
 
 // App.jsx 의 <Route path="/community/*"> 아래 중첩 경로.
 //   /community            → /community/market 으로 바꿔 끼운다(시세 탭 주소를 하나로)
-//   /community/buildings  건물 선택(인증 건물 0개 빈 상태 · 주소로 직접 들어온 경우만)
+//   /community/buildings  건물 선택(등록 호실 0개 빈 상태 · 주소로 직접 들어온 경우만)
 //   /community/{market,news,board,polls}  탭 네 개
 //   /community/posts/new · /community/posts/:postId · /community/posts/:postId/edit
 //   /community/polls/new · /community/polls/:pollId
@@ -60,12 +61,13 @@ const PollNewRoute = ({ building, frame }) => {
 };
 
 // 건물을 고르면 /community(시세 탭)로 간다.
-const BuildingSelectRoute = ({ buildings, current, onSelect }) => {
+const BuildingSelectRoute = ({ buildings, current, onSelect, onRegister }) => {
   const navigate = useNavigate();
   return (
     <CommunityBuildingSelectPage
       buildings={buildings}
       currentComplexId={current?.complexId}
+      onRegister={onRegister}
       onSelect={(complexId) => {
         onSelect(complexId);
         navigate(COMMUNITY_BASE);
@@ -122,7 +124,7 @@ const PostEditRoute = ({ building, frame }) => {
   return <CommunityPostWritePage key={postId} frame={frame} building={building} post={post.data} onBack={goBack} onSaved={goBack} />;
 };
 
-const CommunityRoutes = () => {
+const CommunityRoutes = ({ onNavigate }) => {
   const { data: buildings, isPending, isError, error } = useGetMyBuildings();
   const [storedComplexId, setStoredComplexId] = useState(loadCurrentComplexId);
 
@@ -140,13 +142,18 @@ const CommunityRoutes = () => {
   }
 
   const current = pickCurrentBuilding(buildings, storedComplexId);
-  const selectProps = { buildings, current, onSelect: selectBuilding };
+  // 커뮤니티 밖(A팀 화면)으로 나가는 곳만 onNavigate — 호실 등록 · 권리자 인증
+  const register = onNavigate ? () => onNavigate('propertyRegister') : undefined;
+  const selectProps = { buildings, current, onSelect: selectBuilding, onRegister: register };
 
-  // 인증 건물이 없으면 어느 주소로 와도 건물 선택(빈 상태)을 보여 준다.
+  // 등록한 호실이 없으면(인증 전 건물도 목록에 들어온다) 어느 주소로 와도 건물 선택(빈 상태)을 보여 준다.
   if (!current) return <BuildingSelectRoute {...selectProps} />;
 
-  // frame: 화면마다 CommunityFrame(머리 · 탭 줄)에 넘기는 것
-  const frame = { building: current, buildings, onSelectBuilding: selectBuilding };
+  // frame: 화면마다 CommunityFrame(머리 · 탭 줄)에 넘기는 것. preview: 이 동네 미리보기 상태, verify: 권리자 인증 화면으로
+  const preview = getRegionPreview(buildings, current);
+  const verify =
+    onNavigate && preview.verifyPropertyId ? () => onNavigate('propertyVerify', { propertyId: preview.verifyPropertyId }) : undefined;
+  const frame = { building: current, buildings, onSelectBuilding: selectBuilding, preview, verify };
   const props = { building: current, frame };
   return (
     <Routes>
@@ -166,6 +173,6 @@ const CommunityRoutes = () => {
   );
 };
 
-// App 이 넘기는 onNavigate 는 쓰지 않는다 — 커뮤니티 안 이동은 react-router, 밖으로 나가는 곳은 A팀 사이드바·상단 바다.
+// 커뮤니티 안 이동은 react-router. App 이 넘기는 onNavigate 는 커뮤니티 밖(호실 등록 · 권리자 인증)으로 나갈 때만 쓴다.
 // react-query 는 앱 공용 QueryClientProvider(main.jsx)를 쓴다.
-export const CommunityPage = () => <CommunityRoutes />;
+export const CommunityPage = ({ onNavigate }) => <CommunityRoutes onNavigate={onNavigate} />;

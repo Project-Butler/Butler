@@ -4,8 +4,7 @@ import { Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPostList } from '../hooks/useGetCommunityPostList';
 import { getErrorMessage } from '../utils/getErrorMessage';
-import { POST_CATEGORIES } from '../utils/communityBoardLabels';
-import { BoardNotice } from '../components/CommunityBoard/BoardNotice';
+import { getBlockedMessage, POST_CATEGORIES } from '../utils/communityBoardLabels';
 import { CategoryChip } from '../components/CommunityBoard/CategoryChip';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { MineToggle } from '../components/CommunityBoard/MineToggle';
@@ -56,13 +55,15 @@ export const CommunityPostListPage = ({ frame, building }) => {
       <div className="flex flex-wrap items-center gap-3">
         <ChipGroup label="게시판 분류" options={CATEGORY_FILTERS} value={category} onChange={(value) => setFilter({ category: value })} wrap />
         <MineToggle checked={mine} onChange={(value) => setFilter({ mine: value })} />
-        <Button className="ml-auto" onClick={openWrite} disabled={!list.isSuccess || !canWrite}>
+        {list.isSuccess && !canWrite && (
+          <span className="ml-auto text-sub text-ink-3">{getBlockedMessage(blockedReason)}</span>
+        )}
+        <Button className={list.isSuccess && !canWrite ? '' : 'ml-auto'} onClick={openWrite} disabled={!list.isSuccess || !canWrite}>
           <Pencil size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
           글쓰기
         </Button>
       </div>
 
-      {list.isSuccess && <BoardNotice writeBlockedReason={blockedReason} />}
       {list.isPending && <LoadingStatus />}
       {list.isError && <NoticeBox>{getErrorMessage(list.error)}</NoticeBox>}
 

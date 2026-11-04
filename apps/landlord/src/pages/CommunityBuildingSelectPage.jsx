@@ -4,15 +4,16 @@ import { BuildingOption } from '../components/CommunityBuildingSelect/BuildingOp
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 
 // /community/buildings 건물 선택 화면. PC 에서는 머리의 "건물 바꾸기" 드롭다운이 대신하므로 두 경우에만 그린다.
-// - 인증 건물이 0개: 머리 · 탭 줄 없이 빈 상태. "권리자 인증하기"는 갈 화면(다른 담당)이 없어 비활성
-// - 주소로 직접 들어온 경우: 건물 카드 2열 + 아래 묶음 안내 한 줄. 고르면 /community
-export const CommunityBuildingSelectPage = ({ buildings, currentComplexId, onSelect }) => {
+// - 등록한 호실이 0개: 머리 · 탭 줄 없이 빈 상태 + [호실 등록하기](A팀 호실 등록 화면). 인증 전 건물도 커뮤니티에 들어오므로
+//   "인증 건물 0개" 가 아니라 "등록 호실 0개" 가 기준이다. 남색은 권리자 인증에만 쓰므로 기본 버튼
+// - 주소로 직접 들어온 경우: 건물 카드 2열(인증 전 · 만료 건물에는 배지) + 아래 묶음 안내 한 줄. 고르면 /community
+export const CommunityBuildingSelectPage = ({ buildings, currentComplexId, onSelect, onRegister }) => {
   if (buildings.length === 0) {
     return (
       <div className="w-full max-w-6xl space-y-6 pb-10">
-        <EmptyState title="아직 인증을 마친 건물이 없습니다" description="보유하신 호실로 인증을 시작해 보세요">
-          <Button variant="verifyOutline" disabled>
-            권리자 인증하기
+        <EmptyState title="아직 등록한 호실이 없습니다" description="호실을 등록하면 그 동네 임대인 커뮤니티를 볼 수 있어요">
+          <Button onClick={onRegister} disabled={!onRegister}>
+            호실 등록하기
           </Button>
         </EmptyState>
       </div>
