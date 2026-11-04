@@ -260,6 +260,39 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     assert.equal(asFormer.isReadOnly, true);
   });
 
+  test('운영자가 상세를 보면 감사 로그가 건마다 남고, 소유자·임차인·없는 계약은 남지 않는다', async () => {
+    const user = await fixture.createUser();
+    const tenant = await fixture.createUser('TENANT');
+    const admin = await fixture.createUser('ADMIN');
+    const { ownership } = await createOwnedUnit(user);
+    const contract = await createContract(user, contractInput(ownership.id));
+    await prisma.contract.update({ where: { id: contract.id }, data: { tenantId: tenant.id } });
+    const viewLogs = () => prisma.auditLog.findMany({ where: { action: 'CONTRACT_VIEWED_BY_ADMIN', resourceId: contract.id } });
+
+    await findContractForUser(user, contract.id);
+    await findContractForUser(tenant, contract.id);
+    assert.equal((await viewLogs()).length, 0);
+
+    const requestId = randomUUID();
+    await findContractForUser(admin, contract.id, { requestId, ip: '203.0.113.10' });
+    const logs = await viewLogs();
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].actorType, 'USER');
+    assert.equal(logs[0].actorId, admin.id);
+    assert.equal(logs[0].resourceType, 'CONTRACT');
+    assert.equal(logs[0].requestId, requestId);
+    assert.equal(logs[0].ip, '203.0.113.10');
+    assert.equal(logs[0].before, null);
+    assert.equal(logs[0].after, null);
+
+    await findContractForUser(admin, contract.id);
+    assert.equal((await viewLogs()).length, 2);
+
+    const missingId = randomUUID();
+    assert.equal(await findContractForUser(admin, missingId), null);
+    assert.equal(await prisma.auditLog.count({ where: { action: 'CONTRACT_VIEWED_BY_ADMIN', resourceId: missingId } }), 0);
+  });
+
   test('진행 중 계약은 연락처·메모만, 시작 전 계약은 전부 수정', async () => {
     const user = await fixture.createUser();
     const { ownership } = await createOwnedUnit(user);

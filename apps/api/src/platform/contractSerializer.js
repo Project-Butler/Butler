@@ -27,6 +27,8 @@ export const resolveContractViewer = (contract, user) => {
 };
 
 // contract: Prisma Contract + CONTRACT_INCLUDE. viewer: resolveContractViewer 결과.
+// 운영자에게 보이는 범위는 이 함수의 viewer === 'ADMIN' 결과로만 정한다. 지금은 메모만 가리며,
+// 운영 시작 전 법률 검토 결과에 따라 줄이면 여기만 고친다.
 export const toContractResponse = (contract, { viewer, todayKST, now = new Date() }) => {
   const { ownership } = contract;
   const status = computeContractStatus(contract, todayKST);

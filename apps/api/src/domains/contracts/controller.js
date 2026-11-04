@@ -193,7 +193,7 @@ export const listContracts = async (req, res, next) => {
 export const getContract = async (req, res, next) => {
   try {
     const { contractId } = req.params;
-    const contract = isUuid(contractId) ? await findContractForUser(req.user, contractId) : null;
+    const contract = isUuid(contractId) ? await findContractForUser(req.user, contractId, req) : null;
     if (!contract) throwContractNotFound();
     sendData(res, contract);
   } catch (error) {

@@ -252,9 +252,21 @@ export const findContracts = async (user, { propertyId, ownershipId, activeOwner
 };
 
 // GET /contracts/:contractId — 볼 수 없으면 null(컨트롤러가 404).
-export const findContractForUser = async (user, contractId) => {
+// 운영자 열람은 기록이 먼저다. 감사 로그를 못 남기면 계약 내용도 내주지 않는다.
+export const findContractForUser = async (user, contractId, req) => {
   const contract = await prisma.contract.findUnique({ where: { id: contractId }, include: CONTRACT_INCLUDE });
-  if (!contract || !resolveContractViewer(contract, user)) return null;
+  const viewer = contract ? resolveContractViewer(contract, user) : null;
+  if (!viewer) return null;
+  if (viewer === 'ADMIN') {
+    await audit.record({
+      actor: user,
+      action: 'CONTRACT_VIEWED_BY_ADMIN',
+      resourceType: 'CONTRACT',
+      resourceId: contract.id,
+      summary: '운영자 계약 상세 조회',
+      req,
+    });
+  }
   return respond(contract, user);
 };
 
