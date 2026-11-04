@@ -14,3 +14,18 @@ export const lockOwnershipRow = async (tx, ownershipId) => {
     FOR UPDATE`;
   return rows[0] ?? null;
 };
+
+// 호실의 활성 소유 관계 전부를 id 순서로 잠근다. 권리자 인증 반영이 이 잠금으로 줄을 선다.
+export const lockActiveOwnershipRows = (tx, propertyId) =>
+  tx.$queryRaw`
+    SELECT id::text AS id,
+           user_id::text AS "userId",
+           property_id::text AS "propertyId",
+           started_at AS "startedAt",
+           ended_at AS "endedAt",
+           verification_status::text AS "verificationStatus",
+           verification_expires_at AS "verificationExpiresAt"
+    FROM ownerships
+    WHERE property_id = ${propertyId}::uuid AND ended_at IS NULL
+    ORDER BY id
+    FOR UPDATE`;

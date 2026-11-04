@@ -44,7 +44,9 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     daysUntilEnd: computeDaysUntilEnd(contract, todayKST, status),
     ownershipId: contract.ownershipId,
     landlord: ownership.user,
-    landlordVerified: computeOwnershipVerificationStatus(ownership, now) === 'VERIFIED',
+    // 끝난 소유 관계는 인증이 남아 있어도 false다.
+    landlordVerified: !ownership.endedAt && computeOwnershipVerificationStatus(ownership, now) === 'VERIFIED',
+    endReason: ownership.endReason ?? null,
     // 초대(invitationStatus)는 보류(명세 D-18) — 초대 기능이 생기면 최신 초대 상태를 넣는다.
     tenant: { name: contract.tenantName, phone: contract.tenantPhone, userId: contract.tenantId, invitationStatus: null },
     terminatedOn: toDateOnlyString(contract.terminatedOn),

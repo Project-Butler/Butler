@@ -1,7 +1,18 @@
 import axiosInstance from '../../axios/axiosInstance';
 
 // 가입 직후 로그인 상태가 된다(쿠키 발급). 응답은 postLogin과 같은 AuthMe 모양.
-export const postRegister = async ({ email, password, name, phone, birthDate, role, termsAgreed, privacyAgreed }) => {
+// emailVerificationToken은 postEmailVerificationConfirm이 준 값이다(그 이메일로 인증을 마쳐야 가입된다).
+export const postRegister = async ({
+  email,
+  password,
+  name,
+  phone,
+  birthDate,
+  role,
+  termsAgreed,
+  privacyAgreed,
+  emailVerificationToken,
+}) => {
   const { data } = await axiosInstance.post('/auth/register', {
     email,
     password,
@@ -11,6 +22,7 @@ export const postRegister = async ({ email, password, name, phone, birthDate, ro
     role,
     termsAgreed,
     privacyAgreed,
+    emailVerificationToken,
   });
   return data.data;
 };

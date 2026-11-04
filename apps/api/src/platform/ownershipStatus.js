@@ -10,3 +10,19 @@ export const computeOwnershipVerificationStatus = (ownership, now = new Date()) 
 
   return now.getTime() > ownership.verificationExpiresAt.getTime() ? 'EXPIRED' : 'VERIFIED';
 };
+
+// 커뮤니티 권한 계산에 필요한 소유 관계 칸(/auth/me와 requireRegionMember가 같이 쓴다).
+export const OWNERSHIP_REGION_SELECT = {
+  verificationStatus: true,
+  verificationExpiresAt: true,
+  property: { select: { complex: { select: { regionId: true } } } },
+};
+
+// 활성 소유 관계 행 중 인증이 유효한 것의 법정동 코드(중복 제거).
+export const pickVerifiedLegalDongCodes = (ownerships, now = new Date()) => [
+  ...new Set(
+    ownerships
+      .filter((ownership) => computeOwnershipVerificationStatus(ownership, now) === 'VERIFIED')
+      .map((ownership) => ownership.property.complex.regionId),
+  ),
+];

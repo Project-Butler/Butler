@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContractList } from '../hooks/useGetContractList';
 import {
   CONTRACT_FILTERS,
+  CONTRACT_LEGAL_NOTICE,
   formatContractAmount,
   formatPeriod,
   getContractDdayBadge,
@@ -18,7 +19,7 @@ const PAGE_SIZE = 20;
 const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
   const [page, setPage] = useState(1);
   const { data, error, isLoading, refetch } = useGetContractList(
-    { status: filter.status, sort: 'endDate:asc', page, size: PAGE_SIZE },
+    { ...filter.query, sort: 'endDate:asc', page, size: PAGE_SIZE },
     { onUnauthorized },
   );
   const items = data?.items ?? [];
@@ -61,7 +62,7 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
         </thead>
         <tbody>
           {items.map((contract) => {
-            const status = getContractStatusBadge(contract.status);
+            const status = getContractStatusBadge(contract);
             const dday = getContractDdayBadge(contract);
             return (
               <tr
@@ -110,7 +111,7 @@ export const ContractListPage = ({ onNavigate, onUnauthorized }) => {
     <div className="w-full max-w-6xl space-y-6 pb-10">
       <PageHeader
         title="계약"
-        description="등록한 임대차 계약을 종료일이 가까운 순서로 보여 줘요."
+        description={`등록한 임대차 계약을 종료일이 가까운 순서로 보여 줘요. ${CONTRACT_LEGAL_NOTICE}.`}
         actions={
           <Button onClick={() => onNavigate('contractRegister')}>
             <Plus size={16} className="-ml-0.5 mr-1 inline-block" />

@@ -33,8 +33,10 @@ export const VERIFICATION_STATUS_TONE = {
 
 export const END_REASON_LABEL = {
   SELF_ENDED: '본인 종료',
+  SOLD: '매도',
   SUPERSEDED: '새 소유자 인증',
   ADMIN_ENDED: '운영자 종료',
+  UNVERIFIED_EXPIRED: '미인증 자동 종료',
 };
 
 export const LEASE_TYPE_LABEL = {
@@ -66,7 +68,10 @@ export const AUDIT_ACTION_LABEL = {
   USER_STATUS_CHANGED: '회원 상태 변경',
   USER_WITHDRAWN: '회원 탈퇴',
   OWNERSHIP_CREATED: '소유 관계 등록',
+  OWNERSHIP_VERIFICATION_REQUESTED: '권리자 인증 요청',
   OWNERSHIP_VERIFICATION_APPLIED: '권리자 인증 반영',
+  OWNERSHIP_VERIFICATION_FAILED: '권리자 인증 실패',
+  OWNERSHIP_VERIFICATION_VALIDITY_UPDATED: '인증 유효기간 변경',
   OWNERSHIP_ENDED: '소유 관계 종료',
   OWNERSHIP_REVOKED_BY_ADMIN: '권리자 인증 취소',
   CONTRACT_CREATED: '계약 등록',
@@ -112,6 +117,43 @@ export const AUDIT_RESOURCE_TYPE_LABEL = {
   OWNERSHIP: '소유 관계',
   CONTRACT: '계약',
   TICKET: '수리·점검 요청',
+  MANAGEMENT_LOG: '관리 기록',
   DOCUMENT: '문서',
   JOB: '작업',
+  PLATFORM_SETTING: '운영 설정',
+};
+
+// 권리자 인증 시도(관리자 시도 목록). 사유는 관리자 화면에만 보여 준다.
+export const VERIFICATION_ATTEMPT_STATUS_LABEL = {
+  PENDING: '대기',
+  RUNNING: '진행 중',
+  VERIFIED: '인증',
+  FAILED: '실패',
+};
+
+export const VERIFICATION_ATTEMPT_STATUS_TONE = {
+  PENDING: 'pending',
+  RUNNING: 'warning',
+  VERIFIED: 'verified',
+  FAILED: 'danger',
+};
+
+export const VERIFICATION_REASON_LABEL = {
+  NOT_MATCHED: '소유자 불일치',
+  UNREADABLE: '대장 판독 불가',
+  NOT_FIRST_REGISTRANT: '앞선 소유자 인증 취소 처리 전',
+  NO_JIBUN_ADDRESS: '지번 주소 없음',
+  ISSUE_INVALID: '발급 입력 오류',
+  ISSUE_STOPPED: '발급 중단',
+  ISSUE_FAILED: '발급 실패',
+  OCR_FAILED: 'OCR 실패',
+  TIMED_OUT: '시간 초과',
+  OWNERSHIP_CHANGED: '소유 관계 변경',
+  VERIFIED_OWNER_EXISTS: '인증된 소유자 있음',
+  INTERNAL: '내부 오류',
+};
+
+export const LEDGER_KIND_LABEL = {
+  GENERAL: '일반건축물대장',
+  UNIT_EXCLUSIVE: '집합건축물대장(전유부)',
 };

@@ -1,7 +1,9 @@
 # 로컬 개발용 PostgreSQL. 배포 DB는 Supabase를 쓴다.
 services:
   postgres:
-    image: postgres:16
+    # 챗봇 검색이 pgvector 확장을 쓴다. PostgreSQL 16에 확장만 더한 이미지라 기존 데이터(볼륨)를 그대로 쓴다.
+    # postgres:16과 같은 Debian trixie(glibc 2.41) 기반을 써야 기존 볼륨에서 collation 버전 경고가 나지 않는다.
+    image: pgvector/pgvector:pg16-trixie
     container_name: butler-postgres
     restart: unless-stopped
     environment:

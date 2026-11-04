@@ -8,6 +8,7 @@ import {
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
 import { decodeCreatedAtCursor } from '../../platform/createdAtCursor.js';
+import { ATTEMPT_STATUSES, MAX_VALIDITY_YEARS, parseValidityYears, VERIFICATION_REASON_CODES } from '../../platform/ownershipVerificationRules.js';
 import { parseComplexBody } from './complexInput.js';
 import { OWNERSHIP_FILTER_STATUSES } from './ownershipFilter.js';
 import {
@@ -19,12 +20,15 @@ import {
   findAdminUser,
   findAdminUsers,
   findAuditLogs,
+  findOwnershipVerificationAttempts,
   getDashboardCounts,
+  getOwnershipVerificationSetting,
   JOB_STATUSES,
   refreshJusoReferenceData,
   refreshKaptReferenceData,
   retryJob,
   revokeOwnership,
+  updateOwnershipVerificationSetting,
   USER_ROLES,
   USER_STATUSES,
 } from './service.js';
@@ -162,6 +166,27 @@ const parseJobListQuery = (query) => {
   return { status, cursor, size };
 };
 
+// 문자열은 받지 않는다. 1 이상 정수, 날짜 계산이 깨지지 않는 상한까지.
+export const parseVerificationSettingBody = (body) => {
+  assertAllowedBody(body, ['validityYears']);
+  const validityYears = typeof body.validityYears === 'number' ? parseValidityYears(body.validityYears) : null;
+  if (validityYears === null) {
+    throwIfInvalid([{ field: 'validityYears', reason: `1 이상 ${MAX_VALIDITY_YEARS} 이하의 정수여야 합니다.` }]);
+  }
+  return { validityYears };
+};
+
+const parseAttemptListQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  const status = parseEnum(query.status, 'status', ATTEMPT_STATUSES, details);
+  const reasonCode = parseEnum(query.reasonCode, 'reasonCode', VERIFICATION_REASON_CODES, details);
+  if (query.ownershipId !== undefined && !isUuid(query.ownershipId)) details.push({ field: 'ownershipId', reason: 'UUID 형식이어야 합니다.' });
+  const { cursor, size } = parseCursorPagination(query, details);
+  throwIfInvalid(details);
+  return { status, reasonCode, ownershipId: query.ownershipId, cursor, size };
+};
+
 const throwUserNotFound = () => {
   throw new AppError('USER_NOT_FOUND', 404, '회원을 찾을 수 없습니다.');
 };
@@ -292,6 +317,34 @@ export const postJobRetry = async (req, res, next) => {
     if (!isUuid(jobId)) throw new AppError('JOB_NOT_FOUND', 404, '작업을 찾을 수 없습니다.');
     assertAllowedBody(req.body ?? {}, []);
     sendData(res, await retryJob(req.user, jobId, req), { status: 202 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/settings/ownership-verification
+export const getVerificationSetting = async (req, res, next) => {
+  try {
+    sendData(res, await getOwnershipVerificationSetting());
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/v1/admin/settings/ownership-verification — { validityYears }
+export const patchVerificationSetting = async (req, res, next) => {
+  try {
+    sendData(res, await updateOwnershipVerificationSetting(req.user, parseVerificationSettingBody(req.body), req));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/ownership-verification-attempts?status=&reasonCode=&ownershipId=&cursor=&size=
+export const listVerificationAttempts = async (req, res, next) => {
+  try {
+    const { items, meta } = await findOwnershipVerificationAttempts(parseAttemptListQuery(req.query));
+    sendList(res, items, meta);
   } catch (error) {
     next(error);
   }

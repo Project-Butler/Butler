@@ -74,9 +74,16 @@ describe('D-day', () => {
   });
 
   it('상태 칩은 Badge tone만 쓴다', () => {
-    expect(getContractStatusBadge('ACTIVE')).toEqual({ tone: 'success', label: '진행 중' });
-    expect(getContractStatusBadge('EXPIRING_SOON')).toEqual({ tone: 'warning', label: '만료 임박' });
-    expect(getContractStatusBadge('TERMINATED').tone).toBe('default');
+    expect(getContractStatusBadge({ status: 'ACTIVE' })).toEqual({ tone: 'success', label: '진행 중' });
+    expect(getContractStatusBadge({ status: 'EXPIRING_SOON' })).toEqual({ tone: 'warning', label: '만료 임박' });
+    expect(getContractStatusBadge({ status: 'TERMINATED' }).tone).toBe('default');
+  });
+
+  it('소유가 끝난 계약은 끝남으로 보이고 D-day가 없다. 만료·해지 표시는 그대로다', () => {
+    expect(getContractStatusBadge({ status: 'ACTIVE', endReason: 'SOLD' })).toEqual({ tone: 'default', label: '끝남' });
+    expect(getContractStatusBadge({ status: 'UPCOMING', endReason: 'SOLD' }).label).toBe('끝남');
+    expect(getContractStatusBadge({ status: 'TERMINATED', endReason: 'SOLD' }).label).toBe('해지');
+    expect(getContractDdayBadge({ status: 'ACTIVE', endReason: 'SOLD', daysUntilEnd: 5 })).toBeNull();
   });
 });
 

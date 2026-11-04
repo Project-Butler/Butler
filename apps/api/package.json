@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "seed:disputes": "node prisma/seedDisputes.js",
     "eais": "node src/domains/ownershipVerifications/eais/cli.js",
+    "ownership-runner": "node src/domains/ownershipVerifications/runnerServer.js",
     "sync:kapt": "node prisma/syncKaptComplexes.js",
     "backfill:kapt-basis": "node prisma/backfillKaptBasis.js",
     "import:kapt-basis": "node prisma/importKaptBasis.js",
@@ -33,6 +34,7 @@
     "exceljs": "^4.4.0",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^10.3.1",
     "puppeteer-core": "24.43.1",
     "yauzl": "^3.4.0"
   },

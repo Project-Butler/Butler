@@ -20,17 +20,23 @@ const CONTRACT_STATUS_BADGE = {
   TERMINATED: { tone: 'default', label: '해지' },
 };
 
-export const getContractStatusBadge = (status) => CONTRACT_STATUS_BADGE[status] ?? { tone: 'default', label: status };
-
 // 진행 중(ACTIVE·EXPIRING_SOON): 조건 수정 불가(D-13), 갱신 계약 등록 가능(D-14)
 export const isContractInProgress = (status) => status === 'ACTIVE' || status === 'EXPIRING_SOON';
 
-// 목록 필터 칩(S-01). status 값은 GET /contracts?status=에 그대로 쓴다.
+// 매도 등으로 소유 관계가 끝나면 임대인에게는 끝난 계약이다. 서버 status는 임차인도 쓰므로 날짜 기준 그대로 둔다.
+const isEndedByOwnership = ({ status, endReason }) => Boolean(endReason) && (status === 'UPCOMING' || isContractInProgress(status));
+
+export const getContractStatusBadge = (contract) =>
+  isEndedByOwnership(contract)
+    ? { tone: 'default', label: '끝남' }
+    : (CONTRACT_STATUS_BADGE[contract.status] ?? { tone: 'default', label: contract.status });
+
+// 목록 필터 칩(S-01). 값은 GET /contracts 쿼리에 그대로 쓴다.
 export const CONTRACT_FILTERS = [
-  { key: 'current', label: '진행 중', status: 'ACTIVE,EXPIRING_SOON' },
-  { key: 'upcoming', label: '시작 전', status: 'UPCOMING' },
-  { key: 'ended', label: '끝남', status: 'EXPIRED,TERMINATED' },
-  { key: 'all', label: '전체', status: undefined },
+  { key: 'current', label: '진행 중', query: { status: 'ACTIVE,EXPIRING_SOON', activeOwnership: 'true' } },
+  { key: 'upcoming', label: '시작 전', query: { status: 'UPCOMING', activeOwnership: 'true' } },
+  { key: 'ended', label: '끝남', query: { status: 'EXPIRED,TERMINATED', includeEndedOwnership: 'true' } },
+  { key: 'all', label: '전체', query: {} },
 ];
 
 // 금액: 50000000 → '50,000,000원'
@@ -84,9 +90,10 @@ export const URGENT_DAYS = 7;
 
 export const getDdayTone = (daysUntilEnd) => (daysUntilEnd != null && daysUntilEnd <= URGENT_DAYS ? 'danger' : 'default');
 
-// D-day 칩은 끝나지 않은 계약(시작 전·진행 중)에만 붙인다. 만료·해지는 null.
-export const getContractDdayBadge = ({ status, daysUntilEnd }) => {
-  if (status !== 'UPCOMING' && !isContractInProgress(status)) return null;
+// D-day 칩은 끝나지 않은 계약(시작 전·진행 중)에만 붙인다. 만료·해지·소유가 끝난 계약은 null.
+export const getContractDdayBadge = (contract) => {
+  const { status, daysUntilEnd } = contract;
+  if ((status !== 'UPCOMING' && !isContractInProgress(status)) || isEndedByOwnership(contract)) return null;
   const label = formatDday(daysUntilEnd);
   return label ? { tone: getDdayTone(daysUntilEnd), label } : null;
 };
@@ -128,6 +135,14 @@ export const CONTRACT_DATE_MAX = '2099-12-31';
 export const isContractDateInRange = (dateString) =>
   Boolean(dateString) && dateString >= CONTRACT_DATE_MIN && dateString <= CONTRACT_DATE_MAX;
 export const CONTRACT_DATE_RANGE_MESSAGE = '2000년부터 2099년 사이 날짜를 골라 주세요.';
+
+export const CONTRACT_LEGAL_NOTICE = '관리용 기록이며 법적 효력이 없어요';
+
+// 계약 응답의 endReason(소유 관계 종료 사유) → 끝난 소유 관계 문구. 끝나지 않았으면 null.
+export const getEndedOwnershipNotice = (endReason) => {
+  if (!endReason) return null;
+  return endReason === 'SOLD' || endReason === 'SUPERSEDED' ? '소유권 이전으로 종료된 소유 관계의 계약' : '종료된 소유 관계의 계약';
+};
 
 // 해지일 최대(D-15): 오늘과 종료일 중 이른 날
 export const getMaxTerminationDate = (endDate, today = getTodayKST()) => (endDate < today ? endDate : today);

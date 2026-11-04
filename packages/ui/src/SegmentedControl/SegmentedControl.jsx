@@ -1,5 +1,5 @@
 // 세그먼트 선택 (design.md §5). 선택은 Ink 배경 + 흰 글자, 비선택은 투명 + Ink 2.
-// options: [{ value, label, count? }] — count는 탭 옆 숫자(숫자 글꼴). 칸이 많아 좁으면 가로로 밀어 본다.
+// options: [{ value, label, count?, disabled? }] — count는 탭 옆 숫자(숫자 글꼴). 칸이 많아 좁으면 가로로 밀어 본다.
 export const SegmentedControl = ({ options, value, onChange, ariaLabel, className = '' }) => (
   <div
     role="group"
@@ -13,8 +13,9 @@ export const SegmentedControl = ({ options, value, onChange, ariaLabel, classNam
           key={option.value}
           type="button"
           aria-pressed={isSelected}
+          disabled={option.disabled}
           onClick={() => onChange(option.value)}
-          className={`flex min-h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-input px-2 text-body lg:px-3 transition-colors ${
+          className={`flex min-h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-input px-2 text-body lg:px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
             isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
           }`}
         >
