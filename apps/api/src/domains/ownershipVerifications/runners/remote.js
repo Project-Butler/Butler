@@ -1,4 +1,4 @@
-// 실행 서버(runnerServer.js)에 발급을 맡긴다. 생년월일과 사용자 이름은 보내지 않는다. 결과는 결과 수신 경로로 돌아온다.
+// 외부 발급 서버에 발급·OCR을 맡긴다. 생년월일과 사용자 이름은 보내지 않는다. 결과는 결과 수신 경로로 돌아온다.
 // 서버리스에서 응답 뒤 실행이 유실되지 않도록 전송을 기다린 뒤 응답한다(awaitDispatch).
 import { toRunnerResult } from '../../../platform/ownershipVerificationRules.js';
 import { buildSignedHeaders } from '../runnerSignature.js';
