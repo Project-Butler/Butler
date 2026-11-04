@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Home } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../Card/Card';
+import { SocialLoginButtons } from '../SocialLoginButtons/SocialLoginButtons';
 
-export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, footer, onSubmit }) => {
+// initialError: 화면을 열 때 바로 보여 줄 오류(소셜 로그인 실패 등). socialLoginHref(provider): 있으면 구글·카카오 링크를 보여 준다.
+export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, footer, onSubmit, initialError = '', socialLoginHref }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event) => {
@@ -68,6 +70,8 @@ export const LoginScreen = ({ brand = 'Butler', subtitle, devHint, footer, onSub
             {isSubmitting ? '로그인 중...' : '로그인'}
           </Button>
         </form>
+
+        {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 로그인" />}
       </Card>
 
       {footer}

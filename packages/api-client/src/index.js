@@ -3,6 +3,9 @@ export { queryKey } from './constants/queryKey';
 
 export { postLogin } from './apis/auth/postLogin';
 export { postRegister } from './apis/auth/postRegister';
+export { getOAuthSignup } from './apis/auth/getOAuthSignup';
+export { postOAuthSignup } from './apis/auth/postOAuthSignup';
+export { getOAuthStartUrl } from './apis/auth/getOAuthStartUrl';
 export { postEmailVerification } from './apis/auth/postEmailVerification';
 export { postEmailVerificationConfirm } from './apis/auth/postEmailVerificationConfirm';
 export { postLogout } from './apis/auth/postLogout';

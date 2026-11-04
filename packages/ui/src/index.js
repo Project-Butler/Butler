@@ -9,6 +9,8 @@ export { NotificationMenu } from './NotificationMenu/NotificationMenu';
 export { LoggedOutScreen } from './LoggedOutScreen/LoggedOutScreen';
 export { LoginScreen } from './LoginScreen/LoginScreen';
 export { RegisterScreen } from './RegisterScreen/RegisterScreen';
+export { OAuthSignupScreen } from './OAuthSignupScreen/OAuthSignupScreen';
+export { SocialLoginButtons } from './SocialLoginButtons/SocialLoginButtons';
 export { RequiredMark, TextField } from './TextField/TextField';
 export { SegmentedControl } from './SegmentedControl/SegmentedControl';
 export { FilterChip } from './FilterChip/FilterChip';
