@@ -154,6 +154,14 @@ describe('브리핑', () => {
     expect(await within(await section('최근 투표')).findAllByRole('button', { name: /투표 \d/ })).toHaveLength(3);
   });
 
+  it('시세를 아직 모으는 단지면 시세 · 거래 섹션에 안내 한 줄(나머지 섹션은 그대로)', async () => {
+    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, complexId: 'complex-not-in-example-data' }]);
+    renderAt('/community/briefing');
+    expect(await within(await section('시세')).findByText('시세를 모으는 중입니다')).toBeInTheDocument();
+    expect(await within(await section('최근 거래')).findByText('최근 거래가 없습니다')).toBeInTheDocument();
+    expect(await within(await section('최근 게시글')).findAllByRole('button', { name: /게시글 \d/ })).toHaveLength(5);
+  });
+
   it('비었을 때는 섹션 안 한 줄', async () => {
     api.getCommunityPostList.mockResolvedValue(page([]));
     api.getCommunityPollList.mockResolvedValue(page([]));

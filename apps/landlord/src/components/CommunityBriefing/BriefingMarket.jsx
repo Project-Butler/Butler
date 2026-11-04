@@ -13,7 +13,8 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   const data = prices.data;
   const latest = data?.recentDeals[0];
   const rate = data ? changeRate(data.monthly, 'SALE') : null;
-  const months = data ? monthsEnding(data.asOf) : [];
+  // 아직 수집 안 된 단지(COLLECTING)는 asOf 가 없다 — 그때는 차트를 그리지 않는다
+  const months = data?.asOf ? monthsEnding(data.asOf) : [];
   const values = months.map((month) => {
     const row = data.monthly.find((item) => item.yearMonth === month);
     return row ? monthlyValue(row, 'SALE') : null;
