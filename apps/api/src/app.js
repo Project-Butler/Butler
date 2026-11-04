@@ -6,6 +6,7 @@ import { corsOptions } from './config/corsOptions.js';
 import activitiesRouter from './domains/activities/router.js';
 import adminRouter from './domains/admin/router.js';
 import authRouter from './domains/auth/router.js';
+import communityRouter from './domains/community/router.js';
 import complexesRouter from './domains/complexes/router.js';
 import contractsRouter from './domains/contracts/router.js';
 import managementLogsRouter from './domains/managementLogs/router.js';
@@ -55,6 +56,7 @@ app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/activities', activitiesRouter);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/community', communityRouter);
 
 // Vercel Cron 전용(/api/cron/*). 계약 API가 아니라서 /api/v1 밖이고, 경로는 라우터 안에 있다.
 app.use(cronRouter);
