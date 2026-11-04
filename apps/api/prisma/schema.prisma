@@ -864,3 +864,284 @@ model DisputeChatMessage {
 }
 
 // ===== C팀 끝 =====
+
+// ===== B팀: 임대인 커뮤니티 (community) =====
+// 법정동 단위 게시판·투표·뉴스. 경로 /community · 테이블 community_* · 에러 COMMUNITY_*
+// (api-contract.md 9장 "임대인 커뮤니티"). 실거래 데이터는 플랫폼 시세 API로만 — 자체 적재 테이블 없음.
+// RLS·전국 기사 부분 유니크 인덱스·CHECK 제약 2개는 Prisma 로 표현할 수 없어 마이그레이션 SQL 에 직접 넣었다
+// (migrations/*_add_community/migration.sql 끝).
+
+// ── Core 모델과 relation 을 걸지 않는 이유 ───────────────────────────────────
+// Prisma 의 relation 은 양쪽에 필드가 필요하다. CommunityPost.author 를 만들려면
+// User 에 communityPosts 를 추가해야 하는데, 그러면 Core 블록을 고치게 되어
+// 팀 블록을 나눠 둔 의미(schema.prisma 충돌 방지)가 사라진다.
+//
+// 그래서 userId · legalDongCode · complexId 는 전부 관계 없는 스칼라로 둔다.
+// 존재 검증과 표시용 정보는 플랫폼 조회 기능으로 해결한다
+// (getUserSummary, GET /regions/:legalDongCode 등 — api-contract.md 9장 허용 목록).
+// FK 가 없으므로 참조 무결성은 애플리케이션이 책임진다.
+// ────────────────────────────────────────────────────────────────────────────
+
+
+// ===== enum =====
+
+enum CommunityPostCategory {
+  FREE // 자유
+  MARKET // 시세·거래
+  MAINTENANCE // 수선·관리
+  POLICY // 정책·세금
+
+  @@map("community_post_category")
+}
+
+enum CommunityReportReason {
+  SPAM // 도배·스팸
+  ABUSE // 욕설·비방
+  ADVERTISEMENT // 광고·홍보
+  PRIVACY // 개인정보 노출
+  OTHER // 기타
+
+  @@map("community_report_reason")
+}
+
+enum CommunityReportStatus {
+  RECEIVED // 접수
+  RESOLVED // 처리 완료
+  DISMISSED // 기각
+
+  @@map("community_report_status")
+}
+
+// 투표가 미치는 범위. 만드는 사람이 고르고 등록 후에는 바꿀 수 없다
+// (참여 자격이 도중에 바뀌면 이미 던진 표의 자격이 사라져 집계가 깨진다).
+enum CommunityPollScope {
+  COMPLEX // 우리 단지 — 그 단지에 인증을 보유한 임대인만
+  REGION // 법정동 — 그 동에 인증을 보유한 임대인 모두
+
+  @@map("community_poll_scope")
+}
+
+enum CommunityNewsSource {
+  NEWS_SEARCH // 뉴스 검색 기능으로 모은 지역 기사
+  MOLIT_PRESS // 국토교통부 보도자료
+
+  @@map("community_news_source")
+}
+
+enum CommunityNewsScope {
+  NATIONWIDE // 전국 정책 — scopeCode 는 null
+  SIGUNGU // 시·군·구 — scopeCode 는 법정동코드 앞 5자리
+
+  @@map("community_news_scope")
+}
+
+
+// ===== 게시판 =====
+
+model CommunityPost {
+  id            String                @id @default(uuid()) @db.Uuid
+  legalDongCode String                @map("legal_dong_code") @db.VarChar(10)
+  category      CommunityPostCategory
+  title         String                @db.VarChar(100)
+  body          String
+
+  authorId String @map("author_id") @db.Uuid
+  // 작성 시점의 표기를 굳혀 둔다(예: "잠실한빛아파트 103동 임대인").
+  // 작성자가 그 호실을 팔아도 과거 글의 표기는 바뀌지 않아야 하고,
+  // 목록을 읽을 때마다 소유 관계를 조인하지 않아도 된다.
+  authorLabel String @map("author_label")
+
+  // 목록에서 매번 세지 않도록 둔 값. 댓글 등록·삭제와 같은 트랜잭션에서 고친다.
+  commentCount Int @default(0) @map("comment_count")
+
+  // 작성자 삭제: 표시만 남기고 내용은 비노출
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  // 운영자 숨김: 목록·상세에서 비노출
+  hiddenAt       DateTime? @map("hidden_at") @db.Timestamptz(3)
+  hiddenByUserId String?   @map("hidden_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  comments CommunityComment[]
+  reports  CommunityReport[]
+
+  // 목록 기본 질의: 법정동 + 분류 + 최신순
+  @@index([legalDongCode, category, createdAt(sort: Desc)])
+  // "내 글만 보기" 필터
+  @@index([legalDongCode, authorId, createdAt(sort: Desc)])
+  @@map("community_posts")
+}
+
+model CommunityComment {
+  id     String        @id @default(uuid()) @db.Uuid
+  postId String        @map("post_id") @db.Uuid
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  body String @db.VarChar(1000)
+
+  authorId    String @map("author_id") @db.Uuid
+  authorLabel String @map("author_label")
+
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  hiddenAt       DateTime? @map("hidden_at") @db.Timestamptz(3)
+  hiddenByUserId String?   @map("hidden_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reports CommunityReport[]
+
+  // 상세 화면: 글 하나의 댓글을 오름차순
+  @@index([postId, createdAt])
+  @@index([authorId])
+  @@map("community_comments")
+}
+
+// 글과 댓글을 한 테이블로 받는다. 둘 중 하나만 채워진다
+// (CHECK 제약은 마이그레이션 SQL 에 직접 — add_community migration.sql 끝).
+model CommunityReport {
+  id String @id @default(uuid()) @db.Uuid
+
+  postId String?        @map("post_id") @db.Uuid
+  post   CommunityPost? @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  commentId String?           @map("comment_id") @db.Uuid
+  comment   CommunityComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  reporterId String                @map("reporter_id") @db.Uuid
+  reason     CommunityReportReason
+  detail     String?               @db.VarChar(500)
+
+  status          CommunityReportStatus @default(RECEIVED)
+  handledAt       DateTime?             @map("handled_at") @db.Timestamptz(3)
+  handledByUserId String?               @map("handled_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // 같은 대상 중복 신고 차단.
+  // PostgreSQL 은 UNIQUE 안의 NULL 을 서로 다른 값으로 보기 때문에,
+  // 댓글 신고(post_id = NULL)끼리는 이 제약에 걸리지 않는다 — 그쪽은 아래 제약이 맡는다.
+  @@unique([postId, reporterId])
+  @@unique([commentId, reporterId])
+  // 운영자 콘솔 목록: 상태 + 접수순
+  @@index([status, createdAt])
+  @@map("community_reports")
+}
+
+
+// ===== 투표 =====
+
+model CommunityPoll {
+  id    String             @id @default(uuid()) @db.Uuid
+  scope CommunityPollScope
+
+  // 범위와 무관하게 항상 채운다. COMPLEX 범위일 때는 그 단지가 속한 법정동.
+  legalDongCode String @map("legal_dong_code") @db.VarChar(10)
+  // scope = COMPLEX 일 때만 채운다 (CHECK 제약은 마이그레이션 SQL 에 직접).
+  complexId String? @map("complex_id") @db.Uuid
+
+  title       String  @db.VarChar(100)
+  description String?
+
+  authorId    String @map("author_id") @db.Uuid
+  authorLabel String @map("author_label")
+
+  closesAt DateTime @map("closes_at") @db.Timestamptz(3)
+  // 마감 배치(cron)가 채운다. 색인·정렬을 맞추는 용도다.
+  // 마감 판정은 `closedAt != null || closesAt <= now` 다 — closedAt 만 보면
+  // cron 이 돌기 전까지 결과가 열리지 않는다. 서버 시계 차이는 초 단위라 실익이 작다.
+  closedAt DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  // 참여자 수. 투표와 같은 트랜잭션에서 올린다.
+  voteCount Int @default(0) @map("vote_count")
+
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  hiddenAt       DateTime? @map("hidden_at") @db.Timestamptz(3)
+  hiddenByUserId String?   @map("hidden_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  options CommunityPollOption[]
+
+  // 목록: 법정동 + 진행중/마감 + 마감일순
+  @@index([legalDongCode, closedAt, closesAt])
+  // "우리 단지" 필터
+  @@index([complexId, closesAt])
+  // 마감 배치가 훑는 질의
+  @@index([closedAt, closesAt])
+  @@map("community_polls")
+}
+
+model CommunityPollOption {
+  id     String        @id @default(uuid()) @db.Uuid
+  pollId String        @map("poll_id") @db.Uuid
+  poll   CommunityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  label    String @db.VarChar(80)
+  position Int
+
+  voteCount Int @default(0) @map("vote_count")
+
+  votes CommunityPollVote[]
+
+  // 아래 CommunityPollVote 의 복합 FK 가 참조하는 대상.
+  // 이게 있어야 "다른 투표의 선택지에 표를 던지는" 일이 DB 차원에서 막힌다.
+  @@unique([id, pollId])
+  @@unique([pollId, position])
+  @@map("community_poll_options")
+}
+
+model CommunityPollVote {
+  id String @id @default(uuid()) @db.Uuid
+
+  // pollId 는 두 가지 일을 한다.
+  //   1) 아래 복합 FK 로 "이 선택지가 정말 이 투표의 것인지"를 DB 가 검사하게 하고
+  //   2) 1인 1표 유니크의 한쪽이 된다.
+  // CommunityPoll 로 가는 별도 relation 은 두지 않는다 — 같은 스칼라를 두 relation 에
+  // 쓰면 Prisma 가 거부하고, 집계는 voteCount 로 하므로 필요도 없다.
+  pollId   String              @map("poll_id") @db.Uuid
+  optionId String              @map("option_id") @db.Uuid
+  option   CommunityPollOption @relation(fields: [optionId, pollId], references: [id, pollId], onDelete: Cascade)
+
+  voterId String @map("voter_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // 1인 1표. 같은 범위에 여러 호실을 보유해도 한 표.
+  // 애플리케이션 검사만 믿지 않고 DB 로 강제한다.
+  @@unique([pollId, voterId])
+  @@index([optionId])
+  @@map("community_poll_votes")
+}
+
+
+// ===== 뉴스 =====
+
+model CommunityNewsItem {
+  id     String              @id @default(uuid()) @db.Uuid
+  source CommunityNewsSource
+  scope  CommunityNewsScope
+  // SIGUNGU 면 법정동코드 앞 5자리, SIDO 면 앞 2자리, NATIONWIDE 면 null
+  scopeCode String? @map("scope_code") @db.VarChar(5)
+
+  title     String
+  url       String
+  // 원문 URL 의 sha-256. url 에 직접 유니크를 걸면 길이 한도에 걸릴 수 있다.
+  urlHash   String  @map("url_hash") @db.VarChar(64)
+  publisher String?
+
+  publishedAt DateTime @map("published_at") @db.Timestamptz(3)
+  collectedAt DateTime @default(now()) @map("collected_at") @db.Timestamptz(3)
+
+  // 같은 범위 안에서만 중복을 막는다. 전국 기사와 지역 기사가 같은 URL 이어도
+  // 둘 다 남는다 — 범위가 다르면 다른 목록에 뜨기 때문.
+  //
+  // ⚠️ 이 제약만으로는 전국 기사(scopeCode = NULL)의 중복이 막히지 않는다.
+  //    PostgreSQL 이 UNIQUE 안의 NULL 을 서로 다른 값으로 보기 때문이다.
+  //    부분 유니크 인덱스를 마이그레이션 SQL 에 직접 넣는다 (add_community migration.sql 끝).
+  @@unique([scopeCode, urlHash])
+  @@index([scope, scopeCode, publishedAt(sort: Desc)])
+  @@map("community_news_items")
+}
+// ===== B팀 끝 =====
