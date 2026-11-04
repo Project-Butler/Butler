@@ -7,6 +7,7 @@ import {
   getPoll,
   getPost,
   listMyBuildings,
+  listNews,
   listReports,
   listPolls,
   listPosts,
@@ -74,6 +75,8 @@ router.post(
 );
 router.get('/polls/:pollId', generalRateLimiter, getPoll);
 
+// 뉴스: 읽기만. 수집은 cronRouter.js 의 /api/cron/community-news
+router.get('/regions/:legalDongCode/news', generalRateLimiter, listNews);
 router.post('/polls/:pollId/votes', landlordOnly, generalRateLimiter, loadPoll, memberOfPollRegion, postVote);
 // 삭제는 등록자 본인·참여자 0명일 때만. 자격은 보지 않는다(글 삭제와 같음).
 router.delete('/polls/:pollId', landlordOnly, generalRateLimiter, loadPoll, removePoll);

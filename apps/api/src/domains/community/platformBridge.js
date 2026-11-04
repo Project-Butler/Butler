@@ -149,3 +149,10 @@ export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDong
   const property = complexId ? { complexId } : { complex: { regionId: legalDongCode } };
   return (await findVerifiedOwnerships({ userId, property })).length;
 };
+
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 뉴스 수집 대상(인증 보유자가 한 명이라도 있는 시·군·구 — 아무도 없는 곳은 모으지 않는다).
+// 유효한 권리자 인증이 하나라도 있는 법정동 코드 전부(중복 없음, 오름차순). 사용자는 꺼내지 않는다.
+export const listAllVerifiedLegalDongCodes = async () => {
+  const ownerships = await findVerifiedOwnerships({});
+  return [...new Set(ownerships.map((o) => o.legalDongCode))].sort();
+};
