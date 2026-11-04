@@ -32,9 +32,11 @@ import { PropertyVerifyPage } from './pages/PropertyVerifyPage';
 import { SetupPage } from './pages/SetupPage';
 import { SupportInquiryPage } from './pages/SupportInquiryPage';
 import { DisputeChatPage } from './pages/DisputeChatPage';
+import { DisputeHomePage } from './pages/DisputeHomePage';
 import { DisputePage } from './pages/DisputePage';
 import { DisputeReferenceDetailPage } from './pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from './pages/DisputeSearchPage';
+import { DisputeTopicPage } from './pages/DisputeTopicPage';
 import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
 import { useGetContractList } from './hooks/useGetContractList';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
@@ -61,6 +63,8 @@ const NAV_KEY_BY_VIEW = {
   setup: 'home',
   disputeReference: 'disputes',
   disputeChat: 'disputes',
+  disputeSearch: 'disputes',
+  disputeTopic: 'disputes',
 };
 const SUB_TITLE_BY_VIEW = {
   properties: '호실 목록',
@@ -78,7 +82,8 @@ const SUB_TITLE_BY_VIEW = {
   logDetail: '기록 상세',
   propertyLogRegister: '기록 추가',
   setup: '초기 세팅',
-  disputes: '분쟁 해결사',
+  disputeSearch: '자료 찾기',
+  disputeTopic: '상황별 안내',
   disputeReference: '사례 상세',
 };
 
@@ -386,7 +391,9 @@ export const App = () => {
           {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
           <Route path="/disputes/chat" element={<DisputeChatPage />} />
           <Route path="/disputes" element={<DisputePage {...pageProps} />}>
-            <Route index element={<DisputeSearchPage />} />
+            <Route index element={<DisputeHomePage />} />
+            <Route path="search" element={<DisputeSearchPage />} />
+            <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
             <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
           </Route>
           {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}

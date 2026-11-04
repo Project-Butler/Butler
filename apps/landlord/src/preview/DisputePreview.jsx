@@ -7,9 +7,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LoginScreen } from '@butler/ui';
 import { postLogin } from '@butler/api-client';
 import { DisputeChatPage } from '../pages/DisputeChatPage';
+import { DisputeHomePage } from '../pages/DisputeHomePage';
 import { DisputePage } from '../pages/DisputePage';
 import { DisputeReferenceDetailPage } from '../pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from '../pages/DisputeSearchPage';
+import { DisputeTopicPage } from '../pages/DisputeTopicPage';
 import { buildLocation } from '../routes';
 import '../index.css';
 
@@ -27,7 +29,9 @@ const Screens = () => {
       <Routes>
         <Route path="/disputes/chat" element={<DisputeChatPage />} />
         <Route path="/disputes" element={<DisputePage onNavigate={onNavigate} />}>
-          <Route index element={<DisputeSearchPage />} />
+          <Route index element={<DisputeHomePage />} />
+          <Route path="search" element={<DisputeSearchPage />} />
+          <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
           <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
         </Route>
       </Routes>

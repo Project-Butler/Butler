@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DisputeCategory } from '@prisma/client';
+import { SEED_JSON_PATHS } from '../../../prisma/disputeSeedFiles.js';
 import { DISPUTE_FAQS, filterFaqs } from '../../../src/domains/disputes/faqs.js';
 import { toSearchTerms, toTermVariants } from '../../../src/domains/disputes/service.js';
 
+// 근거 자료는 DB에 시드되는 모든 파일(사례집·법령·판례 등, disputeSeedFiles.js)에서 찾는다.
 const referenceKeys = new Set(
-  JSON.parse(readFileSync(new URL('../../../prisma/seed-data/disputes.json', import.meta.url), 'utf8')).map(
-    (reference) => reference.sourceKey,
-  ),
+  SEED_JSON_PATHS.flatMap((jsonPath) => JSON.parse(readFileSync(jsonPath, 'utf8'))).map((reference) => reference.sourceKey),
 );
 
 test('자주 묻는 질문: key가 겹치지 않고 질문·답이 비어 있지 않다', () => {

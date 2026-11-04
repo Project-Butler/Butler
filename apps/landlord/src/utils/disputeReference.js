@@ -37,8 +37,9 @@ export const findTopic = (key) => DISPUTE_TOPICS.find((topic) => topic.key === k
 // 조정사례 본문은 "[사실관계] … [임대인 주장] … [쟁점] … [검토] …"처럼 구간 제목이 붙어 있다.
 // 구간마다 카드로 나눠 보여 주고, 구간 제목이 없는 본문(판례·가이드라인)은 한 덩어리로 둔다.
 // 국가법령정보센터 판례 원문에는 "[다수의견]", "[별표 1]" 같은 대괄호가 있어서 사례집 구간 제목만 나눈다.
-const SECTION_MARKER = /\[(사실관계|쟁점|검토|[^\]\n]{0,6}주장)\]/;
-const SECTION_TITLE_ALIASES = { 사실관계: '상황' };
+// 상담사례집은 "[질의] … [답변] …"으로 되어 있다.
+const SECTION_MARKER = /\[(사실관계|쟁점|검토|질의|답변|[^\]\n]{0,6}주장)\]/;
+const SECTION_TITLE_ALIASES = { 사실관계: '상황', 질의: '질문' };
 const DEFAULT_SECTION_TITLE = { CASE: '상황', PRECEDENT: '판시 내용', GUIDELINE: '안내' };
 
 // 사례집 판례는 본문이 판시 내용이고 요지가 outcome에 따로 있다. 국가법령정보센터 판례는 outcome 없이 본문이 판결요지다.
