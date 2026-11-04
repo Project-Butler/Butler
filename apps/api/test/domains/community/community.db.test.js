@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, test } from 'node:test';
 import { prisma } from '../../../src/platform/prismaClient.js';
-import { requireRegionMember } from '../../../src/domains/community/platformBridge.js';
+import { requireRegionMember, requireRegionOwner } from '../../../src/domains/community/platformBridge.js';
 import {
   createComment,
   createPost,
@@ -407,8 +407,112 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
     });
   });
 
+  describe('인증 전 미리보기', () => {
+    const runOwner = (user, legalDongCode = REGION) =>
+      new Promise((resolve) => {
+        requireRegionOwner(() => legalDongCode)({ user }, {}, (error) => resolve(error ?? null));
+      });
+    const OTHER_REGION = '1171010100'; // 시드에 있는 다른 법정동(서울 송파구 잠실동)
+
+    test('읽기 자격: 그 동네 호실 등록자는 인증이 없어도 통과, 다른 동네 임대인 · 임차인 · 끝난 소유는 403 COMMUNITY_REGION_OWNER_REQUIRED', async () => {
+      const complex = await fixture.createComplex();
+      const unverified = await createUser();
+      await addUnit(unverified, complex, { status: 'UNVERIFIED' });
+      const expiredOwner = await createUser();
+      await addUnit(expiredOwner, complex, { expired: true });
+      assert.equal(await runOwner(unverified), null);
+      assert.equal(await runOwner(expiredOwner), null);
+
+      const elsewhere = await createUser();
+      await addUnit(elsewhere, complex);
+      const otherDong = await runOwner(elsewhere, OTHER_REGION);
+      assert.equal(otherDong?.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
+      assert.equal(otherDong?.httpStatus, 403);
+
+      const tenant = await createUser('TENANT');
+      assert.equal((await runOwner(tenant))?.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
+
+      const sold = await createUser();
+      await addUnit(sold, complex);
+      await prisma.ownership.updateMany({ where: { userId: sold.id }, data: { endedAt: new Date() } });
+      assert.equal((await runOwner(sold))?.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
+    });
+
+    test('글 상세: 인증한 사람은 본문 · 댓글까지, 인증 전 · 만료는 locked 이고 body · comments 가 응답에 없다', async () => {
+      const complex = await fixture.createComplex({ name: '미리보기아파트' });
+      const author = await createUser();
+      await addUnit(author, complex);
+      const post = await createPost(author, REGION, postInput(complex.id, '잠긴 글'));
+      await createComment(author, post, { complexId: complex.id, body: '첫 댓글' });
+
+      const verified = await findPostDetail(author, post.id);
+      assert.equal(verified.locked, false);
+      assert.equal(verified.body, '본문');
+      assert.equal(verified.comments.length, 1);
+
+      for (const options of [{ status: 'UNVERIFIED' }, { expired: true }]) {
+        const viewer = await createUser();
+        await addUnit(viewer, complex, options);
+        const locked = await findPostDetail(viewer, post.id);
+        assert.equal(locked.locked, true);
+        assert.ok(!('body' in locked), 'body 가 없어야 한다');
+        assert.ok(!('comments' in locked), 'comments 가 없어야 한다');
+        assert.equal(locked.title, '잠긴 글');
+        assert.equal(locked.commentCount, 1);
+        assert.equal(locked.authorLabel, '미리보기아파트 101동 임대인');
+        assert.equal(locked.canWrite, false);
+        assert.equal(locked.writeBlockedReason, options.expired ? 'EXPIRED' : 'UNVERIFIED');
+      }
+    });
+
+    test('글 목록: 인증 전에도 지금 그대로(목록에는 원래 본문이 없다)', async () => {
+      const complex = await fixture.createComplex();
+      const author = await createUser();
+      await addUnit(author, complex);
+      await createPost(author, REGION, postInput(complex.id, '목록 글'));
+      const viewer = await createUser();
+      await addUnit(viewer, complex, { status: 'UNVERIFIED' });
+
+      const { items, meta } = await findPosts(viewer, REGION, LIST);
+      const item = items.find((row) => row.title === '목록 글');
+      assert.ok(item);
+      assert.deepEqual(Object.keys(item).sort(), ['authorLabel', 'category', 'commentCount', 'createdAt', 'id', 'isMine', 'title']);
+      assert.equal(meta.canWrite, false);
+    });
+
+    test('투표 상세: 인증 전에는 질문 · 범위 · 마감 · 참여 인원만 — 선택지 · 내 참여 · 득표 · 비율이 응답에 없다(마감 뒤에도)', async () => {
+      const complex = await fixture.createComplex();
+      const author = await createUser();
+      await addUnit(author, complex);
+      const poll = await createPoll(author, REGION, pollInput(complex.id, { title: '잠긴 투표' }));
+      await castVote(author, await prisma.communityPoll.findUnique({ where: { id: poll.id } }), { optionId: poll.options[0].id });
+
+      const verified = await findPollDetail(author, poll.id);
+      assert.equal(verified.locked, false);
+      assert.equal(verified.options.length, 2);
+      assert.equal(verified.hasVoted, true);
+
+      const viewer = await createUser();
+      await addUnit(viewer, complex, { status: 'UNVERIFIED' });
+      const lockedOpen = await findPollDetail(viewer, poll.id);
+      await prisma.communityPoll.update({ where: { id: poll.id }, data: { closesAt: new Date(Date.now() - DAY) } });
+      const lockedClosed = await findPollDetail(viewer, poll.id);
+      for (const locked of [lockedOpen, lockedClosed]) {
+        assert.equal(locked.locked, true);
+        for (const key of ['options', 'hasVoted', 'myOptionId', 'canVote', 'isEligible', 'myUnitCount', 'description', 'authorLabel']) {
+          assert.ok(!(key in locked), key + ' 가 없어야 한다');
+        }
+        assert.equal(locked.title, '잠긴 투표');
+        assert.equal(locked.scope, 'REGION');
+        assert.equal(locked.voteCount, 1);
+        assert.ok(locked.closesAt);
+      }
+      assert.equal(lockedClosed.isClosed, true);
+    });
+  });
+
   describe('my-buildings', () => {
-    test('미인증·만료 건물은 빠지고, my_buildings 이름을 바꾸면 따라온다', async () => {
+    test('인증 전 · 만료 건물도 상태와 함께 나온다. 인증된 건물이 먼저, my_buildings 이름을 바꾸면 따라온다', async () => {
       const user = await createUser();
       const ok = await fixture.createComplex({ name: '인증아파트' });
       const pending = await fixture.createComplex({ name: '미인증아파트' });
@@ -418,11 +522,19 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       }
       await addUnit(user, ok);
       await addUnit(user, ok);
-      await addUnit(user, pending, { status: 'UNVERIFIED' });
-      await addUnit(user, expired, { expired: true });
+      const pendingUnits = [];
+      for (let i = 0; i < 3; i += 1) pendingUnits.push(await addUnit(user, pending, { status: 'UNVERIFIED' }));
+      const expiredUnit = await addUnit(user, expired, { expired: true });
 
       let buildings = await findMyBuildings(user);
-      assert.deepEqual(buildings.map((building) => [building.name, building.unitCount]), [['인증아파트', 2]]);
+      assert.deepEqual(
+        buildings.map((b) => [b.name, b.unitCount, b.verificationStatus]),
+        [['인증아파트', 2, 'VERIFIED'], ['미인증아파트', 3, 'UNVERIFIED'], ['만료아파트', 1, 'EXPIRED']],
+      );
+      const byName = Object.fromEntries(buildings.map((b) => [b.name, b]));
+      assert.equal(byName['인증아파트'].verifyPropertyId, null);
+      assert.equal(byName['만료아파트'].verifyPropertyId, expiredUnit.id);
+      assert.ok(pendingUnits.map((unit) => unit.id).includes(byName['미인증아파트'].verifyPropertyId));
 
       await prisma.myBuilding.updateMany({ where: { userId: user.id, complexId: ok.id }, data: { name: '바꾼 이름' } });
       buildings = await findMyBuildings(user);
@@ -430,7 +542,32 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       assert.equal(buildings[0].regionName, '서울특별시 노원구 중계동');
     });
 
-    test('unitAreas 는 인증 호실의 전용면적만 담는다(만료 · 미인증 · 면적 없는 호실은 빠짐, 동 · 호수 없음)', async () => {
+    test('verifyPropertyId: 만료 호실을 먼저, 같으면 동 · 호 자연순. 끝난 소유 관계 건물은 나오지 않는다', async () => {
+      const user = await createUser();
+      const mixed = await fixture.createComplex({ name: '섞인아파트' });
+      const soldOut = await fixture.createComplex({ name: '판아파트' });
+      for (const complex of [mixed, soldOut]) {
+        await prisma.myBuilding.create({ data: { userId: user.id, complexId: complex.id, name: complex.name } });
+      }
+      await addUnit(user, mixed, { buildingNo: '102', unitNo: '101', status: 'UNVERIFIED' });
+      const expired = await addUnit(user, mixed, { buildingNo: '110', unitNo: '1201', expired: true });
+      const first = await addUnit(user, mixed, { buildingNo: '101', unitNo: '901', status: 'UNVERIFIED' });
+      const sold = await addUnit(user, soldOut, { status: 'UNVERIFIED' });
+      await prisma.ownership.updateMany({ where: { propertyId: sold.id }, data: { endedAt: new Date() } });
+
+      const buildings = await findMyBuildings(user);
+      assert.deepEqual(buildings.map((b) => b.name), ['섞인아파트']);
+      assert.equal(buildings[0].verificationStatus, 'EXPIRED');
+      assert.equal(buildings[0].verifyPropertyId, expired.id);
+
+      // 만료가 없으면 미인증 중 동 · 호 자연순 첫 호실(101동 901호)
+      await prisma.ownership.updateMany({ where: { propertyId: expired.id }, data: { endedAt: new Date() } });
+      const [again] = await findMyBuildings(user);
+      assert.equal(again.verificationStatus, 'UNVERIFIED');
+      assert.equal(again.verifyPropertyId, first.id);
+    });
+
+    test('unitAreas 는 그 건물의 활성 호실 전용면적(인증 여부 무관, 면적 없는 호실 · 남의 호실은 빠짐, 동 · 호수 없음)', async () => {
       const user = await createUser();
       const other = await createUser();
       const complex = await fixture.createComplex({ name: '면적아파트' });
@@ -443,11 +580,14 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       await addUnit(other, complex, { exclusiveArea: '33.1' }); // 남의 호실
 
       const [building] = await findMyBuildings(user);
-      assert.equal(building.unitCount, 3);
-      assert.deepEqual([...building.unitAreas].sort((a, b) => a - b), [59.84, 84.97]);
+      assert.equal(building.unitCount, 5);
+      assert.equal(building.verificationStatus, 'VERIFIED');
+      assert.equal(building.verifyPropertyId, null);
+      assert.deepEqual([...building.unitAreas].sort((a, b) => a - b), [59.84, 84.97, 101.23, 120.5]);
       assert.ok(building.unitAreas.every((area) => typeof area === 'number'));
       assert.deepEqual(Object.keys(building).sort(), [
         'complexId', 'legalDongCode', 'memberCount', 'name', 'regionName', 'unitAreas', 'unitCount',
+        'verificationStatus', 'verifyPropertyId',
       ]);
     });
   });

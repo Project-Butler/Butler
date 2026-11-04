@@ -28,12 +28,14 @@ import {
   removePoll,
   removePost,
 } from './controller.js';
-import { requireRegionMember } from './platformBridge.js';
+import { requireRegionMember, requireRegionOwner } from './platformBridge.js';
 
 const router = Router();
 
-// 임대인 커뮤니티(api-contract.md 9장). 읽기는 authGuard, 쓰기는 roleGuard(['LANDLORD']) +
-// requireRegionMember(platformBridge.js). 경로마다 역할을 따로 건다.
+// 임대인 커뮤니티(api-contract.md 9장). 경로마다 자격을 따로 건다.
+// - 읽기(글 · 투표 목록 · 상세, 뉴스): authGuard + requireRegionOwner — 그 법정동에 호실을 등록한 임대인(인증 여부 무관, 미리보기).
+//   본문 · 댓글 · 투표 선택지 · 결과는 인증이 유효할 때만 서비스가 응답에 넣는다(locked)
+// - 쓰기: roleGuard(['LANDLORD']) + requireRegionMember — 그 법정동에 인증이 유효한 임대인
 router.use(authGuard);
 
 // 내 건물은 임대인 본인 것이라 LANDLORD만(임차인 읽기 권한 미확정과는 별개).
@@ -44,8 +46,10 @@ router.get('/my-buildings', roleGuard(['LANDLORD']), generalRateLimiter, listMyB
 const landlordOnly = roleGuard(['LANDLORD']);
 const memberOfPathRegion = requireRegionMember((req) => req.params.legalDongCode);
 const memberOfPostRegion = requireRegionMember((req) => req.communityPost.legalDongCode);
+const ownerOfPathRegion = requireRegionOwner((req) => req.params.legalDongCode);
+const ownerOfPostRegion = requireRegionOwner((req) => req.communityPost.legalDongCode);
 
-router.get('/regions/:legalDongCode/posts', generalRateLimiter, listPosts);
+router.get('/regions/:legalDongCode/posts', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listPosts);
 router.post(
   '/regions/:legalDongCode/posts',
   landlordOnly,
@@ -54,17 +58,18 @@ router.post(
   memberOfPathRegion,
   postPost,
 );
-router.get('/posts/:postId', generalRateLimiter, getPost);
+router.get('/posts/:postId', generalRateLimiter, loadPost, ownerOfPostRegion, getPost);
 router.patch('/posts/:postId', landlordOnly, generalRateLimiter, loadPost, memberOfPostRegion, patchPost);
 router.delete('/posts/:postId', landlordOnly, generalRateLimiter, loadPost, removePost);
 router.post('/posts/:postId/comments', landlordOnly, generalRateLimiter, loadPost, memberOfPostRegion, postComment);
 router.delete('/comments/:commentId', landlordOnly, generalRateLimiter, loadComment, removeComment);
 router.post('/posts/:postId/reports', landlordOnly, generalRateLimiter, loadPost, memberOfPostRegion, postReport);
 
-// 투표: 읽기는 authGuard, 등록·참여는 법정동 자격. "우리 단지"(COMPLEX) 자격은 참여 때 서비스가 따로 본다.
+// 투표: 읽기는 그 법정동 호실 등록자, 등록·참여는 법정동 인증. "우리 단지"(COMPLEX) 자격은 참여 때 서비스가 따로 본다.
 const memberOfPollRegion = requireRegionMember((req) => req.communityPoll.legalDongCode);
+const ownerOfPollRegion = requireRegionOwner((req) => req.communityPoll.legalDongCode);
 
-router.get('/regions/:legalDongCode/polls', generalRateLimiter, listPolls);
+router.get('/regions/:legalDongCode/polls', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listPolls);
 router.post(
   '/regions/:legalDongCode/polls',
   landlordOnly,
@@ -73,10 +78,10 @@ router.post(
   memberOfPathRegion,
   postPoll,
 );
-router.get('/polls/:pollId', generalRateLimiter, getPoll);
+router.get('/polls/:pollId', generalRateLimiter, loadPoll, ownerOfPollRegion, getPoll);
 
 // 뉴스: 읽기만. 수집은 cronRouter.js 의 /api/cron/community-news
-router.get('/regions/:legalDongCode/news', generalRateLimiter, listNews);
+router.get('/regions/:legalDongCode/news', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listNews);
 router.post('/polls/:pollId/votes', landlordOnly, generalRateLimiter, loadPoll, memberOfPollRegion, postVote);
 // 삭제는 등록자 본인·참여자 0명일 때만. 자격은 보지 않는다(글 삭제와 같음).
 router.delete('/polls/:pollId', landlordOnly, generalRateLimiter, loadPoll, removePoll);

@@ -80,18 +80,40 @@ const isEligibleVoter = async (user, poll) => {
 const toPercent = (count, total) => (total === 0 ? 0 : Math.round((count * 100) / total));
 
 // GET /community/polls/:pollId
+// 그 법정동에 인증이 유효하지 않으면(미리보기) 질문 · 범위 · 마감 · 참여 인원만 주고 locked: true.
+// 선택지 · 내 참여 여부 · 득표 · 비율은 응답에 넣지 않는다(서버가 잠근다).
 export const findPollDetail = async (user, pollId) => {
   const poll = await findVisiblePoll(pollId);
   const now = new Date();
   const isClosed = isPollClosed(poll, now);
-  const [options, myVote, region, complex, isEligible, myUnitCount, access] = await Promise.all([
+  const access = await getWriteAccess(user, poll.legalDongCode);
+  if (!access.canWrite) {
+    const [region, complex] = await Promise.all([
+      findRegion(poll.legalDongCode),
+      poll.complexId ? prisma.complex.findUnique({ where: { id: poll.complexId }, select: { name: true } }) : null,
+    ]);
+    return {
+      id: poll.id,
+      scope: poll.scope,
+      complexId: poll.complexId,
+      complexName: complex?.name ?? null,
+      region,
+      title: poll.title,
+      closesAt: poll.closesAt.toISOString(),
+      isClosed,
+      voteCount: poll.voteCount,
+      ...access,
+      locked: true,
+      createdAt: poll.createdAt.toISOString(),
+    };
+  }
+  const [options, myVote, region, complex, isEligible, myUnitCount] = await Promise.all([
     prisma.communityPollOption.findMany({ where: { pollId }, orderBy: { position: 'asc' } }),
     prisma.communityPollVote.findUnique({ where: { pollId_voterId: { pollId, voterId: user.id } } }),
     findRegion(poll.legalDongCode),
     poll.complexId ? prisma.complex.findUnique({ where: { id: poll.complexId }, select: { name: true } }) : null,
     isEligibleVoter(user, poll),
     countMyVerifiedUnitsInScope(user.id, poll.scope === 'COMPLEX' ? { complexId: poll.complexId } : { legalDongCode: poll.legalDongCode }),
-    getWriteAccess(user, poll.legalDongCode),
   ]);
 
   return {
@@ -114,6 +136,7 @@ export const findPollDetail = async (user, pollId) => {
     myUnitCount,
     // 머리말 배지용 — 보는 사람의 이 법정동 자격(게시판과 같음)
     ...access,
+    locked: false,
     // 마감 전에는 선택지별 득표를 넣지 않는다(참여 인원 voteCount 만)
     options: options.map((option) => ({
       id: option.id,

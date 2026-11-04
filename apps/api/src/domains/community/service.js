@@ -7,15 +7,18 @@ import {
   countRegionMembers,
   findAuthorUnit,
   getRegionVerificationStatus,
-  summarizeMyVerifiedUnitsByComplex,
+  summarizeMyActiveUnitsByComplex,
 } from './platformBridge.js';
 
 // GET /community/my-buildings — 건물 선택 화면 · 건물 바꾸기의 입력.
-// 내 건물 설정(my_buildings, 숨기지 않은 것) 중 권리자 인증을 보유한 단지만 남긴다.
+// 내 건물 설정(my_buildings, 숨기지 않은 것) 중 활성 소유 관계가 있는 단지 — 인증 전 · 만료 건물도 넣는다(미리보기).
 // 건물명은 A팀 my_buildings.name을 그대로 쓴다(임대인이 고친 이름이 커뮤니티에도 따라온다).
-// unitAreas: 이 단지 내 인증 호실의 전용면적(시세 면적대용). 면적 없는 호실은 빠지고, 동 · 호수는 넣지 않는다(이름 · 호수 · 연락처는 어디에도 노출하지 않는다).
+// unitCount · unitAreas: 이 단지 내 활성 호실 기준(인증 여부는 verificationStatus 가 말한다). 면적 없는 호실은 빠지고,
+// 동 · 호수는 넣지 않는다(이름 · 호수 · 연락처는 어디에도 노출하지 않는다).
+// verificationStatus: 'VERIFIED' | 'UNVERIFIED' | 'EXPIRED', verifyPropertyId: 인증이 필요하면 인증할 호실 하나(권리자 인증 화면으로 가는 id).
+// 정렬: 인증된 건물 먼저, 그다음 호실 수 · 건물명.
 export const findMyBuildings = async (user) => {
-  const myUnits = await summarizeMyVerifiedUnitsByComplex(user.id);
+  const myUnits = await summarizeMyActiveUnitsByComplex(user.id);
   if (myUnits.size === 0) return [];
 
   const buildings = await prisma.myBuilding.findMany({
@@ -38,8 +41,15 @@ export const findMyBuildings = async (user) => {
       unitCount: myUnits.get(building.complexId).unitCount,
       unitAreas: myUnits.get(building.complexId).unitAreas,
       memberCount: memberCounts.get(building.complex.regionId) ?? 0,
+      verificationStatus: myUnits.get(building.complexId).verificationStatus,
+      verifyPropertyId: myUnits.get(building.complexId).verifyPropertyId,
     }))
-    .sort((a, b) => b.unitCount - a.unitCount || compareNatural(a.name, b.name));
+    .sort(
+      (a, b) =>
+        Number(b.verificationStatus === 'VERIFIED') - Number(a.verificationStatus === 'VERIFIED') ||
+        b.unitCount - a.unitCount ||
+        compareNatural(a.name, b.name),
+    );
 };
 
 // ===== 게시판 (목록 · 글 상세) =====
@@ -151,22 +161,23 @@ export const findVisiblePost = async (postId) => {
 };
 
 // GET /community/posts/:postId — 댓글은 오래된 순.
+// 그 법정동에 인증이 유효하지 않으면(미인증 · 만료 — 미리보기) 목록에 보이는 것만 주고 locked: true.
+// 본문(body)과 댓글(comments)은 응답에 넣지 않는다 — 화면에서 숨기는 것이 아니라 서버가 잠근다.
 export const findPostDetail = async (user, postId) => {
   const post = await findVisiblePost(postId);
-  const [comments, access] = await Promise.all([
-    prisma.communityComment.findMany({
-      where: { postId, ...VISIBLE },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    }),
-    getWriteAccess(user, post.legalDongCode),
-  ]);
+  const access = await getWriteAccess(user, post.legalDongCode);
+  const summary = { ...toPostListItem(post, user), legalDongCode: post.legalDongCode, ...access };
+  if (!access.canWrite) return { ...summary, locked: true };
 
+  const comments = await prisma.communityComment.findMany({
+    where: { postId, ...VISIBLE },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
   return {
-    ...toPostListItem(post, user),
-    legalDongCode: post.legalDongCode,
+    ...summary,
+    locked: false,
     body: post.body,
     updatedAt: post.updatedAt.toISOString(),
-    ...access,
     comments: comments.map((comment) => toComment(comment, user)),
   };
 };

@@ -3,6 +3,7 @@
 // 직접 조회하지 않고 항상 이 파일에서 가져다 쓴다(조인 쿼리를 서비스에 흩어 놓지 않는다).
 // requireRegionMember 는 플랫폼 것(middlewares/requireRegionMember.js)을 그대로 내보낸다.
 // listVerifiedLegalDongCodes 는 두지 않는다(부르는 곳이 없고, 플랫폼 pickVerifiedLegalDongCodes 가 같은 일을 한다).
+import { AppError } from '../../platform/AppError.js';
 import { compareNatural } from '../../platform/naturalSort.js';
 import {
   computeOwnershipVerificationStatus,
@@ -69,17 +70,76 @@ export const isRegionMember = async (userId, legalDongCode) => {
 // 알림 기능이 아직 없어서 아무것도 하지 않는다. 부르는 쪽은 진짜 함수처럼 await 해도 된다.
 export const notify = async () => {};
 
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 커뮤니티 읽기 자격(인증 전 미리보기 포함).
+// 이 사용자가 이 법정동에 활성 소유 관계(endedAt null)를 하나라도 가졌는가 — 인증 여부(미인증 · 만료 · 취소)는 보지 않는다.
+// 임차인 · 그 동네에 호실이 없는 임대인은 false.
+export const hasActiveOwnershipInRegion = async (userId, legalDongCode) => {
+  if (!isUuid(userId) || typeof legalDongCode !== 'string') return false;
+  const count = await prisma.ownership.count({
+    where: { userId, endedAt: null, property: { complex: { regionId: legalDongCode } } },
+  });
+  return count > 0;
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 미들웨어. 커뮤니티 읽기 경로(글 · 투표 목록 · 상세, 뉴스)에 authGuard 뒤에 건다.
+// 그 법정동에 호실을 등록한 사람만 읽는다. 아니면 403 COMMUNITY_REGION_OWNER_REQUIRED.
+// 본문 · 댓글 · 투표 선택지 · 결과는 여기를 지나도 인증이 있어야 응답에 들어간다(서비스가 잠근다).
+export const requireRegionOwner = (getLegalDongCode) => async (req, res, next) => {
+  try {
+    if (!(await hasActiveOwnershipInRegion(req.user?.id, getLegalDongCode(req)))) {
+      throw new AppError('COMMUNITY_REGION_OWNER_REQUIRED', 403, '이 동네에 호실을 등록한 임대인만 볼 수 있습니다.');
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 건물 인증 상태의 우선순위: 유효한 인증이 하나라도 있으면 VERIFIED, 없고 만료가 있으면 EXPIRED, 그 밖(미인증 · 취소)은 UNVERIFIED.
+const BUILDING_STATUS_RANK = { VERIFIED: 0, EXPIRED: 1, UNVERIFIED: 2 };
+
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 내 건물 목록(GET /community/my-buildings)이 쓴다.
-// 내가 인증을 보유한 호실을 단지별로 묶는다. Map(complexId → { unitCount, unitAreas }).
-// unitAreas 는 시세 면적대(내 호실 점 · 처음 선택)용 전용면적(㎡, 저장값 그대로) — 면적이 없는 호실은 뺀다. 동 · 호수는 내보내지 않는다.
-export const summarizeMyVerifiedUnitsByComplex = async (userId) => {
+// 내 활성 소유 관계(인증 여부 무관)를 단지별로 묶는다.
+// Map(complexId → { unitCount, unitAreas, verificationStatus, verifyPropertyId }).
+// - unitAreas: 시세 면적대(내 호실 점 · 처음 선택)용 전용면적(㎡, 저장값 그대로). 면적이 없는 호실은 뺀다. 동 · 호수는 내보내지 않는다
+// - verificationStatus: 'VERIFIED' | 'EXPIRED' | 'UNVERIFIED' (판정은 computeOwnershipVerificationStatus)
+// - verifyPropertyId: 인증이 필요한 건물이면 그 건물에서 인증할 호실 하나의 Property.id(만료 호실 먼저, 같으면 동 · 호 자연순), VERIFIED 면 null
+export const summarizeMyActiveUnitsByComplex = async (userId) => {
   const units = new Map();
   if (!isUuid(userId)) return units;
-  for (const { complexId, exclusiveArea } of await findVerifiedOwnerships({ userId })) {
-    if (!units.has(complexId)) units.set(complexId, { unitCount: 0, unitAreas: [] });
+  const rows = await prisma.ownership.findMany({
+    where: { userId, endedAt: null },
+    select: {
+      verificationStatus: true,
+      verificationExpiresAt: true,
+      property: { select: { id: true, complexId: true, buildingNo: true, unitNo: true, exclusiveArea: true } },
+    },
+  });
+  const now = new Date();
+  const toBuildingStatus = (status) => (status === 'VERIFIED' || status === 'EXPIRED' ? status : 'UNVERIFIED');
+  const candidates = new Map();
+  for (const row of rows) {
+    const { id, complexId, buildingNo, unitNo, exclusiveArea } = row.property;
+    const status = toBuildingStatus(computeOwnershipVerificationStatus(row, now));
+    if (!units.has(complexId)) units.set(complexId, { unitCount: 0, unitAreas: [], verificationStatus: 'UNVERIFIED', verifyPropertyId: null });
     const unit = units.get(complexId);
     unit.unitCount += 1;
-    if (exclusiveArea != null) unit.unitAreas.push(exclusiveArea);
+    if (exclusiveArea != null) unit.unitAreas.push(Number(exclusiveArea));
+    if (BUILDING_STATUS_RANK[status] < BUILDING_STATUS_RANK[unit.verificationStatus]) unit.verificationStatus = status;
+    if (status !== 'VERIFIED') {
+      if (!candidates.has(complexId)) candidates.set(complexId, []);
+      candidates.get(complexId).push({ id, status, buildingNo, unitNo });
+    }
+  }
+  for (const [complexId, unit] of units) {
+    if (unit.verificationStatus === 'VERIFIED') continue;
+    const [first] = (candidates.get(complexId) ?? []).sort(
+      (a, b) =>
+        BUILDING_STATUS_RANK[a.status] - BUILDING_STATUS_RANK[b.status] ||
+        compareNatural(a.buildingNo, b.buildingNo) ||
+        compareNatural(a.unitNo, b.unitNo),
+    );
+    unit.verifyPropertyId = first?.id ?? null;
   }
   return units;
 };
