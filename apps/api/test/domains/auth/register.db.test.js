@@ -26,7 +26,7 @@ const issueVerifiedToken = async (email) => {
       codeHash: 'unused',
       verifiedAt: new Date(),
       tokenHash: hashVerificationToken(token),
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     },
   });
   return token;

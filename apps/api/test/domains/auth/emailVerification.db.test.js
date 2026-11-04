@@ -60,7 +60,7 @@ describe('이메일 인증', { skip: dbTestSkip }, () => {
     const email = newEmail();
     const result = await sendEmailVerification(email);
 
-    assert.deepEqual(result, { expiresInSeconds: 600, resendAfterSeconds: 60 });
+    assert.deepEqual(result, { expiresInSeconds: 180, resendAfterSeconds: 60 });
     assert.equal(sent.length, 1);
     assert.equal(sent[0].to, email);
     const code = lastCode();

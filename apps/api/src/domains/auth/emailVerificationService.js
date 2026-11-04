@@ -5,8 +5,8 @@ import { AppError } from '../../platform/AppError.js';
 import { mailer } from '../../platform/mailer.js';
 import { prisma } from '../../platform/prismaClient.js';
 
-export const CODE_TTL_MS = 10 * 60 * 1000; // 인증번호 유효 시간
-export const TOKEN_TTL_MS = 30 * 60 * 1000; // 번호 확인 뒤 가입을 마쳐야 하는 시간
+export const CODE_TTL_MS = 3 * 60 * 1000; // 인증번호 유효 시간
+export const TOKEN_TTL_MS = 5 * 60 * 1000; // 번호 확인 뒤 가입을 마쳐야 하는 시간
 export const RESEND_COOLDOWN_MS = 60 * 1000; // 같은 이메일로 다시 보낼 수 있는 간격
 const MAX_SENDS_PER_HOUR = 5; // 같은 이메일로 1시간에 보낼 수 있는 횟수
 const MAX_ATTEMPTS = 5; // 인증번호 한 건당 틀릴 수 있는 횟수

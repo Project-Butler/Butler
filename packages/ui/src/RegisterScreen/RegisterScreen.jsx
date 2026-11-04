@@ -286,7 +286,7 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit, o
                     setCodeError('');
                   }}
                   error={codeError}
-                  hint={codeError ? undefined : '메일로 받은 6자리 번호를 10분 안에 입력해주세요'}
+                  hint={codeError ? undefined : '메일로 받은 6자리 번호를 3분 안에 입력해주세요'}
                 />
                 <Button disabled={isEmailBusy || code.length !== 6} onClick={handleConfirmCode} className="h-12 shrink-0">
                   확인
