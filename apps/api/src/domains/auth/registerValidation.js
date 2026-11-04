@@ -12,6 +12,7 @@ export const REGISTER_FIELDS = [
   'termsAgreed',
   'privacyAgreed',
   'invitationToken',
+  'emailVerificationToken',
 ];
 
 const EMAIL_MAX_LENGTH = 254;
@@ -36,7 +37,7 @@ const isBlank = (value) => value === undefined || value === null || (typeof valu
 
 export const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 
-const validateEmail = (value, details) => {
+export const validateEmail = (value, details) => {
   if (typeof value !== 'string' || value.trim() === '') {
     details.push({ field: 'email', reason: '이메일을 입력해주세요.' });
     return null;
@@ -150,6 +151,11 @@ export const parseRegisterBody = (body) => {
   const birthDate = validateBirthDate(body.birthDate, details);
   validateAgreement(body.termsAgreed, 'termsAgreed', '이용약관', details);
   validateAgreement(body.privacyAgreed, 'privacyAgreed', '개인정보 수집·이용', details);
+  // POST /auth/email-verifications/confirm이 준 토큰. 이 이메일로 인증됐는지는 가입 트랜잭션에서 확인한다.
+  const { emailVerificationToken } = body;
+  if (typeof emailVerificationToken !== 'string' || emailVerificationToken.trim() === '') {
+    details.push({ field: 'emailVerificationToken', reason: '이메일 인증을 완료해주세요.' });
+  }
 
   const { role } = body;
   if (typeof role !== 'string' || !['LANDLORD', 'TENANT', 'ADMIN'].includes(role)) {
@@ -173,7 +179,7 @@ export const parseRegisterBody = (body) => {
     );
   }
 
-  return { email, password, name, phone, birthDate, role };
+  return { email, password, name, phone, birthDate, role, emailVerificationToken: emailVerificationToken.trim() };
 };
 
 // 소셜 가입 마무리(POST /auth/oauth/signup) 입력. 이메일은 제공자가 준 값을 쓰므로 받지 않는다.
