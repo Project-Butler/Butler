@@ -11,14 +11,16 @@ export const CONTRACT_EDITABLE_FIELDS = [
   'leaseType',
   'deposit',
   'monthlyRent',
+  'rentPaymentDay',
   'startDate',
   'endDate',
   'tenantName',
   'tenantPhone',
   'memo',
 ];
-// 진행 중 계약은 연락처·메모만(D-13). 수정 이력이 없어 조건을 덮어쓰면 원래 값이 사라진다.
-const ACTIVE_EDITABLE_FIELDS = ['tenantPhone', 'memo'];
+// 진행 중 계약은 연락처·메모·월세 입금일만(D-13). 수정 이력이 없어 조건을 덮어쓰면 원래 값이 사라진다.
+// 입금일은 예외로 허용한다 — 바뀐 이력은 감사 로그 before/after에 남긴다(#76 Q3).
+export const ACTIVE_EDITABLE_FIELDS = ['tenantPhone', 'memo', 'rentPaymentDay'];
 
 const TENANT_PHONE_PATTERN = /^010\d{7,8}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,6 +49,15 @@ export const isValidAmount = ({ leaseType, deposit, monthlyRent }) => {
   if (deposit < 0n || monthlyRent < 0n) return false;
   if (leaseType === 'MONTHLY') return monthlyRent >= 1n;
   return monthlyRent === 0n && deposit > 0n;
+};
+
+// 월세 입금일 값 자체가 1~31 정수인지(31은 말일).
+export const isRentPaymentDayInRange = (value) => Number.isInteger(value) && value >= 1 && value <= 31;
+
+// 월세 입금일: 값 없음(null)은 언제나 허용, 월세면 1~31 정수, 전세면 null만.
+export const isValidRentPaymentDay = ({ leaseType, rentPaymentDay }) => {
+  if (rentPaymentDay === null || rentPaymentDay === undefined) return true;
+  return leaseType === 'MONTHLY' && isRentPaymentDayInRange(rentPaymentDay);
 };
 
 // R-04: 종료일이 시작일보다 뒤.

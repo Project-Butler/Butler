@@ -1,4 +1,4 @@
-// API와 실행 서버 사이 양방향 HMAC-SHA256 서명. 서명 대상은 `timestamp.body`, 5분이 넘으면 거절한다.
+// API와 외부 발급 서버 사이 양방향 HMAC-SHA256 서명. 서명 대상은 `timestamp.body`, 5분이 넘으면 거절한다.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const TIMESTAMP_HEADER = 'X-Butler-Timestamp';

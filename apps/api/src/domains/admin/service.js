@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
-import { getNow, getTodayKST } from '../../platform/dateUtils.js';
+import { computeContractStatus } from '../../platform/contractStatus.js';
+import { getNow, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
 import { afterCreatedAtCursor, toCursorPage } from '../../platform/createdAtCursor.js';
 import { endOwnershipInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
@@ -110,7 +111,15 @@ export const findAdminUsers = async ({ query, role, status, page, size }) => {
   return { items: users.map(toAdminUser), meta: toPageMeta(page, size, total) };
 };
 
-const toOwnershipSummary = (ownership, now) => ({
+// 회원 상세의 계약 요약. 임차인 정보·금액·메모는 넣지 않고, 내용은 GET /contracts/:contractId로 건별 조회한다.
+const toContractSummary = (contract, todayKST) => ({
+  id: contract.id,
+  status: computeContractStatus(contract, todayKST),
+  startDate: toDateOnlyString(contract.startDate),
+  endDate: toDateOnlyString(contract.endDate),
+});
+
+const toOwnershipSummary = (ownership, now, todayKST) => ({
   id: ownership.id,
   propertyId: ownership.propertyId,
   complexId: ownership.property.complexId,
@@ -120,15 +129,22 @@ const toOwnershipSummary = (ownership, now) => ({
   startedAt: ownership.startedAt.toISOString(),
   endedAt: ownership.endedAt?.toISOString() ?? null,
   endReason: ownership.endReason,
+  contracts: ownership.contracts.map((contract) => toContractSummary(contract, todayKST)),
 });
 
-// GET /admin/users/:userId. 없으면 null. 소유 관계는 활성 먼저, 그 안에서는 최근 시작 순.
+// GET /admin/users/:userId. 없으면 null. 소유 관계는 활성 먼저, 그 안에서는 최근 시작 순. 계약도 최근 시작 순.
 export const findAdminUser = async (userId) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
       ownerships: {
-        include: { property: { include: { complex: { select: { name: true } } } } },
+        include: {
+          property: { include: { complex: { select: { name: true } } } },
+          contracts: {
+            select: { id: true, startDate: true, endDate: true, terminatedOn: true },
+            orderBy: { startDate: 'desc' },
+          },
+        },
         orderBy: { startedAt: 'desc' },
       },
     },
@@ -136,7 +152,8 @@ export const findAdminUser = async (userId) => {
   if (!user) return null;
 
   const now = getNow();
-  const ownerships = user.ownerships.map((ownership) => toOwnershipSummary(ownership, now));
+  const todayKST = getTodayKST();
+  const ownerships = user.ownerships.map((ownership) => toOwnershipSummary(ownership, now, todayKST));
   return {
     ...toAdminUser(user),
     ownerships: [...ownerships.filter((item) => item.isActive), ...ownerships.filter((item) => !item.isActive)],

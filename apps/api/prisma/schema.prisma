@@ -21,6 +21,14 @@ enum Role {
   @@map("role")
 }
 
+// 소셜 로그인 제공자
+enum OAuthProvider {
+  GOOGLE
+  KAKAO
+
+  @@map("oauth_provider")
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -88,7 +96,8 @@ enum JobStatus {
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
-  passwordHash String     @map("password_hash")
+  // 소셜 로그인으로만 가입한 계정은 비밀번호가 없다(null). 이 경우 비밀번호 로그인은 항상 실패한다.
+  passwordHash String?    @map("password_hash")
   name         String
   // 애플리케이션 레벨에서 암호화한 값을 저장한다 (ERD 공통 설계 규칙)
   phone        String?
@@ -107,6 +116,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions          Session[]
+  oauthAccounts     OAuthAccount[]
   consents          Consent[]
   requestedJobs     Job[]
   ownerships        Ownership[]
@@ -139,6 +149,23 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+// 소셜 로그인 연결. 한 사용자가 구글·카카오를 모두 연결할 수 있고, 같은 소셜 계정은 한 사용자에게만 붙는다.
+// providerUserId는 제공자가 주는 불변 식별자(구글 sub, 카카오 id)다. 이메일은 바뀔 수 있어 식별에 쓰지 않는다.
+model OAuthAccount {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  user           User          @relation(fields: [userId], references: [id])
+  provider       OAuthProvider
+  providerUserId String        @map("provider_user_id")
+  // 연결할 때 제공자가 알려 준 이메일(참고용)
+  email          String?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([provider, providerUserId], map: "uq_oauth_accounts_provider_user")
+  @@unique([userId, provider], map: "uq_oauth_accounts_user_provider")
+  @@map("oauth_accounts")
 }
 
 // 회원가입 이메일 인증. 가입 전(users 행이 없을 때)의 이메일이라 userId가 없다.
@@ -481,9 +508,11 @@ model Contract {
   tenantName  String  @map("tenant_name")
   tenantPhone String  @map("tenant_phone")
 
-  leaseType   LeaseType @map("lease_type")
-  deposit     BigInt
-  monthlyRent BigInt    @map("monthly_rent")
+  leaseType      LeaseType @map("lease_type")
+  deposit        BigInt
+  monthlyRent    BigInt    @map("monthly_rent")
+  // 월세 입금일(매월 며칠). 1~31, 31은 "말일". 전세·입력 전 계약은 null.
+  rentPaymentDay Int?      @map("rent_payment_day")
 
   startDate DateTime @map("start_date") @db.Date
   endDate   DateTime @map("end_date") @db.Date

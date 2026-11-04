@@ -15,9 +15,8 @@ import { getOwnershipVerificationSetting, findOwnershipVerificationAttempts, rev
 import { buildAuthMe, signAccessToken } from '../../../src/domains/auth/service.js';
 import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
 import { ownershipVerificationResultRouter } from '../../../src/domains/ownershipVerifications/router.js';
-import { buildSignedHeaders } from '../../../src/domains/ownershipVerifications/runnerSignature.js';
+import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from '../../../src/domains/ownershipVerifications/runnerSignature.js';
 import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../helpers/fakeLedgerRunner.js';
-import { createRunnerServer } from '../../../src/domains/ownershipVerifications/runnerServer.js';
 import { decryptField } from '../../../src/platform/fieldCrypto.js';
 import { createRemoteRunner } from '../../../src/domains/ownershipVerifications/runners/remote.js';
 import {
@@ -565,7 +564,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
   describe('실제 앱 경로', () => {
     const saved = {};
-    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER', 'OWNERSHIP_VERIFICATION_RUNNER_URL', 'OWNERSHIP_VERIFICATION_RUNNER_SECRET', 'ACCESS_TOKEN_SECRET'];
+    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER_URL', 'OWNERSHIP_VERIFICATION_RUNNER_SECRET', 'ACCESS_TOKEN_SECRET'];
     const RUNNER_SECRET = randomUUID();
     let server;
     let runnerServer;
@@ -573,10 +572,30 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     let baseUrl;
     const userIds = [];
 
-    // 실제 remote 경로: API → 실행 서버(발급·OCR만 가짜) → 서명 콜백 → API.
-    const fakeTools = {
-      issue: async () => ({ status: 'ok', target: { ledgerKind: 'UNIT_EXCLUSIVE' }, pages: [{ page: 1, png: Buffer.alloc(0) }] }),
-      extract: async () => ({ owners: [{ row: 1, name: NAME, birthDate: BIRTH_DATE, idText: FIXTURE_ID_TEXT }], warnings: [] }),
+    // 실제 remote 경로: API → 가짜 발급 서버(서명 확인 후 202) → 서명 콜백 → API. 외부 발급 서버와 같은 계약만 흉내 낸다.
+    const createFakeIssuer = (callbackRoot) => {
+      const issuer = express();
+      issuer.post('/jobs', express.raw({ type: () => true }), (req, res) => {
+        const rawBody = req.body.toString('utf8');
+        const isSigned = verifyRunnerSignature({
+          secret: RUNNER_SECRET,
+          timestamp: req.get(TIMESTAMP_HEADER),
+          signature: req.get(SIGNATURE_HEADER),
+          body: rawBody,
+        });
+        if (!isSigned) return res.status(401).end();
+        const { attemptId } = JSON.parse(rawBody);
+        res.status(202).json({ data: { attemptId } });
+        const body = JSON.stringify({ attemptId, kind: 'OK', ledgerKind: 'UNIT_EXCLUSIVE', owners: [{ name: NAME, birthDate: BIRTH_DATE }] });
+        setImmediate(() =>
+          fetch(`${callbackRoot}/api/v1/ownership-verifications/${attemptId}/result`, {
+            method: 'POST',
+            headers: buildSignedHeaders(RUNNER_SECRET, body),
+            body,
+          }).catch(() => {}),
+        );
+      });
+      return issuer;
     };
 
     before(async () => {
@@ -587,7 +606,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       });
       const apiRoot = `http://127.0.0.1:${server.address().port}`;
       baseUrl = `${apiRoot}/api/v1/ownership-verifications`;
-      const { app: runnerApp } = createRunnerServer({ secret: RUNNER_SECRET, callbackUrl: apiRoot, load: async () => fakeTools });
+      const runnerApp = createFakeIssuer(apiRoot);
       runnerServer = await new Promise((resolve) => {
         const listening = runnerApp.listen(0, '127.0.0.1', () => resolve(listening));
       });
@@ -620,18 +639,17 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       return user;
     };
 
-    test('POST: 러너 미설정 503·시도 없음, 동의 없음 400, remote 202 후 실행 서버 콜백으로 완료, 재인증 대상·최신 조회 경로', async () => {
+    test('POST: 러너 미설정 503·시도 없음, 동의 없음 400, remote 202 후 발급 서버 콜백으로 완료, 재인증 대상·최신 조회 경로', async () => {
       const user = await landlord();
       const ownership = await own(user, await createProperty());
       const body = { ...input(ownership), consent: true };
 
-      delete process.env.OWNERSHIP_VERIFICATION_RUNNER;
+      delete process.env.OWNERSHIP_VERIFICATION_RUNNER_URL;
       const unavailable = await postStart(user, body);
       assert.equal(unavailable.status, 503);
       assert.equal((await unavailable.json()).error.code, 'VERIFICATION_RUNNER_UNAVAILABLE');
       assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: ownership.id } }), 0);
 
-      process.env.OWNERSHIP_VERIFICATION_RUNNER = 'remote';
       process.env.OWNERSHIP_VERIFICATION_RUNNER_URL = runnerUrl;
       process.env.OWNERSHIP_VERIFICATION_RUNNER_SECRET = RUNNER_SECRET;
       const noConsent = await postStart(user, input(ownership));

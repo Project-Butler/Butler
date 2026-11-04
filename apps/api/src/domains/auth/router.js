@@ -6,6 +6,8 @@ import {
   loginRateLimiter,
   registerRateLimiter,
 } from '../../middlewares/rateLimiter.js';
+import { completeOAuthSignup, getOAuthSignup, oauthCallback, startOAuth } from './oauth/oauthController.js';
+import { oauthNavigationRateLimit } from './oauth/oauthRateLimit.js';
 import { login, logout, me, refresh, register } from './controller.js';
 import { confirmEmailVerificationCode, requestEmailVerification } from './emailVerificationController.js';
 
@@ -17,6 +19,11 @@ router.post('/register', registerRateLimiter, register);
 router.post('/login', loginRateLimiter, login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
+// 소셜 로그인(구글·카카오). 정적 경로(/oauth/signup)가 :provider보다 먼저 와야 한다.
+router.get('/oauth/signup', getOAuthSignup);
+router.post('/oauth/signup', registerRateLimiter, completeOAuthSignup);
+router.get('/oauth/:provider', oauthNavigationRateLimit, startOAuth);
+router.get('/oauth/:provider/callback', oauthNavigationRateLimit, oauthCallback);
 router.get('/me', authGuard, me);
 
 export default router;

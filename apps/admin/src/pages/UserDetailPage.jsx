@@ -4,6 +4,8 @@ import { Badge, Button, Card } from '@butler/ui';
 import { ChevronLeft } from 'lucide-react';
 import { StatusMessage } from '../components/StatusMessage/StatusMessage';
 import {
+  CONTRACT_STATUS_LABEL,
+  CONTRACT_STATUS_TONE,
   END_REASON_LABEL,
   ROLE_LABEL,
   USER_STATUS_LABEL,
@@ -132,6 +134,29 @@ const StatusPanel = ({ user, currentUser, onChanged, onUnauthorized }) => {
   );
 };
 
+// 소유 관계별 계약 요약. 상세를 열면 감사 로그가 남으므로, 여기서는 상태와 기간만 보여 준다.
+const ContractSummaryList = ({ contracts, onNavigate }) => {
+  if (contracts.length === 0) return <span className="text-chip text-ink-3">-</span>;
+  return (
+    <ul className="space-y-1">
+      {contracts.map((contract) => (
+        <li key={contract.id}>
+          <button
+            type="button"
+            onClick={() => onNavigate('contractDetail', { contractId: contract.id })}
+            className="flex items-center gap-2 whitespace-nowrap text-chip text-ink-2 hover:text-ink"
+          >
+            <Badge tone={CONTRACT_STATUS_TONE[contract.status]}>{CONTRACT_STATUS_LABEL[contract.status] ?? contract.status}</Badge>
+            <span className="font-num">
+              {contract.startDate} ~ {contract.endDate}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
 export const UserDetailPage = ({ onNavigate, onUnauthorized, currentUser }) => {
   const { userId } = useParams();
   const location = useLocation();
@@ -191,7 +216,8 @@ export const UserDetailPage = ({ onNavigate, onUnauthorized, currentUser }) => {
                     <th className="px-5 py-2 font-medium">호실</th>
                     <th className="px-3 py-2 font-medium">권리자 인증</th>
                     <th className="px-3 py-2 font-medium">시작일</th>
-                    <th className="px-5 py-2 font-medium">종료</th>
+                    <th className="px-3 py-2 font-medium">종료</th>
+                    <th className="px-5 py-2 font-medium">계약</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -204,7 +230,7 @@ export const UserDetailPage = ({ onNavigate, onUnauthorized, currentUser }) => {
                         </Badge>
                       </td>
                       <td className="px-3 py-3 font-num text-chip text-ink-2">{formatDate(ownership.startedAt)}</td>
-                      <td className="px-5 py-3 text-chip text-ink-2">
+                      <td className="px-3 py-3 text-chip text-ink-2">
                         {ownership.isActive ? (
                           <Badge tone="success">활성</Badge>
                         ) : (
@@ -213,6 +239,9 @@ export const UserDetailPage = ({ onNavigate, onUnauthorized, currentUser }) => {
                             {ownership.endReason && ` · ${END_REASON_LABEL[ownership.endReason] ?? ownership.endReason}`}
                           </span>
                         )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <ContractSummaryList contracts={ownership.contracts} onNavigate={onNavigate} />
                       </td>
                     </tr>
                   ))}
