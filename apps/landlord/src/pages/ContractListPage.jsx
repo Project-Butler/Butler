@@ -9,6 +9,7 @@ import {
   CONTRACT_LEGAL_NOTICE,
   formatContractAmount,
   formatPeriod,
+  formatRentPaymentDay,
   getContractDdayBadge,
   getContractStatusBadge,
 } from '../utils/contract';
@@ -81,7 +82,10 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{formatContractAmount(contract)}</td>
+                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">
+                  {formatContractAmount(contract)}
+                  {contract.rentPaymentDay != null && ` · ${formatRentPaymentDay(contract.rentPaymentDay)}`}
+                </td>
                 <td className="px-3 py-3.5 text-ink-2">{contract.tenantName}</td>
                 <td className="px-5 py-3.5 font-num tabular-nums text-ink-2">{formatPeriod(contract)}</td>
               </tr>

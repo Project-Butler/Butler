@@ -15,6 +15,7 @@ const FIELD_LABEL = {
   leaseType: '계약 유형',
   deposit: '보증금',
   monthlyRent: '월세',
+  rentPaymentDay: '월세 입금일',
   startDate: '시작일',
   endDate: '종료일',
   tenantName: '임차인 이름',

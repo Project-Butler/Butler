@@ -4,6 +4,7 @@ import {
   CONTRACT_EDITABLE_FIELDS,
   CONTRACT_STATUSES,
   LEASE_TYPES,
+  isRentPaymentDayInRange,
   isValidDateString,
   normalizeTenantPhone,
 } from '../../platform/contractRules.js';
@@ -19,6 +20,7 @@ import { createContract, findContractForUser, findContracts, terminateContract, 
 
 const CREATE_FIELDS = ['ownershipId', ...CONTRACT_EDITABLE_FIELDS, 'previousContractId'];
 const TERMINATE_FIELDS = ['terminatedOn', 'reason'];
+const NULLABLE_FIELDS = ['memo', 'rentPaymentDay'];
 const MAX_TENANT_NAME_LENGTH = 30;
 const MAX_MEMO_LENGTH = 1000;
 const MAX_REASON_LENGTH = 200;
@@ -37,6 +39,12 @@ const FIELD_PARSERS = {
   },
   deposit: (value, details) => parseMoney('deposit', value, details),
   monthlyRent: (value, details) => parseMoney('monthlyRent', value, details),
+  // 월세 입금일: 1~31 정수(31 = 말일) 또는 null(비움). 전세 규칙은 계약 유형과 합쳐 service.js가 본다.
+  rentPaymentDay: (value, details) => {
+    if (value === null || isRentPaymentDayInRange(value)) return value;
+    details.push({ field: 'rentPaymentDay', reason: '1~31 사이의 정수 또는 null이어야 합니다.' });
+    return undefined;
+  },
   startDate: (value, details) => parseDate('startDate', value, details),
   endDate: (value, details) => parseDate('endDate', value, details),
   tenantName: (value, details) => {
@@ -96,7 +104,7 @@ const parseCreateBody = (body) => {
   }
   const data = parseFields(body, CONTRACT_EDITABLE_FIELDS, details);
   throwIfInvalid(details);
-  return { ownershipId: body.ownershipId, previousContractId, memo: null, ...data };
+  return { ownershipId: body.ownershipId, previousContractId, memo: null, rentPaymentDay: null, ...data };
 };
 
 const parseUpdateBody = (body) => {
@@ -107,9 +115,9 @@ const parseUpdateBody = (body) => {
     ]);
   }
   const details = [];
-  // memo 말고는 null로 비울 수 없는 필수 칸이다.
+  // memo·rentPaymentDay 말고는 null로 비울 수 없는 필수 칸이다.
   for (const field of CONTRACT_EDITABLE_FIELDS) {
-    if (field !== 'memo' && body[field] === null) details.push({ field, reason: '비울 수 없습니다.' });
+    if (!NULLABLE_FIELDS.includes(field) && body[field] === null) details.push({ field, reason: '비울 수 없습니다.' });
   }
   throwIfInvalid(details);
   const data = parseFields(body, CONTRACT_EDITABLE_FIELDS, details);

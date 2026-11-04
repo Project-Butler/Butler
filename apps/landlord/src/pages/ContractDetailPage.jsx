@@ -11,6 +11,7 @@ import {
   CONTRACT_LEGAL_NOTICE,
   formatPeriod,
   formatPhone,
+  formatRentPaymentDay,
   formatWon,
   getContractDdayBadge,
   getContractStatusBadge,
@@ -189,9 +190,30 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
               {formatWon(contract.deposit)}
             </InfoRow>
             {contract.leaseType === 'MONTHLY' && (
-              <InfoRow label="월세" numeric>
-                {formatWon(contract.monthlyRent)}
-              </InfoRow>
+              <>
+                <InfoRow label="월세" numeric>
+                  {formatWon(contract.monthlyRent)}
+                </InfoRow>
+                <InfoRow label="월세 입금일" numeric={contract.rentPaymentDay != null}>
+                  {contract.rentPaymentDay != null ? (
+                    formatRentPaymentDay(contract.rentPaymentDay)
+                  ) : canEdit ? (
+                    // 입금일 칸이 생기기 전에 등록한 계약(#76)
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-warn-ink">월세 입금일을 입력해 주세요</span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('contractEdit', { contractId: contract.id })}
+                        className="font-medium text-accent hover:text-accent-strong"
+                      >
+                        수정
+                      </button>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </InfoRow>
+              </>
             )}
             <InfoRow label="기간" numeric>
               {formatPeriod(contract)}
@@ -230,7 +252,9 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
 
         <div className="space-y-6">
           {canEdit && isContractInProgress(contract.status) && (
-            <NoticeBox tone="info">진행 중인 계약은 연락처·메모만 고칠 수 있어요. 조건을 바꾸려면 갱신 계약을 등록하세요.</NoticeBox>
+            <NoticeBox tone="info">
+              진행 중인 계약은 월세 입금일·연락처·메모만 고칠 수 있어요. 조건을 바꾸려면 갱신 계약을 등록하세요.
+            </NoticeBox>
           )}
           {canEdit && (
             <TerminationCard contract={contract} onTerminated={contractQuery.refetch} onUnauthorized={onUnauthorized} />

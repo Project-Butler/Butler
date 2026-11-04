@@ -5,6 +5,7 @@ import { toDateOnlyString } from './dateUtils.js';
 import { toMoney } from './money.js';
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 import { toPropertySummary } from './propertySerializer.js';
+import { computeNextRentPaymentDate } from './rentPayment.js';
 
 // 계약 조회 때 같이 읽을 관계. 응답을 만들려면 이 include가 있어야 한다.
 export const CONTRACT_INCLUDE = {
@@ -30,6 +31,7 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
   const { ownership } = contract;
   const status = computeContractStatus(contract, todayKST);
   const isOwner = viewer === 'OWNER';
+  const ownershipEnded = Boolean(ownership.endedAt);
 
   return {
     id: contract.id,
@@ -38,6 +40,9 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     leaseType: contract.leaseType,
     deposit: toMoney(contract.deposit),
     monthlyRent: toMoney(contract.monthlyRent),
+    rentPaymentDay: contract.rentPaymentDay ?? null,
+    // 오늘(KST) 이후 가장 가까운 입금일. status처럼 저장하지 않고 응답마다 계산한다(#76).
+    nextRentPaymentDate: computeNextRentPaymentDate(contract, { todayKST, ownershipEnded }),
     startDate: toDateOnlyString(contract.startDate),
     endDate: toDateOnlyString(contract.endDate),
     status,
@@ -54,7 +59,7 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     previousContractId: contract.previousContractId ?? null,
     // 메모는 임대인 개인 기록이라 소유자·이전 소유자에게만 보인다(임차인·운영자는 null, 명세 D-19).
     memo: viewer === 'OWNER' || viewer === 'FORMER_OWNER' ? (contract.memo ?? null) : null,
-    isReadOnly: isOwner ? isContractReadOnly(status, Boolean(ownership.endedAt)) : true,
+    isReadOnly: isOwner ? isContractReadOnly(status, ownershipEnded) : true,
     createdAt: contract.createdAt.toISOString(),
     updatedAt: contract.updatedAt.toISOString(),
   };

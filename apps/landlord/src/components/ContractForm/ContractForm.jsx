@@ -1,4 +1,4 @@
-import { SegmentedControl, TextField } from '@butler/ui';
+import { RequiredMark, SegmentedControl, TextField } from '@butler/ui';
 import { formatNumber } from '../../utils/format';
 import { toPriceDigits } from '../../utils/formValidation';
 import {
@@ -11,6 +11,7 @@ import {
   isContractDateInRange,
   isValidPhone,
   LEASE_TYPE_OPTIONS,
+  RENT_PAYMENT_DAY_OPTIONS,
   toPhoneDigits,
 } from '../../utils/contract';
 
@@ -23,6 +24,7 @@ export const CONTRACT_FORM_FIELDS = [
   'leaseType',
   'deposit',
   'monthlyRent',
+  'rentPaymentDay',
   'startDate',
   'endDate',
   'tenantName',
@@ -31,11 +33,12 @@ export const CONTRACT_FORM_FIELDS = [
   'previousContractId',
 ];
 
-// 금액은 숫자만(문자열) 들고 있다가 보낼 때 정수로 바꾼다. 연락처도 숫자만.
+// 금액은 숫자만(문자열) 들고 있다가 보낼 때 정수로 바꾼다. 연락처도 숫자만. 입금일은 선택 칸 값('1'~'31').
 export const EMPTY_CONTRACT_FORM = {
   leaseType: 'MONTHLY',
   deposit: '',
   monthlyRent: '',
+  rentPaymentDay: '',
   startDate: '',
   endDate: '',
   tenantName: '',
@@ -47,6 +50,7 @@ export const toContractForm = (contract) => ({
   leaseType: contract.leaseType,
   deposit: String(contract.deposit),
   monthlyRent: contract.leaseType === 'JEONSE' ? '' : String(contract.monthlyRent),
+  rentPaymentDay: contract.rentPaymentDay == null ? '' : String(contract.rentPaymentDay),
   startDate: contract.startDate,
   endDate: contract.endDate,
   tenantName: contract.tenantName,
@@ -58,6 +62,7 @@ export const toContractForm = (contract) => ({
 const SERVER_REASON_MESSAGE = {
   INVALID_PHONE: '010으로 시작하는 휴대폰 번호를 입력해 주세요.',
   INVALID_PREVIOUS_CONTRACT: '시작일은 이전 계약이 끝난 날 이후여야 해요.',
+  NOT_ALLOWED_FOR_JEONSE: '전세 계약에는 월세 입금일을 넣을 수 없어요.',
 };
 
 // 이전 계약 연결 오류(D-05)는 시작일을 고치면 풀리므로 시작일 칸 아래에 보여 준다.
@@ -98,22 +103,25 @@ export const validateContractForm = (form) => {
   return Object.fromEntries(Object.entries(errors).filter(([, message]) => message));
 };
 
-// 필수 칸을 다 채웠는지(전세면 월세 칸은 보지 않음)
-export const isContractFormComplete = (form) =>
+// 필수 칸을 다 채웠는지(전세면 월세·입금일 칸은 보지 않음). 입금일은 API에서는 선택이지만 화면에서는 월세면 필수(#76 Q1).
+// 입금일이 없던 기존 월세 계약을 수정할 때만 rentPaymentDayOptional로 선택 칸으로 둔다.
+export const isContractFormComplete = (form, { rentPaymentDayOptional = false } = {}) =>
   Boolean(
     form.deposit !== '' &&
-      (form.leaseType === 'JEONSE' || form.monthlyRent !== '') &&
+      (form.leaseType === 'JEONSE' ||
+        (form.monthlyRent !== '' && (rentPaymentDayOptional || form.rentPaymentDay !== ''))) &&
       form.startDate &&
       form.endDate &&
       form.tenantName.trim() &&
       form.tenantPhone,
   );
 
-// 서버로 보낼 계약 칸. 전세는 월세 0(R-03).
+// 서버로 보낼 계약 칸. 전세는 월세 0(R-03), 입금일 null.
 export const toContractFields = (form) => ({
   leaseType: form.leaseType,
   deposit: Number(form.deposit),
   monthlyRent: form.leaseType === 'JEONSE' ? 0 : Number(form.monthlyRent),
+  rentPaymentDay: form.leaseType === 'JEONSE' || form.rentPaymentDay === '' ? null : Number(form.rentPaymentDay),
   startDate: form.startDate,
   endDate: form.endDate,
   tenantName: form.tenantName.trim(),
@@ -139,7 +147,11 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
             className="w-60"
             options={LEASE_TYPE_OPTIONS}
             value={form.leaseType}
-            onChange={(value) => onChange('leaseType', value)}
+            onChange={(value) => {
+              onChange('leaseType', value);
+              // 전세는 입금일이 없다. 칸을 숨기면서 값도 비운다.
+              if (value === 'JEONSE') onChange('rentPaymentDay', '');
+            }}
           />
         )}
       </div>
@@ -172,6 +184,39 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
           />
         )}
       </div>
+
+      {!isJeonse && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="contract-rent-payment-day" className="text-label font-semibold text-ink">
+              월세 입금일
+              <RequiredMark />
+            </label>
+            <select
+              id="contract-rent-payment-day"
+              aria-required="true"
+              value={form.rentPaymentDay}
+              onChange={(event) => onChange('rentPaymentDay', event.target.value)}
+              disabled={isLocked('rentPaymentDay')}
+              className="h-12 rounded-input border border-line bg-surface px-3 font-num text-card tabular-nums text-ink outline-none focus:border-accent disabled:bg-surface-2"
+            >
+              <option value="" disabled>
+                매월 며칠인지 선택해 주세요
+              </option>
+              {RENT_PAYMENT_DAY_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  매월 {label}
+                </option>
+              ))}
+            </select>
+            {fieldError('rentPaymentDay') ? (
+              <p className="text-chip text-crit-ink">{fieldError('rentPaymentDay')}</p>
+            ) : (
+              <p className="text-chip text-ink-3">29~31일이 없는 달은 그달 말일로 계산해요</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <TextField
