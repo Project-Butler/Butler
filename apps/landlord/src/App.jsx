@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { LoginScreen, RegisterScreen } from '@butler/ui';
+import { LoginScreen, OAuthSignupScreen, RegisterScreen } from '@butler/ui';
 import {
   getMe,
+  getOAuthSignup,
+  getOAuthStartUrl,
   postEmailVerification,
   postEmailVerificationConfirm,
   postLogin,
   postLogout,
+  postOAuthSignup,
   postRegister,
 } from '@butler/api-client';
+import { getOAuthErrorMessage } from './utils/oauthErrorMessages';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
@@ -80,6 +84,8 @@ const SUB_TITLE_BY_VIEW = {
 
 const LOGIN_PATH = '/login';
 const REGISTER_PATH = '/register';
+// 소셜 로그인으로 처음 온 사람이 추가 정보를 입력하는 화면(API 콜백이 여기로 보낸다).
+const OAUTH_SIGNUP_PATH = '/register/oauth';
 
 const AUTH_LINK_CLASS = 'font-semibold text-accent-strong hover:underline';
 
@@ -181,6 +187,8 @@ export const App = () => {
   const [verifiedLegalDongCodes, setVerifiedLegalDongCodes] = useState([]);
   // 새로고침해도 로그인이 풀리지 않게, 처음 열 때 쿠키 세션(GET /auth/me)을 확인한다.
   const [isRestoring, setIsRestoring] = useState(true);
+  // 소셜 로그인 실패 문구. API가 /login?oauth_error=코드로 보내면 한 번 읽고 주소에서 지운다.
+  const [oauthLoginError, setOauthLoginError] = useState('');
   const location = useLocation();
   const routerNavigate = useNavigate();
   const locationRef = useRef(location);
@@ -227,6 +235,13 @@ export const App = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('oauth_error');
+    if (!code) return;
+    setOauthLoginError(getOAuthErrorMessage(code));
+    routerNavigate(LOGIN_PATH, { replace: true });
+  }, [location.search, routerNavigate]);
+
   const handleLogin = async ({ email, password }) => {
     const { user: loggedInUser, verifiedLegalDongCodes: codes } = await postLogin({ email, password });
     setUser(loggedInUser);
@@ -236,6 +251,13 @@ export const App = () => {
   // 임대인 앱의 가입은 항상 LANDLORD다(임차인은 초대 링크로만 가입). 가입하면 바로 로그인 상태가 된다.
   const handleRegister = async (values) => {
     const { user: registeredUser } = await postRegister({ ...values, role: 'LANDLORD' });
+    setUser(registeredUser);
+    setVerifiedLegalDongCodes([]);
+  };
+
+  // 소셜 가입 마무리도 가입 직후 로그인 상태가 된다.
+  const handleOAuthSignup = async (values) => {
+    const { user: registeredUser } = await postOAuthSignup(values);
     setUser(registeredUser);
     setVerifiedLegalDongCodes([]);
   };
@@ -257,11 +279,29 @@ export const App = () => {
 
   const isLoginPath = location.pathname === LOGIN_PATH;
   const isRegisterPath = location.pathname === REGISTER_PATH;
+  const isOAuthSignupPath = location.pathname === OAUTH_SIGNUP_PATH;
 
   if (!user) {
     // 로그인 전에는 로그인·회원가입 화면 말고 어떤 주소로 와도 /login으로 보내고, 로그인하면 원래 가려던 곳으로 돌려보낸다.
-    if (!isLoginPath && !isRegisterPath) {
+    if (!isLoginPath && !isRegisterPath && !isOAuthSignupPath) {
       return <Navigate to={LOGIN_PATH} replace state={{ from: `${location.pathname}${location.search}` }} />;
+    }
+    if (isOAuthSignupPath) {
+      return (
+        <OAuthSignupScreen
+          brand="Butler"
+          subtitle="임대인 회원가입"
+          loadInfo={getOAuthSignup}
+          onSubmit={handleOAuthSignup}
+          footer={
+            <p className="text-body text-ink-2">
+              <Link to={LOGIN_PATH} className={AUTH_LINK_CLASS}>
+                로그인 화면으로
+              </Link>
+            </p>
+          }
+        />
+      );
     }
     if (isRegisterPath) {
       return (
@@ -271,6 +311,7 @@ export const App = () => {
           onSubmit={handleRegister}
           onRequestEmailCode={(email) => postEmailVerification({ email })}
           onConfirmEmailCode={(email, code) => postEmailVerificationConfirm({ email, code })}
+          socialLoginHref={getOAuthStartUrl}
           footer={
             <p className="text-body text-ink-2">
               이미 계정이 있으신가요?{' '}
@@ -288,6 +329,8 @@ export const App = () => {
         subtitle="임대인 전용"
         devHint={import.meta.env.DEV ? 'fixture 계정: landlord@butler.test / password123' : undefined}
         onSubmit={handleLogin}
+        initialError={oauthLoginError}
+        socialLoginHref={getOAuthStartUrl}
         footer={
           <p className="text-body text-ink-2">
             계정이 없으신가요?{' '}
@@ -301,7 +344,7 @@ export const App = () => {
   }
 
   // 로그인된 상태로 /login·/register에 오면(로그인·가입 직후 포함) 원래 가려던 곳, 없으면 홈으로 보낸다.
-  if (isLoginPath || isRegisterPath) {
+  if (isLoginPath || isRegisterPath || isOAuthSignupPath) {
     return <Navigate to={location.state?.from ?? HOME_PATH} replace />;
   }
 

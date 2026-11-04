@@ -3,31 +3,19 @@ import { Home } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../Card/Card';
 import { TextField } from '../TextField/TextField';
+import { AgreementCheckbox, BIRTH_YEAR_MIN, NAME_MAX_LENGTH, pickFieldErrors, todayString, validateProfileFields } from './registerShared';
+import { SocialLoginButtons } from '../SocialLoginButtons/SocialLoginButtons';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^01[016789]\d{7,8}$/;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_BYTES = 72;
-const NAME_MAX_LENGTH = 50;
 // 서버 details 필드 중 화면 칸과 이름이 같은 것만 칸 아래에 보여 준다.
 const FIELD_NAMES = ['name', 'email', 'password', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
 const CODE_PATTERN = /^\d{6}$/;
-const BIRTH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const BIRTH_YEAR_MIN = 1900;
-
-// 오늘 날짜(YYYY-MM-DD). 기기 시간대 기준이라 date 입력의 max로 쓴다.
-const todayString = () => {
-  const now = new Date();
-  const pad = (number) => String(number).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-};
 
 // 서버(registerValidation.js)와 같은 규칙. 최종 판단은 서버가 하고, 여기서는 빠른 안내용이다.
 const validate = ({ name, email, password, passwordConfirm, phone, birthDate, termsAgreed, privacyAgreed }, isEmailVerified) => {
-  const errors = {};
-  const trimmedName = name.trim();
-  if (!trimmedName) errors.name = '이름을 입력해주세요.';
-  else if ([...trimmedName].length > NAME_MAX_LENGTH) errors.name = `이름은 ${NAME_MAX_LENGTH}자 이하여야 합니다.`;
+  const errors = validateProfileFields({ name, phone, birthDate, termsAgreed, privacyAgreed });
 
   if (!email.trim()) errors.email = '이메일을 입력해주세요.';
   else if (!EMAIL_PATTERN.test(email.trim())) errors.email = '이메일 형식이 올바르지 않습니다.';
@@ -39,48 +27,24 @@ const validate = ({ name, email, password, passwordConfirm, phone, birthDate, te
   else if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) errors.password = '비밀번호는 영문과 숫자를 모두 포함해야 합니다.';
 
   if (!errors.password && password !== passwordConfirm) errors.passwordConfirm = '비밀번호가 일치하지 않습니다.';
-
-  const phoneDigits = phone.replace(/[\s-]/g, '');
-  if (phoneDigits && !PHONE_PATTERN.test(phoneDigits)) errors.phone = '휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)';
-
-  if (!birthDate) errors.birthDate = '생년월일을 입력해주세요.';
-  else if (!BIRTH_DATE_PATTERN.test(birthDate) || Number(birthDate.slice(0, 4)) < BIRTH_YEAR_MIN || birthDate > todayString()) {
-    errors.birthDate = '생년월일이 올바르지 않습니다.';
-  }
-
-  if (!termsAgreed) errors.termsAgreed = '이용약관에 동의해야 가입할 수 있습니다.';
-  if (!privacyAgreed) errors.privacyAgreed = '개인정보 수집·이용에 동의해야 가입할 수 있습니다.';
   return errors;
 };
-
-const AgreementCheckbox = ({ id, checked, onChange, error, children }) => (
-  <div className="flex flex-col gap-1">
-    <label htmlFor={id} className="flex cursor-pointer items-start gap-2 text-body text-ink">
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : undefined}
-        className="mt-1 h-4 w-4 shrink-0 accent-accent"
-      />
-      <span>{children}</span>
-    </label>
-    {error && (
-      <p id={`${id}-error`} className="pl-6 text-chip text-crit-ink">
-        {error}
-      </p>
-    )}
-  </div>
-);
 
 // 회원가입 화면. 이메일은 인증번호를 확인한 뒤에만 가입할 수 있다.
 //  onRequestEmailCode(email): 인증번호를 보내고 { resendAfterSeconds }를 돌려준다.
 //  onConfirmEmailCode(email, code): 번호를 확인하고 { verificationToken }을 돌려준다.
 //  onSubmit({ name, email, password, phone, birthDate, termsAgreed, privacyAgreed, emailVerificationToken })
+//  socialLoginHref(provider): 있으면 폼 아래에 구글·카카오로 시작하는 링크를 보여 준다.
 // 세 함수가 던진 오류의 error.response.data.error(code, message, details)를 칸별 오류와 위쪽 안내로 나눠 보여 준다.
-export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit, onRequestEmailCode, onConfirmEmailCode }) => {
+export const RegisterScreen = ({
+  brand = 'Butler',
+  subtitle,
+  footer,
+  onSubmit,
+  onRequestEmailCode,
+  onConfirmEmailCode,
+  socialLoginHref,
+}) => {
   const [values, setValues] = useState({
     name: '',
     email: '',
@@ -207,10 +171,7 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit, o
       });
     } catch (submitError) {
       const apiError = submitError?.response?.data?.error;
-      const serverFieldErrors = {};
-      for (const { field, reason } of apiError?.details ?? []) {
-        if (FIELD_NAMES.includes(field) && !serverFieldErrors[field]) serverFieldErrors[field] = reason;
-      }
+      const serverFieldErrors = pickFieldErrors(apiError?.details, FIELD_NAMES);
       if (apiError?.code === 'EMAIL_ALREADY_EXISTS') serverFieldErrors.email = apiError.message;
       // 인증이 만료됐거나 이미 쓴 토큰이면 인증을 처음부터 다시 받게 한다.
       if (apiError?.code === 'EMAIL_NOT_VERIFIED') {
@@ -365,6 +326,8 @@ export const RegisterScreen = ({ brand = 'Butler', subtitle, footer, onSubmit, o
             {isSubmitting ? '가입 중...' : '회원가입'}
           </Button>
         </form>
+
+        {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 가입" />}
       </Card>
 
       {footer}
