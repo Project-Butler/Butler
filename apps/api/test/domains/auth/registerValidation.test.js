@@ -10,6 +10,7 @@ const valid = () => ({
   role: 'LANDLORD',
   termsAgreed: true,
   privacyAgreed: true,
+  emailVerificationToken: 'verified-token', // secret-guard:allow 테스트용 더미 값
 });
 
 const failsOn = (body, field) => {
@@ -32,6 +33,7 @@ test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, �
     phone: null,
     birthDate: '1990-01-31',
     role: 'LANDLORD',
+    emailVerificationToken: 'verified-token', // secret-guard:allow 테스트용 더미 값
   });
 });
 
@@ -179,4 +181,13 @@ test('role=TENANT 또는 invitationToken이 있으면 422 — 초대 도메인 �
 
 test('형식 오류가 있으면 role 정책보다 먼저 400으로 알려준다', () => {
   assert.ok(failsOn({ ...valid(), role: 'TENANT', email: 'x' }, 'email'));
+});
+
+test('이메일 인증 토큰: 없거나 빈 값·문자열이 아니면 400, 앞뒤 공백은 자른다', () => {
+  const { emailVerificationToken, ...withoutToken } = valid();
+  assert.ok(failsOn(withoutToken, 'emailVerificationToken'));
+  for (const bad of ['', '   ', null, 123]) {
+    assert.ok(failsOn({ ...valid(), emailVerificationToken: bad }, 'emailVerificationToken'));
+  }
+  assert.equal(parseRegisterBody({ ...valid(), emailVerificationToken: '  abc  ' }).emailVerificationToken, 'abc');
 });

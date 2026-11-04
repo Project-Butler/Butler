@@ -5,6 +5,7 @@ import { AppError } from '../../platform/AppError.js';
 import { decryptField, encryptField } from '../../platform/fieldCrypto.js';
 import { OWNERSHIP_REGION_SELECT, pickVerifiedLegalDongCodes } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { consumeVerificationToken } from './emailVerificationService.js';
 import { normalizeEmail } from './registerValidation.js';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000; // 15분 (api-contract.md 1장)
@@ -156,7 +157,7 @@ const emailTakenError = () => new AppError('EMAIL_ALREADY_EXISTS', 409, '이미 
 
 // 사용자·약관 동의·첫 세션을 한 트랜잭션으로 만들고, 성공하면 쿠키를 내려준다.
 // 입력은 parseRegisterBody를 통과한 값이다. 이메일 중복은 사전 조회 + 유니크 제약(동시 가입) 둘 다 409로 처리한다.
-export const registerUser = async (req, res, { email, password, name, phone, birthDate, role }) => {
+export const registerUser = async (req, res, { email, password, name, phone, birthDate, role, emailVerificationToken }) => {
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) throw emailTakenError();
 
   // 비용이 큰 해시·암호화는 트랜잭션 밖에서 끝낸다.
@@ -170,8 +171,10 @@ export const registerUser = async (req, res, { email, password, name, phone, bir
   let refreshToken;
   try {
     ({ created, refreshToken } = await prisma.$transaction(async (tx) => {
+      // 인증번호로 이 이메일을 확인한 토큰을 먼저 쓴다. 이어지는 생성이 실패하면 함께 되돌아간다.
+      const emailVerifiedAt = await consumeVerificationToken(tx, email, emailVerificationToken);
       const user = await tx.user.create({
-        data: { email, passwordHash, name, phone: encryptedPhone, birthDate: encryptedBirthDate, role },
+        data: { email, passwordHash, name, phone: encryptedPhone, birthDate: encryptedBirthDate, role, emailVerifiedAt },
       });
       await tx.consent.createMany({
         data: [

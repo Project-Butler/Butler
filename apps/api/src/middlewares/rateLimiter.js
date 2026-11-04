@@ -64,6 +64,21 @@ export const registerRateLimiter = rateLimiter({
   message: '회원가입 시도가 너무 많습니다. 1시간 후 다시 시도해주세요.',
 });
 
+// 이메일별 재전송 간격·횟수는 서비스가 따로 막는다. 여기는 한 IP가 여러 이메일로 메일을 뿌리는 것을 막는다.
+export const emailVerificationRateLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyFn: (req) => `email-verification:${req.ip}`,
+  message: '인증번호 요청이 너무 많습니다. 1시간 후 다시 시도해주세요.',
+});
+
+export const emailVerificationConfirmRateLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyFn: (req) => `email-verification-confirm:${req.ip}`,
+  message: '인증번호 확인 시도가 너무 많습니다. 1시간 후 다시 시도해주세요.',
+});
+
 export const passwordResetRateLimiter = rateLimiter({
   windowMs: 60 * 60 * 1000,
   max: 5,
