@@ -25,6 +25,7 @@ import { ManagementLogDetailPage } from './pages/ManagementLogDetailPage';
 import { ManagementLogEditPage } from './pages/ManagementLogEditPage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
 import { ManagementLogRegisterPage } from './pages/ManagementLogRegisterPage';
+import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
@@ -396,6 +397,7 @@ export const App = () => {
             <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
             <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
           </Route>
+          <Route path="/community/*" element={<CommunityPage {...pageProps} />} />
           {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
           <Route path="*" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
         </Routes>

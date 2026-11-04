@@ -87,3 +87,18 @@ export { postAdminKaptRefresh } from './apis/admin/postAdminKaptRefresh';
 export { postAdminComplex } from './apis/admin/postAdminComplex';
 
 export { getJob } from './apis/jobs/getJob';
+export { getMyBuildings } from './apis/community/getMyBuildings';
+export { getCommunityPostList } from './apis/community/getCommunityPostList';
+export { getCommunityPost } from './apis/community/getCommunityPost';
+export { postCommunityPost } from './apis/community/postCommunityPost';
+export { patchCommunityPost } from './apis/community/patchCommunityPost';
+export { deleteCommunityPost } from './apis/community/deleteCommunityPost';
+export { postCommunityComment } from './apis/community/postCommunityComment';
+export { deleteCommunityComment } from './apis/community/deleteCommunityComment';
+export { postCommunityReport } from './apis/community/postCommunityReport';
+export { getCommunityPollList } from './apis/community/getCommunityPollList';
+export { getCommunityPoll } from './apis/community/getCommunityPoll';
+export { postCommunityPoll } from './apis/community/postCommunityPoll';
+export { postCommunityVote } from './apis/community/postCommunityVote';
+export { deleteCommunityPoll } from './apis/community/deleteCommunityPoll';
+export { getCommunityNewsList } from './apis/community/getCommunityNewsList';
