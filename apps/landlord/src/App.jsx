@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { LoginScreen, RegisterScreen } from '@butler/ui';
-import { getMe, postLogin, postLogout, postRegister } from '@butler/api-client';
+import {
+  getMe,
+  postEmailVerification,
+  postEmailVerificationConfirm,
+  postLogin,
+  postLogout,
+  postRegister,
+} from '@butler/api-client';
 import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
@@ -262,6 +269,8 @@ export const App = () => {
           brand="Butler"
           subtitle="임대인 회원가입"
           onSubmit={handleRegister}
+          onRequestEmailCode={(email) => postEmailVerification({ email })}
+          onConfirmEmailCode={(email, code) => postEmailVerificationConfirm({ email, code })}
           footer={
             <p className="text-body text-ink-2">
               이미 계정이 있으신가요?{' '}
