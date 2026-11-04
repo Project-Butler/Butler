@@ -6,7 +6,7 @@ import { ReferenceCard } from './ReferenceCard';
 import { SelfCheckTools } from './SelfCheckTools';
 
 // 상황 안내의 '끝까지 보는' 구성: 먼저 확인 → 내 경우 → 준비 자료 → 사례 → 판례 → 절차 → 도움받을 곳 → 도구 → AI.
-// 지금은 보증금 반환에만 있고, 다른 상황도 같은 구조(TOPIC_BRIEFINGS[].guide)로 넓힌다.
+// 여섯 상황 모두 같은 구조(TOPIC_BRIEFINGS[].guide)를 쓴다.
 const SECTIONS = [
   { id: 'guide-checks', label: '먼저 확인' },
   { id: 'guide-cases', label: '내 경우' },

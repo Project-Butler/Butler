@@ -421,6 +421,25 @@ describe('분쟁 해결사', () => {
     await waitFor(() => expect(lastListParams()).toMatchObject({ q: '묵시적', type: 'PRECEDENT' }));
   });
 
+  it('나머지 상황도 같은 구조로 안내하고, 상황마다 그 분류의 사례를 가져온다', async () => {
+    const topics = [
+      ['restore', '원상복구·손해배상', '닳은 것을 두고 다투는 경우', 'DAMAGES'],
+      ['repair', '수리 책임', '임차인이 먼저 고치고 비용을 달라는 경우', 'REPAIR_DUTY'],
+      ['renewal', '계약 갱신·종료', '내가(가족이) 들어가 살려는 경우', 'RENEWAL_TERMINATION,LEASE_TERM'],
+      ['rent', '월세·보증금 조정', '전세를 월세로 바꾸는 경우', 'RENT_ADJUSTMENT'],
+      ['other', '기타·제도 안내', '새 임차인 중개보수를 다투는 경우', 'GENERAL,CONTRACT_INTERPRETATION,BROKERAGE_FEE,PREMIUM'],
+    ];
+    for (const [key, label, caseTitle, category] of topics) {
+      const { unmount } = renderAt(`/disputes/topics/${key}`);
+      expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
+      expect(screen.getByText(caseTitle)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '해결 절차' })).toBeInTheDocument();
+      expect(lastListParams()).toMatchObject({ type: 'CASE', category, size: 3 });
+      unmount();
+    }
+  });
+
   it('첫 화면에서 검색하면 자료 찾기 화면에서 그 검색어로 찾는다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes');
