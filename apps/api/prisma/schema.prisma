@@ -931,6 +931,7 @@ enum CommunityNewsSource {
 enum CommunityNewsScope {
   NATIONWIDE // 전국 정책 — scopeCode 는 null
   SIGUNGU // 시·군·구 — scopeCode 는 법정동코드 앞 5자리
+  SIDO // 시·도 — scopeCode 는 법정동코드 앞 2자리. 시·군·구 기사가 모자랄 때 채우는 묶음
 
   @@map("community_news_scope")
 }

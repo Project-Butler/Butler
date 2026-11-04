@@ -17,6 +17,7 @@ import {
   updatePost,
 } from '../../../src/domains/community/service.js';
 import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
+import { collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
 const REGION = '1135010600'; // createDbFixture 의 단지 법정동(서울 노원구 중계동)
@@ -294,6 +295,115 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       const row = await prisma.communityPost.findUnique({ where: { id: post.id } });
       assert.equal(row.hiddenByUserId, admin.id);
       assert.equal(row.deletedAt, null); // 숨김과 삭제는 따로 저장
+    });
+  });
+
+  describe('뉴스', () => {
+    // 네트워크를 부르지 않게 공급자의 fetch 를 고정 응답으로 바꿔 끼운다(collectNews 옵션).
+    // 검색어 첫 낱말(intitle: 은 떼고 — 구 약칭·동 이름·시·도 약칭·"국토교통부")을 제목에 넣어 걸러내기를 통과하게 하고,
+    // 통과 못 할 제목도 하나 섞는다.
+    const runId = randomUUID();
+    const linkOf = (key) => `https://news.google.com/rss/articles/DBTEST-${runId}-${key}`;
+    const testRows = { url: { startsWith: `https://news.google.com/rss/articles/DBTEST-${runId}-` } };
+    const item = (title, key) =>
+      `<item><title>${title} - 테스트일보</title><link>${linkOf(key)}</link><pubDate>Mon, 26 Oct 2026 03:00:00 GMT</pubDate><source url="https://press.example">테스트일보</source></item>`;
+    const fetchImpl = async (url) => {
+      const name = new URL(url).searchParams.get('q').split(' ')[0].replace(/^intitle:/, '');
+      const xml = `<rss><channel>${item(`${name} 아파트 전세 매물 증가`, `${name}-pass`)}${item(`${name} 가을 축제 개막`, `${name}-drop`)}</channel></rss>`;
+      return new Response(xml, { status: 200 });
+    };
+
+    after(async () => {
+      newsIds.push(...(await prisma.communityNewsItem.findMany({ where: testRows, select: { id: true } })).map((row) => row.id));
+    });
+
+    test('받기에 실패하면 아무것도 넣지 않는다 — 개발·배포 모두 가짜 기사로 채우지 않는다', async () => {
+      const savedEnv = process.env.NODE_ENV;
+      const warn = console.warn;
+      const info = console.info;
+      console.warn = () => {};
+      console.info = () => {};
+      try {
+        for (const env of ['production', 'development']) {
+          process.env.NODE_ENV = env;
+          const before = await prisma.communityNewsItem.count();
+          const result = await collectNews({ fetchImpl: async () => new Response('', { status: 503 }) });
+          assert.equal(result.inserted, 0);
+          assert.ok(result.results.every((row) => row.fetched === 0));
+          assert.equal(await prisma.communityNewsItem.count(), before);
+        }
+        assert.equal(await prisma.communityNewsItem.count({ where: { url: { startsWith: 'https://example.com/' } } }), 0);
+      } finally {
+        console.warn = warn;
+        console.info = info;
+        if (savedEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = savedEnv;
+      }
+    });
+
+    test('걸러진 기사는 저장하지 않고, 시·도(SIDO)도 저장하며, 두 번 수집해도 한 건이다', async () => {
+      // 이 테스트 묶음의 인증 사용자가 노원구(서울)에 있으므로 대상에 서울(SIDO 11)과 노원구(SIGUNGU 11350)가 들어간다
+      const user = await createUser();
+      await addUnit(user, await fixture.createComplex({ name: '뉴스테스트아파트' }));
+      const info = console.info;
+      console.info = () => {};
+      try {
+        const first = await collectNews({ fetchImpl });
+        const byScope = Object.fromEntries(first.results.map((row) => [row.scopeCode ?? '전국', row]));
+        assert.ok(byScope['11'] && byScope['11'].scope === 'SIDO', JSON.stringify(Object.keys(byScope)));
+        assert.ok(byScope['11350'] && byScope['11350'].scope === 'SIGUNGU');
+        // 시·도: 검색어 셋이 같은 기사 둘을 돌려줘도 둘, 그중 축제 기사는 걸러짐
+        assert.deepEqual([byScope['11'].fetched, byScope['11'].filtered], [2, 1]);
+        // 시·군·구: "intitle:노원 …" 셋 + 인증 동 "{동} 아파트" — 첫 낱말마다 기사 둘, 그중 축제 기사는 걸러짐
+        const sigunguRow = byScope['11350'];
+        assert.ok(sigunguRow.fetched >= 4 && sigunguRow.fetched % 2 === 0, JSON.stringify(sigunguRow));
+        assert.equal(sigunguRow.filtered, sigunguRow.fetched / 2);
+        // 전국: 검색어 첫 낱말이 둘(국토교통부·주택임대차보호법)이라 기사 넷. "국토교통부 … 축제"만 걸러진다 —
+        // "주택임대차보호법 … 축제"는 제목에 "임대차"가 있어 통과(전국은 부동산 낱말만 본다)
+        assert.deepEqual([byScope['전국'].fetched, byScope['전국'].filtered], [4, 1]);
+
+        const saved = await prisma.communityNewsItem.findMany({ where: testRows, select: { scope: true, scopeCode: true, title: true, publisher: true } });
+        assert.ok(saved.filter((row) => row.scope !== 'NATIONWIDE').every((row) => !row.title.includes('축제')));
+        assert.ok(saved.some((row) => row.scope === 'SIDO' && row.scopeCode === '11' && row.title === '서울 아파트 전세 매물 증가'));
+        assert.ok(saved.some((row) => row.scope === 'SIGUNGU' && row.scopeCode === '11350' && row.title === '노원 아파트 전세 매물 증가'));
+        assert.ok(saved.every((row) => row.publisher === '테스트일보'));
+
+        const second = await collectNews({ fetchImpl });
+        assert.equal(second.inserted, 0);
+        assert.equal(await prisma.communityNewsItem.count({ where: testRows }), saved.length);
+      } finally {
+        console.info = info;
+      }
+    });
+
+    test('시·군·구 기사가 최근 30일 5건 미만이면 sidoFallback, 5건이면 아니다(30일보다 오래된 것은 세지 않는다)', async () => {
+      const sigungu = '11350';
+      const before = await prisma.communityNewsItem.count({ where: { scope: 'SIGUNGU', scopeCode: sigungu } });
+      const add = (key, daysAgo) =>
+        prisma.communityNewsItem.create({
+          data: {
+            source: 'NEWS_SEARCH',
+            scope: 'SIGUNGU',
+            scopeCode: sigungu,
+            title: `노원구 아파트 ${key}`,
+            url: linkOf(`fallback-${key}`),
+            urlHash: randomUUID().replace(/-/g, '').padEnd(64, '0'),
+            publishedAt: new Date(Date.now() - daysAgo * DAY),
+          },
+        });
+      // 다른 테스트가 넣은 노원구 기사가 있으면 기준이 흔들리므로, 새로 넣는 수를 거기에 맞춘다
+      const recentBefore = await prisma.communityNewsItem.count({ where: { scope: 'SIGUNGU', scopeCode: sigungu, publishedAt: { gte: new Date(Date.now() - 30 * DAY) } } });
+      assert.ok(recentBefore < 5, `노원구 최근 기사가 이미 ${recentBefore}건`);
+      for (let n = recentBefore; n < 4; n += 1) await add(`recent-${n}`, 20); // 20일 전 — 7일 기준이면 세지 않았을 것
+      await add('old', 40);
+      const fallback = async () => (await findNews(REGION, { scope: 'SIGUNGU', page: 1, size: 20 })).meta.sidoFallback;
+      assert.equal(await fallback(), true); // 최근 4건 + 오래된 1건
+      await add('recent-4', 1);
+      assert.equal(await fallback(), false); // 최근 5건
+      assert.ok((await prisma.communityNewsItem.count({ where: { scope: 'SIGUNGU', scopeCode: sigungu } })) > before);
+      const sido = await findNews(REGION, { scope: 'SIDO', page: 1, size: 10 });
+      assert.equal(sido.meta.region.sidoLabel, '서울');
+      assert.ok(!('sidoFallback' in sido.meta));
     });
   });
 

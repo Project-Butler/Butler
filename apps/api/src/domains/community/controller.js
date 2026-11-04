@@ -25,6 +25,7 @@ import {
 } from './service.js';
 import { castVote, closeExpiredPolls, createPoll, deletePoll, findPollDetail, findPolls, findVisiblePoll, throwPollNotFound } from './service/polls.js';
 import { findReports, setCommentHidden, setPollHidden, setPostHidden, updateReportStatus } from './service/admin.js';
+import { collectNews, findNews } from './service/news.js';
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const MAX_TITLE_LENGTH = 100; // CommunityPost.title VarChar(100)
@@ -472,7 +473,41 @@ export const patchPollHidden = async (req, res, next) => {
   }
 };
 
-// ===== 정기 작업 =====
+// ===== 뉴스 · 정기 작업 =====
+
+const NEWS_SCOPES = ['SIGUNGU', 'SIDO', 'NATIONWIDE'];
+
+const parseNewsListQuery = (query) => {
+  assertSingleValues(query);
+  const details = [];
+  const { page, size } = parsePagination(query, details);
+  let scope;
+  if (query.scope !== undefined) {
+    if (NEWS_SCOPES.includes(query.scope)) scope = query.scope;
+    else details.push({ field: 'scope', reason: `${NEWS_SCOPES.join(', ')} 중 하나여야 합니다.` });
+  }
+  throwIfInvalid(details);
+  return { page, size, scope };
+};
+
+export const listNews = async (req, res, next) => {
+  try {
+    const legalDongCode = parseLegalDongCode(req.params.legalDongCode);
+    const { items, meta } = await findNews(legalDongCode, parseNewsListQuery(req.query));
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/cron/community-news (cronRouter.js)
+export const runNewsCollection = async (req, res, next) => {
+  try {
+    sendData(res, await collectNews());
+  } catch (error) {
+    next(error);
+  }
+};
 
 // GET /api/cron/community-polls (cronRouter.js)
 export const runPollClosing = async (req, res, next) => {
