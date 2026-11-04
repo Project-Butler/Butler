@@ -20,14 +20,14 @@ export const signSignupTicket = (provider, profile) =>
   jwt.sign(
     { purpose: 'oauth_signup', provider, providerUserId: profile.providerUserId, email: profile.email, name: profile.name },
     ticketKey(),
-    { expiresIn: Math.floor(SIGNUP_TICKET_TTL_MS / 1000) },
+    { algorithm: 'HS256', expiresIn: Math.floor(SIGNUP_TICKET_TTL_MS / 1000) },
   );
 
 // 없거나 만료·변조된 토큰이면 null
 export const verifySignupTicket = (token) => {
   if (!token) return null;
   try {
-    const payload = jwt.verify(token, ticketKey());
+    const payload = jwt.verify(token, ticketKey(), { algorithms: ['HS256'] });
     return payload.purpose === 'oauth_signup' ? payload : null;
   } catch {
     return null;
@@ -49,7 +49,7 @@ const isUniqueViolation = (error, column) =>
 // 소셜 프로필로 누구인지 정한다.
 //  1) 이미 연결된 소셜 계정이면 그 사용자로 로그인
 //  2) 검증된 이메일이 기존 계정과 같고, 그 계정의 이메일도 인증번호로 확인된(email_verified_at) 계정이면 그 계정에 연결
-//     확인된 적 없는 계정이면 연결하지 않고 거절한다(OAUTH_EMAIL_IN_USE)
+//     확인된 적 없는 계정이면 연결하지 않고 거절한다(OAUTH_EMAIL_IN_USE). 임대인이 아닌 계정도 거절한다(OAUTH_ROLE_NOT_ALLOWED)
 //  3) 둘 다 아니면 가입이 필요하다 → { user: null }
 // 카카오는 is_email_valid·is_email_verified가 모두 true일 때만 검증된 이메일로 본다.
 // 이메일이 없거나 검증되지 않았으면 2)·3)을 하지 않고 거절한다(남의 이메일로 계정을 선점하는 것을 막는다).
@@ -72,11 +72,15 @@ export const resolveOAuthUser = async (provider, profile) => {
 
   const existing = await prisma.user.findUnique({
     where: { email: profile.email },
-    select: { id: true, status: true, emailVerifiedAt: true, oauthAccounts: { select: { provider: true } } },
+    select: { id: true, role: true, status: true, emailVerifiedAt: true, oauthAccounts: { select: { provider: true } } },
   });
   if (!existing) return { user: null };
 
   assertUserUsable(existing);
+  // 소셜 로그인은 임대인에게만 연다. 같은 이메일의 임차인·관리자 계정에는 연결하지 않는다(관리자 계정 보호).
+  if (existing.role !== 'LANDLORD') {
+    throw new AppError('OAUTH_ROLE_NOT_ALLOWED', 403, '임대인 계정만 소셜 로그인을 사용할 수 있습니다.');
+  }
   // 기존 계정의 이메일을 인증번호로 확인한 적이 없으면 연결하지 않는다. 인증 없이 가입할 수 있던 때는
   // 남의 이메일로 먼저 가입해 둔 사람이 소셜 로그인한 본인 계정에 들어올 수 있기 때문이다.
   if (!existing.emailVerifiedAt) {

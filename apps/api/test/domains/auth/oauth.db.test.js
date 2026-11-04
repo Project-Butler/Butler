@@ -36,13 +36,13 @@ const profileOf = (email, overrides = {}) => ({
 });
 const ticketOf = (provider, profile) => ({ provider, providerUserId: profile.providerUserId, email: profile.email, name: profile.name });
 // 비밀번호로 가입한 기존 계정. verified면 이메일 인증을 마친 계정이다.
-const createPasswordUser = async (email, { verified }) =>
+const createPasswordUser = async (email, { verified, role = 'LANDLORD' }) =>
   prisma.user.create({
     data: {
       email,
       passwordHash: await hashPassword('abcd1234'),
       name: '기존',
-      role: 'LANDLORD',
+      role,
       emailVerifiedAt: verified ? new Date() : null,
     },
   });
@@ -105,6 +105,16 @@ describe('소셜 로그인', { skip: dbTestSkip }, () => {
 
     await assert.rejects(resolveOAuthUser('KAKAO', profileOf(email)), { code: 'OAUTH_EMAIL_IN_USE', httpStatus: 409 });
     assert.equal(await prisma.oAuthAccount.count({ where: { userId: existing.id } }), 0);
+  });
+
+  test('이메일이 같아도 임차인·관리자 계정에는 연결하지 않고 403으로 거절한다', async () => {
+    for (const role of ['TENANT', 'ADMIN']) {
+      const email = newEmail();
+      const existing = await createPasswordUser(email, { verified: true, role });
+
+      await assert.rejects(resolveOAuthUser('GOOGLE', profileOf(email)), { code: 'OAUTH_ROLE_NOT_ALLOWED', httpStatus: 403 });
+      assert.equal(await prisma.oAuthAccount.count({ where: { userId: existing.id } }), 0);
+    }
   });
 
   test('이메일이 검증되지 않았거나 없으면 연결·가입 모두 거절한다', async () => {

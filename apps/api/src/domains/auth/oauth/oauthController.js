@@ -20,7 +20,7 @@ const oauthCookieOptions = { ...cookieOptions, path: OAUTH_COOKIE_PATH };
 const STATE_COOKIE = 'oauth_state';
 const SIGNUP_COOKIE = 'oauth_signup';
 
-const frontendUrl = () => {
+export const frontendUrl = () => {
   const url = process.env.OAUTH_FRONTEND_URL;
   if (!url) throw new AppError('OAUTH_UNAVAILABLE', 503, '소셜 로그인이 아직 준비되지 않았습니다.');
   return url.replace(/\/$/, '');
@@ -34,17 +34,27 @@ const isSameState = (expected, actual) => {
 };
 
 // GET /auth/oauth/:provider — 제공자 로그인 화면으로 보낸다.
+// 브라우저가 직접 이동해 오는 주소라 JSON 오류를 내면 사용자가 그대로 본다. 키가 없는 경우(503) 등은 로그인 화면으로 돌려보낸다.
 export const startOAuth = (req, res, next) => {
   try {
     const config = getProvider(req.params.provider);
-    frontendUrl();
+    const base = frontendUrl();
     const state = createState();
-    const url = buildAuthorizeUrl(config, state);
+    let url;
+    try {
+      url = buildAuthorizeUrl(config, state);
+    } catch (error) {
+      if (error instanceof AppError) {
+        console.warn('[oauth] 시작 실패', config.key, error.code);
+        return res.redirect(`${base}/login?oauth_error=${encodeURIComponent(error.code)}`);
+      }
+      throw error;
+    }
 
     res.cookie(STATE_COOKIE, state, { ...oauthCookieOptions, maxAge: STATE_TTL_MS });
-    res.redirect(url);
+    return res.redirect(url);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
@@ -61,7 +71,11 @@ export const oauthCallback = async (req, res, next) => {
     return;
   }
 
-  const fail = (code) => res.redirect(`${base}/login?oauth_error=${encodeURIComponent(code)}`);
+  // 사용자는 코드만 보므로 원인 추적용으로 제공자와 코드만 서버에 남긴다(인가 코드·토큰·이메일은 남기지 않는다).
+  const fail = (code) => {
+    console.warn('[oauth] 콜백 실패', config.key, code);
+    return res.redirect(`${base}/login?oauth_error=${encodeURIComponent(code)}`);
+  };
 
   try {
     const { code, state, error: providerError } = req.query;

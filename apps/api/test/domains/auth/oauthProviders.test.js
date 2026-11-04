@@ -1,6 +1,8 @@
 // 소셜 로그인 제공자 해석·가입 티켓·추가 정보 검증(DB 없음). 외부 호출은 fetch를 가짜로 바꿔 막는다.
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, test } from 'node:test';
+import jwt from 'jsonwebtoken';
 import { parseOAuthSignupBody } from '../../../src/domains/auth/registerValidation.js';
 import { signSignupTicket, verifySignupTicket } from '../../../src/domains/auth/oauth/oauthService.js';
 import { buildAuthorizeUrl, fetchProfile, getProvider } from '../../../src/domains/auth/oauth/providers.js';
@@ -47,6 +49,12 @@ describe('소셜 로그인 제공자', () => {
     assert.equal(url.searchParams.get('state'), 'state-1');
     assert.equal(url.searchParams.get('redirect_uri'), 'http://localhost:3000/api/v1/auth/oauth/kakao/callback');
     assert.match(url.searchParams.get('scope'), /account_email/);
+    assert.equal(url.searchParams.get('prompt'), 'select_account');
+  });
+
+  test('구글 인가 URL도 계정 선택 창을 띄운다', () => {
+    const url = new URL(buildAuthorizeUrl(getProvider('google'), 'state-2'));
+    assert.equal(url.searchParams.get('prompt'), 'select_account');
   });
 
   test('키가 없으면 503 OAUTH_UNAVAILABLE이다', () => {
@@ -84,7 +92,8 @@ describe('소셜 로그인 제공자', () => {
     assert.equal(noEmail.emailVerified, false);
   });
 
-  test('제공자가 거절하거나 통신에 실패하면 502 OAUTH_PROVIDER_ERROR다', async () => {
+  test('제공자가 거절하거나 통신에 실패하면 502 OAUTH_PROVIDER_ERROR다', async (t) => {
+    t.mock.method(console, 'error', () => {});
     globalThis.fetch = async () => jsonResponse({}, false);
     await assert.rejects(fetchProfile(getProvider('google'), 'c'), { code: 'OAUTH_PROVIDER_ERROR', httpStatus: 502 });
 
@@ -92,6 +101,37 @@ describe('소셜 로그인 제공자', () => {
       throw new Error('network');
     };
     await assert.rejects(fetchProfile(getProvider('google'), 'c'), { code: 'OAUTH_PROVIDER_ERROR' });
+  });
+
+  test('제공자가 거절하면 서버 로그에 단계·상태·오류 코드만 남기고 토큰·시크릿·인가 코드는 남기지 않는다', async (t) => {
+    const logged = t.mock.method(console, 'error', () => {});
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'invalid_grant', error_description: 'secret-detail', access_token: 'leak' }),
+    });
+    await assert.rejects(fetchProfile(getProvider('google'), 'auth-code-1'), { code: 'OAUTH_PROVIDER_ERROR' });
+
+    const line = logged.mock.calls.map((call) => call.arguments.join(' ')).join('\n');
+    assert.match(line, /google:token/);
+    assert.match(line, /400 invalid_grant/);
+    for (const secret of ['g-secret', 'auth-code-1', 'leak', 'secret-detail']) assert.equal(line.includes(secret), false, secret);
+  });
+
+  test('운영에서는 OAUTH_REDIRECT_BASE_URL이 https가 아니면 503 OAUTH_UNAVAILABLE이다', (t) => {
+    t.mock.method(console, 'error', () => {});
+    const savedEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      assert.throws(() => buildAuthorizeUrl(getProvider('google'), 's'), { code: 'OAUTH_UNAVAILABLE', httpStatus: 503 });
+
+      process.env.OAUTH_REDIRECT_BASE_URL = 'https://api.example.com';
+      const url = new URL(buildAuthorizeUrl(getProvider('google'), 's'));
+      assert.equal(url.searchParams.get('redirect_uri'), 'https://api.example.com/api/v1/auth/oauth/google/callback');
+    } finally {
+      if (savedEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedEnv;
+    }
   });
 });
 
@@ -109,6 +149,14 @@ describe('소셜 가입 티켓', () => {
     assert.equal(verifySignupTicket(undefined), null);
     assert.equal(verifySignupTicket('abc.def.ghi'), null);
     assert.equal(verifySignupTicket(`${signSignupTicket('GOOGLE', profile)}x`), null);
+  });
+
+  test('HS256이 아닌 알고리즘으로 서명한 티켓은 같은 키여도 거절한다', () => {
+    const key = createHmac('sha256', process.env.ACCESS_TOKEN_SECRET).update('oauth-signup-ticket').digest();
+    const forged = jwt.sign({ purpose: 'oauth_signup', provider: 'GOOGLE', providerUserId: '1', email: 'x@example.com' }, key, { algorithm: 'HS512' });
+    assert.equal(verifySignupTicket(forged), null);
+    const unsigned = jwt.sign({ purpose: 'oauth_signup', provider: 'GOOGLE', providerUserId: '1', email: 'x@example.com' }, '', { algorithm: 'none' });
+    assert.equal(verifySignupTicket(unsigned), null);
   });
 });
 

@@ -64,6 +64,14 @@ export const registerRateLimiter = rateLimiter({
   message: '회원가입 시도가 너무 많습니다. 1시간 후 다시 시도해주세요.',
 });
 
+// 소셜 로그인 시작·콜백(브라우저가 주소로 직접 이동해 오고, 콜백은 제공자 API를 부른다). IP당 10분에 60회.
+export const oauthRateLimiter = rateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  keyFn: (req) => `oauth:${req.ip}`,
+  message: '소셜 로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.',
+});
+
 // 이메일별 재전송 간격·횟수는 서비스가 따로 막는다. 여기는 한 IP가 여러 이메일로 메일을 뿌리는 것을 막는다.
 export const emailVerificationRateLimiter = rateLimiter({
   windowMs: 60 * 60 * 1000,
