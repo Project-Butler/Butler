@@ -70,13 +70,17 @@ export const isRegionMember = async (userId, legalDongCode) => {
 // 알림 기능이 아직 없어서 아무것도 하지 않는다. 부르는 쪽은 진짜 함수처럼 await 해도 된다.
 export const notify = async () => {};
 
+// 인증 취소(REVOKED)는 운영자가 철회한 상태라 다시 인증할 수도 없다(권리자 인증이 VERIFICATION_REVOKED 로 막는다).
+// 그래서 커뮤니티 읽기 자격 · 내 건물 목록에서는 "그 호실 없음" 과 같게 본다.
+const NOT_REVOKED = { verificationStatus: { not: 'REVOKED' } };
+
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 커뮤니티 읽기 자격(인증 전 미리보기 포함).
-// 이 사용자가 이 법정동에 활성 소유 관계(endedAt null)를 하나라도 가졌는가 — 인증 여부(미인증 · 만료 · 취소)는 보지 않는다.
-// 임차인 · 그 동네에 호실이 없는 임대인은 false.
+// 이 사용자가 이 법정동에 활성 소유 관계(endedAt null, 인증 취소 아님)를 하나라도 가졌는가 — 미인증 · 만료여도 된다.
+// 임차인 · 그 동네에 호실이 없는 임대인 · 인증 취소만 있는 임대인은 false.
 export const hasActiveOwnershipInRegion = async (userId, legalDongCode) => {
   if (!isUuid(userId) || typeof legalDongCode !== 'string') return false;
   const count = await prisma.ownership.count({
-    where: { userId, endedAt: null, property: { complex: { regionId: legalDongCode } } },
+    where: { userId, endedAt: null, ...NOT_REVOKED, property: { complex: { regionId: legalDongCode } } },
   });
   return count > 0;
 };
@@ -95,11 +99,12 @@ export const requireRegionOwner = (getLegalDongCode) => async (req, res, next) =
   }
 };
 
-// 건물 인증 상태의 우선순위: 유효한 인증이 하나라도 있으면 VERIFIED, 없고 만료가 있으면 EXPIRED, 그 밖(미인증 · 취소)은 UNVERIFIED.
+// 건물 인증 상태의 우선순위: 유효한 인증이 하나라도 있으면 VERIFIED, 없고 만료가 있으면 EXPIRED, 그 밖(미인증)은 UNVERIFIED.
 const BUILDING_STATUS_RANK = { VERIFIED: 0, EXPIRED: 1, UNVERIFIED: 2 };
 
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 내 건물 목록(GET /community/my-buildings)이 쓴다.
-// 내 활성 소유 관계(인증 여부 무관)를 단지별로 묶는다.
+// 내 활성 소유 관계(인증 취소 제외, 미인증 · 만료 포함)를 단지별로 묶는다. 취소 호실만 있는 건물은 나오지 않고,
+// 취소 호실은 호실 수 · 면적 · 인증할 호실(verifyPropertyId)에도 들어가지 않는다.
 // Map(complexId → { unitCount, unitAreas, verificationStatus, verifyPropertyId }).
 // - unitAreas: 시세 면적대(내 호실 점 · 처음 선택)용 전용면적(㎡, 저장값 그대로). 면적이 없는 호실은 뺀다. 동 · 호수는 내보내지 않는다
 // - verificationStatus: 'VERIFIED' | 'EXPIRED' | 'UNVERIFIED' (판정은 computeOwnershipVerificationStatus)
@@ -108,7 +113,7 @@ export const summarizeMyActiveUnitsByComplex = async (userId) => {
   const units = new Map();
   if (!isUuid(userId)) return units;
   const rows = await prisma.ownership.findMany({
-    where: { userId, endedAt: null },
+    where: { userId, endedAt: null, ...NOT_REVOKED },
     select: {
       verificationStatus: true,
       verificationExpiresAt: true,

@@ -438,6 +438,18 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       assert.equal((await runOwner(sold))?.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
     });
 
+    test('인증 취소(REVOKED)만 있는 임대인은 읽기 403 — 같은 동에 취소 아닌 호실이 하나라도 있으면 통과', async () => {
+      const complex = await fixture.createComplex();
+      const revoked = await createUser();
+      await addUnit(revoked, complex, { status: 'REVOKED' });
+      const error = await runOwner(revoked);
+      assert.equal(error?.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
+      assert.equal(error?.httpStatus, 403);
+
+      await addUnit(revoked, complex, { status: 'UNVERIFIED' });
+      assert.equal(await runOwner(revoked), null);
+    });
+
     test('글 상세: 인증한 사람은 본문 · 댓글까지, 인증 전 · 만료는 locked 이고 body · comments 가 응답에 없다', async () => {
       const complex = await fixture.createComplex({ name: '미리보기아파트' });
       const author = await createUser();
@@ -565,6 +577,24 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       const [again] = await findMyBuildings(user);
       assert.equal(again.verificationStatus, 'UNVERIFIED');
       assert.equal(again.verifyPropertyId, first.id);
+    });
+
+    test('인증 취소(REVOKED)만 있는 건물은 나오지 않고, 취소 호실은 호실 수 · 인증할 호실(verifyPropertyId)에 들어가지 않는다', async () => {
+      const user = await createUser();
+      const revokedOnly = await fixture.createComplex({ name: '취소아파트' });
+      const mixed = await fixture.createComplex({ name: '섞인취소아파트' });
+      for (const complex of [revokedOnly, mixed]) {
+        await prisma.myBuilding.create({ data: { userId: user.id, complexId: complex.id, name: complex.name } });
+      }
+      await addUnit(user, revokedOnly, { status: 'REVOKED' });
+      await addUnit(user, mixed, { buildingNo: '101', unitNo: '101', status: 'REVOKED' }); // 자연순으로는 이것이 먼저
+      const pending = await addUnit(user, mixed, { buildingNo: '102', unitNo: '101', status: 'UNVERIFIED' });
+
+      const buildings = await findMyBuildings(user);
+      assert.deepEqual(buildings.map((b) => b.name), ['섞인취소아파트']);
+      assert.equal(buildings[0].unitCount, 1);
+      assert.equal(buildings[0].verificationStatus, 'UNVERIFIED');
+      assert.equal(buildings[0].verifyPropertyId, pending.id);
     });
 
     test('unitAreas 는 그 건물의 활성 호실 전용면적(인증 여부 무관, 면적 없는 호실 · 남의 호실은 빠짐, 동 · 호수 없음)', async () => {
