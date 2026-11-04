@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 
-// 커뮤니티 탭 네 개. 경로는 /community/{key}.
+// 커뮤니티 탭 다섯 개. 경로는 /community/{key}. 자주 바뀌는 것이 앞으로 — 첫 화면은 브리핑.
 export const COMMUNITY_SECTIONS = [
-  { key: 'market', label: '시세' },
+  { key: 'briefing', label: '브리핑' },
   { key: 'news', label: '뉴스' },
+  { key: 'market', label: '시세' },
   { key: 'board', label: '게시판' },
   { key: 'polls', label: '투표' },
 ];
