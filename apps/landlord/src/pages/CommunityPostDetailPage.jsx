@@ -7,11 +7,12 @@ import { useDeleteCommunityPost } from '../hooks/useDeleteCommunityPost';
 import { useGetCommunityPost } from '../hooks/useGetCommunityPost';
 import { usePostCommunityComment } from '../hooks/usePostCommunityComment';
 import { getErrorMessage } from '../utils/getErrorMessage';
-import { getBlockedMessage } from '../components/CommunityBoard/BoardNotice';
 import { CategoryChip } from '../components/CommunityBoard/CategoryChip';
 import { ReportDialog } from '../components/CommunityBoard/ReportDialog';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { LockedCard } from '../components/CommunityLayout/LockedCard';
+import { getBlockedMessage } from '../utils/communityBoardLabels';
 import { formatKstDateTime } from '../utils/communityFormat';
 
 const MAX_COMMENT_LENGTH = 1000; // CommunityComment.body VarChar(1000)
@@ -31,6 +32,7 @@ const TextButton = ({ children, ...props }) => (
 // 제목 → 분류 · 작성자 · 작성일 → 본문 카드, 제목 줄 오른쪽에 작은 글자 버튼(내 글: 수정 · 삭제 / 남의 글: 신고).
 // 댓글은 아래 별도 카드(목록 + 맨 아래 입력칸). 작성자 옆 '인증 완료'는 글쓴이 표기다 — 글은 인증을 마친 임대인만 쓴다.
 // 머리의 배지는 보는 사람의 이 법정동 자격(writeBlockedReason)이다. 자격이 없어도 내 글·댓글 삭제는 된다(수정은 안 됨).
+// 인증 전 미리보기(locked)면 서버가 본문 · 댓글을 주지 않는다 — 제목 · 분류 · 작성자 · 날짜 아래에 잠금 카드, 신고 · 댓글 없음.
 export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdit }) => {
   const post = useGetCommunityPost(postId);
   const addComment = usePostCommunityComment();
@@ -99,7 +101,7 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
                         삭제
                       </TextButton>
                     </>
-                  ) : (
+                  ) : data.locked ? null : (
                     <TextButton onClick={() => setIsReportOpen(true)} disabled={!canWrite || isReported}>
                       <Flag size={16} strokeWidth={2} aria-hidden="true" />
                       신고
@@ -117,14 +119,19 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
                 <span className="font-num text-sub font-medium tabular-nums text-ink-3">{formatKstDateTime(data.createdAt)}</span>
               </div>
             </div>
-            <Card className="p-6">
-              <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-ink">{data.body}</p>
-            </Card>
+            {data.locked ? (
+              <LockedCard description="권리자 인증을 마치면 글 본문과 댓글을 볼 수 있어요" onVerify={frame.verify} />
+            ) : (
+              <Card className="p-6">
+                <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-ink">{data.body}</p>
+              </Card>
+            )}
           </article>
 
           {isReported && <NoticeBox tone="info">신고가 접수되었습니다.</NoticeBox>}
           {actionError && <NoticeBox>{actionError}</NoticeBox>}
 
+          {!data.locked && (
           <Card className="p-6">
             <section aria-labelledby="community-comments-title" className="space-y-3">
               <h2 id="community-comments-title" className="text-section font-semibold text-ink">
@@ -169,6 +176,7 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
               </form>
             </section>
           </Card>
+          )}
         </>
       )}
 

@@ -4,7 +4,7 @@ import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { fetchNews } from '../newsProvider.js';
 import { buildNameIndex, buildRegionTerms, getSido, makeTitleFilter, toQueryName, toSidoCode } from '../newsRelevance.js';
-import { listAllVerifiedLegalDongCodes } from '../platformBridge.js';
+import { listAllOwnedLegalDongCodes } from '../platformBridge.js';
 
 const toUrlHash = (url) => createHash('sha256').update(url).digest('hex');
 const toSigunguCode = (legalDongCode) => legalDongCode.slice(0, 5);
@@ -16,11 +16,12 @@ const RECENT_DAYS = 30;
 
 // ===== 수집 대상과 걸러내기 =====
 
-// 수집 대상: 전국 + 인증 보유자가 있는 시·도 + 인증 보유자가 있는 시·군·구. 각 대상에 제목 검사 함수를 붙인다.
+// 수집 대상: 전국 + 호실을 등록한 임대인이 있는 시·도 + 같은 시·군·구. 각 대상에 제목 검사 함수를 붙인다.
+// "호실을 등록한 임대인" = 커뮤니티 뉴스를 볼 수 있는 사람(활성 소유 관계, 인증 전 · 만료 포함, 인증 취소 제외 — platformBridge).
 // 시·군·구의 지역 이름 = 그 시·군·구 이름 + 그 시·군·구의 모든 법정동 이름(newsRelevance.js 규칙).
 // 이름표(nameIndex)는 여기서 한 번만 만든다 — 기사마다 DB 를 다시 읽지 않는다.
 export const buildNewsTargets = async () => {
-  const verifiedCodes = new Set(await listAllVerifiedLegalDongCodes());
+  const ownedCodes = new Set(await listAllOwnedLegalDongCodes());
   const regions = (
     await prisma.region.findMany({
       where: { isActive: true },
@@ -29,15 +30,15 @@ export const buildNewsTargets = async () => {
   ).map(({ id, ...rest }) => ({ legalDongCode: id, ...rest }));
   const nameIndex = buildNameIndex(regions);
 
-  // 수집 대상은 인증 보유자가 있는 시·군·구, 인정하는 동 이름은 그 시·군·구의 모든 법정동
-  const targetCodes = new Set([...verifiedCodes].map(toSigunguCode));
+  // 수집 대상은 호실을 등록한 임대인이 있는 시·군·구, 인정하는 동 이름은 그 시·군·구의 모든 법정동
+  const targetCodes = new Set([...ownedCodes].map(toSigunguCode));
   const sigungus = new Map();
   for (const region of regions) {
     const code = toSigunguCode(region.legalDongCode);
     if (!targetCodes.has(code)) continue;
-    if (!sigungus.has(code)) sigungus.set(code, { sigunguName: region.sigunguName, dongNames: [], verifiedDongNames: [] });
+    if (!sigungus.has(code)) sigungus.set(code, { sigunguName: region.sigunguName, dongNames: [], ownedDongNames: [] });
     sigungus.get(code).dongNames.push(region.dongName);
-    if (verifiedCodes.has(region.legalDongCode)) sigungus.get(code).verifiedDongNames.push(region.dongName);
+    if (ownedCodes.has(region.legalDongCode)) sigungus.get(code).ownedDongNames.push(region.dongName);
   }
   const sidoCodes = [...new Set([...sigungus.keys()].map(toSidoCode))].filter((code) => getSido(code)).sort();
 
@@ -53,9 +54,9 @@ export const buildNewsTargets = async () => {
       scope: 'SIGUNGU',
       scopeCode: code,
       sigunguName: sigungu.sigunguName,
-      // 검색어: intitle:{구 약칭} … + 인증 보유자가 있는 동(법정동코드순 최대 2곳) "{동} 아파트"
+      // 검색어: intitle:{구 약칭} … + 호실을 등록한 임대인이 있는 동(법정동코드순 최대 2곳) "{동} 아파트"
       sigunguQueryName: toQueryName(sigungu.sigunguName, 'SIGUNGU', nameIndex),
-      dongQueryNames: sigungu.verifiedDongNames.map((dong) => toQueryName(dong, 'DONG', nameIndex)),
+      dongQueryNames: sigungu.ownedDongNames.map((dong) => toQueryName(dong, 'DONG', nameIndex)),
       filter: makeTitleFilter({ scope: 'SIGUNGU', terms: buildRegionTerms(sigungu, nameIndex), sidoCode: toSidoCode(code) }),
     })),
   ];

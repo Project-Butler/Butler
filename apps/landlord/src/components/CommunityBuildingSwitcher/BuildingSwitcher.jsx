@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Building2, ChevronDown } from 'lucide-react';
+import { VerificationBadge } from '../CommunityLayout/VerificationBadge';
 
 // 건물 바꾸기 드롭다운. 생김새는 @butler/ui PropertySwitcher 를 그대로 따르고 "전체 보기" 칸만 없다
 // (커뮤니티는 건물 하나를 골라야 열린다). 각 줄은 건물 선택 화면 카드의 정보를 한 줄로 — 임대인 인원 수는 여기에만(머리말 등 다른 곳에는 두지 않는다).
+// 인증 전 · 만료 건물 줄에는 머리와 같은 배지('인증 전' · '인증 만료').
 // buildings: GET /community/my-buildings 응답
 export const BuildingSwitcher = ({ buildings, activeComplexId, onChange }) => {
   const [open, setOpen] = useState(false);
@@ -62,6 +64,11 @@ export const BuildingSwitcher = ({ buildings, activeComplexId, onChange }) => {
               >
                 <Building2 size={15} className="flex-none" aria-hidden="true" />
                 <span className={`flex-none ${isActive ? 'font-semibold' : 'font-medium text-ink'}`}>{building.name}</span>
+                {building.verificationStatus && building.verificationStatus !== 'VERIFIED' && (
+                  <span className="flex-none">
+                    <VerificationBadge blockedReason={building.verificationStatus} />
+                  </span>
+                )}
                 <span className={`min-w-0 flex-1 truncate text-sub ${isActive ? '' : 'text-ink-3'}`}>
                   <span className="font-num tabular-nums">{building.unitCount}</span>호실 보유 · {building.regionName} · 임대인{' '}
                   <span className="font-num tabular-nums">{building.memberCount}</span>명

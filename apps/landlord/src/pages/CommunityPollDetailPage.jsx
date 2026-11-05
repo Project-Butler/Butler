@@ -7,6 +7,7 @@ import { usePostCommunityVote } from '../hooks/usePostCommunityVote';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { LockedCard } from '../components/CommunityLayout/LockedCard';
 import { DdayBadge } from '../components/CommunityPoll/DdayBadge';
 import { ScopeChip } from '../components/CommunityPoll/ScopeChip';
 import { PollDisclaimer } from '../components/CommunityPoll/PollDisclaimer';
@@ -45,6 +46,7 @@ const OptionRadio = ({ option, checked, disabled, onChange }) => (
 // 두 칸: 왼쪽(col-span-2)에 질문 · 선택지 · [투표하기] 또는 결과(마감 뒤 득표 · 비율 막대), 오른쪽에 자격 안내 카드
 // (참여 범위 · 1인 1표 · 마감 시각 · 면책 문구)와 그 아래 삭제(본인 · 참여 0명일 때만).
 // 마감 전에는 서버가 득표를 주지 않는다. 참여했으면 내 선택을 보여 주고 버튼은 "참여함"으로 잠근다.
+// 인증 전 미리보기(locked)면 서버가 선택지 · 내 참여 · 결과를 주지 않는다 — 질문 · 범위 · 마감 · 참여 인원 아래에 잠금 카드.
 export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
   const poll = useGetCommunityPoll(pollId);
   const vote = usePostCommunityVote();
@@ -95,7 +97,7 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
               <p className="whitespace-pre-wrap break-keep text-body leading-relaxed text-ink-2">{data.description}</p>
             )}
 
-            {data.isClosed ? (
+            {data.locked ? null : data.isClosed ? (
               <div className="space-y-3">
                 <PollResults options={data.options} />
                 <div className="flex h-11 items-center justify-center rounded-btn border border-line bg-surface-2 text-sub font-semibold text-ink-3">
@@ -125,11 +127,16 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
               </div>
             )}
           </Card>
+          {data.locked && (
+            <div className="lg:col-span-2 lg:col-start-1">
+              <LockedCard description="권리자 인증을 마치면 선택지를 보고 투표에 참여할 수 있어요" onVerify={frame.verify} />
+            </div>
+          )}
 
-          <div className="space-y-3">
+          <div className="space-y-3 lg:col-start-3 lg:row-start-1">
             <Card className="space-y-3 p-6">
               <p className="break-keep text-body text-ink">{eligibilityTarget} 임대인만 참여할 수 있는 투표입니다.</p>
-              {!data.isClosed && (
+              {!data.isClosed && !data.locked && (
                 <p className="break-keep text-sub text-ink-2">
                   {num(1)}인 {num(1)}표입니다. 같은 범위에 여러 호실을 보유하셔도 한 표만 반영됩니다.
                   {data.myUnitCount >= 2 && (

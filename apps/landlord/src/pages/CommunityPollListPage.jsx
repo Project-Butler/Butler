@@ -11,6 +11,7 @@ import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { PollCard } from '../components/CommunityPoll/PollCard';
 import { PollDisclaimer } from '../components/CommunityPoll/PollDisclaimer';
 import { StatusSegment } from '../components/CommunityPoll/StatusSegment';
+import { getBlockedMessage } from '../utils/communityBoardLabels';
 import { splitRegionName } from '../utils/communityFormat';
 
 const SCOPE_ALL = 'ALL';
@@ -62,7 +63,14 @@ export const CommunityPollListPage = ({ frame, building }) => {
             wrap
           />
           <StatusSegment className="w-44" value={status} onChange={(value) => setFilter({ status: value })} />
-          <Button className="ml-auto" onClick={() => navigate('/community/polls/new')} disabled={!list.isSuccess || !canWrite}>
+          {list.isSuccess && !canWrite && (
+            <span className="ml-auto text-sub text-ink-3">{getBlockedMessage(blockedReason, 'poll')}</span>
+          )}
+          <Button
+            className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
+            onClick={() => navigate('/community/polls/new')}
+            disabled={!list.isSuccess || !canWrite}
+          >
             <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
             투표 만들기
           </Button>
