@@ -115,6 +115,22 @@ describe('단지 기사 거르기', () => {
     assert.equal(filter('송파 잠실엘스 전세 매물 감소'), true);
   });
 
+  test('이름 뒤에 숫자가 오면(차수 · 단지 번호) 다른 단지 — 띄어 써도 같다', () => {
+    const filter = makeComplexTitleFilter({ name: '잠실우성아파트', dongName: '잠실동', sigunguName: '송파구' });
+    assert.equal(filter('잠실우성아파트, 재건축 추정비례율 91.07%로 추산'), true);
+    assert.equal(filter('잠실우성4차A 재건축 심의 통과… 49층 828세대 건립'), false);
+    assert.equal(filter('송파 잠실우성 4차, 재건축 통해 828가구 새 아파트로'), false);
+  });
+
+  test('이름이 다른 낱말 중간에서 시작하면 다른 이름 — "일원개포한신" · "위한 신속" 은 "한신" 이 아니다', () => {
+    const filter = makeComplexTitleFilter({ name: '한신아파트', dongName: '일원동', sigunguName: '강남구' });
+    assert.equal(filter('강남구 일원개포한신아파트 재건축 이주'), false);
+    assert.equal(filter('강남구, 노후 임대주택 안전 확보 위한 신속 재정비'), false);
+    assert.equal(filter('강남구 일원동 한신아파트 재건축 이주'), true);
+    // 따옴표 · 문장부호 뒤는 낱말 처음
+    assert.equal(filter("강남 '한신아파트' 재건축 이주"), true);
+  });
+
   test('제외 낱말("삼전" · "방이")은 지역 이름으로 치지 않는다', () => {
     const filter = makeComplexTitleFilter({ name: '현대아파트', dongName: '삼전동', sigunguName: '송파구' });
     assert.equal(filter('삼전 현대아파트 재건축'), false);

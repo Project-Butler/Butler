@@ -109,18 +109,25 @@ export const toComplexQueryNames = (name) => {
 // 단지 기사 제목 검사.
 //   sameNameCount: 전국 단지(Complex) 중 뗀 이름이 같은 단지 수(자기 포함). 2 이상이면 흔한 이름
 //   dongName · sigunguName: 그 단지의 법정동 · 시군구 — 흔하거나 짧은 이름일 때 제목에 함께 있어야 하는 이름
+// 제목 속 단지 이름 찾기: 글자 사이 띄어쓰기는 무시하고, 낱말 처음에서 시작해야 하며(앞에 글자 · 숫자가 붙으면 다른 이름),
+// 바로 뒤(띄어쓰기 건너)에 숫자가 오면 다른 단지("잠실우성" 뒤 "4차")로 본다. 규칙의 이유는 newsRules.js.
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const complexNamePattern = (term, flags = '') =>
+  new RegExp(`(?<![가-힣A-Za-z0-9])${[...term].map(escapeRegExp).join('\\s*')}(?!\\s*\\d)`, flags);
+
 export const makeComplexTitleFilter = ({ name, sameNameCount = 1, dongName = '', sigunguName = '' }) => {
   const { full, base } = complexNameForms(name);
   const names = [...new Set([full, base])].filter((term) => term.length >= MIN_PLACE_BASE_LENGTH).sort((a, b) => b.length - a.length);
+  const finders = names.map((term) => complexNamePattern(term));
+  const strippers = names.map((term) => complexNamePattern(term, 'g'));
   const needsContext = base.length < COMPLEX_MIN_BASE_LENGTH || sameNameCount > 1;
   const contextTerms = [...(sigunguName ? sigunguForms(sigunguName) : []), ...(dongName ? dongForms(dongName) : [])]
     .map(squash)
     .filter((term) => term && !EXCLUDED_PLACE_TERMS.has(term));
   return (title) => {
-    const flat = squash(title);
-    if (!names.some((term) => flat.includes(term))) return false;
+    if (!finders.some((finder) => finder.test(title))) return false;
     // 단지 이름을 빼고 본다 — 이름 안의 "아파트" 로 부동산 낱말 검사를 통과하지 않게, 이름 안의 동 이름으로 동 검사를 통과하지 않게
-    const rest = names.reduce((text, term) => text.split(term).join(' '), flat);
+    const rest = squash(strippers.reduce((text, stripper) => text.replace(stripper, ' '), title));
     if (!hasRealEstateWord(rest)) return false;
     return !needsContext || contextTerms.some((term) => rest.includes(term));
   };
