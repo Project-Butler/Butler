@@ -7,10 +7,35 @@
 // 시세는 단지 단위라 complexId 로 찾는다(같은 동 다른 단지에 남의 시세를 보이지 않게). id 는 로컬 데모 단지 두 개다.
 // 표에 없는 단지는 규격의 "아직 수집 안 된 단지" 응답(collectionStatus: COLLECTING, monthly: [])을 돌려준다.
 // 출처(source)는 두지 않는다 — 지어낸 숫자를 실제 기관 자료로 표시하게 되므로.
+//
+// 날짜: 아래 표는 2026-09 를 마지막 달로 적었다(DEMO_SCENARIO 10절). 돌려줄 때 **오늘(한국 날짜)의 지난달이 마지막 달**이
+// 되게 달 · 계약일 · 기준일을 같은 달 수만큼 통째로 민다 — 고정 날짜는 한 달만 지나도 오래된 데이터처럼 보여서(11/05 결정).
+// 11/05 에 열면 2025-11 → 2026-10, 12월에 열면 2025-12 → 2026-11. 금액 · 건수는 그대로라 증감률 · 평균도 그대로다.
+
+import { formatKstDate } from './communityFormat';
 
 const MANWON = 10000;
-const AS_OF = '2026-09-28';
-const COVERED_FROM = '2025-10';
+const TABLE_LAST_MONTH = '2026-09';
+const TABLE_AS_OF = '2026-09-28';
+const TABLE_COVERED_FROM = '2025-10';
+
+const toMonthIndex = (yearMonth) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  return year * 12 + (month - 1);
+};
+const fromMonthIndex = (index) => `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+
+// 'YYYY-MM' · 'YYYY-MM-DD' 를 offset 달만큼 민다. 옮긴 달에 없는 날(2월 29 · 30일 등)은 그 달 말일로.
+const shiftDate = (date, offset) => {
+  const yearMonth = fromMonthIndex(toMonthIndex(date.slice(0, 7)) + offset);
+  if (date.length === 7) return yearMonth;
+  const [year, month] = yearMonth.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${yearMonth}-${String(Math.min(Number(date.slice(8, 10)), lastDay)).padStart(2, '0')}`;
+};
+
+// 표의 마지막 달에서 오늘(한국 날짜)의 지난달까지 몇 달인지
+const monthOffsetFromToday = () => toMonthIndex(formatKstDate(new Date().toISOString()).slice(0, 7)) - 1 - toMonthIndex(TABLE_LAST_MONTH);
 
 const COMPLEXES = {
   '0c000000-0000-4000-8000-000000000001': { key: 'jamsil', name: '잠실한빛아파트', legalDongCode: '1171010100' },
@@ -113,9 +138,9 @@ const EXAMPLE_PRICES = {
 };
 
 const pick = (minPrice, avg, maxPrice) => ({ minPrice, avgPrice: avg, maxPrice });
-const toMonthly = (dealType) => (row) => {
+const toMonthly = (dealType, shift) => (row) => {
   const [yearMonth, dealCount] = row;
-  const base = { yearMonth, dealCount, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null };
+  const base = { yearMonth: shift(yearMonth), dealCount, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null };
   if (dealType === 'SALE') {
     // 최저 · 최고는 예시 표에 없어서 평균의 ±1.2%(거래 1건이면 평균과 같게)로 만든다
     const avg = row[2] * MANWON;
@@ -125,9 +150,9 @@ const toMonthly = (dealType) => (row) => {
   if (dealType === 'JEONSE') return { ...base, avgDeposit: row[2] * MANWON };
   return { ...base, avgDeposit: row[2] * MANWON, avgMonthlyRent: row[3] * MANWON };
 };
-const toDeal = (dealType, complexName) => (row) => {
+const toDeal = (dealType, complexName, shift) => (row) => {
   const [contractDate, exclusiveArea, floor] = row;
-  const base = { contractDate, dealType, complexName, exclusiveArea, floor, price: null, deposit: null, monthlyRent: null };
+  const base = { contractDate: shift(contractDate), dealType, complexName, exclusiveArea, floor, price: null, deposit: null, monthlyRent: null };
   if (dealType === 'SALE') return { ...base, price: row[3] * MANWON };
   if (dealType === 'JEONSE') return { ...base, deposit: row[3] * MANWON };
   return { ...base, deposit: row[3] * MANWON, monthlyRent: row[4] * MANWON };
@@ -151,12 +176,14 @@ export const getMarketPricesStub = async ({ complexId, dealType, areaMin, areaMa
   }
   const band = BAND_BY_RANGE[`${areaMin ?? ''}-${areaMax ?? ''}`];
   const rows = EXAMPLE_PRICES[complex.key][band]?.[dealType];
+  const offset = monthOffsetFromToday();
+  const shift = (date) => shiftDate(date, offset);
   return {
     ...common,
-    coveredFromYearMonth: COVERED_FROM,
-    asOf: AS_OF,
+    coveredFromYearMonth: shift(TABLE_COVERED_FROM),
+    asOf: shift(TABLE_AS_OF),
     collectionStatus: 'READY',
-    monthly: rows ? rows.monthly.map(toMonthly(dealType)) : [],
-    recentDeals: rows ? rows.deals.map(toDeal(dealType, complex.name)) : [],
+    monthly: rows ? rows.monthly.map(toMonthly(dealType, shift)) : [],
+    recentDeals: rows ? rows.deals.map(toDeal(dealType, complex.name, shift)) : [],
   };
 };
