@@ -25,7 +25,7 @@ import {
 } from './service.js';
 import { castVote, closeExpiredPolls, createPoll, deletePoll, findPollDetail, findPolls, findVisiblePoll, throwPollNotFound } from './service/polls.js';
 import { findReports, setCommentHidden, setPollHidden, setPostHidden, updateReportStatus } from './service/admin.js';
-import { collectNews, findComplexNews, findNews, findNewsComplex } from './service/news.js';
+import { collectAllNews, findComplexNews, findNews, findNewsComplex } from './service/news.js';
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const MAX_TITLE_LENGTH = 100; // CommunityPost.title VarChar(100)
@@ -528,7 +528,7 @@ export const listComplexNews = async (req, res, next) => {
 // GET /api/cron/community-news (cronRouter.js)
 export const runNewsCollection = async (req, res, next) => {
   try {
-    sendData(res, await collectNews());
+    sendData(res, await collectAllNews());
   } catch (error) {
     next(error);
   }

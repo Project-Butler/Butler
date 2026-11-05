@@ -20,7 +20,7 @@ import {
   updatePost,
 } from '../../../src/domains/community/service.js';
 import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
-import { buildComplexNewsTargets, buildNewsTargets, collectNews, findNews } from '../../../src/domains/community/service/news.js';
+import { buildComplexNewsTargets, buildNewsTargets, collectAllNews, collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
 const REGION = '1135010600'; // createDbFixture 의 단지 법정동(서울 노원구 중계동)
@@ -554,7 +554,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         const info = console.info;
         console.info = () => {};
         try {
-          return await collectNews({ fetchImpl: complexFetch });
+          return await collectAllNews({ fetchImpl: complexFetch }); // cron 이 부르는 것(지역 · 전국 → 단지)
         } finally {
           console.info = info;
         }
@@ -589,6 +589,23 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         // 시도한 단지는 시각이 남고, 대상이 아닌 단지는 남지 않는다
         assert.ok(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: unverified.id } } }));
         assert.equal(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: revoked.id } } }), null);
+      });
+
+      test('지역 · 전국 수집(collectNews)은 단지를 건드리지 않는다 — 단지는 cron(collectAllNews)이 이어서 모은다', async () => {
+        const owner = await createUser();
+        const complex = await createNamedComplex('단지뉴스지역만');
+        await addUnit(owner, complex);
+        const info = console.info;
+        console.info = () => {};
+        try {
+          const regional = await collectNews({ fetchImpl: complexFetch });
+          assert.ok(regional.results.every((row) => row.scope !== 'COMPLEX'));
+          assert.ok(!('complexesLeft' in regional));
+        } finally {
+          console.info = info;
+        }
+        assert.equal(await prisma.communityNewsItem.count({ where: { scope: 'COMPLEX', scopeCode: complex.id } }), 0);
+        assert.equal(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: complex.id } } }), null);
       });
 
       test('대상마다 검색어 이름 · 흔한 이름 판정이 붙는다 — 같은 이름 단지가 둘이면 동 · 구 이름 없는 제목은 탈락', async () => {

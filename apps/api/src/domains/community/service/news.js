@@ -165,20 +165,30 @@ const collectTarget = async (target, fetchOptions) => {
   };
 };
 
-// GET /api/cron/community-news — 전국 → 시·도 → 시·군·구 → 단지 순서. 받은 수·걸러진 수·저장 수를 대상마다 기록한다.
-// 예산을 넘겨 건너뛴 검색어는 결과에 남기고 다음 실행 때 다시 받는다. 단지는 남은 시간 안에서 오래 안 모은 곳부터 돌고,
-// 시간이 모자라면 남은 단지는 시도하지 않고(순번 그대로) 다음 번으로 넘긴다. options 는 테스트가 공급자에 넘긴다.
+// 지역 · 전국 수집 — 전국 → 시·도 → 시·군·구 순서. 받은 수·걸러진 수·저장 수를 대상마다 기록한다(단지 뉴스 전과 같은 동작).
+// 예산을 넘겨 건너뛴 검색어는 결과에 남기고 다음 실행 때 다시 받는다. options 는 테스트가 공급자에 넘긴다.
 export const collectNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
   const now = providerOptions.now ?? Date.now;
   const fetchOptions = { ...providerOptions, now, deadline: now() + budgetMs };
   const results = [];
   for (const target of await buildNewsTargets()) results.push(await collectTarget(target, fetchOptions));
+  const summary = { inserted: results.reduce((sum, result) => sum + result.inserted, 0), results };
+  console.info(
+    `[community-news] ${results.map((r) => `${r.scopeCode ?? '전국'} 받음 ${r.fetched}·거름 ${r.filtered}·저장 ${r.inserted}`).join(' / ')}`,
+  );
+  return summary;
+};
 
-  const complexTargets = await buildComplexNewsTargets();
+// 우리 단지 수집 — 주어진 시간 안에서 오래 안 모은 단지부터. 시간이 모자라면 남은 단지는 시도하지 않고(순번 그대로) 다음 번으로.
+export const collectComplexNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
+  const now = providerOptions.now ?? Date.now;
+  const fetchOptions = { ...providerOptions, now, deadline: now() + budgetMs };
+  const targets = await buildComplexNewsTargets();
+  const results = [];
   let complexesLeft = 0;
-  for (const [index, target] of complexTargets.entries()) {
+  for (const [index, target] of targets.entries()) {
     if (now() + REQUEST_TIMEOUT_MS > fetchOptions.deadline) {
-      complexesLeft = complexTargets.length - index;
+      complexesLeft = targets.length - index;
       break;
     }
     const result = await collectTarget(target, fetchOptions);
@@ -186,14 +196,27 @@ export const collectNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions
     // 검색어를 하나라도 불렀으면 시도한 것으로 본다(전부 건너뛰었으면 순번을 그대로 둔다)
     if (result.skippedQueries.length < target.complexQueryNames.length) await markCollected('COMPLEX', target.scopeCode, new Date(now()));
   }
-
   const summary = { inserted: results.reduce((sum, result) => sum + result.inserted, 0), results, complexesLeft };
   console.info(
-    `[community-news] ${results
-      .map((r) => `${r.complexName ?? r.scopeCode ?? '전국'} 받음 ${r.fetched}·거름 ${r.filtered}·저장 ${r.inserted}`)
-      .join(' / ')}${complexesLeft ? ` / 단지 ${complexesLeft}곳 다음 번으로` : ''}`,
+    `[community-news] 단지 ${results.map((r) => `${r.complexName} 받음 ${r.fetched}·거름 ${r.filtered}·저장 ${r.inserted}`).join(' / ') || '없음'}${
+      complexesLeft ? ` / ${complexesLeft}곳 다음 번으로` : ''
+    }`,
   );
   return summary;
+};
+
+// GET /api/cron/community-news — 지역 · 전국을 먼저, 남은 시간에 우리 단지. 한 실행의 시간 예산(RUN_BUDGET_MS)을 둘이 나눠 쓴다.
+// 지역 · 전국(collectNews)과 단지(collectComplexNews)를 나눠 둔 것은 지역 · 전국 수집의 동작을 단지 뉴스 전과 똑같이 두려고.
+export const collectAllNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
+  const now = providerOptions.now ?? Date.now;
+  const startedAt = now();
+  const regional = await collectNews({ ...providerOptions, budgetMs });
+  const complex = await collectComplexNews({ ...providerOptions, budgetMs: Math.max(0, budgetMs - (now() - startedAt)) });
+  return {
+    inserted: regional.inserted + complex.inserted,
+    results: [...regional.results, ...complex.results],
+    complexesLeft: complex.complexesLeft,
+  };
 };
 
 // ===== 읽기 =====
