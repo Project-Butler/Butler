@@ -8,6 +8,7 @@ import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { loadCurrentComplexId, pickCurrentBuilding, saveCurrentComplexId } from '../utils/communityCurrentBuilding';
 import { getRegionPreview } from '../utils/communityPreview';
+import { CommunityBriefingPage } from './CommunityBriefingPage';
 import { CommunityPostListPage } from './CommunityPostListPage';
 import { CommunityBuildingSelectPage } from './CommunityBuildingSelectPage';
 import { CommunityMarketPage } from './CommunityMarketPage';
@@ -19,15 +20,15 @@ import { CommunityPostDetailPage } from './CommunityPostDetailPage';
 import { CommunityPostWritePage } from './CommunityPostWritePage';
 
 // App.jsx 의 <Route path="/community/*"> 아래 중첩 경로.
-//   /community            → /community/market 으로 바꿔 끼운다(시세 탭 주소를 하나로)
+//   /community            → /community/briefing 으로 바꿔 끼운다(첫 화면 = 브리핑, 주소를 하나로)
 //   /community/buildings  건물 선택(등록 호실 0개 빈 상태 · 주소로 직접 들어온 경우만)
-//   /community/{market,news,board,polls}  탭 네 개
+//   /community/{briefing,news,market,board,polls}  탭 다섯 개(이 순서)
 //   /community/posts/new · /community/posts/:postId · /community/posts/:postId/edit
 //   /community/polls/new · /community/polls/:pollId
 // 현재 건물은 경로에 넣지 않고 localStorage(utils/communityCurrentBuilding.js).
 // 화면은 LandlordLayout 안의 PC 페이지다 — 머리 · 탭 줄은 CommunityFrame.
 export const COMMUNITY_BASE = '/community';
-const DEFAULT_TAB_PATH = `${COMMUNITY_BASE}/market`;
+const DEFAULT_TAB_PATH = `${COMMUNITY_BASE}/briefing`;
 
 // 하위 화면의 "뒤로": 앱 안에서 들어왔으면 브라우저 뒤로가기, 주소를 직접 열었으면(돌아갈 기록 없음) fallback 으로.
 // 판단은 react-router 가 history state 에 두는 idx(push 때만 오르고 replace 에는 그대로)로 한다 —
@@ -60,7 +61,7 @@ const PollNewRoute = ({ building, frame }) => {
   );
 };
 
-// 건물을 고르면 /community(시세 탭)로 간다.
+// 건물을 고르면 /community(브리핑)로 간다.
 const BuildingSelectRoute = ({ buildings, current, onSelect, onRegister }) => {
   const navigate = useNavigate();
   return (
@@ -159,6 +160,7 @@ const CommunityRoutes = ({ onNavigate }) => {
     <Routes>
       <Route index element={<Navigate to={DEFAULT_TAB_PATH} replace />} />
       <Route path="buildings" element={<BuildingSelectRoute {...selectProps} />} />
+      <Route path="briefing" element={<CommunityBriefingPage {...props} />} />
       <Route path="market" element={<CommunityMarketPage {...props} />} />
       <Route path="news" element={<CommunityNewsPage {...props} />} />
       <Route path="board" element={<CommunityPostListPage {...props} />} />
