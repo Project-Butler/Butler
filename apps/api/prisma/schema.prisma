@@ -1167,4 +1167,20 @@ model CommunityNewsCursor {
   @@index([scope, lastCollectedAt])
   @@map("community_news_cursors")
 }
+
+// 커뮤니티 닉네임(11/05, 계획서 12-3) — 사용자 한 명에 한 줄. 규칙은 domains/community/nicknameRules.js.
+// User 와 relation 을 걸지 않는다(User 에 back-relation 을 더하면 Core 블록을 고치게 된다 — 스칼라 id).
+// 글 · 댓글 · 투표에는 닉네임을 굳히지 않는다 — 읽을 때 이 표에서 붙인다(바꾸면 옛 글도 새 닉네임).
+model CommunityProfile {
+  userId            String    @id @map("user_id") @db.Uuid
+  nickname          String    @db.VarChar(12)
+  // 비교용 키(영문 소문자 · 띄어쓰기 없음). 전체에서 하나 — 같은 닉네임을 동시에 정해도 DB 가 하나만 받는다
+  nicknameKey       String    @unique @map("nickname_key") @db.VarChar(12)
+  // 마지막으로 "바꾼" 시각. 처음 정할 때는 비운다(처음 정하기는 30일 계산에 넣지 않는다)
+  nicknameChangedAt DateTime? @map("nickname_changed_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("community_profiles")
+}
 // ===== B팀 끝 =====
