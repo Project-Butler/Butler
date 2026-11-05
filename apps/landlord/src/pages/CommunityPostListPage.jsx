@@ -11,6 +11,7 @@ import { MineToggle } from '../components/CommunityBoard/MineToggle';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { AuthorName } from '../components/CommunityNickname/AuthorName';
 import { formatKstShortDate, splitRegionName } from '../utils/communityFormat';
 
 // "전체"는 분류를 보내지 않는다(서버가 category 없이도 받는다).
@@ -48,7 +49,9 @@ export const CommunityPostListPage = ({ frame, building }) => {
     setSearchParams(query, { replace: true });
   };
   const openPost = (postId) => navigate(`/community/posts/${postId}`);
-  const openWrite = () => navigate(category === CATEGORY_ALL ? '/community/posts/new' : `/community/posts/new?category=${category}`);
+  // 닉네임이 없으면 닉네임 대화상자를 먼저 — 저장하면 글쓰기로 간다
+  const openWrite = () =>
+    frame.nickname.ensure(() => navigate(category === CATEGORY_ALL ? '/community/posts/new' : `/community/posts/new?category=${category}`));
 
   return (
     <CommunityFrame frame={frame} section="board" scopeText={`${dongName} 임대인`} blockedReason={blockedReason}>
@@ -78,7 +81,7 @@ export const CommunityPostListPage = ({ frame, building }) => {
                 <tr className="border-b border-line bg-surface-2 text-left text-chip text-ink-3">
                   <th className="w-28 px-5 py-2.5 font-medium">분류</th>
                   <th className="px-3 py-2.5 font-medium">제목</th>
-                  <th className="px-3 py-2.5 font-medium">작성자</th>
+                  <th className="w-[32%] px-3 py-2.5 font-medium">작성자</th>
                   <th className="w-24 px-5 py-2.5 font-medium">작성일</th>
                 </tr>
               </thead>
@@ -110,7 +113,10 @@ export const CommunityPostListPage = ({ frame, building }) => {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3.5 text-ink-2">{post.authorLabel}</td>
+                    {/* "닉네임 (괄호 표기)" — 칸이 좁으면 괄호 부분만 말줄임(max-w-0 으로 칸 너비를 머리 줄에 맞춘다) */}
+                    <td className="max-w-0 px-3 py-3.5">
+                      <AuthorName nickname={post.authorNickname} label={post.authorLabel} />
+                    </td>
                     <td className="px-5 py-3.5 font-num tabular-nums text-ink-3">{formatKstShortDate(post.createdAt)}</td>
                   </tr>
                 ))}

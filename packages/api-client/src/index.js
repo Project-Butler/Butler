@@ -103,3 +103,5 @@ export { postCommunityVote } from './apis/community/postCommunityVote';
 export { deleteCommunityPoll } from './apis/community/deleteCommunityPoll';
 export { getCommunityNewsList } from './apis/community/getCommunityNewsList';
 export { getCommunityComplexNewsList } from './apis/community/getCommunityComplexNewsList';
+export { getCommunityProfile } from './apis/community/getCommunityProfile';
+export { putCommunityProfile } from './apis/community/putCommunityProfile';

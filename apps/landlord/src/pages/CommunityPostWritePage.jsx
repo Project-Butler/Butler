@@ -46,6 +46,8 @@ export const CommunityPostWritePage = ({ frame, building, post = null, defaultCa
         : await create.mutateAsync({ legalDongCode: building.legalDongCode, complexId: building.complexId, ...fields });
       onSaved(saved);
     } catch (error) {
+      // 닉네임이 없어 막혔으면 닉네임 대화상자가 열린다 — 쓰던 내용은 그대로, 저장한 뒤 다시 [등록]
+      if (frame.nickname.handleWriteError(error)) return;
       const apiError = toApiError(error);
       setFieldErrors(toFieldErrors(apiError));
       setErrorMessage(apiError.message);

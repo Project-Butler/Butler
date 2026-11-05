@@ -68,7 +68,8 @@ export const CommunityPollListPage = ({ frame, building }) => {
           )}
           <Button
             className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
-            onClick={() => navigate('/community/polls/new')}
+            // 닉네임이 없으면 닉네임 대화상자를 먼저 — 저장하면 투표 만들기로 간다
+            onClick={() => frame.nickname.ensure(() => navigate('/community/polls/new'))}
             disabled={!list.isSuccess || !canWrite}
           >
             <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
