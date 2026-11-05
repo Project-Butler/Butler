@@ -2,41 +2,20 @@
 //   전국: 제목에 부동산 낱말이 하나라도 있어야 한다
 //   시·군·구: 거기에 더해 그 지역 이름이 제목에 있어야 한다
 //   시·도: 거기에 더해 그 시·도 이름(약칭)이 제목에 있어야 한다
-// 낱말 목록은 운영하며 다듬는다.
+//   단지: 단지 이름이 제목에 있고, 이름을 빼고도 부동산 낱말이 있어야 한다(흔하거나 짧은 이름은 동 · 시군구 이름도)
+// 낱말 목록 · 표 · 이름 규칙과 그 이유는 newsRules.js 에 있다(이 파일은 읽기만 한다). 아래 세 이름은 예전처럼 다시 내보낸다.
+import {
+  COMPLEX_MIN_BASE_LENGTH,
+  COMPLEX_NAME_SUFFIXES,
+  DONG_SUFFIX,
+  EXCLUDED_PLACE_TERMS,
+  MIN_PLACE_BASE_LENGTH,
+  REAL_ESTATE_WORDS,
+  SIDO_TABLE,
+  SIGUNGU_SUFFIX,
+} from './newsRules.js';
 
-// ===== 부동산 낱말(임대인 관심사) =====
-// "임대"·"임차" 단독은 빼고 좁혔다(지하철 차량 임대 같은 오탐). "매매"도 "인신매매·마약 매매"에 걸려 좁혔다.
-export const REAL_ESTATE_WORDS = [
-  '전세', '월세', '전월세', '임대차', '임대인', '임대료', '임대주택', '임대사업자', '임차인', '임차권',
-  '보증금', '집주인', '세입자', '아파트', '오피스텔', '빌라', '주택', '재건축', '재개발', '분양', '청약',
-  '집값', '매매가', '매매 거래', '매매거래', '실거래', '공시가격', '보유세', '종부세', '재산세', '부동산',
-];
-
-// ===== 시·도 약칭(17개 고정 표) =====
-// 법정동코드 앞 2자리 → 제목에서 인정할 이름과 화면·검색어용 약칭. 옛 코드(광주 29 · 강원 42 · 전북 45 · 전남 46)와
-// 새 코드(강원특별자치도 51 · 전북특별자치도 52 · 전남광주통합특별시 12)를 모두 잇는다 — 시드 Region 은 새 코드다.
-export const SIDO_TABLE = {
-  11: { label: '서울', names: ['서울'] },
-  26: { label: '부산', names: ['부산'] },
-  27: { label: '대구', names: ['대구'] },
-  28: { label: '인천', names: ['인천'] },
-  29: { label: '광주', names: ['광주'] },
-  30: { label: '대전', names: ['대전'] },
-  31: { label: '울산', names: ['울산'] },
-  36: { label: '세종', names: ['세종'] },
-  41: { label: '경기', names: ['경기'] },
-  42: { label: '강원', names: ['강원'] },
-  43: { label: '충북', names: ['충북', '충청북도'] },
-  44: { label: '충남', names: ['충남', '충청남도'] },
-  45: { label: '전북', names: ['전북', '전라북도'] },
-  46: { label: '전남', names: ['전남', '전라남도'] },
-  47: { label: '경북', names: ['경북', '경상북도'] },
-  48: { label: '경남', names: ['경남', '경상남도'] },
-  50: { label: '제주', names: ['제주'] },
-  51: { label: '강원', names: ['강원'] },
-  52: { label: '전북', names: ['전북', '전라북도'] },
-  12: { label: '광주·전남', names: ['광주', '전남', '전라남도'] },
-};
+export { EXCLUDED_PLACE_TERMS, REAL_ESTATE_WORDS, SIDO_TABLE };
 
 export const toSidoCode = (legalDongCode) => legalDongCode.slice(0, 2);
 export const getSido = (sidoCode) => SIDO_TABLE[sidoCode] ?? null;
@@ -45,22 +24,10 @@ export const hasRealEstateWord = (title) => REAL_ESTATE_WORDS.some((word) => tit
 const mentionsSido = (title, sidoCode) => (getSido(sidoCode)?.names ?? []).some((name) => title.includes(name));
 
 // ===== 지역 이름 =====
-// 시·군·구 이름("송파구"·"송파")과 그 시·군·구의 **모든** 법정동 이름("잠실동"·"잠실")을 인정한다.
-//   - 이름(전체든 접미사 뗀 것이든)이 전국에 한 시·군·구에만 있으면 혼자서도 인정
-//   - 여러 시·군·구에 있으면 같은 제목에 그 시·군·구 이름이나 시·도 이름이 함께 있어야 인정
-//     (시·군·구 이름 자체가 여러 곳에 있으면 — 중구·동구 — 시·도 이름이 함께 있어야)
-//   - 접미사를 떼서 한 글자가 되면 뗀 이름은 쓰지 않는다("우동" → "우" 안 씀)
-//   - 흔한 낱말과 겹치는 이름은 EXCLUDED_PLACE_TERMS 로 뺀다
-const SIGUNGU_SUFFIX = /(시|군|구)$/;
-const DONG_SUFFIX = /(동|읍|면|리|가)$/;
-
-// 흔한 낱말과 겹쳐 지역 이름으로 쓰지 않는 것(실제 수집에서 오탐이 난 이름). 전체 이름("삼전동")은 그대로 인정된다.
-//   삼전 — "삼전"(삼성전자 줄임말), 방이 — "방이 3개" 같은 표현
-export const EXCLUDED_PLACE_TERMS = new Set(['삼전', '방이']);
-
+// 규칙(전국에 하나뿐이면 혼자서도, 여럿이면 시·군·구 · 시·도 이름과 함께, 한 글자로 떼지 않음, 제외 낱말)은 newsRules.js 의 "지역 이름 규칙".
 const nameForms = (name, suffix) => {
   const base = name.replace(suffix, '');
-  return base !== name && base.length >= 2 ? [name, base] : [name];
+  return base !== name && base.length >= MIN_PLACE_BASE_LENGTH ? [name, base] : [name];
 };
 // "수원시 장안구" 처럼 띄어 쓴 시·군·구는 낱말마다
 const sigunguForms = (sigunguName) => sigunguName.split(/\s+/).flatMap((token) => nameForms(token, SIGUNGU_SUFFIX));
@@ -119,5 +86,42 @@ export const makeTitleFilter = ({ scope, terms = [], sidoCode }) => {
 export const toQueryName = (name, kind, nameIndex) => {
   const last = name.split(/\s+/).pop();
   const base = last.replace(kind === 'SIGUNGU' ? SIGUNGU_SUFFIX : DONG_SUFFIX, '');
-  return base !== last && base.length >= 2 && isUnique(base, nameIndex) && !EXCLUDED_PLACE_TERMS.has(base) ? base : last;
+  return base !== last && base.length >= MIN_PLACE_BASE_LENGTH && isUnique(base, nameIndex) && !EXCLUDED_PLACE_TERMS.has(base) ? base : last;
+};
+
+// ===== 단지 기사 =====
+// 규칙과 이유는 newsRules.js 의 "단지 기사 거르는 규칙". 이름 비교는 띄어쓰기를 무시한다.
+const squash = (text) => text.replace(/\s+/g, '');
+
+// 단지 이름 → { full, base }(띄어쓰기 없앤 것). base 는 접미사("아파트")를 뗀 이름, 뗄 것이 없으면 full 과 같다.
+export const complexNameForms = (name) => {
+  const full = squash(name);
+  const suffix = COMPLEX_NAME_SUFFIXES.find((word) => full.endsWith(word) && full.length > word.length);
+  return { full, base: suffix ? full.slice(0, -suffix.length) : full };
+};
+
+// 검색어에 쓸 이름: 단지 이름 그대로 + 뗀 이름(3자 이상이고 다를 때). 따옴표는 newsProvider 가 붙인다.
+export const toComplexQueryNames = (name) => {
+  const { full, base } = complexNameForms(name);
+  return base !== full && base.length >= COMPLEX_MIN_BASE_LENGTH ? [name.trim(), base] : [name.trim()];
+};
+
+// 단지 기사 제목 검사.
+//   sameNameCount: 전국 단지(Complex) 중 뗀 이름이 같은 단지 수(자기 포함). 2 이상이면 흔한 이름
+//   dongName · sigunguName: 그 단지의 법정동 · 시군구 — 흔하거나 짧은 이름일 때 제목에 함께 있어야 하는 이름
+export const makeComplexTitleFilter = ({ name, sameNameCount = 1, dongName = '', sigunguName = '' }) => {
+  const { full, base } = complexNameForms(name);
+  const names = [...new Set([full, base])].filter((term) => term.length >= MIN_PLACE_BASE_LENGTH).sort((a, b) => b.length - a.length);
+  const needsContext = base.length < COMPLEX_MIN_BASE_LENGTH || sameNameCount > 1;
+  const contextTerms = [...(sigunguName ? sigunguForms(sigunguName) : []), ...(dongName ? dongForms(dongName) : [])]
+    .map(squash)
+    .filter((term) => term && !EXCLUDED_PLACE_TERMS.has(term));
+  return (title) => {
+    const flat = squash(title);
+    if (!names.some((term) => flat.includes(term))) return false;
+    // 단지 이름을 빼고 본다 — 이름 안의 "아파트" 로 부동산 낱말 검사를 통과하지 않게, 이름 안의 동 이름으로 동 검사를 통과하지 않게
+    const rest = names.reduce((text, term) => text.split(term).join(' '), flat);
+    if (!hasRealEstateWord(rest)) return false;
+    return !needsContext || contextTerms.some((term) => rest.includes(term));
+  };
 };

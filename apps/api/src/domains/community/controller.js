@@ -25,7 +25,7 @@ import {
 } from './service.js';
 import { castVote, closeExpiredPolls, createPoll, deletePoll, findPollDetail, findPolls, findVisiblePoll, throwPollNotFound } from './service/polls.js';
 import { findReports, setCommentHidden, setPollHidden, setPostHidden, updateReportStatus } from './service/admin.js';
-import { collectNews, findNews } from './service/news.js';
+import { collectNews, findComplexNews, findNews, findNewsComplex } from './service/news.js';
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const MAX_TITLE_LENGTH = 100; // CommunityPost.title VarChar(100)
@@ -494,6 +494,31 @@ export const listNews = async (req, res, next) => {
   try {
     const legalDongCode = parseLegalDongCode(req.params.legalDongCode);
     const { items, meta } = await findNews(legalDongCode, parseNewsListQuery(req.query));
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 단지 뉴스: 단지를 먼저 찾아 둔다(읽기 자격 판정에 그 단지 법정동을 쓴다)
+export const loadNewsComplex = async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.complexId)) throw new AppError('COMMUNITY_COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
+    req.communityComplex = await findNewsComplex(req.params.complexId);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /community/complexes/:complexId/news?page&size
+export const listComplexNews = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const details = [];
+    const { page, size } = parsePagination(req.query, details);
+    throwIfInvalid(details);
+    const { items, meta } = await findComplexNews(req.communityComplex, { page, size });
     sendList(res, items, meta);
   } catch (error) {
     next(error);

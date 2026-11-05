@@ -1,18 +1,35 @@
 // 뉴스 화면의 목록과 뉴스 수집. 수집은 cronRouter.js 의 /api/cron/community-news 가 부른다.
+// 일정 · 검색어 · 기간 · 거르는 규칙 · 한도 · 채움 기준은 newsRules.js(이 파일은 읽기만 한다).
 import { createHash } from 'node:crypto';
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { fetchNews } from '../newsProvider.js';
-import { buildNameIndex, buildRegionTerms, getSido, makeTitleFilter, toQueryName, toSidoCode } from '../newsRelevance.js';
-import { listAllOwnedLegalDongCodes } from '../platformBridge.js';
+import {
+  buildNameIndex,
+  buildRegionTerms,
+  complexNameForms,
+  getSido,
+  makeComplexTitleFilter,
+  makeTitleFilter,
+  toComplexQueryNames,
+  toQueryName,
+  toSidoCode,
+} from '../newsRelevance.js';
+import {
+  COMPLEX_MAX_PER_RUN,
+  RECENT_DAYS,
+  REQUEST_TIMEOUT_MS,
+  RUN_BUDGET_MS,
+  SIDO_FALLBACK_SIZE,
+  SIDO_FALLBACK_THRESHOLD,
+} from '../newsRules.js';
+import { listAllOwnedComplexIds, listAllOwnedLegalDongCodes } from '../platformBridge.js';
 
 const toUrlHash = (url) => createHash('sha256').update(url).digest('hex');
 const toSigunguCode = (legalDongCode) => legalDongCode.slice(0, 5);
 
-// 시·군·구 기사가 이보다 적으면(최근 30일) 화면에 시·도 묶음을 함께 보인다
-export const SIDO_FALLBACK_THRESHOLD = 5;
-export const SIDO_FALLBACK_SIZE = 10;
-const RECENT_DAYS = 30;
+// 예전처럼 이 파일에서도 가져갈 수 있게 다시 내보낸다(값은 newsRules.js)
+export { SIDO_FALLBACK_SIZE, SIDO_FALLBACK_THRESHOLD };
 
 // ===== 수집 대상과 걸러내기 =====
 
@@ -83,30 +100,98 @@ const saveArticles = async (articles, { scope, scopeCode }) => {
   return count;
 };
 
-// 한 번 실행의 총 시간 예산. vercel.json 함수 제한 60초 안에서 DB 저장 몫을 남긴다.
-const RUN_BUDGET_MS = 45 * 1000;
+// ===== 단지 뉴스(우리 단지) =====
 
-// GET /api/cron/community-news — 전국 → 시·도 → 시·군·구 순서. 받은 수·걸러진 수·저장 수를 대상마다 기록한다.
-// 예산을 넘겨 건너뛴 검색어는 결과에 남기고 다음 실행 때 다시 받는다. options 는 테스트가 공급자에 넘긴다.
+// 이번 실행에 돌 단지 순서: 한 번도 안 모은 단지 → 모은 지 오래된 단지 → 최근에 모은 단지, 같으면 id 순. limit 곳까지.
+// lastCollectedById: Map(단지 id → 마지막으로 모은 시각 Date). DB 없는 순수 함수(테스트용으로 내보낸다).
+export const orderComplexesForRun = (complexes, lastCollectedById, limit = COMPLEX_MAX_PER_RUN) => {
+  const at = (complex) => lastCollectedById.get(complex.id)?.getTime() ?? -1;
+  return [...complexes].sort((a, b) => at(a) - at(b) || a.id.localeCompare(b.id)).slice(0, limit);
+};
+
+// 단지 수집 대상: 호실을 등록한 임대인(활성 소유, 인증 취소 제외)이 있는 단지. 오래 안 모은 단지부터(한 번도 안 모은 단지가 맨 앞),
+// 같으면 id 순, 한 번에 COMPLEX_MAX_PER_RUN 까지. 각 대상에 검색어 이름과 제목 검사 함수를 붙인다.
+// 흔한 이름 판정: 전국 단지(Complex) 중 "아파트" 를 뗀 이름(띄어쓰기 무시)이 같은 단지 수.
+export const buildComplexNewsTargets = async () => {
+  const ids = await listAllOwnedComplexIds();
+  if (ids.length === 0) return [];
+  const [complexes, allNames, cursors] = await Promise.all([
+    prisma.complex.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, region: { select: { sigunguName: true, dongName: true } } },
+    }),
+    prisma.complex.findMany({ select: { name: true } }),
+    prisma.communityNewsCursor.findMany({ where: { scope: 'COMPLEX', scopeCode: { in: ids } } }),
+  ]);
+  const baseCounts = new Map();
+  for (const { name } of allNames) {
+    const { base } = complexNameForms(name);
+    baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
+  }
+  const lastCollected = new Map(cursors.map((cursor) => [cursor.scopeCode, cursor.lastCollectedAt]));
+  return orderComplexesForRun(complexes, lastCollected).map((complex) => ({
+    scope: 'COMPLEX',
+    scopeCode: complex.id,
+    complexName: complex.name,
+    complexQueryNames: toComplexQueryNames(complex.name),
+    filter: makeComplexTitleFilter({
+      name: complex.name,
+      sameNameCount: baseCounts.get(complexNameForms(complex.name).base) ?? 1,
+      dongName: complex.region.dongName,
+      sigunguName: complex.region.sigunguName,
+    }),
+  }));
+};
+
+// 시도한 단지는 저장 건수와 관계없이 시각을 적는다 — 다음 번에는 뒤로 가서 다른 단지 차례가 온다
+const markCollected = (scope, scopeCode, at) =>
+  prisma.communityNewsCursor.upsert({
+    where: { scope_scopeCode: { scope, scopeCode } },
+    create: { scope, scopeCode, lastCollectedAt: at },
+    update: { lastCollectedAt: at },
+  });
+
+const collectTarget = async (target, fetchOptions) => {
+  const { articles, skippedQueries } = await fetchNews(target, fetchOptions);
+  const passed = articles.filter((article) => target.filter(article.title));
+  return {
+    scope: target.scope,
+    scopeCode: target.scopeCode,
+    ...(target.complexName ? { complexName: target.complexName } : {}),
+    fetched: articles.length,
+    filtered: articles.length - passed.length,
+    inserted: await saveArticles(passed, target),
+    skippedQueries,
+  };
+};
+
+// GET /api/cron/community-news — 전국 → 시·도 → 시·군·구 → 단지 순서. 받은 수·걸러진 수·저장 수를 대상마다 기록한다.
+// 예산을 넘겨 건너뛴 검색어는 결과에 남기고 다음 실행 때 다시 받는다. 단지는 남은 시간 안에서 오래 안 모은 곳부터 돌고,
+// 시간이 모자라면 남은 단지는 시도하지 않고(순번 그대로) 다음 번으로 넘긴다. options 는 테스트가 공급자에 넘긴다.
 export const collectNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
   const now = providerOptions.now ?? Date.now;
   const fetchOptions = { ...providerOptions, now, deadline: now() + budgetMs };
   const results = [];
-  for (const target of await buildNewsTargets()) {
-    const { articles, skippedQueries } = await fetchNews(target, fetchOptions);
-    const passed = articles.filter((article) => target.filter(article.title));
-    results.push({
-      scope: target.scope,
-      scopeCode: target.scopeCode,
-      fetched: articles.length,
-      filtered: articles.length - passed.length,
-      inserted: await saveArticles(passed, target),
-      skippedQueries,
-    });
+  for (const target of await buildNewsTargets()) results.push(await collectTarget(target, fetchOptions));
+
+  const complexTargets = await buildComplexNewsTargets();
+  let complexesLeft = 0;
+  for (const [index, target] of complexTargets.entries()) {
+    if (now() + REQUEST_TIMEOUT_MS > fetchOptions.deadline) {
+      complexesLeft = complexTargets.length - index;
+      break;
+    }
+    const result = await collectTarget(target, fetchOptions);
+    results.push(result);
+    // 검색어를 하나라도 불렀으면 시도한 것으로 본다(전부 건너뛰었으면 순번을 그대로 둔다)
+    if (result.skippedQueries.length < target.complexQueryNames.length) await markCollected('COMPLEX', target.scopeCode, new Date(now()));
   }
-  const summary = { inserted: results.reduce((sum, result) => sum + result.inserted, 0), results };
+
+  const summary = { inserted: results.reduce((sum, result) => sum + result.inserted, 0), results, complexesLeft };
   console.info(
-    `[community-news] ${results.map((r) => `${r.scopeCode ?? '전국'} 받음 ${r.fetched}·거름 ${r.filtered}·저장 ${r.inserted}`).join(' / ')}`,
+    `[community-news] ${results
+      .map((r) => `${r.complexName ?? r.scopeCode ?? '전국'} 받음 ${r.fetched}·거름 ${r.filtered}·저장 ${r.inserted}`)
+      .join(' / ')}${complexesLeft ? ` / 단지 ${complexesLeft}곳 다음 번으로` : ''}`,
   );
   return summary;
 };
@@ -165,5 +250,25 @@ export const findNews = async (legalDongCode, { scope, page, size }, now = new D
       region,
       ...(scope === 'SIGUNGU' ? { sidoFallback: recentSigungu < SIDO_FALLBACK_THRESHOLD } : {}),
     },
+  };
+};
+
+// 단지 뉴스 읽기 전에 그 단지를 찾는다(읽기 자격은 그 단지 법정동으로 — router 의 requireRegionOwner).
+export const findNewsComplex = async (complexId) => {
+  const complex = await prisma.complex.findUnique({ where: { id: complexId }, select: { id: true, name: true, regionId: true } });
+  if (!complex) throw new AppError('COMMUNITY_COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
+  return complex;
+};
+
+// GET /community/complexes/:complexId/news — 우리 단지 기사(단지 이름이 제목에 들어간 기사), 최신순.
+export const findComplexNews = async (complex, { page, size }) => {
+  const where = { scope: 'COMPLEX', scopeCode: complex.id };
+  const [items, total] = await Promise.all([
+    prisma.communityNewsItem.findMany({ where, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * size, take: size }),
+    prisma.communityNewsItem.count({ where }),
+  ]);
+  return {
+    items: items.map(toNewsItem),
+    meta: { page, size, total, hasNext: page * size < total, complex: { id: complex.id, name: complex.name, legalDongCode: complex.regionId } },
   };
 };

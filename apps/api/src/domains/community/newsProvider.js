@@ -4,6 +4,7 @@
 //   fetchNews({ scope: 'SIGUNGU', sigunguQueryName: '송파', dongQueryNames: ['잠실'] }, { deadline }) → { articles, skippedQueries }
 //   fetchNews({ scope: 'SIDO', sidoNames: ['서울'] }, { deadline })        → { articles, skippedQueries }
 //   fetchNews({ scope: 'NATIONWIDE' }, { deadline })                   → { articles, skippedQueries }
+//   fetchNews({ scope: 'COMPLEX', complexQueryNames: ['잠실엘스아파트', '잠실엘스'] }, { deadline }) → { articles, skippedQueries }
 //   걸러내기(부동산 낱말·지역 이름)는 newsRelevance.js — 수집하는 쪽이 저장 전에 한다.
 //   articles: [{ title, url, source, publishedAt }] — 제목(꼬리 " - 언론사" 뗀 것)·구글 경유 링크·언론사·Date.
 //   description 은 꺼내지 않는다. 받기에 실패하면 빈 결과다 — 개발·배포 모두 가짜 기사로 채우지 않는다.
@@ -12,27 +13,27 @@
 // ⚠️ 구글 뉴스 RSS 의 이용 조건은 개인적·비상업적 이용이고 공식 API 가 아니다 — 학기 데모용. 실서비스 전에
 //    출처를 다시 정한다. 바꿀 때는 이 파일만 교체한다.
 
-// ===== 검색어 =====
-// 시·군·구(검색어 모양 몇 가지를 실제로 비교해 저장 수 · 정확도가 가장 나은 것): "intitle:{구 약칭} 아파트 / 전세 / 재건축" + 인증 보유자가 있는 동 최대 2곳 "{동} 아파트"
-//   — 시·군·구당 5개 이하. intitle 이 제목에 지역명이 있는 기사만 가져온다
-// 시·도: "{약칭} 전세 / 월세 / 임대차", 전국: 국토교통부·임대차 정책어.
-// 기간 연산자를 붙이지 않으면 2024년 기사까지 섞여 온다(10/26 첫 실제 응답에서 100건 중 97건이 7일보다 오래됨).
-export const SIDO_QUERY_WORDS = ['전세', '월세', '임대차'];
-export const SIGUNGU_TITLE_WORDS = ['아파트', '전세', '재건축'];
-export const MAX_DONG_QUERIES = 2;
-export const NATIONWIDE_QUERIES = ['국토교통부 임대차', '국토교통부 전세', '주택임대차보호법'];
-// 기간: 시·군·구만 30일(7일로는 지역 기사가 거의 없다), 시·도·전국은 7일
-const PERIOD_BY_SCOPE = { SIGUNGU: 'when:30d', SIDO: 'when:7d', NATIONWIDE: 'when:7d' };
-const MAX_ARTICLES_PER_QUERY = 20; // 검색어마다 최신 20건
+// 검색어 · 기간 · 건수 · 요청 한도 같은 값은 모두 newsRules.js 에 있다(이 파일은 읽기만 한다).
+// 아래 네 이름은 예전처럼 이 파일에서도 가져갈 수 있게 다시 내보낸다.
+import {
+  COMPLEX_MAX_QUERIES,
+  FEED_LOCALE,
+  GOOGLE_NEWS_RSS,
+  MAX_ARTICLES_PER_QUERY,
+  MAX_DONG_QUERIES,
+  MAX_FEED_LENGTH,
+  NATIONWIDE_QUERIES,
+  PERIOD_BY_SCOPE,
+  REQUEST_TIMEOUT_MS,
+  SIDO_QUERY_WORDS,
+  SIGUNGU_TITLE_WORDS,
+  USER_AGENT,
+} from './newsRules.js';
 
-const GOOGLE_NEWS_RSS = 'https://news.google.com/rss/search';
-const REQUEST_TIMEOUT_MS = 8000;
-const MAX_FEED_LENGTH = 2 * 1024 * 1024; // 이보다 긴 응답은 읽지 않는다
-// 요청 머리의 정직한 User-Agent — 무엇이 긁는지 밝힌다. 개인 연락처는 넣지 않는다(HTTP 머리는 ASCII 만).
-const USER_AGENT = 'ButlerCommunityNewsBot/1.0 (Butler landlord community news collector)';
+export { MAX_DONG_QUERIES, NATIONWIDE_QUERIES, SIDO_QUERY_WORDS, SIGUNGU_TITLE_WORDS };
 
 export const buildFeedUrl = (query, scope = 'NATIONWIDE') =>
-  `${GOOGLE_NEWS_RSS}?q=${encodeURIComponent(`${query} ${PERIOD_BY_SCOPE[scope]}`)}&hl=ko&gl=KR&ceid=KR:ko`;
+  `${GOOGLE_NEWS_RSS}?q=${encodeURIComponent(`${query} ${PERIOD_BY_SCOPE[scope]}`)}&${FEED_LOCALE}`;
 
 // ===== RSS 읽기(라이브러리 없음) =====
 
@@ -138,9 +139,11 @@ const fetchQueries = async (queries, scope, { fetchImpl, now, deadline }) => {
   return { articles: articles.filter((article) => !seen.has(article.url) && seen.add(article.url)), skippedQueries };
 };
 
-// 시·군·구는 intitle 3개 + 동 최대 2개, 시·도는 "{약칭} {낱말}"(약칭이 둘이면 둘 다 — 광주·전남), 전국은 정해 둔 검색어.
-export const toQueries = ({ scope, sigunguQueryName, dongQueryNames = [], sidoNames = [] }) => {
+// 시·군·구는 intitle 3개 + 동 최대 2개, 시·도는 "{약칭} {낱말}"(약칭이 둘이면 둘 다 — 광주·전남), 전국은 정해 둔 검색어,
+// 단지는 단지 이름을 따옴표로 묶어 최대 2개(newsRules.js).
+export const toQueries = ({ scope, sigunguQueryName, dongQueryNames = [], sidoNames = [], complexQueryNames = [] }) => {
   if (scope === 'NATIONWIDE') return NATIONWIDE_QUERIES;
+  if (scope === 'COMPLEX') return complexQueryNames.slice(0, COMPLEX_MAX_QUERIES).map((name) => `"${name}"`);
   if (scope === 'SIDO') return sidoNames.flatMap((name) => SIDO_QUERY_WORDS.map((word) => `${name} ${word}`));
   if (!sigunguQueryName) return [];
   return [
