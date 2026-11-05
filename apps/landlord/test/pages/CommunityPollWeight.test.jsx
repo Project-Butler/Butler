@@ -76,6 +76,8 @@ const renderAt = (path) => {
     </QueryClientProvider>,
   );
 };
+// 파일의 첫 렌더는 화면 코드를 처음 불러와 전체 실행 때 1초를 넘기기도 한다 — 첫 대기만 여유를 둔다
+const FIRST_RENDER = { timeout: 3000 };
 
 describe('투표 표 수', () => {
   beforeEach(() => {
@@ -87,7 +89,7 @@ describe('투표 표 수', () => {
     api.getCommunityPoll.mockResolvedValue(poll());
     renderAt('/community/polls/poll-1');
 
-    expect(await screen.findByRole('heading', { name: '분리수거장 위치 변경 의견' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '분리수거장 위치 변경 의견' }, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '인증한 호실 3개 — 3표로 반영됩니다.')).toBeInTheDocument();
     expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '가진 표 3표를 한 선택지에 모두 반영합니다')).toBeInTheDocument();
     expect(screen.queryByText(/1표만 반영/)).not.toBeInTheDocument();
