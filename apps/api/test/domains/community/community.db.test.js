@@ -17,7 +17,7 @@ import {
   updatePost,
 } from '../../../src/domains/community/service.js';
 import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
-import { collectNews, findNews } from '../../../src/domains/community/service/news.js';
+import { buildNewsTargets, collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
 const REGION = '1135010600'; // createDbFixture 의 단지 법정동(서울 노원구 중계동)
@@ -374,6 +374,32 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       } finally {
         console.info = info;
       }
+    });
+
+    test('수집 대상 = 뉴스를 볼 수 있는 사람이 있는 구 — 인증 전은 들어가고, 인증 취소 · 끝난 소유만 있는 구는 빠진다', async () => {
+      // 다른 데이터와 겹치지 않게, 소유 관계가 하나도 없는 시·군·구를 쓴다(먼저 확인)
+      const UNVERIFIED_REGION = '4794025000'; // 경북 울릉군 울릉읍 — 인증 전 호실만
+      const REVOKED_REGION = '2872031000'; // 인천 옹진군 북도면 — 인증 취소 호실만
+      const ENDED_REGION = '4380025000'; // 충북 단양군 단양읍 — 끝난 소유 관계만
+      const ownedIn = (sigungu) =>
+        prisma.ownership.count({ where: { property: { complex: { regionId: { startsWith: sigungu } } } } });
+      for (const code of ['47940', '28720', '43800']) assert.equal(await ownedIn(code), 0, `${code} 에 다른 소유 관계가 있어 이 테스트를 쓸 수 없다`);
+
+      const user = await createUser();
+      await addUnit(user, await fixture.createComplex({ name: '울릉인증전아파트', regionId: UNVERIFIED_REGION }), { status: 'UNVERIFIED' });
+      await addUnit(user, await fixture.createComplex({ name: '옹진취소아파트', regionId: REVOKED_REGION }), { status: 'REVOKED' });
+      const ended = await addUnit(user, await fixture.createComplex({ name: '단양끝난아파트', regionId: ENDED_REGION }));
+      await prisma.ownership.updateMany({ where: { propertyId: ended.id }, data: { endedAt: new Date() } });
+
+      const targets = await buildNewsTargets();
+      const sigungu = Object.fromEntries(targets.filter((target) => target.scope === 'SIGUNGU').map((target) => [target.scopeCode, target]));
+      // 인증 전 호실만 있어도 그 구 · 그 시·도를 모은다 — 그 임대인은 뉴스를 볼 수 있으므로. 검색어에 그 동도 들어간다
+      assert.ok(sigungu['47940'], JSON.stringify(Object.keys(sigungu)));
+      assert.equal(sigungu['47940'].dongQueryNames.length, 1);
+      assert.ok(targets.some((target) => target.scope === 'SIDO' && target.scopeCode === '47'));
+      // 인증 취소 · 끝난 소유만 있는 구는 볼 사람이 없어 모으지 않는다
+      assert.equal(sigungu['28720'], undefined);
+      assert.equal(sigungu['43800'], undefined);
     });
 
     test('시·군·구 기사가 최근 30일 5건 미만이면 sidoFallback, 5건이면 아니다(30일보다 오래된 것은 세지 않는다)', async () => {

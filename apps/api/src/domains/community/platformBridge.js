@@ -215,9 +215,14 @@ export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDong
   return (await findVerifiedOwnerships({ userId, property })).length;
 };
 
-// 플랫폼에 생기면 교체: 계약에 없는 함수. 뉴스 수집 대상(인증 보유자가 한 명이라도 있는 시·군·구 — 아무도 없는 곳은 모으지 않는다).
-// 유효한 권리자 인증이 하나라도 있는 법정동 코드 전부(중복 없음, 오름차순). 사용자는 꺼내지 않는다.
-export const listAllVerifiedLegalDongCodes = async () => {
-  const ownerships = await findVerifiedOwnerships({});
-  return [...new Set(ownerships.map((o) => o.legalDongCode))].sort();
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 뉴스 수집 대상(그 뉴스를 볼 수 있는 사람이 한 명이라도 있는 동 — 아무도 없는 곳은 모으지 않는다).
+// 기준은 커뮤니티 읽기 자격(hasActiveOwnershipInRegion)과 같다 — 활성 소유 관계(endedAt null, 인증 취소 아님)가 하나라도 있는
+// 법정동 코드 전부(인증 전 · 만료 포함, 중복 없음, 오름차순). 사용자는 꺼내지 않는다.
+// (11/05: 전에는 유효한 인증만 봐서, 11/04 부터 뉴스를 볼 수 있게 된 인증 전 임대인만 있는 구는 기사가 쌓이지 않았다)
+export const listAllOwnedLegalDongCodes = async () => {
+  const ownerships = await prisma.ownership.findMany({
+    where: { endedAt: null, ...NOT_REVOKED },
+    select: { property: { select: { complex: { select: { regionId: true } } } } },
+  });
+  return [...new Set(ownerships.map((o) => o.property.complex.regionId))].sort();
 };
