@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button, TextField } from '@butler/ui';
 import { usePutCommunityProfile } from '../../hooks/usePutCommunityProfile';
@@ -10,7 +11,8 @@ const MAX_NICKNAME_LENGTH = 12; // 서버 nicknameRules.js NICKNAME_MAX_LENGTH
 const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
 // 닉네임 정하기 대화상자(PC 명세 10절). 신고 대화상자와 같은 틀 — 어두운 덮개 + 가운데 카드(max-w-md),
-// Esc · 바깥 클릭으로 닫기, 포커스 가둠(열면 입력 칸, 닫으면 열기 전 자리로).
+// Esc · 바깥 클릭으로 닫기, 포커스 가둠(열면 입력 칸, 닫으면 열기 전 자리로). document.body 에 그린다(portal) —
+// 화면 틀(CommunityFrame)의 간격 클래스(space-y)가 덮개에 위 여백을 주지 않게.
 // 규칙(2~12자 · 한글 · 영문 · 숫자 · 금지 낱말 · 30일)은 서버가 본다 — 화면은 서버 오류 문구를 칸 아래 한 줄로 보여 준다.
 // profile: { nickname, nextChangeAt, previewLabel } (없으면 아직 못 불러온 것) · onSaved: 저장한 뒤(하던 일로 돌아가기) · onClose: 닫기
 export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
@@ -66,7 +68,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
 
   const error = save.isError ? getErrorMessage(save.error) : lockedUntil ? `${lockedUntil}부터 바꿀 수 있어요` : undefined;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 px-6" onClick={onClose}>
       <form
         ref={dialogRef}
@@ -126,6 +128,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
           </Button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 };
