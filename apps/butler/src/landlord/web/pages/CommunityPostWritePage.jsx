@@ -3,7 +3,7 @@ import { Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { usePatchCommunityPost } from '../hooks/usePatchCommunityPost';
 import { usePostCommunityPost } from '../hooks/usePostCommunityPost';
-import { toApiError, toFieldErrors } from '../utils/apiError';
+import { toApiError, toFieldErrors } from '../../../shared/apiError';
 import { POST_CATEGORIES } from '../utils/communityBoardLabels';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';

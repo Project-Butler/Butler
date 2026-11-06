@@ -5,7 +5,7 @@ import { AddressSearchDialog } from '../components/AddressSearchDialog/AddressSe
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { usePostProperty } from '../hooks/usePostProperty';
-import { toFieldErrors } from '../utils/apiError';
+import { toFieldErrors } from '../../../shared/apiError';
 import { formatDetailBuildingRange } from '../utils/detailBuildingNames';
 import { formatFloor, parseFloorInput, validateFloorInput } from '../utils/floor';
 import { toAreaInput, validateExclusiveArea } from '../utils/formValidation';

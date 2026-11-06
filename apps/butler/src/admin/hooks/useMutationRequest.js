@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../shared/apiError';
 
 const INITIAL_STATE = { data: null, error: null, isLoading: false };
 

@@ -12,7 +12,7 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useAttachmentUploads } from '../hooks/useAttachmentUploads';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { usePostManagementLog } from '../hooks/usePostManagementLog';
-import { toFieldErrors } from '../utils/apiError';
+import { toFieldErrors } from '../../../shared/apiError';
 import { getTodayKST } from '../utils/contract';
 import { SCOPE_LABEL, VERIFICATION_REQUIRED_MESSAGE } from '../utils/managementLog';
 

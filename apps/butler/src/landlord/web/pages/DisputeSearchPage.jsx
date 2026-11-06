@@ -9,7 +9,7 @@ import { SearchBox } from '../components/DisputeReference/SearchBox';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { DISPUTE_TOPICS, findTopic, REFERENCE_TYPES } from '../utils/disputeReference';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 const PAGE_SIZE = 5;
 // 전체 탭에서 자료 위에 먼저 보여 줄 질문 수. 나머지는 질문 탭에서 본다.

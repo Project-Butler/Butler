@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getOwnershipVerificationRenewalTargetList, getPropertyOwnershipList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 import { toRenewalNotices } from '../utils/ownershipVerification';
 
 // 활성 소유 관계를 한 번에 최대 100건 받아 같은 법정동의 다른 호실을 찾는다. 넘는 호실은 없는 것으로 보아 커뮤니티 문장을 남긴다.

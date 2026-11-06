@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAdminUserList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../shared/apiError';
 
 // 회원 목록(GET /admin/users). data = { items, meta: { page, size, total, hasNext } }.
 // 쪽 번호로 넘기는 표라서 앞 쪽 결과에 이어 붙이지 않고 바꿔 끼운다. 다시 불러오는 동안 이전 쪽을 그대로 보여 준다.

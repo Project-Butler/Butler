@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { patchPropertyOwnership } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 const INITIAL_STATE = { data: null, error: null, isLoading: false };
 

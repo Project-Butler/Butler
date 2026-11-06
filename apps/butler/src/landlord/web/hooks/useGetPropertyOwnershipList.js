@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getPropertyOwnershipList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 내 소유 관계 목록(GET /property-ownerships). data = { items, meta: { page, size, total, hasNext } }.
 // active: 'true'(활성만) · 'false'(종료만) · 생략(전체).

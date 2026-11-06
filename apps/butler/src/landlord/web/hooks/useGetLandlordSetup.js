@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getLandlordSetup } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 초기 세팅 진행 현황(GET /dashboard/landlord/setup).
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

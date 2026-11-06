@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getManagementLogList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 관리 로그 목록(GET /management-logs). type은 'REPAIR,NOTE'처럼 쉼표로. data = { items, meta: { page, size, total, hasNext } }.
 // page가 1보다 크면 앞 페이지 결과 뒤에 이어 붙인다([더 보기]). 필터가 바뀌면 쓰는 쪽에서 page를 1로 되돌린다.

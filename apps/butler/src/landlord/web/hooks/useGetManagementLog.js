@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getManagementLog } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 관리 로그 상세(GET /management-logs/:logId). 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.
 export const useGetManagementLog = (logId, { onUnauthorized } = {}) => {

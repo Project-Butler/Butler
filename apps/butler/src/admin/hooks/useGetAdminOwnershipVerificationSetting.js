@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAdminOwnershipVerificationSetting } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../shared/apiError';
 
 // 권리자 인증 유효기간(GET /admin/settings/ownership-verification). data = { validityYears, updatedAt }.
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

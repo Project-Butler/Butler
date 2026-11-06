@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useGetContract } from '../hooks/useGetContract';
+import { useGetContract } from '../../../shared/useGetContract';
 import { usePostContractTermination } from '../hooks/usePostContractTermination';
 import { formatDateKST } from '../utils/format';
 import {

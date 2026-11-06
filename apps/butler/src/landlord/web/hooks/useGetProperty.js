@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getProperty } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 호실 상세(GET /properties/:propertyId).
 // propertyId가 없으면 호출하지 않는다. 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

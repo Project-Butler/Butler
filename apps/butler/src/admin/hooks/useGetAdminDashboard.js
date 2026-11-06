@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAdminDashboard } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../shared/apiError';
 
 // 관리자 대시보드 요약 카운트(GET /admin/dashboard).
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

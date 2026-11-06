@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getPropertyList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 내 호실 목록(GET /properties). complexId를 주면 그 단지(건물)의 호실만. data = { items, meta: { page, size, total, hasNext } }.
 // page가 1보다 크면 앞 페이지 결과 뒤에 이어 붙인다([더 보기]). relation이 바뀌면 쓰는 쪽에서 page를 1로 되돌린다.

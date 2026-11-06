@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { postDocumentDownloadUrl } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../../shared/apiError';
 import { isRenderableImage } from '../../utils/attachment';
 
 // 붙은 문서 한 건의 썸네일. 열 때 다운로드 URL(5분 유효)을 받고, 사진이 안 뜨면(만료 등) 한 번만 다시 받는다.

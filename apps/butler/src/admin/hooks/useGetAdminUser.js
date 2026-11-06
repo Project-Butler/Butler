@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAdminUser } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../shared/apiError';
 
 // 회원 상세(GET /admin/users/:userId). 소유 관계 요약(ownerships)이 같이 온다.
 // userId가 없으면 호출하지 않는다. 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

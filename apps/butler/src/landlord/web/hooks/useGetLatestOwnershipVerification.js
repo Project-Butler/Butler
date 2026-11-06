@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLatestOwnershipVerification } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 import { isAttemptActive } from '../utils/ownershipVerification';
 
 const POLL_INTERVAL_MS = 3000;

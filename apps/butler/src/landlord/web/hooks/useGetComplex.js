@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getComplex } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 단지 상세(GET /complexes/:complexId) — 주소·법정동·건물 정보.
 // complexId가 없으면 호출하지 않는다. 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

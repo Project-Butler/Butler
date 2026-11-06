@@ -3,7 +3,7 @@ import { Badge, Button, Card } from '@butler/ui';
 import { ChevronLeft } from 'lucide-react';
 import { StatusMessage } from '../components/StatusMessage/StatusMessage';
 import { CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, LEASE_TYPE_LABEL } from '../constants/labels';
-import { useGetContract } from '../hooks/useGetContract';
+import { useGetContract } from '../../shared/useGetContract';
 import { formatDateTime } from '../utils/formatDate';
 import { formatWon } from '../utils/formatMoney';
 

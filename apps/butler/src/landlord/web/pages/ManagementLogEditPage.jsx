@@ -13,7 +13,7 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useAttachmentUploads } from '../hooks/useAttachmentUploads';
 import { useGetManagementLog } from '../hooks/useGetManagementLog';
 import { usePatchManagementLog } from '../hooks/usePatchManagementLog';
-import { toFieldErrors } from '../utils/apiError';
+import { toFieldErrors } from '../../../shared/apiError';
 import { getLogScopeBadge } from '../utils/managementLog';
 
 const EditForm = ({ log, onNavigate, onUnauthorized }) => {

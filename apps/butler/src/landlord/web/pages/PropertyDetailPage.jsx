@@ -14,7 +14,7 @@ import { useGetPropertyOwnership } from '../hooks/useGetPropertyOwnership';
 import { usePatchProperty } from '../hooks/usePatchProperty';
 import { usePatchPropertyOwnership } from '../hooks/usePatchPropertyOwnership';
 import { usePostPropertyOwnershipEnd } from '../hooks/usePostPropertyOwnershipEnd';
-import { toFieldErrors } from '../utils/apiError';
+import { toFieldErrors } from '../../../shared/apiError';
 import { formatContractAmount, formatPeriod, formatWon, getContractDdayBadge, getContractStatusBadge } from '../utils/contract';
 import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '../utils/floor';
 import { formatDateKST, formatNumber } from '../utils/format';

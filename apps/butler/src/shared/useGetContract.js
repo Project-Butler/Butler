@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getContract } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from './apiError';
 
-// 계약 상세(GET /contracts/:contractId).
+// 계약 상세(GET /contracts/:contractId). 운영자에게 보이는 범위는 서버가 정한다(memo는 null).
 // contractId가 없으면 호출하지 않는다. 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.
 export const useGetContract = (contractId, { onUnauthorized } = {}) => {
   const [state, setState] = useState({ data: null, error: null, isLoading: Boolean(contractId) });

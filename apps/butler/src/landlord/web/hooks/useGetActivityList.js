@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getActivityList } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 // 최근 활동(GET /activities). data = 활동 배열(최신순).
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.

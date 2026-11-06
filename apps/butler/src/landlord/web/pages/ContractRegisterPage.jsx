@@ -12,7 +12,7 @@ import {
 } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useGetContract } from '../hooks/useGetContract';
+import { useGetContract } from '../../../shared/useGetContract';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { usePostContract } from '../hooks/usePostContract';
 import { CONTRACT_LEGAL_NOTICE, formatContractAmount, formatPeriod, formatPhone, getRenewalPeriod } from '../utils/contract';

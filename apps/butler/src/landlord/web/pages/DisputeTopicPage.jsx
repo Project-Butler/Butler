@@ -9,7 +9,7 @@ import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { findTopic } from '../utils/disputeReference';
 import { HELP_ROUTES, TOPIC_BRIEFINGS } from '../utils/disputePortal';
-import { isUnauthorizedError } from '../utils/apiError';
+import { isUnauthorizedError } from '../../../shared/apiError';
 
 // 실제 조정 사례는 요약과 함께 3건만 보여 주고, 나머지는 자료 찾기로 잇는다.
 const CASE_COUNT = 3;

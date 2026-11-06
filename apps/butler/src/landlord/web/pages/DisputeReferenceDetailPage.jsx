@@ -14,7 +14,7 @@ import {
   toApplyQuestion,
   TYPE_LABELS,
 } from '../utils/disputeReference';
-import { isUnauthorizedError, toApiError } from '../utils/apiError';
+import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 const Section = ({ title, children }) => (
   <section className="rounded-card border border-line bg-surface p-4 lg:p-5">

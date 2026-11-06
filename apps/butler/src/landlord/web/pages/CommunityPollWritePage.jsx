@@ -4,7 +4,7 @@ import { Button, Card, TextField } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPollList } from '../hooks/useGetCommunityPollList';
 import { usePostCommunityPoll } from '../hooks/usePostCommunityPoll';
-import { toApiError, toFieldErrors } from '../utils/apiError';
+import { toApiError, toFieldErrors } from '../../../shared/apiError';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { formatKstDate } from '../utils/communityFormat';

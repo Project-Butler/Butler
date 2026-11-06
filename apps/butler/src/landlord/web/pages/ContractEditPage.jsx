@@ -11,7 +11,7 @@ import {
 } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { useGetContract } from '../hooks/useGetContract';
+import { useGetContract } from '../../../shared/useGetContract';
 import { usePatchContract } from '../hooks/usePatchContract';
 import { getContractStatusBadge, isContractInProgress } from '../utils/contract';
 
