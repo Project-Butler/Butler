@@ -41,9 +41,3 @@ docs/
 
 # 문서 첨부 임시 로컬 저장소(STORAGE_DRIVER=local). 업로드한 파일이 들어간다.
 apps/api/.storage/
-
-# Playwright E2E 산출물과 세션 상태(쿠키가 들어 있다)
-apps/butler/test-results/
-apps/butler/test-results-prod/
-apps/butler/playwright-report/
-apps/butler/test/e2e/.auth/

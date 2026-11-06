@@ -28,7 +28,7 @@ const env = vi.hoisted(() => ({ surface: 'web', nextLogin: null }));
 vi.mock('@butler/api-client', () => api);
 vi.mock('../src/surface/getSurface', () => ({ getSurface: () => env.surface }));
 
-// 로그인·가입 화면은 입력 칸 대신 버튼 하나로 onSubmit 을 부른다(실제 화면은 e2e 에서 본다).
+// 로그인·가입 화면은 입력 칸 대신 버튼 하나로 onSubmit 을 부른다(여기서 보는 것은 라우팅이지 입력 화면이 아니다).
 vi.mock('@butler/ui', async (importOriginal) => {
   const actual = await importOriginal();
   return {

@@ -3,7 +3,7 @@
 //   휴대폰 UA이거나, 터치 기기((pointer: coarse))이면서 폭이 768px 미만이면 앱, 아니면 웹. 폭은 단독 기준이 아니다.
 //   UA는 navigator.userAgentData.mobile 을 먼저 보고, 없는 브라우저만 navigator.userAgent 의 휴대폰 단어로 본다.
 //   페이지를 열 때 한 번 판단하고 저장하지 않는다. ?surface= 덮어쓰기는 개발 환경에서만 동작한다.
-// 아래 환경 값은 Playwright(Chromium 153)로 http://localhost 에서 실제로 읽은 값에 맞췄다.
+// 아래 환경 값은 실제 브라우저(Chromium 153)에서 http://localhost 로 열어 읽은 값에 맞췄다(userAgentData.mobile · pointer: coarse · innerWidth).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { APP_MAX_WIDTH, createGetSurface, detectSurface, readSurfaceOverride } from '../../src/surface/getSurface';

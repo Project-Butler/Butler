@@ -75,10 +75,7 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 ### 6. 테스트
 ```bash
 npm test -w apps/butler            # 단위·컴포넌트·정적 검사 (vitest)
-npx playwright install chromium    # E2E 브라우저를 처음 한 번 받는다
-npm run test:e2e -w apps/butler    # E2E (API가 떠 있고 seed 계정이 있어야 한다)
 ```
-E2E는 로그인 속도 제한(이메일당 10분 10회) 때문에 세션을 역할마다 한 번만 만들어 나눠 쓴다. 자세한 전제는 `apps/butler/playwright.config.js`에 있다.
 
 ## DB 작업 규칙
 - 개발은 각자 로컬 Docker DB에서 한다. 공유 DB(Supabase)를 가리키고 `prisma migrate dev`를 실행하지 않는다.

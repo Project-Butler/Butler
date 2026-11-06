@@ -8,9 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:prod": "playwright test -c playwright.prod.config.js"
+    "test": "vitest run"
   },
   "dependencies": {
     "@butler/api-client": "^1.0.0",
