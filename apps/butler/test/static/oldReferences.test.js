@@ -11,8 +11,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   .split('\0')
   .filter(Boolean)
-  // docs/plan.md : 이전 구조를 설명하는 계획 문서. 이 테스트 파일은 검사 패턴을 적어 두므로 스스로를 제외한다.
-  .filter((file) => file !== 'docs/plan.md' && file !== 'apps/butler/test/static/oldReferences.test.js')
+  // docs/plan.md : 이전 구조를 설명하는 계획 문서.
+  // oldReferences·chunks 테스트: "없어야 하는 것"의 이름을 적어 두고 없는지 확인하는 파일이라 검사 대상에서 뺀다.
+  .filter((file) => !['docs/plan.md', 'apps/butler/test/static/oldReferences.test.js', 'apps/butler/test/static/chunks.test.js'].includes(file))
   .filter((file) => !/\.(png|jpg|jpeg|gif|ico|webp|woff2?|zip|xlsx?|pptx)$/i.test(file));
 
 const read = (file) => readFileSync(path.join(repoRoot, file), 'utf8');
