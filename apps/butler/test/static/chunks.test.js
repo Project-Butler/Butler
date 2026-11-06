@@ -24,7 +24,14 @@ let entryName;
 
 beforeAll(async () => {
   outDir = mkdtempSync(path.join(os.tmpdir(), 'butler-chunks-'));
-  await build({ root: appRoot, configFile: path.join(appRoot, 'vite.config.js'), logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+  // Tailwind 는 설정 파일을 "현재 디렉터리"에서 찾으므로, 저장소 루트에서 실행해도 같도록 빌드하는 동안만 앱 폴더로 옮겨 간다.
+  const originalCwd = process.cwd();
+  process.chdir(appRoot);
+  try {
+    await build({ root: appRoot, configFile: path.join(appRoot, 'vite.config.js'), logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+  } finally {
+    process.chdir(originalCwd);
+  }
   const assets = path.join(outDir, 'assets');
   files = Object.fromEntries(readdirSync(assets).filter((name) => name.endsWith('.js')).map((name) => [name, readFileSync(path.join(assets, name), 'utf8')]));
   const html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
