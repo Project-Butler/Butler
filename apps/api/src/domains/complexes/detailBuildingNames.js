@@ -19,7 +19,7 @@ const PREVIEW_COUNT = 3;
 
 const isConsecutive = (numbers) => numbers.every((number, index) => index === 0 || number === numbers[index - 1] + 1);
 
-// 목록 표시용 짧은 글. 화면(apps/landlord)도 같은 규칙으로 보여 준다. 빈 목록이면 null.
+// 목록 표시용 짧은 글. 화면(apps/butler)도 같은 규칙으로 보여 준다. 빈 목록이면 null.
 // - 숫자 동(2개 이상)이 1씩 이어지면 '101동~117동', 그 밖의 이름(상가동 등)은 ' 외 N개'로 붙인다.
 // - 아니면 앞 3개 + ' 외 N개'.
 export const formatDetailBuildingRange = (names) => {

@@ -4,15 +4,18 @@ export default {
     extend: {
       colors: {
         accent: { DEFAULT: '#0E6B5C', strong: '#0A5246', soft: '#DDEFEA' },
-        seal: { DEFAULT: '#34479E', ink: '#2B3B85', soft: '#E4E8F7' },
+        // box·dash·slot: Figma 01 Foundations 에 있고 여기엔 없던 색(#97). 기존 값은 바꾸지 않았다.
+        seal: { DEFAULT: '#34479E', ink: '#2B3B85', soft: '#E4E8F7', box: '#F6F7FD' },
         ink: { DEFAULT: '#15201C', 2: '#4B5A55', 3: '#5A6863' },
         ok: { DEFAULT: '#1E7F4E', ink: '#17643D', soft: '#DDF1E5' },
         warn: { DEFAULT: '#A0600C', ink: '#85500A', soft: '#FBEBD2' },
-        crit: { DEFAULT: '#B83A28', ink: '#9C3020', soft: '#F8E0DB' },
+        crit: { DEFAULT: '#B83A28', ink: '#9C3020', soft: '#F8E0DB', box: '#FDF3F1' },
         ground: '#EEF1F0',
         surface: '#FFFFFF',
         'surface-2': '#F3F6F5',
         line: '#DCE3E0',
+        dash: '#B9C4C0',
+        slot: '#9AA8A3',
       },
       fontFamily: {
         sans: ['IBM Plex Sans KR', 'Malgun Gothic', 'sans-serif'],
@@ -32,6 +35,14 @@ export default {
         chip: ['12px', { lineHeight: '1.3' }],
         eyebrow: ['11.5px', { lineHeight: '1.3', letterSpacing: '0.06em' }],
         kpi: ['28px', { lineHeight: '1.1', letterSpacing: '-0.01em' }],
+        // 아래는 Figma 01 Foundations 에 있고 위에 없던 글자 단계(#97). 줄 높이·자간은 Figma 값 그대로이고, 굵기는 클래스로 정한다.
+        // card-sm 15/SemiBold · tab 11/Medium(선택된 탭 tab-on 은 같은 크기 + font-semibold) · btn 15/SemiBold · btn-sm 14/SemiBold · num/lg 20/Bold
+        // (위의 기존 단계는 Figma 와 줄 높이가 다른 곳이 있지만 이번에는 덮어쓰지 않았다.)
+        'card-sm': ['15px', { lineHeight: '1.5' }],
+        tab: ['11px', { lineHeight: '1.5' }],
+        btn: ['15px', { lineHeight: '1.5' }],
+        'btn-sm': ['14px', { lineHeight: '1.5' }],
+        'num-lg': ['20px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
       },
       borderRadius: {
         card: '14px',
