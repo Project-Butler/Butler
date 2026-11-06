@@ -1,7 +1,7 @@
 import { TabBar } from './TabBar';
 import { TopBar } from './TopBar';
 
-// 앱 화면의 틀: 위 상단 바 · 가운데 본문 · 아래 탭 (docs/plan.md 4장 packages/ui MobileShell).
+// 앱 화면의 틀: 위 상단 바 · 가운데 본문 · 아래 탭.
 // 폭은 모바일 폭(430px)을 넘지 않고 가운데에 놓인다 — 휴대폰에서는 화면 전체, PC에서는 가운데 모바일 폭(양옆 선).
 // shell: 셸을 구분하는 표지(data-shell). topBar: TopBar props. tabs: TabBar items.
 export const MobileShell = ({ shell, topBar, tabs, children }) => (

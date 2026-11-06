@@ -1,4 +1,4 @@
-// 화면 형태(surface): 'web'(사이드바 셸) | 'app'(상단 바 + 하단 탭 셸). docs/plan.md 2장.
+// 화면 형태(surface): 'web'(사이드바 셸) | 'app'(상단 바 + 하단 탭 셸).
 //   휴대폰 UA이거나, 터치 기기((pointer: coarse))이면서 폭이 768px 미만이면 앱, 아니면 웹.
 //   폭은 단독 기준이 아니다(PC에서 창을 줄여도 웹).
 //   UA는 navigator.userAgentData.mobile 을 먼저 보고, 지원하지 않는 브라우저(Safari·Firefox)는 navigator.userAgent 의 휴대폰 단어로 본다.

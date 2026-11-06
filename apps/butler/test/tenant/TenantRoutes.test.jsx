@@ -1,4 +1,4 @@
-// 임차인 앱 틀 (docs/plan.md 2장·3장): 항상 앱 화면(PC 에서는 가운데 모바일 폭). 이번에는 틀(홈 자리, 내 정보 자리 + 로그아웃)만.
+// 임차인 앱 틀: 항상 앱 화면(PC 에서는 가운데 모바일 폭). 이번에는 틀(홈 자리, 내 정보 자리 + 로그아웃)만.
 // 하단 탭은 홈 · 내 정보 두 칸이다. 임차인의 실제 기능 화면은 초대 기능 이후.
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

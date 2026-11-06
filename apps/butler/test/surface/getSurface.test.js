@@ -1,5 +1,5 @@
 // @vitest-environment node
-// 화면 형태(web · app) 판단 기준 (docs/plan.md 2장):
+// 화면 형태(web · app) 판단 기준:
 //   휴대폰 UA이거나, 터치 기기((pointer: coarse))이면서 폭이 768px 미만이면 앱, 아니면 웹. 폭은 단독 기준이 아니다.
 //   UA는 navigator.userAgentData.mobile 을 먼저 보고, 없는 브라우저만 navigator.userAgent 의 휴대폰 단어로 본다.
 //   페이지를 열 때 한 번 판단하고 저장하지 않는다. ?surface= 덮어쓰기는 개발 환경에서만 동작한다.

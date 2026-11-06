@@ -1,6 +1,6 @@
 import baseConfig from '@butler/config/eslint.config.js';
 
-// import 경계 (docs/plan.md 5장 4번)
+// import 경계
 // - admin/·landlord/·tenant/ 는 서로 import할 수 없다. shared/ 와 packages/* 만 쓴다.
 // - 역할 폴더는 앱 최상위 모듈(auth/·store/·surface/)도 import하지 않는다. 필요한 값은 props로 받는다.
 // - axios는 어느 파일에서도 직접 import하지 않는다. API 호출 함수는 packages/api-client 에만 둔다.

@@ -1,4 +1,4 @@
-// 세션 스토어(zustand): user, verifiedLegalDongCodes, login, logout, clearSession (docs/plan.md 4장·5장 6번)
+// 세션 스토어(zustand): user, verifiedLegalDongCodes, login, logout, clearSession
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({ getMe: vi.fn(), postLogout: vi.fn() }));

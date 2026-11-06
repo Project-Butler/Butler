@@ -1,5 +1,5 @@
 // @vitest-environment node
-// 디자인 토큰이 Figma Foundations 와 맞는지 (docs/plan.md 4장: "Figma Foundations와 비교해 없는 토큰만 추가, 기존 값은 덮어쓰지 않음").
+// 디자인 토큰이 Figma Foundations 와 맞는지 (Figma Foundations와 비교해 없는 토큰만 추가, 기존 값은 덮어쓰지 않음).
 // Figma 쪽 값은 get_variable_defs 로 읽은 정의를 옮긴 스냅샷이다.
 //   파일: Butler 화면 구조 · IA · 와이어프레임 (fileKey ttUBxWD5lrOZJlHXZbxM6D) › 01 Foundations (node 2:164), 2026-11-06 확인
 import tailwindConfig from '@butler/config/tailwind.config.js';

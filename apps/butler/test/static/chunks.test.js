@@ -1,5 +1,5 @@
 // @vitest-environment node
-// T0 정적 검사: admin · landlord(web/app) · tenant 청크가 따로 나뉘어야 한다 (docs/plan.md 8장 "임차인이 관리자 코드까지 내려받음").
+// T0 정적 검사: admin · landlord(web/app) · tenant 청크가 따로 나뉘어야 한다 (임차인이 관리자 코드까지 내려받지 않게).
 // 실제로 vite build 를 돌려, 역할마다 고유한 문구가 "자기 청크에만" 있고 첫 진입 청크에는 없는지 본다.
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';

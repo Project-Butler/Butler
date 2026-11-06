@@ -1,5 +1,5 @@
 // 세션 상태(zustand). 지금 로그인한 사용자와, 권리자 인증이 유효한 법정동 코드를 한 곳에 둔다.
-// 서버 데이터는 tanstack query, 세션만 여기. 401 처리도 clearSession 하나로 모은다(docs/plan.md 5장 6번).
+// 서버 데이터는 tanstack query, 세션만 여기. 401 처리도 clearSession 하나로 모은다.
 // 액션 참조는 상태가 바뀌어도 변하지 않는다. 데이터 훅이 onUnauthorized 를 useEffect 의존성에 넣기 때문에,
 // clearSession 참조가 바뀌면 요청이 무한 반복된다.
 import { create } from 'zustand';
