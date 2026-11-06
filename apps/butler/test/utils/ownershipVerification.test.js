@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildLocation, resolveViewKey } from '../../src/routes';
-import { formatActivity } from '../../src/utils/activity';
-import { getEndedOwnershipNotice } from '../../src/utils/contract';
+import { buildLocation, resolveViewKey } from '../../src/landlord/web/routes';
+import { formatActivity } from '../../src/landlord/web/utils/activity';
+import { getEndedOwnershipNotice } from '../../src/landlord/web/utils/contract';
 import {
   buildRenewalMessage,
   getDaysUntilExpiry,
@@ -11,7 +11,7 @@ import {
   losesCommunityAccess,
   toOwnershipEndBody,
   toRenewalNotices,
-} from '../../src/utils/ownershipVerification';
+} from '../../src/landlord/web/utils/ownershipVerification';
 
 const NOW = new Date('2026-11-03T03:00:00Z');
 const DONG = '1171010100';

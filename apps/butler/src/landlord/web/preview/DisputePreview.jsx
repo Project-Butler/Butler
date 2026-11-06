@@ -13,7 +13,7 @@ import { DisputeReferenceDetailPage } from '../pages/DisputeReferenceDetailPage'
 import { DisputeSearchPage } from '../pages/DisputeSearchPage';
 import { DisputeTopicPage } from '../pages/DisputeTopicPage';
 import { buildLocation } from '../routes';
-import '../index.css';
+import '../../../index.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 

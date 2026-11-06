@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRentDueToday, toScheduleEvents } from '../../src/utils/dashboard';
+import { getRentDueToday, toScheduleEvents } from '../../src/landlord/web/utils/dashboard';
 
 const TODAY = '2026-11-04';
 

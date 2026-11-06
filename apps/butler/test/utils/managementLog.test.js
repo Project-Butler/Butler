@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canDeleteLog, formatLogDate, getLogOriginLabel, getLogScopeBadge, getLogTypeLabel, isFutureLog } from '../../src/utils/managementLog';
+import { canDeleteLog, formatLogDate, getLogOriginLabel, getLogScopeBadge, getLogTypeLabel, isFutureLog } from '../../src/landlord/web/utils/managementLog';
 
 describe('getLogOriginLabel', () => {
   it('내가 쓴 기록은 표시하지 않는다', () => {

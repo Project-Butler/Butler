@@ -8,7 +8,7 @@ import {
   isContractFormComplete,
   toContractFields,
   toContractForm,
-} from '../../src/components/ContractForm/ContractForm';
+} from '../../src/landlord/web/components/ContractForm/ContractForm';
 
 // 화면처럼 폼 상태를 들고 ContractForm에 넘긴다.
 const Harness = ({ initial = EMPTY_CONTRACT_FORM, lockedFields = [] }) => {

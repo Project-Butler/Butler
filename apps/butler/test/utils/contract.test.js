@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_CONTRACT_FORM, validateContractForm } from '../../src/components/ContractForm/ContractForm';
-import { buildLocation, resolveViewKey } from '../../src/routes';
+import { EMPTY_CONTRACT_FORM, validateContractForm } from '../../src/landlord/web/components/ContractForm/ContractForm';
+import { buildLocation, resolveViewKey } from '../../src/landlord/web/routes';
 import {
   formatContractAmount,
   formatDday,
@@ -16,7 +16,7 @@ import {
   isContractDateInRange,
   isValidPhone,
   toPhoneDigits,
-} from '../../src/utils/contract';
+} from '../../src/landlord/web/utils/contract';
 
 describe('계약 금액 표기', () => {
   it('원 단위와 만 단위로 쓴다', () => {

@@ -13,7 +13,6 @@ import {
   postRegister,
 } from '@butler/api-client';
 import { getOAuthErrorMessage } from './utils/oauthErrorMessages';
-import { InstallBanner } from './install/InstallBanner';
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
 import { BuildingListPage } from './pages/BuildingListPage';
@@ -359,7 +358,6 @@ export const App = () => {
 
   return (
     <>
-      <InstallBanner />
       <LayoutWithBadges
         onUnauthorized={handleUnauthorized}
         verifiedLegalDongCodes={verifiedLegalDongCodes}

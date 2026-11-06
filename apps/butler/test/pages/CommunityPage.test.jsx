@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommunityPage } from '../../src/pages/CommunityPage';
+import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
 
 const api = vi.hoisted(() => ({
   getMyBuildings: vi.fn(),

@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AttachmentPicker } from '../../src/components/AttachmentPicker/AttachmentPicker';
-import { DocumentThumbnail } from '../../src/components/DocumentThumbnail/DocumentThumbnail';
-import { useAttachmentUploads } from '../../src/hooks/useAttachmentUploads';
+import { AttachmentPicker } from '../../src/landlord/web/components/AttachmentPicker/AttachmentPicker';
+import { DocumentThumbnail } from '../../src/landlord/web/components/DocumentThumbnail/DocumentThumbnail';
+import { useAttachmentUploads } from '../../src/landlord/web/hooks/useAttachmentUploads';
 
 const api = vi.hoisted(() => ({
   postUploadSession: vi.fn(),

@@ -3,13 +3,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DisputeHomePage } from '../../src/pages/DisputeHomePage';
-import { DisputePage } from '../../src/pages/DisputePage';
-import { DisputeReferenceDetailPage } from '../../src/pages/DisputeReferenceDetailPage';
-import { DisputeSearchPage } from '../../src/pages/DisputeSearchPage';
-import { DisputeTopicPage } from '../../src/pages/DisputeTopicPage';
-import { buildLocation } from '../../src/routes';
-import { breakNumberedItems, splitSections } from '../../src/utils/disputeReference';
+import { DisputeHomePage } from '../../src/landlord/web/pages/DisputeHomePage';
+import { DisputePage } from '../../src/landlord/web/pages/DisputePage';
+import { DisputeReferenceDetailPage } from '../../src/landlord/web/pages/DisputeReferenceDetailPage';
+import { DisputeSearchPage } from '../../src/landlord/web/pages/DisputeSearchPage';
+import { DisputeTopicPage } from '../../src/landlord/web/pages/DisputeTopicPage';
+import { buildLocation } from '../../src/landlord/web/routes';
+import { breakNumberedItems, splitSections } from '../../src/landlord/web/utils/disputeReference';
 
 const api = vi.hoisted(() => ({
   getDisputeReferenceList: vi.fn(),

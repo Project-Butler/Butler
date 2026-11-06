@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getMarketPricesStub } from '../../src/utils/communityMarketPriceStub';
+import { getMarketPricesStub } from '../../src/landlord/web/utils/communityMarketPriceStub';
 
 // 예시 시세의 날짜는 오늘(한국 날짜)의 지난달이 마지막 달이 되게 옮겨진다. 금액 · 건수는 그대로.
 const JAMSIL = '0c000000-0000-4000-8000-000000000001';

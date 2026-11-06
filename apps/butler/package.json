@@ -1,5 +1,5 @@
 {
-  "name": "@butler/landlord",
+  "name": "@butler/butler",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -18,14 +18,14 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.30.6"
+    "react-router-dom": "^6.30.6",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "jsdom": "^29.1.1",
-    "vite-plugin-pwa": "^0.20.5",
     "vitest": "~3.2.7"
   }
 }

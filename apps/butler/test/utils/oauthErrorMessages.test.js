@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getOAuthErrorMessage } from '../../src/utils/oauthErrorMessages';
+import { getOAuthErrorMessage } from '../../src/landlord/web/utils/oauthErrorMessages';
 
 describe('getOAuthErrorMessage', () => {
   it('API가 보내는 코드마다 사람이 읽을 문구를 준다', () => {

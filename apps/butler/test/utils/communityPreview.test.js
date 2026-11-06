@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRegionPreview } from '../../src/utils/communityPreview';
+import { getRegionPreview } from '../../src/landlord/web/utils/communityPreview';
 
 const b = (complexId, legalDongCode, verificationStatus, verifyPropertyId = null) => ({ complexId, legalDongCode, verificationStatus, verifyPropertyId });
 

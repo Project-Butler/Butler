@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LoginScreen } from '@butler/ui';
 import { postLogin } from '@butler/api-client';
 import { DisputeChatPage } from '../pages/DisputeChatPage';
-import '../index.css';
+import '../../../index.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
