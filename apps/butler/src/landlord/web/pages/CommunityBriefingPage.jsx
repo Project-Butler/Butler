@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { COMMUNITY_PATH } from '../routes';
 import { BriefingDeals } from '../components/CommunityBriefing/BriefingDeals';
 import { BriefingMarket } from '../components/CommunityBriefing/BriefingMarket';
 import { BriefingNews } from '../components/CommunityBriefing/BriefingNews';
@@ -18,7 +19,7 @@ export const CommunityBriefingPage = ({ frame, building }) => {
   const navigate = useNavigate();
   const { dong, sigungu } = splitRegionName(building.regionName);
   const band = AREA_BANDS.find((item) => item.key === pickAreaBands(building.unitAreas ?? []).defaultKey);
-  const go = (path) => () => navigate(`/community/${path}`);
+  const go = (path) => () => navigate(`${COMMUNITY_PATH}/${path}`);
 
   return (
     <CommunityFrame frame={frame} section="briefing">
@@ -27,10 +28,10 @@ export const CommunityBriefingPage = ({ frame, building }) => {
         <BriefingDeals building={building} band={band} onMore={go('market')} />
       </div>
       <div className="grid items-stretch gap-6 lg:grid-cols-2">
-        <BriefingPosts building={building} dongName={dong} onOpen={(id) => navigate(`/community/posts/${id}`)} onMore={go('board')} />
+        <BriefingPosts building={building} dongName={dong} onOpen={(id) => navigate(`${COMMUNITY_PATH}/posts/${id}`)} onMore={go('board')} />
         <BriefingNews building={building} sigunguName={sigungu} onMore={go('news')} />
       </div>
-      <BriefingPolls building={building} dongName={dong} onOpen={(id) => navigate(`/community/polls/${id}`)} onMore={go('polls')} />
+      <BriefingPolls building={building} dongName={dong} onOpen={(id) => navigate(`${COMMUNITY_PATH}/polls/${id}`)} onMore={go('polls')} />
     </CommunityFrame>
   );
 };

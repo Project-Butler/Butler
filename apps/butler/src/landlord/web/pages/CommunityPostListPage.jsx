@@ -1,5 +1,6 @@
 import { Pencil } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { COMMUNITY_PATH } from '../routes';
 import { Button, Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPostList } from '../hooks/useGetCommunityPostList';
@@ -47,8 +48,8 @@ export const CommunityPostListPage = ({ frame, building }) => {
     if (filter.mine) query.set('mine', 'true');
     setSearchParams(query, { replace: true });
   };
-  const openPost = (postId) => navigate(`/community/posts/${postId}`);
-  const openWrite = () => navigate(category === CATEGORY_ALL ? '/community/posts/new' : `/community/posts/new?category=${category}`);
+  const openPost = (postId) => navigate(`${COMMUNITY_PATH}/posts/${postId}`);
+  const openWrite = () => navigate(category === CATEGORY_ALL ? `${COMMUNITY_PATH}/posts/new` : `${COMMUNITY_PATH}/posts/new?category=${category}`);
 
   return (
     <CommunityFrame frame={frame} section="board" scopeText={`${dongName} 임대인`} blockedReason={blockedReason}>

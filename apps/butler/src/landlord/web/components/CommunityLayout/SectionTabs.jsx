@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { COMMUNITY_PATH } from '../../routes';
 
-// 커뮤니티 탭 다섯 개. 경로는 /community/{key}. 자주 바뀌는 것이 앞으로 — 첫 화면은 브리핑.
+// 커뮤니티 탭 다섯 개. 경로는 /landlord/community/{key}. 자주 바뀌는 것이 앞으로 — 첫 화면은 브리핑.
 export const COMMUNITY_SECTIONS = [
   { key: 'briefing', label: '브리핑' },
   { key: 'news', label: '뉴스' },
@@ -22,7 +23,7 @@ export const SectionTabs = ({ activeSection }) => {
             key={section.key}
             type="button"
             aria-current={isActive ? 'page' : undefined}
-            onClick={() => navigate(`/community/${section.key}`)}
+            onClick={() => navigate(`${COMMUNITY_PATH}/${section.key}`)}
             className={`-mb-px border-b-2 px-4 py-2.5 text-body transition-colors ${
               isActive ? 'border-accent font-semibold text-ink' : 'border-transparent font-medium text-ink-3 hover:text-ink'
             }`}

@@ -116,21 +116,21 @@ describe('날짜 계산', () => {
 describe('계약 경로', () => {
   it('갱신·호실 미리 선택을 주소에 남긴다', () => {
     expect(buildLocation('contractRegister', { renewFrom: 'c-1' })).toEqual({
-      pathname: '/contracts/new',
+      pathname: '/landlord/contracts/new',
       search: '?renewFrom=c-1',
     });
     expect(buildLocation('contractRegister', { propertyId: 'p-1' })).toEqual({
-      pathname: '/contracts/new',
+      pathname: '/landlord/contracts/new',
       search: '?propertyId=p-1',
     });
-    expect(buildLocation('contractRegister')).toEqual({ pathname: '/contracts/new', search: '' });
+    expect(buildLocation('contractRegister')).toEqual({ pathname: '/landlord/contracts/new', search: '' });
   });
 
   it('사이드바 계약 메뉴는 계약 목록으로, /contracts/new는 상세보다 먼저 맞춘다', () => {
-    expect(buildLocation('leases')).toEqual({ pathname: '/contracts' });
-    expect(resolveViewKey('/contracts/new')).toBe('contractRegister');
-    expect(resolveViewKey('/contracts/c-1')).toBe('contractDetail');
-    expect(resolveViewKey('/contracts/c-1/edit')).toBe('contractEdit');
+    expect(buildLocation('leases')).toEqual({ pathname: '/landlord/contracts' });
+    expect(resolveViewKey('/landlord/contracts/new')).toBe('contractRegister');
+    expect(resolveViewKey('/landlord/contracts/c-1')).toBe('contractDetail');
+    expect(resolveViewKey('/landlord/contracts/c-1/edit')).toBe('contractEdit');
   });
 });
 

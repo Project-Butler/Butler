@@ -1,13 +1,11 @@
 # Butler
 
-임대인·임차인을 위한 임대차 관리 서비스. 임대인·임차인·운영자용 프론트 3개와 백엔드 1개를 npm workspaces 모노레포로 관리한다.
+임대인·임차인을 위한 임대차 관리 서비스. 임대인·임차인·운영자가 함께 쓰는 프론트 1개와 백엔드 1개를 npm workspaces 모노레포로 관리한다.
 
 | 워크스페이스 | 내용 | 로컬 주소 |
 |---|---|---|
 | `apps/api` | 백엔드 (Express, Prisma) | http://localhost:4000/api/v1 |
-| `apps/landlord` | 임대인 (반응형 웹 + PWA) | http://localhost:5173 |
-| `apps/tenant` | 임차인 (웹 우선, PWA) | http://localhost:5174 |
-| `apps/admin` | 운영자 (데스크톱 웹) | http://localhost:5175 |
+| `apps/butler` | 프론트 하나 (관리자·임대인·임차인). 로그인한 역할과 화면 형태(웹·앱)에 따라 보여 주는 화면만 달라진다 | http://localhost:5173 |
 | `packages/ui` · `config` · `api-client` | 공유 컴포넌트 · 설정 · API 호출 | |
 
 팀 작업 규칙은 `CLAUDE.md`에 있다.
@@ -30,9 +28,7 @@ npm install          # apps/api의 postinstall이 Prisma Client도 생성한다
 각 폴더의 `.env.example`을 `.env`로 복사한다. `.env`는 절대 커밋하지 않는다.
 ```bash
 cp apps/api/.env.example apps/api/.env
-cp apps/landlord/.env.example apps/landlord/.env
-cp apps/tenant/.env.example apps/tenant/.env
-cp apps/admin/.env.example apps/admin/.env
+cp apps/butler/.env.example apps/butler/.env
 ```
 `apps/api/.env`의 `ACCESS_TOKEN_SECRET`·`REFRESH_TOKEN_SECRET`은 비어 있으니 아래 명령으로 하나씩 만들어 넣는다(두 값은 달라야 한다). 비워 두면 로그인이 안 된다. 휴대폰 번호 암호화용 `FIELD_ENCRYPTION_KEY`(hex 64자)도 같은 명령으로 만들어 넣는다(비워 두면 휴대폰 번호를 넣은 회원가입이 실패한다).
 ```bash
@@ -51,8 +47,11 @@ npm run seed:disputes -w apps/api                      # 분쟁 참고자료 1,7
 ### 4. 실행
 ```bash
 npm run dev -w apps/api          # API
-npm run dev -w apps/landlord     # 필요한 프론트만 (tenant, admin도 같은 방식)
+npm run dev -w apps/butler       # 프론트 (http://localhost:5173)
 ```
+로그인 화면은 하나(`/login`)이고, 로그인하면 역할에 따라 `/admin/*`(관리자), `/landlord/*`(임대인), `/tenant/*`(임차인) 화면으로 간다. 다른 역할 주소로 들어가면 내 역할 홈으로 돌아온다.
+
+화면 형태는 페이지를 열 때 한 번 정한다. 휴대폰이거나, 터치 기기이면서 폭이 768px 미만이면 앱 화면(상단 바 + 하단 탭), 아니면 웹 화면(사이드바)이다. 관리자는 항상 웹, 임차인은 항상 앱 화면이다. 개발 서버에서는 주소 뒤에 `?surface=app` 또는 `?surface=web`을 붙여 덮어쓸 수 있다(배포 빌드에서는 무시된다).
 
 ### 5. 확인
 로컬 확인용 계정으로 로그인한다(`prisma db seed`가 만든다). 비밀번호는 모두 `password123`이다.
@@ -70,6 +69,14 @@ curl -c cookie.txt -H "Content-Type: application/json" -H "X-Requested-With: but
   -d '{"email":"landlord@butler.test","password":"password123"}' http://localhost:4000/api/v1/auth/login
 curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.total 1752
 ```
+
+### 6. 테스트
+```bash
+npm test -w apps/butler            # 단위·컴포넌트·정적 검사 (vitest)
+npx playwright install chromium    # E2E 브라우저를 처음 한 번 받는다
+npm run test:e2e -w apps/butler    # E2E (API가 떠 있고 seed 계정이 있어야 한다)
+```
+E2E는 로그인 속도 제한(이메일당 10분 10회) 때문에 세션을 역할마다 한 번만 만들어 나눠 쓴다. 자세한 전제는 `apps/butler/playwright.config.js`에 있다.
 
 ## DB 작업 규칙
 - 개발은 각자 로컬 Docker DB에서 한다. 공유 DB(Supabase)를 가리키고 `prisma migrate dev`를 실행하지 않는다.

@@ -12,7 +12,7 @@ import { DisputePage } from '../pages/DisputePage';
 import { DisputeReferenceDetailPage } from '../pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from '../pages/DisputeSearchPage';
 import { DisputeTopicPage } from '../pages/DisputeTopicPage';
-import { buildLocation } from '../routes';
+import { BASE_PATH, buildLocation } from '../routes';
 import '../../../index.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -27,8 +27,8 @@ const Screens = () => {
   return (
     <main className="min-h-screen bg-ground px-5 py-4 font-sans text-ink lg:px-10 lg:py-8">
       <Routes>
-        <Route path="/disputes/chat" element={<DisputeChatPage />} />
-        <Route path="/disputes" element={<DisputePage onNavigate={onNavigate} />}>
+        <Route path={`${BASE_PATH}/disputes/chat`} element={<DisputeChatPage />} />
+        <Route path={`${BASE_PATH}/disputes`} element={<DisputePage onNavigate={onNavigate} />}>
           <Route index element={<DisputeHomePage />} />
           <Route path="search" element={<DisputeSearchPage />} />
           <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
@@ -57,7 +57,7 @@ const Preview = () => {
   }
 
   return (
-    <MemoryRouter initialEntries={['/disputes']}>
+    <MemoryRouter initialEntries={[`${BASE_PATH}/disputes`]}>
       <Screens />
     </MemoryRouter>
   );

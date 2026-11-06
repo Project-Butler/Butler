@@ -131,10 +131,10 @@ describe('인증 활동 문장', () => {
 
 describe('라우트', () => {
   it('인증·문의 화면 경로', () => {
-    expect(buildLocation('propertyVerify', { propertyId: 'p1' }).pathname).toBe('/properties/p1/verify');
-    expect(resolveViewKey('/properties/p1/verify')).toBe('propertyVerify');
-    expect(buildLocation('supportInquiry').pathname).toBe('/support/inquiry');
-    expect(resolveViewKey('/support/inquiry')).toBe('supportInquiry');
+    expect(buildLocation('propertyVerify', { propertyId: 'p1' }).pathname).toBe('/landlord/properties/p1/verify');
+    expect(resolveViewKey('/landlord/properties/p1/verify')).toBe('propertyVerify');
+    expect(buildLocation('supportInquiry').pathname).toBe('/landlord/support/inquiry');
+    expect(resolveViewKey('/landlord/support/inquiry')).toBe('supportInquiry');
   });
   it('등록 안내 문구는 주소에 남기지 않는다', () => {
     const location = buildLocation('propertyVerify', { propertyId: 'p1', notice: '안내' });

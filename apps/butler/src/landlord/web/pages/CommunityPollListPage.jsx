@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { COMMUNITY_PATH } from '../routes';
 import { Button } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPollList } from '../hooks/useGetCommunityPollList';
@@ -68,7 +69,7 @@ export const CommunityPollListPage = ({ frame, building }) => {
           )}
           <Button
             className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
-            onClick={() => navigate('/community/polls/new')}
+            onClick={() => navigate(`${COMMUNITY_PATH}/polls/new`)}
             disabled={!list.isSuccess || !canWrite}
           >
             <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
@@ -88,7 +89,7 @@ export const CommunityPollListPage = ({ frame, building }) => {
           <>
             <ul aria-label="투표" className="grid gap-4 lg:grid-cols-2">
               {polls.map((poll) => (
-                <PollCard key={poll.id} poll={poll} dongName={dongName} onOpen={(id) => navigate(`/community/polls/${id}`)} />
+                <PollCard key={poll.id} poll={poll} dongName={dongName} onOpen={(id) => navigate(`${COMMUNITY_PATH}/polls/${id}`)} />
               ))}
             </ul>
             {list.hasNextPage && (

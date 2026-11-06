@@ -118,8 +118,8 @@ const Harness = () => {
   };
   return (
     <Routes>
-      <Route path="/disputes/chat" element={<ChatProbe />} />
-      <Route path="/disputes" element={<DisputePage onNavigate={onNavigate} />}>
+      <Route path="/landlord/disputes/chat" element={<ChatProbe />} />
+      <Route path="/landlord/disputes" element={<DisputePage onNavigate={onNavigate} />}>
         <Route index element={<DisputeHomePage />} />
         <Route path="search" element={<DisputeSearchPage />} />
         <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
@@ -133,7 +133,7 @@ const renderAt = (path) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
         <Harness />
       </MemoryRouter>
     </QueryClientProvider>,

@@ -1,12 +1,19 @@
 import { matchPath } from 'react-router-dom';
 
-// 메인 대시보드 경로. '/'로 들어오면 여기로 보낸다(App).
-export const HOME_PATH = '/home';
+// 임대인 화면은 앱 안에서 /landlord 아래에 놓인다(관리자 /admin, 임차인 /tenant와 겹치지 않게).
+// 아래 ROUTE_TABLE·BUILDERS의 경로는 이 접두어 기준의 상대 경로이고, 접두어는 buildLocation·resolveViewKey가 붙이고 뗀다.
+// <Routes>는 /landlord/* 안에서 접두어 없는 경로로 맞춘다.
+export const BASE_PATH = '/landlord';
+export const COMMUNITY_PATH = `${BASE_PATH}/community`;
+
+// 메인 대시보드. '/landlord'로 들어오면 여기로 보낸다. Navigate에는 접두어를 포함한 HOME_PATH를 쓴다.
+const HOME = '/home';
+export const HOME_PATH = `${BASE_PATH}${HOME}`;
 
 // 화면 key ↔ URL 경로. 화면 컴포넌트는 onNavigate(key, params)로 이동하고, 이 파일이 key를 경로로 바꾼다.
 // 위쪽일수록 먼저 맞춰 본다(/properties/new가 /properties/:propertyId보다 앞, /contracts/new도 같다).
 export const ROUTE_TABLE = [
-  { key: 'home', path: HOME_PATH },
+  { key: 'home', path: HOME },
   { key: 'buildingList', path: '/buildings' },
   { key: 'properties', path: '/properties' },
   { key: 'propertyRegister', path: '/properties/new' },
@@ -30,15 +37,23 @@ export const ROUTE_TABLE = [
   { key: 'disputeReference', path: '/disputes/references/:referenceId' },
 ];
 
-// 현재 경로가 어느 화면 key인지. 표에 없는 경로(아직 화면이 없는 메뉴)는 첫 구간을 key로 쓴다.
+// 접두어(/landlord)를 뗀다. /landlord 밖의 경로('/contracts', '/landlord-x/contracts')는 null이라 우연히 맞지 않는다.
+const stripBase = (pathname) => {
+  if (pathname === BASE_PATH) return '/';
+  return pathname.startsWith(`${BASE_PATH}/`) ? pathname.slice(BASE_PATH.length) : null;
+};
+
+// 현재 경로(접두어 포함)가 어느 화면 key인지. 표에 없는 경로(아직 화면이 없는 메뉴)는 첫 구간을 key로 쓴다.
 export const resolveViewKey = (pathname) => {
-  const matched = ROUTE_TABLE.find((route) => matchPath({ path: route.path, end: true }, pathname));
+  const relative = stripBase(pathname);
+  if (relative === null) return null;
+  const matched = ROUTE_TABLE.find((route) => matchPath({ path: route.path, end: true }, relative));
   if (matched) return matched.key;
-  return pathname.split('/')[1] || 'home';
+  return relative.split('/')[1] || 'home';
 };
 
 const BUILDERS = {
-  home: () => ({ pathname: HOME_PATH }),
+  home: () => ({ pathname: HOME }),
   // 안내 문구(notice)는 주소에 남기지 않고 history state로만 넘긴다(새로고침하면 사라진다).
   buildingList: ({ notice }) => ({ pathname: '/buildings', state: notice ? { notice } : undefined }),
   // 소유 중(OWNER)이 기본이라 주소에는 다른 관계일 때만 붙인다.
@@ -89,7 +104,9 @@ const BUILDERS = {
   disputeChat: ({ draft }) => ({ pathname: '/disputes/chat', state: draft ? { draft } : undefined }),
 };
 
+// 화면 key → 이동할 위치(접두어 포함). 표에 없는 key는 /landlord/{key}로 보낸다(아직 화면이 없는 메뉴).
 export const buildLocation = (key, params = {}) => {
   const build = BUILDERS[key];
-  return build ? build(params) : { pathname: `/${key}` };
+  const location = build ? build(params) : { pathname: `/${key}` };
+  return { ...location, pathname: `${BASE_PATH}${location.pathname}` };
 };

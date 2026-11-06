@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { COMMUNITY_PATH } from '../../routes';
 import { PageHeader } from '../PageHeader/PageHeader';
 import { BuildingSwitcher } from '../CommunityBuildingSwitcher/BuildingSwitcher';
 import { PreviewNotice } from './PreviewNotice';
@@ -25,7 +26,7 @@ export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null
   // 건물을 바꾸면 같은 탭에 머문다. 하위 화면(다른 법정동의 글·투표)이었으면 그 탭 목록으로 간다.
   const selectBuilding = (complexId) => {
     onSelectBuilding(complexId);
-    if (onBack) navigate(`/community/${section}`);
+    if (onBack) navigate(`${COMMUNITY_PATH}/${section}`);
   };
 
   return (

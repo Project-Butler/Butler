@@ -63,9 +63,9 @@ const renderAt = (path) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
         <Routes>
-          <Route path="/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
+          <Route path="/landlord/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
         </Routes>
         <LocationProbe />
       </MemoryRouter>
@@ -90,7 +90,7 @@ describe('브리핑', () => {
   it('/community 는 브리핑으로 가고, 탭 순서는 브리핑 · 뉴스 · 시세 · 게시판 · 투표', async () => {
     renderAt('/community');
     await section('시세');
-    expect(screen.getByTestId('location')).toHaveTextContent('/community/briefing');
+    expect(screen.getByTestId('location')).toHaveTextContent('/landlord/community/briefing');
     const tabs = within(screen.getByRole('navigation', { name: '커뮤니티 메뉴' })).getAllByRole('button');
     expect(tabs.map((tab) => tab.textContent)).toEqual(['브리핑', '뉴스', '시세', '게시판', '투표']);
     expect(tabs[0]).toHaveAttribute('aria-current', 'page');
@@ -125,10 +125,10 @@ describe('브리핑', () => {
   it('더보기 › 는 해당 탭으로', async () => {
     renderAt('/community/briefing');
     const cases = [
-      ['최근 게시글', '/community/board'],
-      ['최근 뉴스', '/community/news'],
-      ['최근 투표', '/community/polls'],
-      ['시세', '/community/market'],
+      ['최근 게시글', '/landlord/community/board'],
+      ['최근 뉴스', '/landlord/community/news'],
+      ['최근 투표', '/landlord/community/polls'],
+      ['시세', '/landlord/community/market'],
     ];
     for (const [name, path] of cases) {
       await userEvent.click(await within(await section(name)).findByRole('button', { name: `${name} 더보기` }));
@@ -141,7 +141,7 @@ describe('브리핑', () => {
     api.getCommunityPost.mockResolvedValue({ ...post(1), legalDongCode: REGION.legalDongCode, canWrite: false, writeBlockedReason: 'UNVERIFIED', locked: true });
     renderAt('/community/briefing');
     await userEvent.click(await within(await section('최근 게시글')).findByRole('button', { name: /게시글 1/ }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/community/posts/post-1');
+    expect(screen.getByTestId('location')).toHaveTextContent('/landlord/community/posts/post-1');
     expect(await screen.findByText('인증한 임대인만 볼 수 있어요')).toBeInTheDocument();
   });
 

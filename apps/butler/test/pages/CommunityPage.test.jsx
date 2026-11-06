@@ -97,9 +97,9 @@ const renderAt = (path, onNavigate = vi.fn()) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
         <Routes>
-          <Route path="/community/*" element={<CommunityPage onNavigate={onNavigate} />} />
+          <Route path="/landlord/community/*" element={<CommunityPage onNavigate={onNavigate} />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
