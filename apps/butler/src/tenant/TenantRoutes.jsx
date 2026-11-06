@@ -1,7 +1,33 @@
-// 임차인 앱 화면(항상 앱 셸). 셸·홈 자리·내 정보 자리는 8단계에서 만든다. 지금은 라우팅이 이어지는지만 확인하는 자리다.
-export const TenantRoutes = ({ user, onLogout }) => (
-  <main data-shell="tenant" className="p-6">
-    <p>임차인 화면 준비 중 · {user.name}</p>
-    <button type="button" onClick={onLogout}>로그아웃</button>
-  </main>
-);
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { MobileShell } from '@butler/ui';
+import { AccountCard } from '../shared/AccountCard';
+import { ComingSoon } from '../shared/ComingSoon';
+import { HOME_PATH, SETTINGS_PATH } from './routes';
+import { isTabActive, TABS } from './tabs';
+
+// 임차인 앱 화면: 항상 앱 셸(PC 에서는 가운데 모바일 폭). 이번에는 틀(홈 자리, 내 정보 자리 + 로그아웃)만 있다.
+// 이 컴포넌트는 앱의 /tenant/* 아래에 놓인다. 로그인·세션은 앱 최상위가 하고, 여기는 user·onLogout 을 props 로 받는다.
+export const TenantRoutes = ({ user, onLogout }) => {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  const tabs = TABS.map((tab) => ({ ...tab, active: isTabActive(tab, pathname), onClick: () => navigate(tab.path) }));
+  const current = TABS.find((tab) => isTabActive(tab, pathname));
+
+  return (
+    <MobileShell shell="tenant" topBar={{ avatar: { name: user.name, label: '내 계정', onClick: () => navigate(SETTINGS_PATH) } }} tabs={tabs}>
+      <Routes>
+        <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
+        <Route
+          path="/settings"
+          element={
+            <ComingSoon title="내 정보">
+              <AccountCard user={user} onLogout={onLogout} />
+            </ComingSoon>
+          }
+        />
+        <Route path="*" element={<ComingSoon title={current?.label ?? '준비 중인 화면'} />} />
+      </Routes>
+    </MobileShell>
+  );
+};

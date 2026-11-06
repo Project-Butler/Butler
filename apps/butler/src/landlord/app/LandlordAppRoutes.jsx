@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { Button, Card, MobileShell } from '@butler/ui';
+import { MobileShell } from '@butler/ui';
+import { AccountCard } from '../../shared/AccountCard';
+import { ComingSoon } from '../../shared/ComingSoon';
 import { HOME_PATH } from '../web/routes';
-import { ComingSoon } from './ComingSoon';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 
 // 임대인 앱 화면(상단 바 + 하단 탭). 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소는 웹과 같고 화면만 다르다).
@@ -23,13 +24,7 @@ export const LandlordAppRoutes = ({ user, onLogout }) => {
           path="/settings"
           element={
             <ComingSoon title="내 정보">
-              <Card>
-                <p className="text-card-sm font-semibold text-ink">{user.name}</p>
-                <p className="text-sub text-ink-3">{user.email}</p>
-                <Button variant="secondary" className="mt-4 w-full" onClick={onLogout}>
-                  로그아웃
-                </Button>
-              </Card>
+              <AccountCard user={user} onLogout={onLogout} />
             </ComingSoon>
           }
         />

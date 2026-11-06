@@ -154,3 +154,57 @@ test.describe('T2 LANDLORD mobile: 앱 셸 + 탭 4칸', () => {
     await context.close();
   });
 });
+
+test.describe('T2 TENANT: 항상 앱 셸 (PC 에서는 가운데 모바일 폭)', () => {
+  test('PC 1280: 앱 셸이 430px 이하 폭으로 화면 가운데에 놓인다', async ({ browser }) => {
+    const { context, page } = await openAs(browser, 'tenant', { viewport: { width: 1280, height: 800 } }, '/tenant/home');
+    expect(await detectShell(page)).toBe('tenant');
+    const box = await page.locator('[data-shell="tenant"]').boundingBox();
+    expect(box.width, '모바일 폭(430px)을 넘는다').toBeLessThanOrEqual(430);
+    expect(box.width, '너무 좁다').toBeGreaterThan(300);
+    expect(Math.abs(box.x + box.width / 2 - 640), `가운데가 아니다(왼쪽 ${box.x}px · 폭 ${box.width}px)`).toBeLessThanOrEqual(1);
+    await context.close();
+  });
+
+  test('휴대폰(iPhone 13): 화면 폭 전체를 쓴다', async ({ browser }) => {
+    const { context, page } = await openAs(browser, 'tenant', devices['iPhone 13'], '/tenant/home');
+    expect(await detectShell(page)).toBe('tenant');
+    const box = await page.locator('[data-shell="tenant"]').boundingBox();
+    expect(box.x).toBe(0);
+    expect(box.width).toBe(390);
+    await context.close();
+  });
+
+  test('탭 2칸(홈 · 내 정보): 누르면 맞는 주소로 가고 활성 표시가 따라 움직인다', async ({ browser }) => {
+    const { context, page } = await openAs(browser, 'tenant', { viewport: { width: 1280, height: 800 } }, '/tenant/home');
+    const nav = page.getByRole('navigation', { name: '하단 메뉴' });
+    expect(await nav.getByRole('button').allTextContents()).toEqual(['홈', '내 정보']);
+    for (const [label, path] of [['내 정보', '/tenant/settings'], ['홈', '/tenant/home']]) {
+      await nav.getByRole('button', { name: label }).click();
+      await expect(page, `[${label}]`).toHaveURL(new RegExp(`${path.replaceAll('/', '\/')}$`));
+      await expect(nav.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+      await expect(page.getByRole('region', { name: '준비 중' })).toBeVisible();
+    }
+    await context.close();
+  });
+
+  test('내 정보에서 로그아웃하면 /login 이고, 뒤로 가도 임차인 화면이 보이지 않는다', async ({ browser }) => {
+    // 로그아웃은 서버 세션을 없애므로 다른 스펙이 같이 쓰는 저장된 로그인이 아니라 자기 로그인을 한다.
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, baseURL: BASE_URL });
+    const page = await context.newPage();
+    await page.goto('/login');
+    await loginViaUi(page, 'tenant');
+    await expect(page).toHaveURL(/\/tenant\/home$/);
+    expect(await detectShell(page)).toBe('tenant');
+
+    await page.getByRole('navigation', { name: '하단 메뉴' }).getByRole('button', { name: '내 정보' }).click();
+    await page.getByRole('button', { name: '로그아웃' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.locator('[data-shell="tenant"]')).toHaveCount(0);
+    await context.close();
+  });
+});

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { getRoleHome, isKnownRole, resolveAfterLogin, ROLE_PREFIX } from '../../src/auth/roleHome';
 import { HOME_PATH as ADMIN_HOME } from '../../src/admin/routes';
 import { HOME_PATH as LANDLORD_HOME } from '../../src/landlord/web/routes';
+import { HOME_PATH as TENANT_HOME } from '../../src/tenant/routes';
 
 describe('역할 홈', () => {
   it('역할별 홈 주소', () => {
@@ -16,6 +17,7 @@ describe('역할 홈', () => {
   it('각 역할 폴더의 HOME_PATH 와 어긋나지 않는다 (둘이 따로 있으므로 같이 움직여야 한다)', () => {
     expect(getRoleHome('ADMIN')).toBe(ADMIN_HOME);
     expect(getRoleHome('LANDLORD')).toBe(LANDLORD_HOME);
+    expect(getRoleHome('TENANT')).toBe(TENANT_HOME);
   });
 
   it('알 수 없는 역할은 홈이 없다 (로그인 화면으로 보내면 무한 반복되므로 null)', () => {

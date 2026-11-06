@@ -14,10 +14,9 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const MARKERS = {
   admin: '관리자 콘솔', // admin/layout/AdminLayout.jsx 의 brandSubtitle
   landlordWeb: '버틀러의 자산', // landlord/web/layout/LandlordLayout.jsx 의 brandSubtitle
-  landlordApp: 'landlord-app', // landlord/app 셸의 data-shell
-  tenant: 'data-shell', // tenant 셸의 data-shell (tenant 안에서만 'tenant' 값을 쓴다 — 아래에서 값까지 본다)
+  landlordApp: 'shell:"landlord-app"', // landlord/app 이 MobileShell 에 넘기는 shell 값(빌드 후에도 남는 문자열)
+  tenant: 'shell:"tenant"', // tenant 가 MobileShell 에 넘기는 shell 값
 };
-const TENANT_MARKER = '"tenant"';
 
 let outDir;
 let files;
@@ -55,8 +54,9 @@ describe('T0 역할별 청크 분리 (빌드 결과)', () => {
 
   it('임대인 앱 · 임차인 화면도 첫 진입 청크에 들어 있지 않다', () => {
     expect(files[entryName]).not.toContain(MARKERS.landlordApp);
-    expect(files[entryName]).not.toContain(TENANT_MARKER);
-    expect(chunksContaining(MARKERS.landlordApp)).not.toContain(entryName);
+    expect(files[entryName]).not.toContain(MARKERS.tenant);
+    expect(chunksContaining(MARKERS.landlordApp)).toHaveLength(1);
+    expect(chunksContaining(MARKERS.tenant)).toHaveLength(1);
   });
 
   it('관리자 · 임대인 웹 · 임대인 앱 · 임차인 청크는 서로 다른 파일이다', () => {
@@ -64,7 +64,7 @@ describe('T0 역할별 청크 분리 (빌드 결과)', () => {
       admin: chunksContaining(MARKERS.admin)[0],
       landlordWeb: chunksContaining(MARKERS.landlordWeb)[0],
       landlordApp: chunksContaining(MARKERS.landlordApp)[0],
-      tenant: chunksContaining(TENANT_MARKER).find((name) => files[name].includes(MARKERS.tenant)),
+      tenant: chunksContaining(MARKERS.tenant)[0],
     };
     for (const [role, name] of Object.entries(picked)) expect(name, `${role} 청크를 못 찾았다`).toBeTruthy();
     expect(new Set(Object.values(picked)).size, `서로 다른 청크여야 하는데 겹친다: ${JSON.stringify(picked)}`).toBe(4);
