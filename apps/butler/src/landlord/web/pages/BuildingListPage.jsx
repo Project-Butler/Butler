@@ -24,7 +24,7 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
   const goRegister = () => onNavigate('propertyRegister');
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title="내 부동산"
         description="단지와 호실을 한눈에 보고 관리해요."
@@ -69,11 +69,11 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
           <table className="w-full text-body">
             <thead>
               <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-                <th className="px-5 py-2.5 font-medium">호실</th>
-                <th className="px-3 py-2.5 font-medium">도로명주소</th>
-                <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
-                <th className="px-3 py-2.5 font-medium">계약</th>
-                <th className="px-5 py-2.5 font-medium">권리자 인증</th>
+                <th className="whitespace-nowrap px-5 py-2.5 font-medium">호실</th>
+                <th className="w-full px-3 py-2.5 font-medium">도로명주소</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-medium">계약</th>
+                <th className="whitespace-nowrap px-5 py-2.5 font-medium">권리자 인증</th>
               </tr>
             </thead>
             <tbody>
@@ -86,10 +86,10 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
                     onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                     className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
                   >
-                    <td className="px-5 py-3.5 font-semibold text-ink">{property.displayName}</td>
-                    <td className="max-w-xs truncate px-3 py-3.5 text-ink-2">{property.complex.roadAddress ?? '—'}</td>
-                    <td className="whitespace-nowrap px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
-                    <td className="whitespace-nowrap px-3 py-3.5" onClick={(event) => event.stopPropagation()}>
+                    <td className="whitespace-nowrap px-5 py-3 font-semibold text-ink">{property.displayName}</td>
+                    <td className="w-full max-w-0 truncate px-3 py-3 text-ink-2">{property.complex.roadAddress ?? '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-3 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-3" onClick={(event) => event.stopPropagation()}>
                       <PropertyContractCell
                         property={property}
                         onNavigate={onNavigate}
@@ -97,7 +97,7 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
                         onNotice={setContractNotice}
                       />
                     </td>
-                    <td className="whitespace-nowrap px-5 py-3.5">
+                    <td className="whitespace-nowrap px-5 py-3">
                       <Badge tone={verification.tone}>{verification.label}</Badge>
                     </td>
                   </tr>
