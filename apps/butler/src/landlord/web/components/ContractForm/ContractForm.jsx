@@ -130,33 +130,36 @@ export const toContractFields = (form) => ({
 });
 
 // 계약 입력 칸(S-02 ②~⑥, S-04). lockedFields에 든 칸은 보기만 한다(진행 중 계약, D-13).
-export const ContractForm = ({ form, onChange, fieldError, disabled = false, lockedFields = [] }) => {
+// PC 배치는 가로 3칸: 호실(2칸, propertyField) · 계약 유형 / 보증금 · 월세 · 입금일 / 시작일 · 종료일 / 임차인 이름 · 연락처 / 메모.
+export const ContractForm = ({ form, onChange, fieldError, disabled = false, lockedFields = [], propertyField = null }) => {
   const isLocked = (name) => disabled || lockedFields.includes(name);
   const isJeonse = form.leaseType === 'JEONSE';
   const moneyHint = (value) => (value ? formatManwon(Number(value)) : undefined);
 
   return (
     <>
-      <div className="flex flex-col gap-1.5">
-        <p className="text-label font-semibold text-ink">계약 유형</p>
-        {isLocked('leaseType') ? (
-          <p className="rounded-input bg-surface-2 px-4 py-3 text-card text-ink-2">{getLeaseTypeLabel(form.leaseType)}</p>
-        ) : (
-          <SegmentedControl
-            ariaLabel="계약 유형"
-            className="w-60"
-            options={LEASE_TYPE_OPTIONS}
-            value={form.leaseType}
-            onChange={(value) => {
-              onChange('leaseType', value);
-              // 전세는 입금일이 없다. 칸을 숨기면서 값도 비운다.
-              if (value === 'JEONSE') onChange('rentPaymentDay', '');
-            }}
-          />
-        )}
+      <div className="grid grid-cols-3 items-start gap-4">
+        {propertyField && <div className="col-span-2">{propertyField}</div>}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-label font-semibold text-ink">계약 유형</p>
+          {isLocked('leaseType') ? (
+            <p className="rounded-input bg-surface-2 px-4 py-3 text-card text-ink-2">{getLeaseTypeLabel(form.leaseType)}</p>
+          ) : (
+            <SegmentedControl
+              ariaLabel="계약 유형"
+              options={LEASE_TYPE_OPTIONS}
+              value={form.leaseType}
+              onChange={(value) => {
+                onChange('leaseType', value);
+                // 전세는 입금일이 없다. 칸을 숨기면서 값도 비운다.
+                if (value === 'JEONSE') onChange('rentPaymentDay', '');
+              }}
+            />
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 items-start gap-4">
         <TextField
           label="보증금"
           required
@@ -183,10 +186,7 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
             disabled={isLocked('monthlyRent')}
           />
         )}
-      </div>
-
-      {!isJeonse && (
-        <div className="grid grid-cols-2 gap-4">
+        {!isJeonse && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="contract-rent-payment-day" className="text-label font-semibold text-ink">
               월세 입금일
@@ -215,10 +215,10 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
               <p className="text-chip text-ink-3">29~31일이 없는 달은 그달 말일로 계산해요</p>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 items-start gap-4">
         <TextField
           label="시작일"
           required
@@ -245,7 +245,7 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 items-start gap-4">
         <TextField
           label="임차인 이름"
           required
@@ -276,7 +276,7 @@ export const ContractForm = ({ form, onChange, fieldError, disabled = false, loc
         </label>
         <textarea
           id="contract-memo"
-          rows={4}
+          rows={3}
           maxLength={MAX_MEMO_LENGTH}
           placeholder="특약, 관리비 등 기억해 둘 내용"
           value={form.memo}

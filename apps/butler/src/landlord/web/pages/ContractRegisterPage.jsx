@@ -70,45 +70,53 @@ const ContractRegisterForm = ({ initialPropertyId, previous, onNavigate, onUnaut
     submitError?.status === 400 && submitError.details.some(({ field }) => CONTRACT_FORM_FIELDS.includes(field));
   const isPropertyMissing = propertyList.data && propertyId && !property;
 
-  return (
-    <div className="grid grid-cols-3 items-start gap-6">
-      <Card className="col-span-2 space-y-6 p-6">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="contract-property" className="text-label font-semibold text-ink">
-            호실
-            <RequiredMark />
-          </label>
-          <select
-            id="contract-property"
-            aria-required="true"
-            value={propertyId}
-            onChange={(event) => setPropertyId(event.target.value)}
-            // 갱신은 이전 계약과 같은 소유 관계여야 해서(D-05) 호실을 바꾸지 않는다.
-            disabled={Boolean(previous) || !propertyList.data || isSubmitting}
-            className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
-          >
-            <option value="" disabled>
-              {propertyList.data ? '계약할 호실을 선택해 주세요' : '불러오는 중'}
-            </option>
-            {properties.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.displayName} · {getPropertyStatusBadge(item.status).label}
-              </option>
-            ))}
-          </select>
-          {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
-          {isPropertyMissing && <p className="text-chip text-crit-ink">인증 완료된 호실 중에 없어요. 권리자 인증을 먼저 완료해 주세요.</p>}
-          {propertyList.data && properties.length === 0 && (
-            <p className="text-chip text-ink-3">
-              계약할 수 있는 호실이 없어요. 호실을 등록하고 권리자 인증을 완료해 주세요.{' '}
-              <button type="button" onClick={() => onNavigate('buildingList')} className="font-medium text-accent hover:text-accent-strong">
-                내 부동산으로 가기
-              </button>
-            </p>
-          )}
-        </div>
+  const propertyField = (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="contract-property" className="text-label font-semibold text-ink">
+        호실
+        <RequiredMark />
+      </label>
+      <select
+        id="contract-property"
+        aria-required="true"
+        value={propertyId}
+        onChange={(event) => setPropertyId(event.target.value)}
+        // 갱신은 이전 계약과 같은 소유 관계여야 해서(D-05) 호실을 바꾸지 않는다.
+        disabled={Boolean(previous) || !propertyList.data || isSubmitting}
+        className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
+      >
+        <option value="" disabled>
+          {propertyList.data ? '계약할 호실을 선택해 주세요' : '불러오는 중'}
+        </option>
+        {properties.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.displayName} · {getPropertyStatusBadge(item.status).label}
+          </option>
+        ))}
+      </select>
+      {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
+      {isPropertyMissing && <p className="text-chip text-crit-ink">인증 완료된 호실 중에 없어요. 권리자 인증을 먼저 완료해 주세요.</p>}
+      {propertyList.data && properties.length === 0 && (
+        <p className="text-chip text-ink-3">
+          계약할 수 있는 호실이 없어요. 호실을 등록하고 권리자 인증을 완료해 주세요.{' '}
+          <button type="button" onClick={() => onNavigate('buildingList')} className="font-medium text-accent hover:text-accent-strong">
+            내 부동산으로 가기
+          </button>
+        </p>
+      )}
+    </div>
+  );
 
-        <ContractForm form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} />
+  return (
+    <div className="grid grid-cols-4 items-start gap-6">
+      <Card className="col-span-3 space-y-5 p-6">
+        <ContractForm
+          form={form}
+          onChange={updateField}
+          fieldError={fieldError}
+          disabled={isSubmitting}
+          propertyField={propertyField}
+        />
       </Card>
 
       <Card className="sticky top-6 space-y-4 p-6">
@@ -156,7 +164,7 @@ export const ContractRegisterPage = ({ params, onNavigate, onUnauthorized }) => 
   const isWaitingPrevious = Boolean(params.renewFrom) && !previous;
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title={params.renewFrom ? '갱신 계약 등록' : '계약 등록'}
         description={`계약 조건과 임차인 연락처를 입력해 주세요. ${CONTRACT_LEGAL_NOTICE}.`}
