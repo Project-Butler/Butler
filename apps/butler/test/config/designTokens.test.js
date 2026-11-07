@@ -40,7 +40,13 @@ const SIZE_KEY = {
   btn: 'btn', 'btn-sm': 'btn-sm', 'num/kpi': 'kpi', 'num/lg': 'num-lg', 'num/body': 'body', 'num/sub': 'sub', 'num/chip': 'chip',
 };
 // 이번에 Figma 에 맞춰 새로 넣은 글자 키: 줄 높이·자간까지 Figma 값을 따른다.
-const ADDED_SIZE_KEYS = { 'card-sm': 'card-sm', tab: 'tab', btn: 'btn', 'btn-sm': 'btn-sm', 'num-lg': 'num/lg' };
+// #98: 기존 키(h1·card·label·sub·chip·kpi)는 줄 높이가 Figma 와 달라 웹 화면을 지키려고 덮어쓰지 않았다. 앱(모바일) 화면은 아래 새 키로 Figma 값을 그대로 쓴다.
+//   m-* = 같은 크기에 줄 높이 1.5(Figma). num-* = 숫자 글꼴 단계(줄 높이 1.3).
+const ADDED_SIZE_KEYS = {
+  'card-sm': 'card-sm', tab: 'tab', btn: 'btn', 'btn-sm': 'btn-sm', 'num-lg': 'num/lg',
+  'm-h1': 'h1', 'm-card': 'card', 'm-label': 'label', 'm-sub': 'sub', 'm-chip': 'chip',
+  'num-kpi': 'num/kpi', 'num-body': 'num/body', 'num-sub': 'num/sub',
+};
 
 const extend = tailwindConfig.theme.extend;
 const pick = (object, path) => path.reduce((value, key) => value?.[key], object);

@@ -3,6 +3,10 @@ const SIZE_CLASS = {
   lg: 'px-5 py-3.5 text-card',
   md: 'px-4 py-2 text-body',
   sm: 'px-3 py-1.5 text-chip',
+  // 모바일 화면(Figma Button): 높이 48(기본) · 52(하단 고정) · 44(홈 바로가기), 글자 btn 15
+  h48: 'h-12 px-[18px] text-btn',
+  h52: 'h-[52px] px-[18px] text-btn',
+  h44: 'h-11 px-[18px] text-btn',
 };
 
 // verify / verifyOutline(남색)은 권리자 인증 행동에만 쓴다 (design.md §2, §5)

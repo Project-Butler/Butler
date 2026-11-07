@@ -39,13 +39,15 @@ export const App = () => {
 
   // 화면 도중 세션이 끊기면(401) clearSession 으로 로그아웃 상태가 되고, RequireRole 이 /login 으로 보낸다.
   const roleProps = { user, verifiedLegalDongCodes, onLogout: logout, onUnauthorized: clearSession, onRefreshMe: refreshMe };
-  const LandlordRoutes = getSurface() === 'app' ? LandlordAppRoutes : LandlordWebRoutes;
+  // 로그인·가입 화면도 surface 로 모양(웹 · 앱 M01·M02·소셜 가입)을 고른다. 역할을 모르는 화면이라 기기 기준 그대로다.
+  const surface = getSurface();
+  const LandlordRoutes = surface === 'app' ? LandlordAppRoutes : LandlordWebRoutes;
 
   return (
     <Routes>
-      <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
-      <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
-      <Route path="/register/oauth" element={<GuestOnly><OAuthSignupPage /></GuestOnly>} />
+      <Route path="/login" element={<GuestOnly><LoginPage surface={surface} /></GuestOnly>} />
+      <Route path="/register" element={<GuestOnly><RegisterPage surface={surface} /></GuestOnly>} />
+      <Route path="/register/oauth" element={<GuestOnly><OAuthSignupPage surface={surface} /></GuestOnly>} />
       <Route
         path="/admin/*"
         element={

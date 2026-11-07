@@ -61,6 +61,7 @@ npm run dev -w apps/butler       # 프론트 (http://localhost:5173)
 | 역할 | 이메일 |
 |---|---|
 | LANDLORD | `landlord@butler.test` |
+| LANDLORD (앱 화면 확인용, 부동산 없음) | `landapp@butler.test` |
 | TENANT | `tenant@butler.test` |
 | ADMIN | `admin@butler.test` |
 
