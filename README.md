@@ -79,16 +79,18 @@ npm test -w apps/butler            # 단위·컴포넌트·정적 검사 (vitest
 ```
 
 ## Vercel 배포
-프론트와 API를 Vercel 프로젝트 두 개로 나눠 배포한다. 두 프로젝트 모두 같은 저장소를 연결하고, 빌드 설정은 각 폴더의 `vercel.json`에 들어 있다. 프로젝트를 만들 때 직접 정할 값은 아래뿐이다.
+프론트와 API를 Vercel 프로젝트 두 개로 나눠 배포하되, 사용자가 접속하는 주소는 프론트 하나다. 프론트가 `/api/*` 요청을 API 프로젝트로 넘겨 주므로(`apps/butler/vercel.json`의 rewrite) 브라우저는 프론트 도메인만 호출하고, httpOnly 쿠키는 같은 사이트 쿠키가 된다. 그래서 커스텀 도메인 없이 `*.vercel.app`으로도 로그인이 된다. 빌드 설정은 각 폴더의 `vercel.json`에 들어 있고, 프로젝트를 만들 때 직접 정할 값은 아래뿐이다.
 
 | 프로젝트 | Root Directory | 환경 변수 |
 |---|---|---|
-| 프론트 | `apps/butler` | `VITE_SERVER_API_URL` = 배포된 API 주소 + `/api/v1` (빌드 시점에 박히므로 바꾸면 재배포) |
-| API | `apps/api` | `apps/api/.env.example`의 키들. 특히 `FRONTEND_ORIGINS` = 배포된 프론트 origin |
+| API (`butler-api`, 먼저 배포) | `apps/api` | `apps/api/.env.example`의 키들 |
+| 프론트 (`butler`) | `apps/butler` | `VITE_SERVER_API_URL` = `/api/v1` (상대 경로. 빌드 시점에 박히므로 바꾸면 재배포) |
 
 - 두 프로젝트 모두 "Include source files outside of the Root Directory"를 켠 채로 둔다(기본값). `packages/*` 워크스페이스를 쓰기 때문이다.
-- 인증이 httpOnly 쿠키라서 프론트와 API는 같은 상위 도메인의 커스텀 도메인으로 묶는다(예: `app.example.com`, `api.example.com`). `*.vercel.app`끼리는 쿠키가 third-party로 막혀 로그인이 안 된다.
-- 프론트는 SPA라서 `vercel.json`의 rewrite가 모든 경로를 `index.html`로 보낸다. 새로고침·직접 접속 404를 막는다.
+- 프론트 `vercel.json`의 rewrite 목적지는 API 프로젝트의 고정 주소(`https://butler-api.vercel.app`)다. API 프로젝트 이름이나 주소를 바꾸면 이 값도 같이 바꾼다.
+- 프론트는 SPA라서 `/api` 외의 모든 경로를 `index.html`로 보낸다. 새로고침·직접 접속 404를 막는다. `/api` rewrite가 먼저 와야 한다.
+- 소셜 로그인을 쓸 때 `OAUTH_REDIRECT_BASE_URL`과 `OAUTH_FRONTEND_URL`은 **프론트 주소**로 넣고, 구글·카카오 콘솔의 Redirect URI도 `{프론트 주소}/api/v1/auth/oauth/{google|kakao}/callback`으로 등록한다.
+- API의 `FRONTEND_ORIGINS`는 배포된 프론트 origin으로 맞춘다.
 
 ## DB 작업 규칙
 - 개발은 각자 로컬 Docker DB에서 한다. 공유 DB(Supabase)를 가리키고 `prisma migrate dev`를 실행하지 않는다.
