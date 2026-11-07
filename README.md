@@ -78,6 +78,18 @@ curl -b cookie.txt http://localhost:4000/api/v1/disputes/references   # meta.tot
 npm test -w apps/butler            # 단위·컴포넌트·정적 검사 (vitest)
 ```
 
+## Vercel 배포
+프론트와 API를 Vercel 프로젝트 두 개로 나눠 배포한다. 두 프로젝트 모두 같은 저장소를 연결하고, 빌드 설정은 각 폴더의 `vercel.json`에 들어 있다. 프로젝트를 만들 때 직접 정할 값은 아래뿐이다.
+
+| 프로젝트 | Root Directory | 환경 변수 |
+|---|---|---|
+| 프론트 | `apps/butler` | `VITE_SERVER_API_URL` = 배포된 API 주소 + `/api/v1` (빌드 시점에 박히므로 바꾸면 재배포) |
+| API | `apps/api` | `apps/api/.env.example`의 키들. 특히 `FRONTEND_ORIGINS` = 배포된 프론트 origin |
+
+- 두 프로젝트 모두 "Include source files outside of the Root Directory"를 켠 채로 둔다(기본값). `packages/*` 워크스페이스를 쓰기 때문이다.
+- 인증이 httpOnly 쿠키라서 프론트와 API는 같은 상위 도메인의 커스텀 도메인으로 묶는다(예: `app.example.com`, `api.example.com`). `*.vercel.app`끼리는 쿠키가 third-party로 막혀 로그인이 안 된다.
+- 프론트는 SPA라서 `vercel.json`의 rewrite가 모든 경로를 `index.html`로 보낸다. 새로고침·직접 접속 404를 막는다.
+
 ## DB 작업 규칙
 - 개발은 각자 로컬 Docker DB에서 한다. 공유 DB(Supabase)를 가리키고 `prisma migrate dev`를 실행하지 않는다.
 - 모델을 바꾸면 `apps/api`에서 `npx prisma migrate dev --name <변경내용>`으로 마이그레이션을 만들어 PR에 넣는다. 컬럼 이름·타입을 바꿀 때는 `--create-only`로 만든 SQL을 먼저 검토한다.
