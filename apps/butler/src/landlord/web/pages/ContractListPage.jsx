@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { Badge, Button, Card, FilterChip } from '@butler/ui';
+import { Badge, Button, Card, SegmentedControl } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContractList } from '../hooks/useGetContractList';
@@ -54,11 +54,11 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
       <table className="w-full text-body">
         <thead>
           <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-            <th className="px-5 py-2.5 font-medium">호실</th>
-            <th className="px-3 py-2.5 font-medium">상태</th>
-            <th className="px-3 py-2.5 font-medium">보증금 / 월세</th>
-            <th className="px-3 py-2.5 font-medium">임차인</th>
-            <th className="px-5 py-2.5 font-medium">기간</th>
+            <th className="w-full px-5 py-2.5 font-medium">호실</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">상태</th>
+            <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">보증금 / 월세</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">임차인</th>
+            <th className="whitespace-nowrap px-5 py-2.5 text-right font-medium">기간</th>
           </tr>
         </thead>
         <tbody>
@@ -71,8 +71,8 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('contractDetail', { contractId: contract.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3.5 font-semibold text-ink">{contract.property.displayName}</td>
-                <td className="px-3 py-3.5">
+                <td className="px-5 py-3 font-semibold text-ink">{contract.property.displayName}</td>
+                <td className="whitespace-nowrap px-3 py-3">
                   <div className="flex items-center gap-1.5">
                     <Badge tone={status.tone}>{status.label}</Badge>
                     {dday && (
@@ -82,12 +82,12 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">
+                <td className="whitespace-nowrap px-3 py-3 text-right font-num tabular-nums text-ink-2">
                   {formatContractAmount(contract)}
                   {contract.rentPaymentDay != null && ` · ${formatRentPaymentDay(contract.rentPaymentDay)}`}
                 </td>
-                <td className="px-3 py-3.5 text-ink-2">{contract.tenantName}</td>
-                <td className="px-5 py-3.5 font-num tabular-nums text-ink-2">{formatPeriod(contract)}</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2">{contract.tenantName}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right font-num tabular-nums text-ink-2">{formatPeriod(contract)}</td>
               </tr>
             );
           })}
@@ -106,31 +106,27 @@ const ContractListSection = ({ filter, onNavigate, onUnauthorized }) => {
   );
 };
 
-// 계약 목록(S-01): 필터 칩 진행 중 / 시작 전 / 끝남 / 전체. 선택한 필터는 화면 안에서만 기억한다.
+// 계약 목록(S-01): 상태 세그먼트 진행 중 / 시작 전 / 끝남 / 전체(머리 영역 오른쪽, [계약 등록] 왼쪽). 선택한 필터는 화면 안에서만 기억한다.
 export const ContractListPage = ({ onNavigate, onUnauthorized }) => {
   const [filterKey, setFilterKey] = useState(CONTRACT_FILTERS[0].key);
   const filter = CONTRACT_FILTERS.find((item) => item.key === filterKey);
+  const filterOptions = CONTRACT_FILTERS.map((item) => ({ value: item.key, label: item.label }));
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title="계약"
         description={`등록한 임대차 계약을 종료일이 가까운 순서로 보여 줘요. ${CONTRACT_LEGAL_NOTICE}.`}
         actions={
-          <Button onClick={() => onNavigate('contractRegister')}>
-            <Plus size={16} className="-ml-0.5 mr-1 inline-block" />
-            계약 등록
-          </Button>
+          <>
+            <SegmentedControl ariaLabel="계약 상태" options={filterOptions} value={filterKey} onChange={setFilterKey} className="w-80" />
+            <Button onClick={() => onNavigate('contractRegister')}>
+              <Plus size={16} className="-ml-0.5 mr-1 inline-block" />
+              계약 등록
+            </Button>
+          </>
         }
       />
-
-      <div role="group" aria-label="계약 상태" className="flex flex-wrap gap-2">
-        {CONTRACT_FILTERS.map((item) => (
-          <FilterChip key={item.key} selected={item.key === filterKey} onClick={() => setFilterKey(item.key)}>
-            {item.label}
-          </FilterChip>
-        ))}
-      </div>
 
       <ContractListSection key={filterKey} filter={filter} onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
     </div>
