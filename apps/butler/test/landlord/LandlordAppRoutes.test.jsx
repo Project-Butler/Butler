@@ -1,11 +1,18 @@
-// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다.
+// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다(홈 M03·부동산 등록 M04 는 #98 에서 실제 화면).
 // 하단 탭 4칸(Figma IA 기준 임시): 홈 /landlord/home · 내 자산 /landlord/buildings · 커뮤니티 /landlord/community · 내 정보 /landlord/settings
 // 표가 많은 웹 화면을 모바일에 그대로 보여 주지 않는다.
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import { LandlordAppRoutes } from '../../src/landlord/app/LandlordAppRoutes';
+
+// 홈(M03)이 부르는 목록 API. 이 파일은 탭·셸을 보므로 빈 목록만 돌려준다(홈 내용은 AppHome.test.jsx).
+vi.mock('@butler/api-client', () => {
+  const empty = () => Promise.resolve({ data: [], meta: { page: 1, size: 100, total: 0, hasNext: false } });
+  return { getContractList: vi.fn(empty), getPropertyList: vi.fn(empty), getPropertyOwnershipList: vi.fn(empty) };
+});
+
+const { LandlordAppRoutes } = await import('../../src/landlord/app/LandlordAppRoutes');
 
 const USER = { id: 'l-1', name: '김집주', email: 'landlord@butler.test', role: 'LANDLORD' };
 
@@ -88,7 +95,6 @@ describe('임대인 앱: 하단 탭', () => {
 
 describe('임대인 앱: 준비 중 화면', () => {
   it.each([
-    '/landlord/home',
     '/landlord/buildings',
     '/landlord/community',
     '/landlord/community/briefing',
