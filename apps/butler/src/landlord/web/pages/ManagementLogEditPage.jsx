@@ -43,8 +43,8 @@ const EditForm = ({ log, onNavigate, onUnauthorized }) => {
   };
 
   return (
-    <div className="grid grid-cols-3 items-start gap-6">
-      <Card className="col-span-2 space-y-6 p-6">
+    <div className="grid grid-cols-4 items-start gap-6">
+      <Card className="col-span-3 space-y-5 p-6">
         <ManagementLogForm
           form={form}
           onChange={updateField}
@@ -80,7 +80,7 @@ export const ManagementLogEditPage = ({ logId, onNavigate, onUnauthorized }) => 
   const { data: log, error } = useGetManagementLog(logId, { onUnauthorized });
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader title="기록 수정" onBack={() => window.history.back()} />
       {error && <NoticeBox>{error.message}</NoticeBox>}
       {!log && !error && <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}

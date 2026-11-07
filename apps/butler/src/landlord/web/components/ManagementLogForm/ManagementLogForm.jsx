@@ -34,18 +34,53 @@ export const toLogFields = (form) => ({
 // 사진을 올리는 중이거나 실패한 사진이 남아 있으면 저장하지 않는다(빼거나 끝날 때까지).
 export const isAttachmentReady = (uploads) => !uploads.isUploading && !uploads.hasFailed;
 
-// 유형·제목·내용·날짜·비용·사진 입력. 호실·공개 범위는 쓰는 화면이 따로 그린다.
+// 유형·제목·내용·날짜·비용·사진 입력. 호실·공개 범위 칸은 쓰는 화면이 propertyField·scopeField로 넘긴다(없으면 생략).
+// PC 배치는 가로 3칸 한 격자: 호실(2칸) · 날짜 / 공개 범위 · 유형 · 비용 / 제목 / 내용 / 사진.
+// 호실·공개 범위가 없는 수정 화면은 날짜 · 유형 · 비용이 한 줄이 된다.
 // uploads: useAttachmentUploads() 반환값. 저장할 때 uploads.documentIds를 attachmentDocumentIds로 보낸다.
-export const ManagementLogForm = ({ form, onChange, fieldError, uploads, onUnauthorized, disabled = false }) => (
+export const ManagementLogForm = ({
+  form,
+  onChange,
+  fieldError,
+  uploads,
+  onUnauthorized,
+  disabled = false,
+  propertyField = null,
+  scopeField = null,
+}) => (
   <>
-    <div className="flex flex-col gap-1.5">
-      <span className="text-label font-semibold text-ink">유형</span>
-      <SegmentedControl
-        ariaLabel="유형"
-        options={WRITABLE_TYPE_OPTIONS}
-        value={form.type}
-        onChange={(value) => onChange('type', value)}
-        className="max-w-sm"
+    <div className="grid grid-cols-3 items-start gap-4">
+      {propertyField && <div className="col-span-2">{propertyField}</div>}
+      <TextField
+        label="날짜"
+        required
+        type="date"
+        className="font-num tabular-nums"
+        max="9999-12-31"
+        value={form.occurredOn}
+        onChange={(event) => onChange('occurredOn', event.target.value)}
+        error={fieldError('occurredOn')}
+        disabled={disabled}
+      />
+      {scopeField}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-label font-semibold text-ink">유형</span>
+        <SegmentedControl
+          ariaLabel="유형"
+          options={WRITABLE_TYPE_OPTIONS}
+          value={form.type}
+          onChange={(value) => onChange('type', value)}
+        />
+      </div>
+      <TextField
+        label="비용 (선택, 원)"
+        inputMode="numeric"
+        className="font-num tabular-nums"
+        placeholder="350,000"
+        value={form.cost === '' ? '' : formatNumber(Number(form.cost))}
+        onChange={(event) => onChange('cost', event.target.value.replace(/\D/g, ''))}
+        error={fieldError('cost')}
+        disabled={disabled}
       />
     </div>
     <TextField
@@ -64,7 +99,7 @@ export const ManagementLogForm = ({ form, onChange, fieldError, uploads, onUnaut
       </label>
       <textarea
         id="log-content"
-        rows={5}
+        rows={3}
         maxLength={MAX_CONTENT_LENGTH}
         placeholder="작업 내용이나 기억해 둘 내용"
         value={form.content}
@@ -73,29 +108,6 @@ export const ManagementLogForm = ({ form, onChange, fieldError, uploads, onUnaut
         className="rounded-input border border-line bg-surface px-3 py-2.5 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
       />
       {fieldError('content') && <p className="text-chip text-crit-ink">{fieldError('content')}</p>}
-    </div>
-    <div className="grid grid-cols-2 gap-4">
-      <TextField
-        label="날짜"
-        required
-        type="date"
-        className="font-num tabular-nums"
-        max="9999-12-31"
-        value={form.occurredOn}
-        onChange={(event) => onChange('occurredOn', event.target.value)}
-        error={fieldError('occurredOn')}
-        disabled={disabled}
-      />
-      <TextField
-        label="비용 (선택, 원)"
-        inputMode="numeric"
-        className="font-num tabular-nums"
-        placeholder="350,000"
-        value={form.cost === '' ? '' : formatNumber(Number(form.cost))}
-        onChange={(event) => onChange('cost', event.target.value.replace(/\D/g, ''))}
-        error={fieldError('cost')}
-        disabled={disabled}
-      />
     </div>
     {uploads && <AttachmentPicker uploads={uploads} disabled={disabled} onUnauthorized={onUnauthorized} />}
     {fieldError('attachmentDocumentIds') && <p className="text-chip text-crit-ink">{fieldError('attachmentDocumentIds')}</p>}

@@ -63,60 +63,62 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
     if (error?.status === 400) setServerFieldErrors(toFieldErrors(error));
   };
 
+  const propertyField = (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="log-property" className="text-label font-semibold text-ink">
+        호실
+        <RequiredMark />
+      </label>
+      <select
+        id="log-property"
+        aria-required="true"
+        value={propertyId}
+        onChange={(event) => setPropertyId(event.target.value)}
+        disabled={Boolean(fixedPropertyId) || !propertyList.data || isSubmitting}
+        className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
+      >
+        <option value="" disabled>
+          {propertyList.data ? '기록할 호실을 선택해 주세요' : '불러오는 중'}
+        </option>
+        {properties.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.displayName}
+          </option>
+        ))}
+      </select>
+      {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
+      {isPropertyMissing && <p className="text-chip text-crit-ink">지금 소유한 호실 중에 없어요.</p>}
+      {propertyList.data && properties.length === 0 && (
+        <p className="text-chip text-ink-3">먼저 호실을 등록해 주세요</p>
+      )}
+    </div>
+  );
+  const scopeField = (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-label font-semibold text-ink">공개 범위</span>
+      <SegmentedControl
+        ariaLabel="공개 범위"
+        options={[
+          { value: 'PRIVATE', label: SCOPE_LABEL.PRIVATE },
+          { value: 'PROPERTY_HISTORY', label: SCOPE_LABEL.PROPERTY_HISTORY, disabled: !isVerified },
+        ]}
+        value={effectiveScope}
+        onChange={setScope}
+      />
+      <p className="text-chip text-ink-3">
+        {isVerified
+          ? '호실 이력은 다음 소유자에게 넘어가고 지울 수 없어요. 임차인 정보는 적지 말아 주세요. 정한 뒤에는 바꿀 수 없어요.'
+          : `호실 이력은 ${VERIFICATION_REQUIRED_MESSAGE}.`}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader title="기록 추가" description="호실에 있었던 일을 남겨 두세요." onBack={() => window.history.back()} />
 
-      <div className="grid grid-cols-3 items-start gap-6">
-        <Card className="col-span-2 space-y-6 p-6">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="log-property" className="text-label font-semibold text-ink">
-              호실
-              <RequiredMark />
-            </label>
-            <select
-              id="log-property"
-              aria-required="true"
-              value={propertyId}
-              onChange={(event) => setPropertyId(event.target.value)}
-              disabled={Boolean(fixedPropertyId) || !propertyList.data || isSubmitting}
-              className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
-            >
-              <option value="" disabled>
-                {propertyList.data ? '기록할 호실을 선택해 주세요' : '불러오는 중'}
-              </option>
-              {properties.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.displayName}
-                </option>
-              ))}
-            </select>
-            {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
-            {isPropertyMissing && <p className="text-chip text-crit-ink">지금 소유한 호실 중에 없어요.</p>}
-            {propertyList.data && properties.length === 0 && (
-              <p className="text-chip text-ink-3">먼저 호실을 등록해 주세요</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold text-ink">공개 범위</span>
-            <SegmentedControl
-              ariaLabel="공개 범위"
-              options={[
-                { value: 'PRIVATE', label: SCOPE_LABEL.PRIVATE },
-                { value: 'PROPERTY_HISTORY', label: SCOPE_LABEL.PROPERTY_HISTORY, disabled: !isVerified },
-              ]}
-              value={effectiveScope}
-              onChange={setScope}
-              className="max-w-sm"
-            />
-            <p className="text-chip text-ink-3">
-              {isVerified
-                ? '호실 이력은 다음 소유자에게 넘어가고 지울 수 없어요. 임차인 정보는 적지 말아 주세요. 정한 뒤에는 바꿀 수 없어요.'
-                : `호실 이력은 ${VERIFICATION_REQUIRED_MESSAGE}.`}
-            </p>
-          </div>
-
+      <div className="grid grid-cols-4 items-start gap-6">
+        <Card className="col-span-3 space-y-5 p-6">
           <ManagementLogForm
             form={form}
             onChange={updateField}
@@ -124,6 +126,8 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
             uploads={uploads}
             onUnauthorized={onUnauthorized}
             disabled={isSubmitting}
+            propertyField={propertyField}
+            scopeField={scopeField}
           />
         </Card>
 
