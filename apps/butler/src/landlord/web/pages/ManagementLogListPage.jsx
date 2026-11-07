@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { Button, Card, FilterChip } from '@butler/ui';
+import { Button, Card, SegmentedControl } from '@butler/ui';
 import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -52,11 +52,11 @@ const ManagementLogListSection = ({ propertyId, type, onNavigate, onUnauthorized
       <table className="w-full text-body">
         <thead>
           <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-            <th className="px-5 py-2.5 font-medium">날짜</th>
-            <th className="px-3 py-2.5 font-medium">호실</th>
-            <th className="px-3 py-2.5 font-medium">제목</th>
-            <th className="px-3 py-2.5 font-medium">구분</th>
-            <th className="px-5 py-2.5 text-right font-medium">비용</th>
+            <th className="whitespace-nowrap px-5 py-2.5 font-medium">날짜</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">호실</th>
+            <th className="w-full px-3 py-2.5 font-medium">제목</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">구분</th>
+            <th className="whitespace-nowrap px-5 py-2.5 text-right font-medium">비용</th>
           </tr>
         </thead>
         <tbody>
@@ -66,18 +66,18 @@ const ManagementLogListSection = ({ propertyId, type, onNavigate, onUnauthorized
               onClick={() => onNavigate('logDetail', { logId: log.id })}
               className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
             >
-              <td className="whitespace-nowrap px-5 py-3.5 font-num tabular-nums text-ink-2">{log.occurredOn}</td>
-              <td className="px-3 py-3.5 text-ink-2">{log.property.displayName}</td>
-              <td className="px-3 py-3.5 font-semibold text-ink">
+              <td className="whitespace-nowrap px-5 py-3 font-num tabular-nums text-ink-2">{log.occurredOn}</td>
+              <td className="whitespace-nowrap px-3 py-3 text-ink-2">{log.property.displayName}</td>
+              <td className="px-3 py-3 font-semibold text-ink">
                 {log.title}
                 {formatAttachmentCount(log.attachments) && (
                   <span className="ml-2 font-num text-chip font-normal tabular-nums text-ink-3">{formatAttachmentCount(log.attachments)}</span>
                 )}
               </td>
-              <td className="px-3 py-3.5">
-                <ManagementLogBadges log={log} />
+              <td className="whitespace-nowrap px-3 py-3">
+                <ManagementLogBadges log={log} wrap={false} />
               </td>
-              <td className="whitespace-nowrap px-5 py-3.5 text-right font-num tabular-nums text-ink-2">
+              <td className="whitespace-nowrap px-5 py-3 text-right font-num tabular-nums text-ink-2">
                 {formatWon(log.cost) ?? '—'}
               </td>
             </tr>
@@ -97,7 +97,10 @@ const ManagementLogListSection = ({ propertyId, type, onNavigate, onUnauthorized
   );
 };
 
-// 관리 로그(하우스 로그) 전체 목록(S-04). 호실 필터는 주소(?propertyId=)에 남겨 호실 상세의 [전체 보기]로 바로 들어온다.
+// 유형 세그먼트: 전체 + 수리·점검·메모·수리 요청 완료. 값 ''은 전체(유형 조건 없음).
+const TYPE_SEGMENT_OPTIONS = [{ value: '', label: '전체' }, ...TYPE_FILTER_OPTIONS];
+
+// 관리 로그(하우스 로그) 전체 목록(S-04). 필터는 한 줄 필터 바(호실 · 유형 · [초기화]). 호실 필터는 주소(?propertyId=)에 남겨 호실 상세의 [전체 보기]로 바로 들어온다.
 export const ManagementLogListPage = ({ propertyId, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const owned = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
@@ -107,9 +110,14 @@ export const ManagementLogListPage = ({ propertyId, onNavigate, onUnauthorized }
     ...new Map([...(owned.data?.items ?? []), ...(formerlyOwned.data?.items ?? [])].map((item) => [item.id, item])).values(),
   ];
   const [type, setType] = useState(null);
+  const hasFilter = Boolean(propertyId || type);
+  const resetFilters = () => {
+    setType(null);
+    if (propertyId) onNavigate('logs', {}, { replace: true });
+  };
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title="관리 로그 (하우스 로그)"
         description="내 호실의 수리·점검·메모를 날짜 순서로 모아 봐요."
@@ -126,7 +134,7 @@ export const ManagementLogListPage = ({ propertyId, onNavigate, onUnauthorized }
           aria-label="호실"
           value={propertyId ?? ''}
           onChange={(event) => onNavigate('logs', { propertyId: event.target.value || undefined }, { replace: true })}
-          className="h-11 max-w-xs rounded-input border border-line bg-surface px-3 text-body text-ink outline-none focus:border-accent"
+          className="h-12 w-64 rounded-input border border-line bg-surface px-3 text-body text-ink outline-none focus:border-accent"
         >
           <option value="">전체 호실</option>
           {properties.map((property) => (
@@ -135,17 +143,17 @@ export const ManagementLogListPage = ({ propertyId, onNavigate, onUnauthorized }
             </option>
           ))}
         </select>
-        <div role="group" aria-label="유형" className="flex flex-wrap gap-2">
-          {TYPE_FILTER_OPTIONS.map((option) => (
-            <FilterChip
-              key={option.value}
-              selected={option.value === type}
-              onClick={() => setType((prev) => (prev === option.value ? null : option.value))}
-            >
-              {option.label}
-            </FilterChip>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="유형"
+          options={TYPE_SEGMENT_OPTIONS}
+          value={type ?? ''}
+          onChange={(value) => setType(value || null)}
+        />
+        {hasFilter && (
+          <Button variant="secondary" onClick={resetFilters}>
+            초기화
+          </Button>
+        )}
       </div>
 
       <ManagementLogListSection
