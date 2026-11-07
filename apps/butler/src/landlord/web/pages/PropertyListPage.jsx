@@ -54,10 +54,10 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
       <table className="w-full text-body">
         <thead>
           <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-            <th className="px-5 py-2.5 font-medium">호실</th>
-            <th className="px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
-            {!isFormer && <th className="px-3 py-2.5 font-medium">계약</th>}
-            <th className="px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
+            <th className="w-full px-5 py-2.5 font-medium">호실</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
+            {!isFormer && <th className="whitespace-nowrap px-3 py-2.5 font-medium">계약</th>}
+            <th className="whitespace-nowrap px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
           </tr>
         </thead>
         <tbody>
@@ -72,10 +72,10 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
                 onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
                 className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
               >
-                <td className="px-5 py-3.5 font-semibold text-ink">{property.displayName}</td>
-                <td className="px-3 py-3.5 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                <td className="px-5 py-3 font-semibold text-ink">{property.displayName}</td>
+                <td className="whitespace-nowrap px-3 py-3 font-num tabular-nums text-ink-2">{spec || '—'}</td>
                 {!isFormer && (
-                  <td className="px-3 py-3.5" onClick={(event) => event.stopPropagation()}>
+                  <td className="whitespace-nowrap px-3 py-3" onClick={(event) => event.stopPropagation()}>
                     <PropertyContractCell
                       property={property}
                       onNavigate={onNavigate}
@@ -84,7 +84,7 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
                     />
                   </td>
                 )}
-                <td className="px-5 py-3.5">
+                <td className="whitespace-nowrap px-5 py-3">
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                 </td>
               </tr>
@@ -106,32 +106,39 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
   );
 };
 
+// 소유 구분 탭(세그먼트). 페이지 머리 오른쪽(actions)에 둬서 탭만 쓰는 줄을 없앤다.
+const RelationTabs = ({ relation, onNavigate }) => (
+  <div role="tablist" aria-label="소유 구분" className="flex w-80 gap-1 rounded-btn border border-line bg-surface-2 p-1">
+    {RELATION_TABS.map((tab) => {
+      const isSelected = tab.relation === relation;
+      return (
+        <button
+          key={tab.relation}
+          type="button"
+          role="tab"
+          id={`property-tab-${tab.relation}`}
+          aria-selected={isSelected}
+          aria-controls="property-tabpanel"
+          onClick={() => !isSelected && onNavigate('properties', { relation: tab.relation }, { replace: true })}
+          className={`h-10 flex-1 rounded-input text-body transition-colors ${
+            isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
+          }`}
+        >
+          {tab.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
 // 호실 목록: 현재 소유 / 예전 소유. 선택한 탭은 view params(relation)에 두어 뒤로가기로 돌아와도 유지된다.
 export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => (
-  <div className="w-full max-w-6xl space-y-6 pb-10">
-    <PageHeader title="호실 목록" onBack={() => window.history.back()} />
-
-    <div role="tablist" aria-label="소유 구분" className="flex w-80 gap-1 rounded-btn border border-line bg-surface-2 p-1">
-      {RELATION_TABS.map((tab) => {
-        const isSelected = tab.relation === relation;
-        return (
-          <button
-            key={tab.relation}
-            type="button"
-            role="tab"
-            id={`property-tab-${tab.relation}`}
-            aria-selected={isSelected}
-            aria-controls="property-tabpanel"
-            onClick={() => !isSelected && onNavigate('properties', { relation: tab.relation }, { replace: true })}
-            className={`h-10 flex-1 rounded-input text-body transition-colors ${
-              isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
-            }`}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+  <div className="w-full space-y-6 pb-10">
+    <PageHeader
+      title="호실 목록"
+      onBack={() => window.history.back()}
+      actions={<RelationTabs relation={relation} onNavigate={onNavigate} />}
+    />
 
     <div role="tabpanel" id="property-tabpanel" aria-labelledby={`property-tab-${relation}`}>
       <PropertyListSection key={relation} relation={relation} onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
