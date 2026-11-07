@@ -43,6 +43,16 @@ export default {
         btn: ['15px', { lineHeight: '1.5' }],
         'btn-sm': ['14px', { lineHeight: '1.5' }],
         'num-lg': ['20px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        // #98 앱(모바일) 화면용. 위 기존 단계(h1·card·label·sub·chip·kpi)는 줄 높이가 Figma 와 달라서(웹 화면을 지키려고) 덮어쓰지 않고,
+        // Figma 값(줄 높이 1.5, 숫자 단계는 1.3) 그대로인 새 키를 따로 둔다. 웹 화면은 계속 위 기존 키를 쓴다.
+        'm-h1': ['22px', { lineHeight: '1.5' }],
+        'm-card': ['16px', { lineHeight: '1.5' }],
+        'm-label': ['13px', { lineHeight: '1.5' }],
+        'm-sub': ['12.5px', { lineHeight: '1.5' }],
+        'm-chip': ['12px', { lineHeight: '1.5' }],
+        'num-kpi': ['28px', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        'num-body': ['14px', { lineHeight: '1.3' }],
+        'num-sub': ['12.5px', { lineHeight: '1.3' }],
       },
       borderRadius: {
         card: '14px',
