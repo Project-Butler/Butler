@@ -7,14 +7,14 @@ export const TopBar = ({ brand = 'Butler', avatar }) => (
   <header className="sticky top-0 z-10 flex min-h-[53px] items-center justify-between border-b border-line bg-surface px-5 py-2.5">
     <div className="flex items-center gap-2">
       <img src={logoMark} alt="" width={24} height={24} />
-      <p className="text-card font-semibold text-ink">{brand}</p>
+      <p className="text-m-card font-semibold text-ink">{brand}</p>
     </div>
     {avatar && (
       <button
         type="button"
         aria-label={avatar.label ?? '내 계정'}
         onClick={avatar.onClick}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-chip font-semibold text-accent-strong"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-m-chip font-semibold text-accent-strong"
       >
         {avatar.name?.trim()?.[0] ?? '○'}
       </button>
