@@ -15,9 +15,10 @@ const FieldLabel = ({ children, htmlFor, required = false }) => (
   </label>
 );
 
+// 설비 체크(칩형, 높이 36). 한 줄 6개로 15개가 3줄에 들어간다.
 const CheckboxChip = ({ checked, onChange, label, disabled }) => (
   <label
-    className={`flex h-10 cursor-pointer items-center gap-2 rounded-input border px-3 text-body transition-colors ${
+    className={`flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-input border px-3 text-body transition-colors ${
       checked ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line text-ink-2 hover:bg-surface-2'
     } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
   >
@@ -58,6 +59,14 @@ const AddressField = ({ complex, onOpen, error, disabled }) => (
   </div>
 );
 
+// 라벨 줄 오른쪽에 붙는 작은 체크(동 없는 건물). 별도 줄을 쓰지 않는다.
+const InlineCheckbox = ({ checked, onChange, label, disabled }) => (
+  <label className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sub text-ink-2 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}>
+    <input type="checkbox" className="accent-accent" checked={checked} onChange={onChange} disabled={disabled} />
+    {label}
+  </label>
+);
+
 // 부동산 등록(POST /properties): 주소와 동·호를 한 화면에서 입력한다. 저장하면 권리자 인증 화면으로 간다(기록 바꿈).
 // 한 번에 한 호실씩 등록한다. 여러 호실은 인증 화면의 [나중에 하기]·[다른 호실 등록]을 거쳐 이어서 등록한다.
 export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
@@ -95,12 +104,12 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
   const goBack = () => window.history.back();
 
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader title="부동산 등록" description="주소와 동·호를 입력하면 등록돼요." onBack={goBack} />
 
-      <div className="grid grid-cols-3 items-start gap-6">
-        <div className="col-span-2 space-y-4">
-          <Card className="space-y-6 p-6">
+      <div className="grid grid-cols-4 items-start gap-6">
+        <div className="col-span-3 space-y-4">
+          <Card className="space-y-5 p-6">
             <AddressField
               complex={complex}
               onOpen={openDialog}
@@ -108,7 +117,8 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
               disabled={isSubmitting}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* 동 · 호 · 층 · 전용면적 한 줄 4칸 */}
+            <div className="grid grid-cols-4 items-start gap-4">
               <div className="space-y-2">
                 {hasDongList ? (
                   <>
@@ -153,9 +163,18 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
                     )}
                   </>
                 ) : (
-                  <>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <FieldLabel htmlFor="building-no">동 (선택)</FieldLabel>
+                      <InlineCheckbox
+                        label="동 없는 건물"
+                        checked={form.noDong}
+                        onChange={(event) => updateField('noDong', event.target.checked)}
+                        disabled={disabled}
+                      />
+                    </div>
                     <TextField
-                      label="동 (선택)"
+                      id="building-no"
                       suffix="동"
                       placeholder="101"
                       value={form.noDong ? '' : form.buildingNo}
@@ -163,18 +182,7 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
                       error={fieldError('buildingNo')}
                       disabled={disabled || form.noDong}
                     />
-                    <CheckboxChip
-                      label="동이 없는 건물이에요"
-                      checked={form.noDong}
-                      onChange={(event) => updateField('noDong', event.target.checked)}
-                      disabled={disabled}
-                    />
-                  </>
-                )}
-                {showUnknownDongWarning && (
-                  <NoticeBox tone="warn">
-                    이 주소의 동 목록({dongRange})에 없는 동이에요. 맞는지 확인해 주세요. 그대로 등록할 수도 있어요.
-                  </NoticeBox>
+                  </div>
                 )}
               </div>
               <TextField
@@ -187,13 +195,9 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
                 error={fieldError('unitNo')}
                 disabled={disabled}
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <TextField
                 label="층 (선택)"
-                placeholder="12 또는 B1"
-                hint="지하는 B1, 지하1처럼 적어요"
+                placeholder="12, 지하는 B1"
                 value={form.floor}
                 onChange={(event) => updateField('floor', event.target.value)}
                 error={fieldError('floor')}
@@ -210,29 +214,46 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
                 disabled={disabled}
               />
             </div>
+            {showUnknownDongWarning && (
+              <NoticeBox tone="warn">
+                이 주소의 동 목록({dongRange})에 없는 동이에요. 맞는지 확인해 주세요. 그대로 등록할 수도 있어요.
+              </NoticeBox>
+            )}
 
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel htmlFor="unit-type">방 구성 (선택)</FieldLabel>
-              <select
-                id="unit-type"
-                value={form.unitType}
-                onChange={(event) => updateField('unitType', event.target.value)}
+            {/* 방 구성 · 기타 설비 한 줄 2칸 */}
+            <div className="grid grid-cols-2 items-start gap-4">
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel htmlFor="unit-type">방 구성 (선택)</FieldLabel>
+                <select
+                  id="unit-type"
+                  value={form.unitType}
+                  onChange={(event) => updateField('unitType', event.target.value)}
+                  disabled={disabled}
+                  className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
+                >
+                  <option value="">선택 안 함</option>
+                  {UNIT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {fieldError('unitType') && <p className="text-chip text-crit-ink">{fieldError('unitType')}</p>}
+              </div>
+              <TextField
+                label="기타 설비 (선택)"
+                placeholder="예: 커튼, 블라인드"
+                maxLength={MAX_EQUIPMENT_ETC_LENGTH}
+                value={form.equipmentEtc}
+                onChange={(event) => updateField('equipmentEtc', event.target.value)}
+                error={fieldError('equipmentEtc')}
                 disabled={disabled}
-                className="h-12 rounded-input border border-line bg-surface px-3 text-card text-ink outline-none focus:border-accent disabled:bg-surface-2"
-              >
-                <option value="">선택 안 함</option>
-                {UNIT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {fieldError('unitType') && <p className="text-chip text-crit-ink">{fieldError('unitType')}</p>}
+              />
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <p className="text-label font-semibold text-ink">설비 (선택)</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-6 gap-2">
                 {EQUIPMENT_OPTIONS.map((option) => (
                   <CheckboxChip
                     key={option.value}
@@ -244,15 +265,6 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
                 ))}
               </div>
               {fieldError('equipment') && <p className="text-chip text-crit-ink">{fieldError('equipment')}</p>}
-              <TextField
-                label="기타 설비 (선택)"
-                placeholder="예: 커튼, 블라인드"
-                maxLength={MAX_EQUIPMENT_ETC_LENGTH}
-                value={form.equipmentEtc}
-                onChange={(event) => updateField('equipmentEtc', event.target.value)}
-                error={fieldError('equipmentEtc')}
-                disabled={disabled}
-              />
             </div>
           </Card>
         </div>
