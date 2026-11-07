@@ -115,7 +115,7 @@ export const ContractEditPage = ({ contractId, onUnauthorized }) => {
 
   return (
     <div className="w-full space-y-6 pb-10">
-      <PageHeader title="계약 수정" description={contract?.tenantName} onBack={() => window.history.back()} />
+      <PageHeader title="계약 수정" description={contract?.tenantName} />
       {contractQuery.error && <NoticeBox>{contractQuery.error.message}</NoticeBox>}
       {!contract && !contractQuery.error && <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
       {contract?.isReadOnly && <NoticeBox tone="warn">끝난 계약이나 소유가 끝난 호실의 계약은 수정할 수 없어요</NoticeBox>}

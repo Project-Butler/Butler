@@ -136,7 +136,6 @@ export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => (
   <div className="w-full space-y-6 pb-10">
     <PageHeader
       title="호실 목록"
-      onBack={() => window.history.back()}
       actions={<RelationTabs relation={relation} onNavigate={onNavigate} />}
     />
 

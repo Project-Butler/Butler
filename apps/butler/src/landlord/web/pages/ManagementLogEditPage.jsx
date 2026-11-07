@@ -81,7 +81,7 @@ export const ManagementLogEditPage = ({ logId, onNavigate, onUnauthorized }) => 
 
   return (
     <div className="w-full space-y-6 pb-10">
-      <PageHeader title="기록 수정" onBack={() => window.history.back()} />
+      <PageHeader title="기록 수정" />
       {error && <NoticeBox>{error.message}</NoticeBox>}
       {!log && !error && <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
       {log?.isReadOnly && <NoticeBox>이 기록은 수정할 수 없어요.</NoticeBox>}

@@ -115,7 +115,7 @@ export const ManagementLogRegisterPage = ({ propertyId: fixedPropertyId, onNavig
 
   return (
     <div className="w-full space-y-6 pb-10">
-      <PageHeader title="기록 추가" description="호실에 있었던 일을 남겨 두세요." onBack={() => window.history.back()} />
+      <PageHeader title="기록 추가" description="호실에 있었던 일을 남겨 두세요." />
 
       <div className="grid grid-cols-4 items-start gap-6">
         <Card className="col-span-3 space-y-5 p-6">

@@ -8,7 +8,6 @@ export const SupportInquiryPage = () => (
     <PageHeader
       title="관리자 문의"
       description="권리자 인증이나 호실 소유 관계에 문제가 있으면 알려 주세요."
-      onBack={() => window.history.back()}
     />
     <NoticeBox tone="warn">문의 접수는 준비 중이에요. 지금은 입력하거나 보낼 수 없어요.</NoticeBox>
     <Card className="space-y-5 p-6">

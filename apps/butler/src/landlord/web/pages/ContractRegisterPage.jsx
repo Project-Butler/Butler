@@ -168,7 +168,6 @@ export const ContractRegisterPage = ({ params, onNavigate, onUnauthorized }) => 
       <PageHeader
         title={params.renewFrom ? '갱신 계약 등록' : '계약 등록'}
         description={`계약 조건과 임차인 연락처를 입력해 주세요. ${CONTRACT_LEGAL_NOTICE}.`}
-        onBack={() => window.history.back()}
       />
       {renewQuery.error && <NoticeBox>{renewQuery.error.message}</NoticeBox>}
       {isWaitingPrevious && !renewQuery.error && (

@@ -123,7 +123,7 @@ export const PropertyVerifyPage = ({ propertyId, notice, onVerified, onNavigate,
   const goLater = () => onNavigate('buildingList', notice ? { notice } : {});
 
   const header = (
-    <PageHeader title="권리자 인증" description={property?.displayName} onBack={() => window.history.back()} />
+    <PageHeader title="권리자 인증" description={property?.displayName} />
   );
   const pageError = propertyQuery.error ?? ownershipQuery.error;
   const isNotOwner = property && !ownershipId;

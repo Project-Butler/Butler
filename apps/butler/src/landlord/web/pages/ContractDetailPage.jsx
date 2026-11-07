@@ -122,7 +122,7 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
   if (!contract) {
     return (
       <div className="w-full max-w-6xl space-y-6 pb-10">
-        <PageHeader title="계약 상세" onBack={() => window.history.back()} />
+        <PageHeader title="계약 상세" />
         {contractQuery.error ? (
           <NoticeBox>{contractQuery.error.message}</NoticeBox>
         ) : (
@@ -143,7 +143,6 @@ export const ContractDetailPage = ({ contractId, onNavigate, onUnauthorized }) =
       <PageHeader
         title={contract.property.displayName}
         description={`${contract.tenantName} · ${getLeaseTypeLabel(contract.leaseType)} 계약`}
-        onBack={() => window.history.back()}
         actions={
           canEdit && (
             <>

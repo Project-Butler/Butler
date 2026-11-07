@@ -628,7 +628,7 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
   if (!property) {
     return (
       <div className="w-full max-w-6xl space-y-6">
-        <PageHeader title="호실 상세" onBack={goBack} />
+        <PageHeader title="호실 상세" />
         {propertyQuery.error ? (
           <NoticeBox>{propertyQuery.error.message}</NoticeBox>
         ) : (
@@ -646,7 +646,6 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
       <PageHeader
         title={property.displayName}
         description={complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress}
-        onBack={goBack}
         actions={
           <>
             <Badge tone={status.tone}>{status.label}</Badge>

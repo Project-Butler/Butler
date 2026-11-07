@@ -101,11 +101,10 @@ export const PropertyRegisterPage = ({ onNavigate, onUnauthorized }) => {
     if (result) onNavigate('propertyVerify', { propertyId: result.property.id, ...(result.notice && { notice: result.notice }) }, { replace: true });
   };
 
-  const goBack = () => window.history.back();
 
   return (
     <div className="w-full space-y-6 pb-10">
-      <PageHeader title="부동산 등록" description="주소와 동·호를 입력하면 등록돼요." onBack={goBack} />
+      <PageHeader title="부동산 등록" description="주소와 동·호를 입력하면 등록돼요." />
 
       <div className="grid grid-cols-4 items-start gap-6">
         <div className="col-span-3 space-y-4">

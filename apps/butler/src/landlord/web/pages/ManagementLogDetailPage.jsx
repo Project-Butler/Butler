@@ -59,7 +59,7 @@ export const ManagementLogDetailPage = ({ logId, onNavigate, onUnauthorized }) =
   if (!log) {
     return (
       <div className="w-full max-w-6xl space-y-6 pb-10">
-        <PageHeader title="기록 상세" onBack={() => window.history.back()} />
+        <PageHeader title="기록 상세" />
         {error ? <NoticeBox>{error.message}</NoticeBox> : <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
       </div>
     );
@@ -70,7 +70,6 @@ export const ManagementLogDetailPage = ({ logId, onNavigate, onUnauthorized }) =
       <PageHeader
         title={log.title}
         description={log.property.displayName}
-        onBack={() => window.history.back()}
         actions={
           !log.isReadOnly && (
             <Button variant="secondary" onClick={() => onNavigate('logEdit', { logId: log.id })}>
