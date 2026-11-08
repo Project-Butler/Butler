@@ -55,7 +55,7 @@ const NAV_KEY_BY_VIEW = {
   disputeTopic: 'disputes',
 };
 const SUB_TITLE_BY_VIEW = {
-  properties: '호실 목록',
+  properties: '예전 소유',
   propertyDetail: '호실 상세',
   propertyRegister: '부동산 등록',
   propertyVerify: '권리자 인증',

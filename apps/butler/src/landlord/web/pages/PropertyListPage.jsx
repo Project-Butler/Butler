@@ -1,27 +1,25 @@
-import { useState } from 'react';
-import { Badge, Button, Card } from '@butler/ui';
+import { useEffect, useState } from 'react';
+import { Archive, Plus } from 'lucide-react';
+import { Badge, Button } from '@butler/ui';
+import { EmptyState } from '../components/EmptyState/EmptyState';
+import { IconTile } from '../components/IconTile/IconTile';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
+import { OwnershipTabs } from '../components/OwnershipTabs/OwnershipTabs';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { PropertyContractCell } from '../components/PropertyContractCell/PropertyContractCell';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatUnitSpec } from '../utils/format';
 import { getUnitTypeLabel } from '../utils/unitListing';
-import { getVerificationBadge } from '../utils/verificationBadge';
 
 const PAGE_SIZE = 20;
 
-const RELATION_TABS = [
-  { relation: 'OWNER', label: '현재 소유' },
-  { relation: 'FORMER_OWNER', label: '예전 소유' },
-];
-
-// 한 탭(관계)의 목록. 탭이 바뀌면 key로 새로 시작해 page가 1로 돌아간다.
-const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
+// 예전 소유 호실 표. 소유가 끝난 호실은 계속 쌓일 수 있어 카드 대신 표로 본다. 행을 누르면 그때의 호실 상세(읽기 전용).
+const FormerOwnerTable = ({ onNavigate, onUnauthorized, onTotal }) => {
   const [page, setPage] = useState(1);
-  const { data, error, isLoading, refetch } = useGetPropertyList({ relation, page, size: PAGE_SIZE }, { onUnauthorized });
-  const [contractNotice, setContractNotice] = useState(null);
-  const isFormer = relation === 'FORMER_OWNER';
+  const { data, error, isLoading, refetch } = useGetPropertyList({ relation: 'FORMER_OWNER', page, size: PAGE_SIZE }, { onUnauthorized });
   const items = data?.items ?? [];
+  useEffect(() => {
+    if (data) onTotal(data.meta.total);
+  }, [data, onTotal]);
 
   if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
   if (isLoading && !data) {
@@ -32,115 +30,89 @@ const PropertyListSection = ({ relation, onNavigate, onUnauthorized }) => {
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <Card className="flex flex-col items-center gap-3 px-5 py-16 text-center">
-        <p className="text-card font-semibold text-ink">
-          {isFormer ? '예전에 소유했던 부동산이 없습니다' : '등록한 부동산이 없습니다'}
-        </p>
-        {!isFormer && (
-          <Button onClick={() => onNavigate('buildingList')}>내 부동산으로</Button>
-        )}
-      </Card>
-    );
-  }
-
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex items-center justify-between px-5 py-4">
-        <h2 className="text-section font-semibold text-ink">{isFormer ? '예전 소유 호실' : '현재 소유 호실'}</h2>
-        <span className="font-num text-sub tabular-nums text-ink-3">{data.meta.total}건</span>
-      </div>
-      <table className="w-full text-body">
-        <thead>
-          <tr className="border-y border-line bg-surface-2 text-left text-chip text-ink-3">
-            <th className="w-full px-5 py-2.5 font-medium">호실</th>
-            <th className="whitespace-nowrap px-3 py-2.5 font-medium">방 구성 · 면적 · 층</th>
-            {!isFormer && <th className="whitespace-nowrap px-3 py-2.5 font-medium">계약</th>}
-            <th className="whitespace-nowrap px-5 py-2.5 font-medium">{isFormer ? '상태' : '권리자 인증'}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((property) => {
-            const badge = isFormer
-              ? { tone: 'default', label: '소유 종료' }
-              : getVerificationBadge(property.myRelation?.verificationStatus);
-            const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
-            return (
-              <tr
-                key={property.id}
-                onClick={() => onNavigate('propertyDetail', { propertyId: property.id })}
-                className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
-              >
-                <td className="px-5 py-3 font-semibold text-ink">{property.displayName}</td>
-                <td className="whitespace-nowrap px-3 py-3 font-num tabular-nums text-ink-2">{spec || '—'}</td>
-                {!isFormer && (
-                  <td className="whitespace-nowrap px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                    <PropertyContractCell
-                      property={property}
-                      onNavigate={onNavigate}
-                      onUnauthorized={onUnauthorized}
-                      onNotice={setContractNotice}
-                    />
+    <section className="former-page__table-wrap overflow-hidden rounded-card border border-line bg-surface">
+      {items.length === 0 ? (
+        <EmptyState icon={Archive} title="예전에 소유했던 부동산이 없습니다" description="소유를 끝낸 호실은 여기에 모여요." />
+      ) : (
+        <table className="w-full text-body">
+          <thead>
+            <tr className="border-b border-line bg-surface-2 text-left text-sub font-semibold text-ink-2">
+              <th className="w-full px-5 py-3">호실</th>
+              <th className="whitespace-nowrap px-5 py-3">방 구성 · 면적 · 층</th>
+              <th className="whitespace-nowrap px-5 py-3">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((property) => {
+              const spec = [getUnitTypeLabel(property.myListing?.unitType), formatUnitSpec(property)].filter(Boolean).join(' · ');
+              const open = () => onNavigate('propertyDetail', { propertyId: property.id });
+              return (
+                <tr
+                  key={property.id}
+                  tabIndex={0}
+                  onClick={open}
+                  onKeyDown={(event) => event.key === 'Enter' && open()}
+                  className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                >
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <IconTile icon={Archive} tone="mute" size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-ink">{property.displayName}</p>
+                        {property.complex.roadAddress && <p className="truncate text-sub text-ink-3">{property.complex.roadAddress}</p>}
+                      </div>
+                    </div>
                   </td>
-                )}
-                <td className="whitespace-nowrap px-5 py-3">
-                  <Badge tone={badge.tone}>{badge.label}</Badge>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {contractNotice && <NoticeBox className="m-5">{contractNotice}</NoticeBox>}
+                  <td className="whitespace-nowrap px-5 py-4 font-num tabular-nums text-ink-2">{spec || '—'}</td>
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <Badge>소유 종료</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
       {error && <NoticeBox className="m-5">{error.message}</NoticeBox>}
       {data.meta.hasNext && (
-        // 다음 페이지 로드가 실패했으면 page는 이미 N이므로 N+1로 건너뛰지 않고 같은 페이지를 다시 불러온다.
         <div className="border-t border-line p-4 text-center">
           <Button variant="secondary" disabled={isLoading} onClick={() => (error ? refetch() : setPage((prev) => prev + 1))}>
             {isLoading ? '불러오는 중' : error ? '다시 시도' : '더 보기'}
           </Button>
         </div>
       )}
-    </Card>
+    </section>
   );
 };
 
-// 소유 구분 탭(세그먼트). 페이지 머리 오른쪽(actions)에 둬서 탭만 쓰는 줄을 없앤다.
-const RelationTabs = ({ relation, onNavigate }) => (
-  <div role="tablist" aria-label="소유 구분" className="flex w-80 gap-1 rounded-btn border border-line bg-surface-2 p-1">
-    {RELATION_TABS.map((tab) => {
-      const isSelected = tab.relation === relation;
-      return (
-        <button
-          key={tab.relation}
-          type="button"
-          role="tab"
-          id={`property-tab-${tab.relation}`}
-          aria-selected={isSelected}
-          aria-controls="property-tabpanel"
-          onClick={() => !isSelected && onNavigate('properties', { relation: tab.relation }, { replace: true })}
-          className={`h-10 flex-1 rounded-input text-body transition-colors ${
-            isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
-          }`}
-        >
-          {tab.label}
-        </button>
-      );
-    })}
-  </div>
-);
+// 호실 목록(/properties). 현재 소유(OWNER)는 내 부동산 카드 화면으로 보내고, 예전 소유(FORMER_OWNER)는 표로 보여 준다.
+// 두 화면 제목은 "내 부동산", 머리 오른쪽에 같은 탭(OwnershipTabs) + [부동산 등록].
+export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => {
+  const currentCount = useGetPropertyList({ relation: 'OWNER', size: 1 }, { onUnauthorized });
+  const [formerTotal, setFormerTotal] = useState(null);
 
-// 호실 목록: 현재 소유 / 예전 소유. 선택한 탭은 view params(relation)에 두어 뒤로가기로 돌아와도 유지된다.
-export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => (
-  <div className="w-full space-y-6 pb-10">
-    <PageHeader
-      title="호실 목록"
-      actions={<RelationTabs relation={relation} onNavigate={onNavigate} />}
-    />
+  useEffect(() => {
+    if (relation !== 'FORMER_OWNER') onNavigate('buildingList', {}, { replace: true });
+  }, [relation, onNavigate]);
+  if (relation !== 'FORMER_OWNER') return null;
 
-    <div role="tabpanel" id="property-tabpanel" aria-labelledby={`property-tab-${relation}`}>
-      <PropertyListSection key={relation} relation={relation} onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
+  return (
+    <div className="former-page w-full space-y-5 pb-10">
+      <PageHeader
+        title="내 부동산"
+        description="소유가 끝난 호실이에요. 그때 남긴 계약·관리 기록을 볼 수 있어요."
+        actions={
+          <>
+            <OwnershipTabs active="FORMER_OWNER" counts={{ OWNER: currentCount.data?.meta.total, FORMER_OWNER: formerTotal }} onNavigate={onNavigate} />
+            <Button size="h44" onClick={() => onNavigate('propertyRegister')}>
+              <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" />
+              부동산 등록
+            </Button>
+          </>
+        }
+      />
+      <FormerOwnerTable onNavigate={onNavigate} onUnauthorized={onUnauthorized} onTotal={setFormerTotal} />
     </div>
-  </div>
-);
+  );
+};
