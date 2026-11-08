@@ -20,7 +20,7 @@ const SectionTitle = ({ children }) => <h3 className="text-section font-semibold
 // 사용자가 사례집을 직접 뒤지지 않아도 되게 정리한 내용이 위에 온다.
 export const DisputeTopicPage = () => {
   const { topicKey } = useParams();
-  const { askAi, isAiDocked, setAiSuggestions, openReference, goBack, onNavigate, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onNavigate, onUnauthorized } = useOutletContext();
   const topic = findTopic(topicKey);
   const briefing = TOPIC_BRIEFINGS[topicKey];
   const category = topic?.categories.join(',');
@@ -39,12 +39,6 @@ export const DisputeTopicPage = () => {
   useEffect(() => {
     window.scrollTo?.(0, 0);
   }, [topicKey]);
-
-  // 오른쪽 AI: 이 상황 안내를 읽다가 바로 물어볼 질문
-  useEffect(() => {
-    if (!topic) return;
-    setAiSuggestions?.([`${topic.label} 문제에서 제 경우는 어디에 해당하나요?`, `${topic.label} 안내의 어려운 말을 쉽게 설명해 주세요`]);
-  }, [topic, setAiSuggestions]);
 
   useEffect(() => {
     if (isUnauthorizedError(faqs.error) || isUnauthorizedError(cases.error)) onUnauthorized?.();
@@ -100,8 +94,8 @@ export const DisputeTopicPage = () => {
         onSearch={(q) => onNavigate('disputeSearch', { q })}
         onSearchPrecedent={(q) => onNavigate('disputeSearch', { q, tab: 'PRECEDENT' })}
         onOpenReference={openReference}
-        // 넓은 화면은 오른쪽 AI가 있어서 맨 아래 AI 카드를 두지 않는다.
-        onAsk={isAiDocked ? undefined : askAboutTopic}
+        // 안내를 다 읽고도 답이 없을 때의 AI 입구(맨 끝)
+        onAsk={askAboutTopic}
       />
       <LegalNotice />
     </div>

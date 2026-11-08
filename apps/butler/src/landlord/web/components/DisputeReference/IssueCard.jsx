@@ -1,8 +1,8 @@
 import { AlertCircle, ChevronRight } from 'lucide-react';
 
 // '최근 임대차 이슈'. 기사 요약 대신 임대인에게 미치는 영향을 먼저 쓰고,
-// 내 계약에 해당하는지 확인(AI) · 관련 판례 · 상황 안내로 바로 잇는다.
-export const IssueCard = ({ issue, onCheckMine, onSearch, onOpenTopic }) => (
+// 관련 판례 · 상황 안내로 바로 잇는다. 첫 화면이라 AI 입구는 두지 않는다.
+export const IssueCard = ({ issue, onSearch, onOpenTopic }) => (
   <section className="rounded-card border border-line bg-surface p-5 lg:p-6">
     <p className="flex items-center gap-1.5 text-label font-semibold text-accent-strong">
       <AlertCircle size={16} />
@@ -23,16 +23,8 @@ export const IssueCard = ({ issue, onCheckMine, onSearch, onOpenTopic }) => (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={onCheckMine}
-        className="flex min-h-11 items-center gap-1 rounded-btn bg-accent px-4 text-label font-semibold text-surface transition-colors hover:bg-accent-strong"
-      >
-        내 계약에 해당하는지 확인
-        <ChevronRight size={16} />
-      </button>
-      <button
-        type="button"
         onClick={onSearch}
-        className="flex min-h-11 items-center gap-1 rounded-btn border border-line px-4 text-label font-semibold text-ink transition-colors hover:bg-surface-2"
+        className="flex min-h-11 items-center gap-1 rounded-btn bg-accent px-4 text-label font-semibold text-surface transition-colors hover:bg-accent-strong"
       >
         관련 판례
         <ChevronRight size={16} />

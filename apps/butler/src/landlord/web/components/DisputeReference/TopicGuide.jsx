@@ -194,10 +194,10 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onS
       {onAsk && (
         <section className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
           <Search size={20} className="text-accent" />
-          <p className="mt-2 text-card font-semibold text-ink">그래도 내 상황이 애매하다면</p>
+          <p className="mt-2 text-card font-semibold text-ink">답을 찾지 못하셨나요?</p>
           <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 관련 사례·판례와 도움받을 곳을 찾아 정리해 드려요.</p>
           <Button onClick={onAsk} className="mt-4 min-h-11 px-5">
-            내 상황으로 찾아보기
+            AI에게 물어보기
           </Button>
         </section>
       )}

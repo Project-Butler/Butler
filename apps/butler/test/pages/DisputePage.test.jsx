@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DisputeHomePage } from '../../src/landlord/web/pages/DisputeHomePage';
 import { DisputePage } from '../../src/landlord/web/pages/DisputePage';
 import { DisputeReferenceDetailPage } from '../../src/landlord/web/pages/DisputeReferenceDetailPage';
@@ -95,16 +95,6 @@ const FAQS = [
   },
 ];
 
-// 화면 폭(미디어 쿼리) 흉내. true면 PC 넓은 화면(오른쪽 AI 패널).
-const setWide = (isWide) => {
-  window.matchMedia = vi.fn().mockImplementation((query) => ({
-    matches: isWide,
-    media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  }));
-};
-
 const ChatProbe = () => {
   const { state } = useLocation();
   return <p>챗봇 화면 · {state?.draft ?? '질문 없음'}</p>;
@@ -143,11 +133,8 @@ const renderAt = (path) => {
 const lastListParams = () => api.getDisputeReferenceList.mock.calls.at(-1)[0];
 
 describe('분쟁 해결사', () => {
-  const originalMatchMedia = window.matchMedia;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    setWide(false);
     api.getDisputeReferenceList.mockResolvedValue(listResponse([CASE_ITEM]));
     api.getDisputeReference.mockResolvedValue(CASE_DETAIL);
     api.getDisputeRelatedReferences.mockResolvedValue(RELATED);
@@ -160,10 +147,6 @@ describe('분쟁 해결사', () => {
       ),
     );
     api.getDisputeChatList.mockResolvedValue({ data: [], meta: { page: 1, size: 20, total: 0, hasNext: false } });
-  });
-
-  afterEach(() => {
-    window.matchMedia = originalMatchMedia;
   });
 
   it('조건 없이 들어오면 전체 자료와 상황 칩을 보여 주고, 칩을 누르면 그 상황의 질문과 사례로 좁힌다', async () => {
@@ -393,7 +376,7 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('button', { name: '원상복구·손해배상' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('결과가 없으면 알려 주고, 좁은 화면에서 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
+  it('결과가 없으면 알려 주고, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     api.getDisputeReferenceList.mockResolvedValue(listResponse([], { CASE: 0, PRECEDENT: 0, GUIDELINE: 0 }));
     renderAt('/disputes/search?q=%EB%B0%98%EB%A0%A4%EA%B2%AC');
@@ -404,7 +387,7 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText('챗봇 화면 · 반려견')).toBeInTheDocument();
   });
 
-  it('좁은 화면에서 [내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
+  it('사례 상세 하단 [내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/references/ref-case');
 
@@ -413,24 +396,19 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText(/챗봇 화면 · "퇴거 후 벽지·장판 손상/)).toBeInTheDocument();
   });
 
-  it('넓은 화면은 오른쪽에 AI를 늘 두고, 보고 있는 자료에 맞는 질문 칩을 주며, 접으면 버튼 하나만 남는다', async () => {
-    setWide(true);
+  it('AI는 오른쪽에 붙여 두지 않고, 첫 화면에는 입구가 없으며, 상황 안내를 다 읽은 맨 끝에서 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
-    renderAt('/disputes/references/ref-case');
+    renderAt('/disputes');
 
-    const panel = await screen.findByRole('complementary', { name: 'AI에게 물어보기' });
-    const applyQuestion = `"${CASE_ITEM.title}" 사례가 제 상황에도 해당하는지 알고 싶어요.\n제 상황:`;
-    await user.click(await within(panel).findByRole('button', { name: applyQuestion }));
-    expect(within(panel).getByLabelText('상담 질문')).toHaveValue(applyQuestion);
-    // 같은 일을 하는 본문 버튼은 넓은 화면에 두지 않는다.
-    expect(screen.queryByRole('button', { name: '내 상황에 적용해 보기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /AI/ })).not.toBeInTheDocument();
 
-    await user.click(within(panel).getByRole('button', { name: '접기' }));
-    expect(screen.queryByRole('complementary', { name: 'AI에게 물어보기' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '원상복구·손해배상' }));
+    expect(await screen.findByText('답을 찾지 못하셨나요?')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
-    // 접었다 펴도 쓰던 질문은 남는다.
-    expect(within(screen.getByRole('complementary', { name: 'AI에게 물어보기' })).getByLabelText('상담 질문')).toHaveValue(applyQuestion);
-    expect(screen.getByRole('heading', { name: CASE_ITEM.title })).toBeInTheDocument();
+
+    expect(screen.getByText(/챗봇 화면 · 원상복구·손해배상 문제로 상담하고 싶어요/)).toBeInTheDocument();
   });
 
   it('첫 화면의 질문 칩을 누르면 그 상황 안내 맨 위에 연결된 자주 묻는 질문의 답을 펼친다', async () => {

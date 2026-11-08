@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronRight, Search } from 'lucide-react';
-import { Button } from '@butler/ui';
+import { ChevronRight } from 'lucide-react';
 import { HelpRouteCard } from '../components/DisputeReference/HelpRouteCard';
 import { IssueCard } from '../components/DisputeReference/IssueCard';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
@@ -14,17 +13,13 @@ import { HELP_ROUTES, SEARCH_EXAMPLES, TOPIC_QUESTIONS, WEEKLY_ISSUE } from '../
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
 // 임대차 분쟁 센터 첫 화면. 칸마다 "그래서 뭘 하면 되는지"로 이어지게 둔다.
-// 검색(+ 사례·판례 전체 보기) → 유형별 질문 → 최근 이슈(임대인 영향) → 도움 요청할 곳. AI는 오른쪽에 늘 있다(좁은 화면은 입구 카드).
+// 검색(+ 사례·판례 전체 보기) → 유형별 질문 → 최근 이슈(임대인 영향) → 도움 요청할 곳.
+// 첫 화면에는 AI 입구를 두지 않는다(찾다가 없을 때만 — DisputePage 참고).
 // 서식·도구는 상황마다 다르므로 상황 안내 화면에 둔다.
 // 이슈·기관은 시안이라 고정 내용이다.
 export const DisputeHomePage = () => {
-  const { askAi, isAiDocked, isWideContent, setAiSuggestions, onNavigate } = useOutletContext();
+  const { onNavigate } = useOutletContext();
   const [keyword, setKeyword] = useState('');
-
-  // 오른쪽 AI의 질문 칩은 기본 질문을 쓴다.
-  useEffect(() => {
-    setAiSuggestions?.(null);
-  }, [setAiSuggestions]);
 
   const search = (q) => onNavigate('disputeSearch', { q });
   const openTopic = (topicKey) => onNavigate('disputeTopic', { topicKey });
@@ -67,7 +62,7 @@ export const DisputeHomePage = () => {
 
       <section className="flex flex-col gap-3">
         <SectionTitle>분쟁 유형별로 알아보기</SectionTitle>
-        <ul className={`grid gap-3 sm:grid-cols-2 ${isWideContent ? 'lg:grid-cols-3' : ''}`}>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {DISPUTE_TOPICS.map((topic) => (
             <li key={topic.key}>
               <TopicGuideCard
@@ -81,30 +76,15 @@ export const DisputeHomePage = () => {
         </ul>
       </section>
 
-      {/* 넓은 화면은 오른쪽에 AI가 늘 있어서, 좁은 화면에서만 AI 입구 카드를 둔다. */}
-      {!isAiDocked && (
-        <section className="rounded-card bg-accent p-5 text-surface">
-          <h3 className="flex items-center gap-2 text-card font-semibold">
-            <Search size={18} />
-            내 상황으로 찾아보기
-          </h3>
-          <p className="mt-2 break-keep text-body">상황을 적어 주시면 관련 사례·판례·가이드와 도움받을 기관을 정리해 드려요.</p>
-          <Button variant="secondary" onClick={() => askAi()} className="mt-4 min-h-11 w-full">
-            상황 입력하기
-          </Button>
-        </section>
-      )}
-
       <IssueCard
         issue={WEEKLY_ISSUE}
-        onCheckMine={() => askAi(WEEKLY_ISSUE.askDraft)}
         onSearch={() => onNavigate('disputeSearch', { q: WEEKLY_ISSUE.searchQuery, tab: 'PRECEDENT' })}
         onOpenTopic={() => openTopic(WEEKLY_ISSUE.topicKey)}
       />
 
       <section className="flex flex-col gap-3">
         <SectionTitle>어디에 도움을 요청해야 하나요?</SectionTitle>
-        <ul className={`grid gap-4 ${isWideContent ? 'lg:grid-cols-3' : ''}`}>
+        <ul className="grid gap-4 lg:grid-cols-3">
           {HELP_ROUTES.map((route) => (
             <li key={route.key}>
               <HelpRouteCard route={route} />
