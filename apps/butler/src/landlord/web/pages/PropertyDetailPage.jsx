@@ -7,6 +7,7 @@ import { ManagementLogBadges } from '../components/ManagementLogBadges/Managemen
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
+import { VerifyModal } from '../components/VerifyModal/VerifyModal';
 import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
 import { useGetComplex } from '../hooks/useGetComplex';
 import { useGetLatestOwnershipVerification } from '../hooks/useGetLatestOwnershipVerification';
@@ -541,7 +542,18 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
 };
 
 // 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
-export const PropertyDetailPage = ({ propertyId, focusContractId, verifiedLegalDongCodes, onVerified, onNavigate, onUnauthorized }) => {
+// isVerifyOpen: /properties/:id/verify 로 들어오면 권리자 인증 팝업을 띄운다(onCloseVerify로 닫는다).
+export const PropertyDetailPage = ({
+  propertyId,
+  focusContractId,
+  isVerifyOpen = false,
+  verifyNotice,
+  onCloseVerify,
+  verifiedLegalDongCodes,
+  onVerified,
+  onNavigate,
+  onUnauthorized,
+}) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
   const property = propertyQuery.data;
@@ -643,7 +655,7 @@ export const PropertyDetailPage = ({ propertyId, focusContractId, verifiedLegalD
               attempt={latestAttempt.data}
               isAttemptRunning={latestAttempt.isActive}
               renewalNotice={renewal.notices.find((notice) => notice.id === ownership.id)}
-              onVerify={() => onNavigate('propertyVerify', { propertyId: property.id })}
+              onVerify={() => onNavigate('propertyVerify', { propertyId: property.id, fromDetail: true })}
               onInquiry={() => onNavigate('supportInquiry')}
             />
           )}
@@ -663,6 +675,21 @@ export const PropertyDetailPage = ({ propertyId, focusContractId, verifiedLegalD
           )}
         </aside>
       </div>
+
+      {isVerifyOpen && (
+        <VerifyModal
+          propertyName={property.displayName}
+          ownership={activeOwnershipId ? ownership : undefined}
+          isNotOwner={!activeOwnershipId}
+          latest={latestAttempt}
+          notice={verifyNotice}
+          onClose={onCloseVerify}
+          onInquiry={() => onNavigate('supportInquiry')}
+          onRegisterAnother={() => onNavigate('propertyRegister')}
+          onRevoked={refetchOwnership}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
     </div>
   );
 };

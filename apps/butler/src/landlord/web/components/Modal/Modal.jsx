@@ -11,15 +11,20 @@ const SIZE_CLASS = { md: 'max-w-lg', lg: 'max-w-2xl' };
 export const Modal = ({ title, subtitle, icon, iconTone = 'accent', onClose, footer, size = 'md', children }) => {
   const titleId = useId();
   const panelRef = useRef(null);
+  // onClose가 렌더마다 새로 만들어져도 포커스를 다시 옮기지 않도록 최신 값만 ref로 읽는다(입력 중 포커스 뺏김 방지).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     panelRef.current?.focus();
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, []);
 
   return (
     <div

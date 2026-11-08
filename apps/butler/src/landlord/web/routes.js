@@ -64,10 +64,10 @@ const BUILDERS = {
   propertyRegister: () => ({ pathname: '/properties/new' }),
   // contractId: /contracts/:id 로 들어온 계약(호실 상세의 계약 영역에서 지난 계약이면 펼쳐 둔다)
   propertyDetail: ({ propertyId, contractId }) => ({ pathname: `/properties/${propertyId}`, search: contractId ? `?contract=${contractId}` : '' }),
-  // 등록 직후 안내(notice)는 주소에 남기지 않고 history state로만 넘긴다.
-  propertyVerify: ({ propertyId, notice }) => ({
+  // 호실 상세 위 인증 팝업. 등록 직후 안내(notice)와 호실 상세에서 열었는지(fromDetail)는 history state로만 넘긴다.
+  propertyVerify: ({ propertyId, notice, fromDetail }) => ({
     pathname: `/properties/${propertyId}/verify`,
-    state: notice ? { notice } : undefined,
+    state: notice || fromDetail ? { ...(notice && { notice }), ...(fromDetail && { fromDetail }) } : undefined,
   }),
   supportInquiry: () => ({ pathname: '/support/inquiry' }),
   contracts: () => ({ pathname: '/contracts' }),

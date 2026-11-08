@@ -14,7 +14,6 @@ import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
-import { PropertyVerifyPage } from './pages/PropertyVerifyPage';
 import { SetupPage } from './pages/SetupPage';
 import { SupportInquiryPage } from './pages/SupportInquiryPage';
 import { DisputeChatPage } from './pages/DisputeChatPage';
@@ -82,16 +81,29 @@ const BuildingListRoute = (pageProps) => {
   return <BuildingListPage params={{ notice: state?.notice }} {...pageProps} />;
 };
 
-const PropertyDetailRoute = (pageProps) => {
+// 호실 상세와 권리자 인증(/properties/:id/verify)은 같은 화면이다. 인증 주소면 호실 상세 위에 인증 팝업을 띄운다.
+// 같은 요소·key라 팝업을 열고 닫아도 호실 상세를 다시 불러오지 않는다.
+// 호실 상세에서 연 팝업(state.fromDetail)은 뒤로 가서 닫고(뒤로가기와 같다), 바로 들어온 주소면 호실 상세로 바꾼다.
+const PropertyDetailRoute = ({ isVerifyOpen = false, ...pageProps }) => {
   const { propertyId } = useParams();
   const [searchParams] = useSearchParams();
-  return <PropertyDetailPage key={propertyId} propertyId={propertyId} focusContractId={searchParams.get('contract') ?? undefined} {...pageProps} />;
-};
-
-const PropertyVerifyRoute = (pageProps) => {
-  const { propertyId } = useParams();
   const { state } = useLocation();
-  return <PropertyVerifyPage key={propertyId} propertyId={propertyId} notice={state?.notice} {...pageProps} />;
+  const { onNavigate } = pageProps;
+  const closeVerify = useCallback(() => {
+    if (state?.fromDetail) window.history.back();
+    else onNavigate('propertyDetail', { propertyId }, { replace: true });
+  }, [state, onNavigate, propertyId]);
+  return (
+    <PropertyDetailPage
+      key={propertyId}
+      propertyId={propertyId}
+      focusContractId={searchParams.get('contract') ?? undefined}
+      isVerifyOpen={isVerifyOpen}
+      verifyNotice={isVerifyOpen ? state?.notice : undefined}
+      onCloseVerify={closeVerify}
+      {...pageProps}
+    />
+  );
 };
 
 const PropertyListRoute = (pageProps) => {
@@ -219,7 +231,7 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
         <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
         <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
-        <Route path="/properties/:propertyId/verify" element={<PropertyVerifyRoute {...pageProps} />} />
+        <Route path="/properties/:propertyId/verify" element={<PropertyDetailRoute isVerifyOpen {...pageProps} />} />
         <Route path="/support/inquiry" element={<SupportInquiryPage />} />
         <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
         <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
