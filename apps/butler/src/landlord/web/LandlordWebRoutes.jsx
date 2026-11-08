@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearch
 import { LandlordLayout } from './layout/LandlordLayout';
 import { LandlordDashboard } from './dashboard/LandlordDashboard';
 import { BuildingListPage } from './pages/BuildingListPage';
-import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
 import { ContractListPage } from './pages/ContractListPage';
 import { ContractRegisterPage } from './pages/ContractRegisterPage';
@@ -24,7 +23,9 @@ import { DisputePage } from './pages/DisputePage';
 import { DisputeReferenceDetailPage } from './pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from './pages/DisputeSearchPage';
 import { DisputeTopicPage } from './pages/DisputeTopicPage';
+import { NoticeBox } from './components/NoticeBox/NoticeBox';
 import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
+import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
@@ -83,7 +84,8 @@ const BuildingListRoute = (pageProps) => {
 
 const PropertyDetailRoute = (pageProps) => {
   const { propertyId } = useParams();
-  return <PropertyDetailPage key={propertyId} propertyId={propertyId} {...pageProps} />;
+  const [searchParams] = useSearchParams();
+  return <PropertyDetailPage key={propertyId} propertyId={propertyId} focusContractId={searchParams.get('contract') ?? undefined} {...pageProps} />;
 };
 
 const PropertyVerifyRoute = (pageProps) => {
@@ -106,9 +108,20 @@ const ContractRegisterRoute = (pageProps) => {
   return <ContractRegisterPage key={`${propertyId}-${renewFrom}`} params={{ propertyId, renewFrom }} {...pageProps} />;
 };
 
-const ContractDetailRoute = (pageProps) => {
+// 계약 상세 페이지는 호실 상세의 계약 영역으로 합쳤다. 예전 주소(/contracts/:id, 알림·북마크)는 그 계약의 호실 상세로 보낸다.
+const ContractDetailRoute = ({ onNavigate, onUnauthorized }) => {
   const { contractId } = useParams();
-  return <ContractDetailPage key={contractId} contractId={contractId} {...pageProps} />;
+  const contractQuery = useGetContract(contractId, { onUnauthorized });
+  const propertyId = contractQuery.data?.property.id;
+  useEffect(() => {
+    if (propertyId) onNavigate('propertyDetail', { propertyId, contractId }, { replace: true });
+  }, [propertyId, contractId, onNavigate]);
+  if (contractQuery.error) return <NoticeBox>{contractQuery.error.message}</NoticeBox>;
+  return (
+    <p role="status" className="py-10 text-center text-body text-ink-3">
+      불러오는 중입니다
+    </p>
+  );
 };
 
 const ContractEditRoute = (pageProps) => {
