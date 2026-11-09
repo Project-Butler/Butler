@@ -689,7 +689,7 @@ export const findReferenceSummariesBySourceKeys = async (sourceKeys) => {
   if (sourceKeys.length === 0) return new Map();
   const references = await prisma.disputeReference.findMany({
     where: { sourceKey: { in: sourceKeys } },
-    select: { sourceKey: true, id: true, type: true, category: true, title: true },
+    select: { sourceKey: true, id: true, type: true, category: true, title: true, sourceTitle: true },
   });
   return new Map(references.map(({ sourceKey, ...reference }) => [sourceKey, reference]));
 };

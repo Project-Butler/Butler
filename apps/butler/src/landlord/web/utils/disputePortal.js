@@ -87,8 +87,8 @@ export const TOPIC_BRIEFINGS = {
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
         { key: 'deposit', label: '보증금 공탁', note: '법원 전자공탁', href: 'https://ekt.scourt.go.kr' },
-        { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/transfer/transferCalculatorForm.do?Key=10404000000002022101900' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -171,7 +171,7 @@ export const TOPIC_BRIEFINGS = {
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -256,7 +256,7 @@ export const TOPIC_BRIEFINGS = {
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -340,7 +340,7 @@ export const TOPIC_BRIEFINGS = {
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -422,9 +422,9 @@ export const TOPIC_BRIEFINGS = {
         { title: '분쟁조정', detail: '합의가 안 되면 조정위원회에 신청해요', parts: ['caseRefs', 'precedents'], help: ['committee', 'seoul', 'klac'] },
       ],
       tools: [
-        { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/transfer/transferCalculatorForm.do?Key=10404000000002022101900' },
         { key: 'report', label: '주택 임대차 신고', note: '부동산거래관리시스템', href: 'https://rtms.molit.go.kr' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -507,8 +507,8 @@ export const TOPIC_BRIEFINGS = {
       ],
       tools: [
         { key: 'easylaw', label: '임대차 생활법령', note: '찾기쉬운 생활법령정보', href: 'https://easylaw.go.kr/CSP/CsmMain.laf?csmSeq=277' },
-        { key: 'mediation', label: '분쟁조정 신청', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
-        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+        { key: 'mediation', label: '분쟁조정 신청', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/dispute/dispute.do?Key=10303000000002022101715' },
+        { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
   },
@@ -577,7 +577,7 @@ export const HELP_ROUTES = [
     ],
     source: { label: '수수료·기간 기관 안내', href: 'https://adrhome.reb.or.kr/adrhome/reb/LO010100/03/10302000000002022101718' },
     actions: [
-      { label: '조정 신청', href: 'https://adrhome.reb.or.kr/adrhome/reb/main', primary: true },
+      { label: '조정 신청', href: 'https://adrhome.reb.or.kr/adrhome/reb/dispute/dispute.do?Key=10303000000002022101715', primary: true },
       { label: '절차 보기', href: 'https://adrhome.reb.or.kr/adrhome/reb/LO010100/03/10301000000002022101316' },
     ],
   },

@@ -85,7 +85,9 @@ const FAQS = [
     category: 'DAMAGES',
     question: '세입자가 나가면서 벽에 못 자국이 많아요. 도배비를 보증금에서 빼도 되나요?',
     answer: '통상의 손모는 특약이 없으면 임차인이 원상회복할 의무가 없어요.',
-    references: [{ id: 'ref-case', type: 'CASE', category: 'DAMAGES', title: CASE_ITEM.title }],
+    references: [
+      { id: 'ref-case', type: 'CASE', category: 'DAMAGES', title: CASE_ITEM.title, sourceTitle: '2025 주택·상가건물 임대차분쟁 조정사례집' },
+    ],
   },
   {
     key: 'renewal-implicit-request',
@@ -422,7 +424,7 @@ describe('분쟁 해결사', () => {
       expect(names.some((name) => name.startsWith(label))).toBe(true);
     }
     expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', 'https://adrhome.reb.or.kr/adrhome/reb/main');
+    expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr');
     expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
     // 최근 이슈(뉴스)는 첫 화면에서 뺐다.
@@ -441,6 +443,8 @@ describe('분쟁 해결사', () => {
     const question = await within(selected).findByRole('button', { name: /못 자국이 많아요/ });
     expect(question).toHaveAttribute('aria-expanded', 'true');
     expect(within(selected).getByText(/통상의 손모는 특약이 없으면/)).toBeInTheDocument();
+    // 답 아래에 근거 자료를 낸 곳을 적는다.
+    expect(within(selected).getByText('출처 · 2025 주택·상가건물 임대차분쟁 조정사례집')).toBeInTheDocument();
   });
 
   it('첫 화면에서 유형 카드 머리를 누르면 상황 안내로 간다', async () => {
@@ -472,6 +476,10 @@ describe('분쟁 해결사', () => {
       expect(screen.getAllByRole('heading', { name }).length).toBeGreaterThan(0);
     }
     expect(screen.getByRole('link', { name: /보증금 공탁/ })).toHaveAttribute('href', 'https://ekt.scourt.go.kr');
+    // 서식·도구는 기관 메인이 아니라 그 기능 페이지로 바로 간다.
+    expect(screen.getByRole('link', { name: /전월세 전환 계산기/ })).toHaveAttribute('href', expect.stringContaining('transferCalculatorForm.do'));
+    expect(screen.getByRole('link', { name: /주택임대차 표준계약서/ })).toHaveAttribute('href', expect.stringContaining('downloadContract.do'));
+    expect(screen.getAllByRole('link', { name: /조정 신청/ })[0]).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(screen.getByRole('button', { name: '모두 접기' })).toBeInTheDocument();
     expect(lastListParams()).toMatchObject({ type: 'CASE', category: 'DEPOSIT_RETURN', size: 3 });
 
