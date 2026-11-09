@@ -35,8 +35,7 @@ export const toLogFields = (form) => ({
 export const isAttachmentReady = (uploads) => !uploads.isUploading && !uploads.hasFailed;
 
 // 유형·제목·내용·날짜·비용·사진 입력. 호실·공개 범위 칸은 쓰는 화면이 propertyField·scopeField로 넘긴다(없으면 생략).
-// PC 배치는 가로 3칸 한 격자: 호실(2칸) · 날짜 / 공개 범위 · 유형 · 비용 / 제목 / 내용 / 사진.
-// 호실·공개 범위가 없는 수정 화면은 날짜 · 유형 · 비용이 한 줄이 된다.
+// 팝업 배치(가로 2칸): 호실 / 날짜 · 비용 / 유형 · 공개 범위 / 제목 / 내용 / 사진.
 // uploads: useAttachmentUploads() 반환값. 저장할 때 uploads.documentIds를 attachmentDocumentIds로 보낸다.
 export const ManagementLogForm = ({
   form,
@@ -49,8 +48,8 @@ export const ManagementLogForm = ({
   scopeField = null,
 }) => (
   <>
-    <div className="grid grid-cols-3 items-start gap-4">
-      {propertyField && <div className="col-span-2">{propertyField}</div>}
+    {propertyField}
+    <div className="grid grid-cols-2 items-start gap-4">
       <TextField
         label="날짜"
         required
@@ -62,7 +61,16 @@ export const ManagementLogForm = ({
         error={fieldError('occurredOn')}
         disabled={disabled}
       />
-      {scopeField}
+      <TextField
+        label="비용 (선택)"
+        numeric
+        suffix="원"
+        placeholder="350,000"
+        value={form.cost === '' ? '' : formatNumber(Number(form.cost))}
+        onChange={(event) => onChange('cost', event.target.value.replace(/\D/g, ''))}
+        error={fieldError('cost')}
+        disabled={disabled}
+      />
       <div className="flex flex-col gap-1.5">
         <span className="text-label font-semibold text-ink">유형</span>
         <SegmentedControl
@@ -72,16 +80,7 @@ export const ManagementLogForm = ({
           onChange={(value) => onChange('type', value)}
         />
       </div>
-      <TextField
-        label="비용 (선택, 원)"
-        inputMode="numeric"
-        className="font-num tabular-nums"
-        placeholder="350,000"
-        value={form.cost === '' ? '' : formatNumber(Number(form.cost))}
-        onChange={(event) => onChange('cost', event.target.value.replace(/\D/g, ''))}
-        error={fieldError('cost')}
-        disabled={disabled}
-      />
+      {scopeField}
     </div>
     <TextField
       label="제목"

@@ -7,6 +7,7 @@ import { ManagementLogBadges } from '../components/ManagementLogBadges/Managemen
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
+import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { VerifyModal } from '../components/VerifyModal/VerifyModal';
 import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
 import { useGetComplex } from '../hooks/useGetComplex';
@@ -506,7 +507,7 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
             </Button>
           )}
           {canAdd && (
-            <Button variant="secondary" size="h44" onClick={() => onNavigate('propertyLogRegister', { propertyId })}>
+            <Button variant="secondary" size="h44" onClick={() => onNavigate('propertyLogRegister', { propertyId, fromPage: true })}>
               <Plus size={16} className="-ml-0.5 mr-1 inline-block" />
               기록 추가
             </Button>
@@ -543,12 +544,15 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
 
 // 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
 // isVerifyOpen: /properties/:id/verify 로 들어오면 권리자 인증 팝업을 띄운다(onCloseVerify로 닫는다).
+// isLogModalOpen: /properties/:id/logs/new 로 들어오면 이 호실로 고정한 기록 추가 팝업을 띄운다. 저장하면 관리 로그를 새로 고친다.
 export const PropertyDetailPage = ({
   propertyId,
   focusContractId,
   isVerifyOpen = false,
   verifyNotice,
   onCloseVerify,
+  isLogModalOpen = false,
+  onCloseLogModal,
   verifiedLegalDongCodes,
   onVerified,
   onNavigate,
@@ -583,6 +587,7 @@ export const PropertyDetailPage = ({
   });
 
   const goBack = () => window.history.back();
+  const [logReloadKey, setLogReloadKey] = useState(0);
 
   if (!property) {
     return (
@@ -640,6 +645,7 @@ export const PropertyDetailPage = ({
           )}
           {property.myRelation?.ownershipId && (
             <LogSection
+              key={logReloadKey}
               propertyId={property.id}
               canAdd={property.myRelation.type === 'OWNER'}
               onNavigate={onNavigate}
@@ -676,6 +682,17 @@ export const PropertyDetailPage = ({
         </aside>
       </div>
 
+      {isLogModalOpen && (
+        <LogFormModal
+          fixedPropertyId={property.id}
+          onClose={onCloseLogModal}
+          onSaved={() => {
+            setLogReloadKey((prev) => prev + 1);
+            onCloseLogModal();
+          }}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
       {isVerifyOpen && (
         <VerifyModal
           propertyName={property.displayName}

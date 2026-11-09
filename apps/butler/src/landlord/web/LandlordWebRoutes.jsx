@@ -6,10 +6,7 @@ import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractEditPage } from './pages/ContractEditPage';
 import { ContractListPage } from './pages/ContractListPage';
 import { ContractRegisterPage } from './pages/ContractRegisterPage';
-import { ManagementLogDetailPage } from './pages/ManagementLogDetailPage';
-import { ManagementLogEditPage } from './pages/ManagementLogEditPage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
-import { ManagementLogRegisterPage } from './pages/ManagementLogRegisterPage';
 import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
@@ -81,16 +78,17 @@ const BuildingListRoute = (pageProps) => {
   return <BuildingListPage params={{ notice: state?.notice }} {...pageProps} />;
 };
 
-// 호실 상세와 권리자 인증(/properties/:id/verify)은 같은 화면이다. 인증 주소면 호실 상세 위에 인증 팝업을 띄운다.
+// 호실 상세·권리자 인증(/properties/:id/verify)·기록 추가(/properties/:id/logs/new)는 같은 화면이다. 뒤 둘은 호실 상세 위 팝업.
 // 같은 요소·key라 팝업을 열고 닫아도 호실 상세를 다시 불러오지 않는다.
 // 호실 상세에서 연 팝업(state.fromDetail)은 뒤로 가서 닫고(뒤로가기와 같다), 바로 들어온 주소면 호실 상세로 바꾼다.
-const PropertyDetailRoute = ({ isVerifyOpen = false, ...pageProps }) => {
+const PropertyDetailRoute = ({ isVerifyOpen = false, isLogModalOpen = false, ...pageProps }) => {
   const { propertyId } = useParams();
   const [searchParams] = useSearchParams();
   const { state } = useLocation();
   const { onNavigate } = pageProps;
-  const closeVerify = useCallback(() => {
-    if (state?.fromDetail) window.history.back();
+  // 인증 팝업(state.fromDetail)·기록 추가 팝업(state.fromPage) 모두 호실 상세에서 열었으면 뒤로 가서 닫는다.
+  const closeOverlay = useCallback(() => {
+    if (state?.fromDetail || state?.fromPage) window.history.back();
     else onNavigate('propertyDetail', { propertyId }, { replace: true });
   }, [state, onNavigate, propertyId]);
   return (
@@ -100,7 +98,9 @@ const PropertyDetailRoute = ({ isVerifyOpen = false, ...pageProps }) => {
       focusContractId={searchParams.get('contract') ?? undefined}
       isVerifyOpen={isVerifyOpen}
       verifyNotice={isVerifyOpen ? state?.notice : undefined}
-      onCloseVerify={closeVerify}
+      onCloseVerify={closeOverlay}
+      isLogModalOpen={isLogModalOpen}
+      onCloseLogModal={closeOverlay}
       {...pageProps}
     />
   );
@@ -110,6 +110,39 @@ const PropertyListRoute = (pageProps) => {
   // 예전 소유 호실 등 관계별 호실 목록(내 부동산에서 들어온다)
   const [searchParams] = useSearchParams();
   return <PropertyListPage relation={searchParams.get('relation') ?? 'OWNER'} {...pageProps} />;
+};
+
+// 관리 로그 목록·기록 상세(/logs/:logId)·기록 추가(/logs/new)·수정(/logs/:logId/edit)은 같은 화면이다.
+// 상세는 오른쪽 패널, 추가·수정은 가운데 팝업. 화면에서 연 팝업(state.fromPage)은 뒤로 가서 닫고, 바로 들어온 주소면 목록 주소로 바꾼다.
+const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
+  const { logId } = useParams();
+  const [searchParams] = useSearchParams();
+  const { state } = useLocation();
+  const { onNavigate } = pageProps;
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  const modal = modalMode === 'create' ? {} : modalMode === 'edit' ? { logId } : null;
+  const openModal = useCallback(
+    (next) =>
+      next.logId
+        ? onNavigate('logEdit', { logId: next.logId, propertyId, fromPage: true })
+        : onNavigate('logRegister', { propertyId, fromPage: true }),
+    [onNavigate, propertyId],
+  );
+  const closeModal = useCallback(() => {
+    if (state?.fromPage) window.history.back();
+    else if (modalMode === 'edit') onNavigate('logDetail', { logId }, { replace: true });
+    else onNavigate('logs', { propertyId }, { replace: true });
+  }, [state, modalMode, onNavigate, logId, propertyId]);
+  return (
+    <ManagementLogListPage
+      propertyId={propertyId}
+      selectedLogId={modalMode ? undefined : logId}
+      modal={modal}
+      onOpenModal={openModal}
+      onCloseModal={closeModal}
+      {...pageProps}
+    />
+  );
 };
 
 const ContractRegisterRoute = (pageProps) => {
@@ -139,26 +172,6 @@ const ContractDetailRoute = ({ onNavigate, onUnauthorized }) => {
 const ContractEditRoute = (pageProps) => {
   const { contractId } = useParams();
   return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
-};
-
-const ManagementLogListRoute = (pageProps) => {
-  const [searchParams] = useSearchParams();
-  return <ManagementLogListPage propertyId={searchParams.get('propertyId') ?? undefined} {...pageProps} />;
-};
-
-const PropertyLogRegisterRoute = (pageProps) => {
-  const { propertyId } = useParams();
-  return <ManagementLogRegisterPage key={propertyId} propertyId={propertyId} {...pageProps} />;
-};
-
-const ManagementLogDetailRoute = (pageProps) => {
-  const { logId } = useParams();
-  return <ManagementLogDetailPage key={logId} logId={logId} {...pageProps} />;
-};
-
-const ManagementLogEditRoute = (pageProps) => {
-  const { logId } = useParams();
-  return <ManagementLogEditPage key={logId} logId={logId} {...pageProps} />;
 };
 
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
@@ -238,10 +251,10 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
         <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
         <Route path="/logs" element={<ManagementLogListRoute {...pageProps} />} />
-        <Route path="/logs/new" element={<ManagementLogRegisterPage {...pageProps} />} />
-        <Route path="/logs/:logId" element={<ManagementLogDetailRoute {...pageProps} />} />
-        <Route path="/logs/:logId/edit" element={<ManagementLogEditRoute {...pageProps} />} />
-        <Route path="/properties/:propertyId/logs/new" element={<PropertyLogRegisterRoute {...pageProps} />} />
+        <Route path="/logs/new" element={<ManagementLogListRoute modalMode="create" {...pageProps} />} />
+        <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />
+        <Route path="/logs/:logId/edit" element={<ManagementLogListRoute modalMode="edit" {...pageProps} />} />
+        <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
         <Route path="/setup" element={<SetupPage {...pageProps} />} />
         {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
         <Route path="/disputes/chat" element={<DisputeChatPage />} />
