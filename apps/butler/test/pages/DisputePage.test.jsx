@@ -9,6 +9,7 @@ import { DisputeReferenceDetailPage } from '../../src/landlord/web/pages/Dispute
 import { DisputeSearchPage } from '../../src/landlord/web/pages/DisputeSearchPage';
 import { DisputeTopicPage } from '../../src/landlord/web/pages/DisputeTopicPage';
 import { buildLocation } from '../../src/landlord/web/routes';
+import { HELP_ROUTES, TOPIC_BRIEFINGS } from '../../src/landlord/web/utils/disputePortal';
 import { breakNumberedItems, splitSections } from '../../src/landlord/web/utils/disputeReference';
 
 const api = vi.hoisted(() => ({
@@ -439,19 +440,29 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText(/자연스럽게 닳은 건 책임이 아니에요/)).toBeInTheDocument();
   });
 
-  it('보증금 반환 안내는 확인할 것·내 경우·준비 자료·판례(왜 관련 있는지)·절차·기관까지 한 화면에 보여 준다', async () => {
+  it('보증금 반환 안내는 번호 단계 5개로 처음엔 제목만 보여 주고, 펼치면 그 단계의 자료·서식·기관이 나온다', async () => {
+    const user = userEvent.setup();
     renderAt('/disputes/topics/deposit');
 
     expect(await screen.findByRole('heading', { name: '보증금 반환' })).toBeInTheDocument();
-    for (const name of ['먼저 확인하세요', '내 경우에는', '지금 준비할 자료', '해결 절차', '어디에 도움을 요청해야 하나요?', '서식·도구']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-    }
+    const steps = within(screen.getByRole('region', { name: '해결 단계' })).getAllByRole('button', { expanded: false });
+    expect(steps.map((step) => step.textContent.replace(/펼치기$/, ''))).toEqual(['지금 상황 확인', '협의', '문서로 알리기', '분쟁조정', '법원']);
+    expect(screen.queryByRole('heading', { name: '먼저 확인하세요' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
+    expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
     expect(screen.getByText('공제 금액으로 다투는 경우')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '모두 펼치기' }));
+    for (const name of ['준비할 자료', '서식·도구', '도움받을 곳']) {
+      expect(screen.getAllByRole('heading', { name }).length).toBeGreaterThan(0);
+    }
     expect(screen.getByRole('link', { name: /보증금 공탁/ })).toHaveAttribute('href', 'https://ekt.scourt.go.kr');
+    expect(screen.getByRole('button', { name: '모두 접기' })).toBeInTheDocument();
     expect(lastListParams()).toMatchObject({ type: 'CASE', category: 'DEPOSIT_RETURN', size: 3 });
 
     // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 관련 판례 찾기로 판례 탭 검색을 연다.
-    const user = userEvent.setup();
     await user.click(screen.getAllByRole('button', { name: '근거 보기' })[0]);
     expect(screen.getByText('주택임대차보호법 제6조의2 (묵시적 갱신 시 계약의 해지)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '관련 판례 찾기' }));
@@ -470,9 +481,10 @@ describe('분쟁 해결사', () => {
     for (const [key, label, caseTitle, category] of topics) {
       const { unmount } = renderAt(`/disputes/topics/${key}`);
       expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '해결 단계' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
       expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
       expect(screen.getByText(caseTitle)).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: '해결 절차' })).toBeInTheDocument();
       expect(lastListParams()).toMatchObject({ type: 'CASE', category, size: 3 });
       unmount();
     }
@@ -486,6 +498,17 @@ describe('분쟁 해결사', () => {
 
     expect(await screen.findByRole('heading', { name: '자료 찾기' })).toBeInTheDocument();
     await waitFor(() => expect(lastListParams()).toMatchObject({ q: '도배' }));
+  });
+});
+
+describe('상황 안내 단계', () => {
+  it('상황마다 서식·도구와 도움받을 곳, 준비 자료·사례·판례가 빠짐없이 한 단계씩에만 들어간다', () => {
+    for (const [key, { guide }] of Object.entries(TOPIC_BRIEFINGS)) {
+      const used = (field) => guide.procedure.flatMap((step) => step[field] ?? []);
+      expect(used('tools').sort(), key).toEqual(guide.tools.map((tool) => tool.key).sort());
+      expect(used('help').sort(), key).toEqual(HELP_ROUTES.map((route) => route.key).sort());
+      expect(used('parts').sort(), key).toEqual(['caseRefs', 'documents', 'precedents']);
+    }
   });
 });
 

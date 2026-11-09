@@ -3,6 +3,8 @@
 
 // 상황별 브리핑. key는 DISPUTE_TOPICS(utils/disputeReference.js)와 같다. 상황마다 '여기서 끝나는' 안내(guide)를 같은 구조로 둔다.
 // checks·cases 문장마다 basis(근거 조문·판례), condition(적용 조건), q(비슷한 사례 검색어)를 붙여 [근거 보기]로 펼친다.
+// procedure는 상황 안내의 2~5단계(1단계는 '지금 상황 확인' = checks·cases). 단계마다 parts(documents·caseRefs·precedents)·tools·help(HELP_ROUTES key)로
+// 그 단계에서 쓰는 자료·서식·기관을 붙인다(모든 도구·기관은 어느 한 단계에 들어간다).
 // 관련 판례는 precedentQ가 있으면 그 말로, 없으면 q로 찾는다. 근거는 seed-data의 법령 조문·사례집·자주 묻는 질문에서 가져왔다.
 export const TOPIC_BRIEFINGS = {
   deposit: {
@@ -77,10 +79,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서와 특약', '보증금·월세 입금 내역', '관리비·공과금 정산 내역', '입주·퇴거 때 사진과 영상', '수리 견적서·영수증', '문자·통화 등 연락 기록'],
       procedure: [
-        { title: '협의', detail: '정산 내역을 보여 주고 날짜·금액을 합의해요' },
-        { title: '문서로 알리기', detail: '합의가 안 되면 요구 사항을 내용증명으로 보내요' },
-        { title: '분쟁조정', detail: '조정위원회에 신청해요. 수수료 1만 원부터, 60일 안에 끝나요' },
-        { title: '법원', detail: '조정이 안 되면 지급명령·소송으로 가요' },
+        { title: '협의', detail: '정산 내역을 보여 주고 날짜·금액을 합의해요', parts: ['documents'], tools: ['calculator', 'contract'] },
+        { title: '문서로 알리기', detail: '합의가 안 되면 요구 사항을 내용증명으로 보내요', tools: ['certified'] },
+        { title: '분쟁조정', detail: '조정위원회에 신청해요. 수수료 1만 원부터, 60일 안에 끝나요', parts: ['caseRefs'], help: ['committee', 'seoul'] },
+        { title: '법원', detail: '조정이 안 되면 지급명령·소송으로 가요', parts: ['precedents'], tools: ['deposit'], help: ['klac'] },
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
@@ -162,10 +164,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서와 특약', '입주·퇴거 때 사진과 영상', '입주 때 물품 목록', '수리 견적서·영수증', '도배·장판 시공 시기 자료', '문자·통화 등 연락 기록'],
       procedure: [
-        { title: '상태 확인', detail: '퇴거일에 임차인과 함께 상태를 보고 사진으로 남겨요' },
-        { title: '문서로 알리기', detail: '공제 항목·금액을 견적서와 함께 문서로 보내요' },
-        { title: '분쟁조정', detail: '조정위원회에 신청해요. 현장조사로 금액을 조정하기도 해요' },
-        { title: '법원', detail: '조정이 안 되면 소송으로 가요' },
+        { title: '상태 확인', detail: '퇴거일에 임차인과 함께 상태를 보고 사진으로 남겨요', parts: ['documents'] },
+        { title: '문서로 알리기', detail: '공제 항목·금액을 견적서와 함께 문서로 보내요', tools: ['certified', 'contract'] },
+        { title: '분쟁조정', detail: '조정위원회에 신청해요. 현장조사로 금액을 조정하기도 해요', parts: ['caseRefs'], help: ['committee', 'seoul'] },
+        { title: '법원', detail: '조정이 안 되면 소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
@@ -247,10 +249,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서와 특약', '고장 부위 사진·영상', '수리 업체 의견서·견적서', '수리 영수증', '임차인이 알린 날짜 (문자 등)', '이전 수리 이력'],
       procedure: [
-        { title: '원인 확인', detail: '사진·업체 의견으로 원인과 범위를 확인해요' },
-        { title: '협의', detail: '누가 얼마를 낼지, 수리 일정을 정해요' },
-        { title: '분쟁조정', detail: '합의가 안 되면 조정위원회에 신청해요' },
-        { title: '법원', detail: '조정이 안 되면 소송으로 가요' },
+        { title: '원인 확인', detail: '사진·업체 의견으로 원인과 범위를 확인해요', parts: ['documents'] },
+        { title: '협의', detail: '누가 얼마를 낼지, 수리 일정을 정해요', tools: ['certified', 'contract'] },
+        { title: '분쟁조정', detail: '합의가 안 되면 조정위원회에 신청해요', parts: ['caseRefs'], help: ['committee', 'seoul'] },
+        { title: '법원', detail: '조정이 안 되면 소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
@@ -331,10 +333,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서 (기간·특약)', '갱신 요구·거절 문자나 내용증명', '통지한 날짜 기록', '월세 입금 내역', '실거주 계획 자료 (전입 예정 등)'],
       procedure: [
-        { title: '날짜 확인', detail: '끝나는 날과 갱신 요구·거절이 오간 날짜를 확인해요' },
-        { title: '문서로 알리기', detail: '갱신·거절·해지 의사를 내용증명으로 남겨요' },
-        { title: '분쟁조정', detail: '조정위원회에서 종료일·합의금 등을 조정해요' },
-        { title: '법원', detail: '나가지 않으면 명도소송으로 가요' },
+        { title: '날짜 확인', detail: '끝나는 날과 갱신 요구·거절이 오간 날짜를 확인해요', parts: ['documents'] },
+        { title: '문서로 알리기', detail: '갱신·거절·해지 의사를 내용증명으로 남겨요', tools: ['certified', 'contract'] },
+        { title: '분쟁조정', detail: '조정위원회에서 종료일·합의금 등을 조정해요', parts: ['caseRefs'], help: ['committee', 'seoul'] },
+        { title: '법원', detail: '나가지 않으면 명도소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
         { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
@@ -414,10 +416,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서', '마지막으로 증액한 날짜 기록', '주변 시세 자료', '변경 계약서', '보증금·월세 입금 내역'],
       procedure: [
-        { title: '계산', detail: '증액 가능 날짜와 5%·전환율 상한을 계산해요' },
-        { title: '협의', detail: '근거 자료를 보여 주고 금액을 합의해요' },
-        { title: '변경 계약', detail: '변경 계약서를 쓰고 필요하면 신고해요' },
-        { title: '분쟁조정', detail: '합의가 안 되면 조정위원회에 신청해요' },
+        { title: '계산', detail: '증액 가능 날짜와 5%·전환율 상한을 계산해요', tools: ['calculator'] },
+        { title: '협의', detail: '근거 자료를 보여 주고 금액을 합의해요', parts: ['documents'] },
+        { title: '변경 계약', detail: '변경 계약서를 쓰고 필요하면 신고해요', tools: ['contract', 'report'] },
+        { title: '분쟁조정', detail: '합의가 안 되면 조정위원회에 신청해요', parts: ['caseRefs', 'precedents'], help: ['committee', 'seoul', 'klac'] },
       ],
       tools: [
         { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
@@ -498,10 +500,10 @@ export const TOPIC_BRIEFINGS = {
       ],
       documents: ['임대차 계약서와 특약', '중개대상물 확인·설명서', '중개보수 영수증', '권리금 계약서 (상가)', '문자·통화 등 연락 기록'],
       procedure: [
-        { title: '기준 확인', detail: '어떤 제도에 해당하는지 생활법령정보 등에서 확인해요' },
-        { title: '협의', detail: '계약서와 기준을 보여 주고 합의해요' },
-        { title: '분쟁조정', detail: '조정위원회에 신청하거나 받은 신청에 답해요' },
-        { title: '법원', detail: '조정이 안 되면 소송으로 가요' },
+        { title: '기준 확인', detail: '어떤 제도에 해당하는지 생활법령정보 등에서 확인해요', tools: ['easylaw'] },
+        { title: '협의', detail: '계약서와 기준을 보여 주고 합의해요', parts: ['documents'], tools: ['contract'] },
+        { title: '분쟁조정', detail: '조정위원회에 신청하거나 받은 신청에 답해요', parts: ['caseRefs'], tools: ['mediation'], help: ['committee', 'seoul'] },
+        { title: '법원', detail: '조정이 안 되면 소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
         { key: 'easylaw', label: '임대차 생활법령', note: '찾기쉬운 생활법령정보', href: 'https://easylaw.go.kr/CSP/CsmMain.laf?csmSeq=277' },
