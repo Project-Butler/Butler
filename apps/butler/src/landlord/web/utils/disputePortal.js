@@ -514,17 +514,6 @@ export const TOPIC_BRIEFINGS = {
   },
 };
 
-// 첫 화면 '최근 임대차 이슈'. 기사 요약이 아니라 임대인에게 어떤 영향이 있는지와 근거를 붙인다.
-// 시안이라 조사한 기사로 고정해 두고, 나중에는 뉴스 검색 + AI 요약으로 주마다 바꾼다.
-export const WEEKLY_ISSUE = {
-  title: '실거주로 갱신을 거절한 뒤 다른 사람에게 세를 주면 배상해야 해요',
-  impact: '실거주를 이유로 갱신을 거절했다면 2년 안에는 다른 사람에게 세를 주지 마세요. 부득이한 사정이 생겼다면 그 사정을 입증할 자료를 남겨 두세요.',
-  chips: ['주택임대차보호법 제6조의3', '2심 배상 3,079만 원 (10-13 보도)', '갱신·종료 조정 신청 증가'],
-  searchQuery: '실거주',
-  topicKey: 'renewal',
-  source: { press: '머니투데이', date: '2026-10-13', href: 'https://www.mt.co.kr/society/2026/10/13/2026101219493123965' },
-};
-
 // 검색창 아래 예시 질문. 지금 검색은 단어 포함으로 찾아서(#4 의미 검색 전) 문장 대신 핵심 단어(q)로 찾는다.
 export const SEARCH_EXAMPLES = [
   { label: '보증금이 아직 안 들어왔어요', q: '보증금 반환' },
@@ -532,7 +521,7 @@ export const SEARCH_EXAMPLES = [
   { label: '갱신 거절해도 되나요?', q: '갱신거절' },
 ];
 
-// 분쟁 유형 카드 안의 질문 칩. 칩마다 자주 묻는 질문(apps/api/prisma/seed-data/dispute-faqs.json의 key) 하나를 연결해,
+// 상황 안내 맨 위 '자주 묻는 질문' 칩. 칩마다 자주 묻는 질문(apps/api/prisma/seed-data/dispute-faqs.json의 key) 하나를 연결해,
 // 누르면 그 상황 안내 화면 맨 위에 정리된 답과 근거 자료를 펼친다.
 export const TOPIC_QUESTIONS = {
   deposit: [
@@ -617,4 +606,25 @@ export const HELP_ROUTES = [
     ],
     actions: [{ label: '상담 안내', href: 'https://www.klac.or.kr', primary: true }],
   },
+];
+
+// 첫 화면 맨 아래 '자료 출처'. 화면의 사례·판례·법령·가이드가 어디서 왔는지 밝힌다(사례집 고지: 인용 시 출처 표시).
+// 목록은 apps/api/prisma/seed-data/README.md의 출처와 같게 둔다.
+export const DATA_SOURCES = [
+  {
+    label: '조정사례',
+    detail: '2025 주택·상가건물 임대차분쟁 조정사례집(국토교통부·한국부동산원·LH), 2022 주택임대차분쟁 조정사례집(국토교통부)',
+    href: 'https://adrhome.reb.or.kr/adrhome/reb/main',
+  },
+  { label: '조정사례', detail: '대한법률구조공단 임대차분쟁조정위원회 조정사례집', href: 'https://www.hldcc.or.kr/hp/li/arrCaseList.do' },
+  { label: '상담사례', detail: '주택·상가건물 임대차 상담사례집(국토교통부·한국부동산원, 서울특별시)', href: 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419' },
+  { label: '판례·법령', detail: '국가법령정보센터 판례, 주택임대차보호법·민법 등 현행 법령', href: 'https://www.law.go.kr' },
+  { label: '가이드', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
+];
+
+// 첫 화면 맨 아래 '기관 연락처'. 전화번호는 HELP_ROUTES에 적힌 번호만 쓰고, 번호를 확인하지 못한 곳은 홈페이지로 잇는다.
+export const CONTACTS = [
+  { name: '주택임대차분쟁조정위원회(한국부동산원)', value: '홈페이지', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+  { name: '서울시 전월세종합지원센터', value: '02-2133-1200', href: 'tel:02-2133-1200' },
+  { name: '대한법률구조공단', value: '132', href: 'tel:132' },
 ];

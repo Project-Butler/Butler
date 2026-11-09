@@ -1,4 +1,4 @@
-import { BookOpen, PaintRoller, RefreshCw, TrendingUp, Wallet, Wrench } from 'lucide-react';
+import { BookOpen, ChevronRight, PaintRoller, RefreshCw, TrendingUp, Wallet, Wrench } from 'lucide-react';
 
 const TOPIC_ICONS = {
   deposit: Wallet,
@@ -19,18 +19,18 @@ export const TopicIcon = ({ topicKey }) => {
   );
 };
 
-// 분쟁 해결사 첫 화면 상황 타일. 대표 질문을 보여 줘서 "내 얘기다" 하고 고를 수 있게 한다.
-export const TopicTile = ({ topic, count, sampleQuestion, onClick }) => (
+// 첫 화면 분쟁 유형 카드. 이름(조정위원회 조정 대상)과 짧은 예시만 두고, 누르면 상황 안내로 간다.
+export const TopicTile = ({ topic, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="flex h-full w-full flex-col rounded-card border border-line bg-surface p-4 text-left transition-colors hover:bg-surface-2 lg:p-5"
+    className="flex h-full min-h-11 w-full items-center gap-3 rounded-card border border-line bg-surface p-4 text-left transition-colors hover:bg-surface-2"
   >
-    <span className="flex items-center justify-between gap-2">
-      <TopicIcon topicKey={topic.key} />
-      {count !== undefined && <span className="font-num text-sub tabular-nums text-ink-3">{count}건</span>}
+    <TopicIcon topicKey={topic.key} />
+    <span className="min-w-0 flex-1">
+      <span className="block break-keep text-card font-semibold text-ink">{topic.label}</span>
+      <span className="mt-0.5 block text-sub text-ink-2">{topic.hint}</span>
     </span>
-    <span className="mt-3 text-card font-semibold text-ink">{topic.label}</span>
-    {sampleQuestion && <span className="mt-1 line-clamp-2 text-sub text-ink-2">“{sampleQuestion}”</span>}
+    <ChevronRight size={16} className="shrink-0 text-ink-3" />
   </button>
 );
