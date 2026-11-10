@@ -61,7 +61,8 @@ const BasisToggle = ({ item, onSearchPrecedent }) => {
 // precedents: [{ reference, question }] — 자주 묻는 질문의 근거 판례와 그 질문(왜 관련 있는지)
 export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onSearchPrecedent, onOpenReference, onAsk }) => {
   const steps = [FIRST_STEP, ...guide.procedure];
-  const [openSteps, setOpenSteps] = useState(() => new Set());
+  // 처음엔 모두 펼쳐 둔다(한눈에 읽고, 필요 없는 단계만 접기).
+  const [openSteps, setOpenSteps] = useState(() => new Set(steps.map((_, i) => i)));
   const isAllOpen = openSteps.size === steps.length;
   const toggleStep = (index) =>
     setOpenSteps((current) => {

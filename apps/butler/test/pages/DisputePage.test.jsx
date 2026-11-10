@@ -459,21 +459,15 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText(/자연스럽게 닳은 건 책임이 아니에요/)).toBeInTheDocument();
   });
 
-  it('보증금 반환 안내는 번호 단계 5개로 처음엔 제목만 보여 주고, 펼치면 그 단계의 자료·서식·기관이 나온다', async () => {
+  it('보증금 반환 안내는 번호 단계 5개를 처음부터 모두 펼쳐 그 단계의 자료·서식·기관을 보여 주고, 접을 수 있다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/topics/deposit');
 
     expect(await screen.findByRole('heading', { name: '보증금·주택 반환' })).toBeInTheDocument();
-    const steps = within(screen.getByRole('region', { name: '해결 단계' })).getAllByRole('button', { expanded: false });
-    expect(steps.map((step) => step.textContent.replace(/펼치기$/, ''))).toEqual(['지금 상황 확인', '협의', '문서로 알리기', '분쟁조정', '법원']);
-    expect(screen.queryByRole('heading', { name: '먼저 확인하세요' })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
+    const steps = within(screen.getByRole('region', { name: '해결 단계' })).getAllByRole('button', { expanded: true });
+    expect(steps.map((step) => step.textContent.replace(/접기$/, ''))).toEqual(['지금 상황 확인', '협의', '문서로 알리기', '분쟁조정', '법원']);
     expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
     expect(screen.getByText('공제 금액으로 다투는 경우')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '모두 펼치기' }));
     for (const name of ['준비할 자료', '서식·도구', '도움받을 곳']) {
       expect(screen.getAllByRole('heading', { name }).length).toBeGreaterThan(0);
     }
@@ -482,8 +476,14 @@ describe('분쟁 해결사', () => {
     expect(screen.getByRole('link', { name: /전월세 전환 계산기/ })).toHaveAttribute('href', expect.stringContaining('transferCalculatorForm.do'));
     expect(screen.getByRole('link', { name: /주택임대차 표준계약서/ })).toHaveAttribute('href', expect.stringContaining('downloadContract.do'));
     expect(screen.getAllByRole('link', { name: /조정 신청/ })[0]).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
-    expect(screen.getByRole('button', { name: '모두 접기' })).toBeInTheDocument();
     expect(lastListParams()).toMatchObject({ type: 'CASE', category: 'DEPOSIT_RETURN', size: 3 });
+
+    await user.click(screen.getByRole('button', { name: '모두 접기' }));
+    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
+    expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '모두 펼치기' }));
 
     // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 관련 판례 찾기로 판례 탭 검색을 연다.
     await user.click(screen.getAllByRole('button', { name: '근거 보기' })[0]);
@@ -505,7 +505,6 @@ describe('분쟁 해결사', () => {
       const { unmount } = renderAt(`/disputes/topics/${key}`);
       expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: '해결 단계' })).toBeInTheDocument();
-      await userEvent.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
       expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
       expect(screen.getByText(caseTitle)).toBeInTheDocument();
       expect(lastListParams()).toMatchObject({ type: 'CASE', category, size: 3 });

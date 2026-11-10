@@ -100,6 +100,7 @@ export const DisputeTopicPage = () => {
     <div className="flex flex-col gap-6">
       {header}
       <TopicGuide
+        key={topicKey}
         guide={briefing.guide}
         helpRoutes={HELP_ROUTES}
         cases={caseItems}
