@@ -436,7 +436,7 @@ describe('분쟁 해결사', () => {
     expect(screen.queryByText('최근 임대차 이슈')).not.toBeInTheDocument();
   });
 
-  it('상황 안내 맨 위 질문 칩을 누르면 그 질문을 고른 칩으로 표시하고 답을 바로 아래 펼친다', async () => {
+  it('상황 안내 맨 위 질문 칩을 누르면 그 질문을 고른 칩으로 표시하고 답을 바로 아래 펼치며, 다시 누르면 푼다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/topics/restore');
 
@@ -450,6 +450,11 @@ describe('분쟁 해결사', () => {
     expect(within(selected).getByText(/통상의 손모는 특약이 없으면/)).toBeInTheDocument();
     // 답 아래에 근거 자료를 낸 곳을 적는다.
     expect(within(selected).getByText('출처 · 2025 주택·상가건물 임대차분쟁 조정사례집')).toBeInTheDocument();
+
+    // 고른 칩을 다시 누르면 풀리고 답도 접힌다.
+    await user.click(screen.getByRole('button', { name: '원상복구 범위' }));
+    expect(screen.getByRole('button', { name: '원상복구 범위' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('region', { name: '고른 질문' })).not.toBeInTheDocument();
   });
 
   it('첫 화면에서 유형 카드 머리를 누르면 상황 안내로 간다', async () => {

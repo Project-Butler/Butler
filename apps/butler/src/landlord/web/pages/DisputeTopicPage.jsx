@@ -26,8 +26,10 @@ export const DisputeTopicPage = () => {
   const category = topic?.categories.join(',');
   const faqs = useGetDisputeFaqList({ category });
   // 맨 위 질문 칩에서 고른 질문(?faq=key). 다른 상황 분류의 질문일 수도 있어서 전체 질문에서 찾는다.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const selectedFaqKey = searchParams.get('faq');
+  // 고른 칩을 다시 누르면 풀린다. 같은 화면 안의 고르기라 기록을 쌓지 않는다(replace, 자료 찾기 칩과 같음).
+  const toggleFaq = (faq) => setSearchParams(faq === selectedFaqKey ? {} : { faq }, { replace: true });
   const allFaqs = useGetDisputeFaqList({});
   const selectedFaq = selectedFaqKey ? allFaqs.data?.find((faq) => faq.key === selectedFaqKey) : undefined;
   const cases = useGetDisputeReferenceList({
@@ -70,7 +72,7 @@ export const DisputeTopicPage = () => {
           <li key={question.faq}>
             <FilterChip
               selected={question.faq === selectedFaqKey}
-              onClick={() => onNavigate('disputeTopic', { topicKey, faq: question.faq })}
+              onClick={() => toggleFaq(question.faq)}
             >
               {question.label}
             </FilterChip>

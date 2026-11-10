@@ -523,12 +523,13 @@ export const SEARCH_EXAMPLES = [
 
 // 상황 안내 맨 위 '자주 묻는 질문' 칩. 칩마다 자주 묻는 질문(apps/api/prisma/seed-data/dispute-faqs.json의 key) 하나를 연결해,
 // 누르면 그 상황 안내 화면 맨 위에 정리된 답과 근거 자료를 펼친다.
+// 칩은 같은 계층이라 순서는 일이 벌어지는 차례(계약 → 계약 중 → 끝날 때 → 끝난 뒤)로 둔다. 클릭 기록이 쌓이면 많이 찾는 순으로 바꾼다.
 export const TOPIC_QUESTIONS = {
   deposit: [
     { label: '언제 돌려줘야 하나', faq: 'deposit-new-tenant-delay' },
     { label: '공제할 수 있는 비용', faq: 'deposit-deduct-proof' },
-    { label: '못 돌려줄 때 대응', faq: 'deposit-cannot-return' },
     { label: '일부만 돌려줄 때', faq: 'deposit-partial-return' },
+    { label: '못 돌려줄 때 대응', faq: 'deposit-cannot-return' },
     { label: '새 임차인과 관계', faq: 'deposit-new-tenant-relation' },
   ],
   restore: [
@@ -537,27 +538,27 @@ export const TOPIC_QUESTIONS = {
     { label: '입주 사진이 없을 때', faq: 'restore-no-photo' },
   ],
   repair: [
+    { label: '수리 특약', faq: 'repair-waiver-clause' },
     { label: '누가 고쳐야 하나', faq: 'repair-who-fixes' },
     { label: '보일러 고장', faq: 'repair-boiler' },
     { label: '수리비를 세입자가 냈을 때', faq: 'repair-tenant-paid' },
-    { label: '수리 특약', faq: 'repair-waiver-clause' },
   ],
   renewal: [
-    { label: '갱신 거절할 수 있는 경우', faq: 'renewal-refuse-realuse' },
-    { label: '실거주 거절 후 주의', faq: 'restore-realuse-then-lease' },
-    { label: '묵시적 갱신', faq: 'renewal-implicit-termination' },
     { label: '중도 해지', faq: 'renewal-early-termination' },
+    { label: '갱신 거절할 수 있는 경우', faq: 'renewal-refuse-realuse' },
+    { label: '묵시적 갱신', faq: 'renewal-implicit-termination' },
+    { label: '실거주 거절 후 주의', faq: 'restore-realuse-then-lease' },
   ],
   rent: [
     { label: '얼마까지 올릴 수 있나', faq: 'rent-increase-cap' },
-    { label: '월세 감액 요구', faq: 'rent-decrease-request' },
     { label: '전월세 전환', faq: 'rent-conversion' },
+    { label: '월세 감액 요구', faq: 'rent-decrease-request' },
     { label: '월세가 밀릴 때', faq: 'rent-arrears' },
   ],
   other: [
+    { label: '계약서 특약 해석', faq: 'other-contract-document' },
     { label: '중개보수는 누가', faq: 'other-brokerage-fee' },
     { label: '권리금 (상가)', faq: 'other-premium-direct-use' },
-    { label: '계약서 특약 해석', faq: 'other-contract-document' },
   ],
 };
 
