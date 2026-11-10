@@ -279,6 +279,20 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
   });
 
+  it('상황 안내에서 질문 칩을 여러 번 눌렀다 풀어도 기록이 쌓이지 않아 [뒤로] 한 번에 첫 화면으로 간다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes');
+
+    await user.click(await screen.findByRole('button', { name: /^보증금 반환/ }));
+    await screen.findByRole('heading', { name: '보증금 반환' });
+    for (const name of ['언제 돌려줘야 하나', '공제할 수 있는 비용', '공제할 수 있는 비용', '일부만 돌려줄 때']) {
+      await user.click(screen.getByRole('button', { name }));
+    }
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+    expect(await screen.findByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
+  });
+
   it('주소로 바로 들어온 자료 찾기의 [뒤로]는 임대차 분쟁 센터로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/search?q=%EB%8F%84%EB%B0%B0');
