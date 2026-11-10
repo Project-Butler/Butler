@@ -85,7 +85,7 @@ export const TOPIC_BRIEFINGS = {
         { title: '법원', detail: '조정이 안 되면 지급명령·소송으로 가요', parts: ['precedents'], tools: ['deposit'], help: ['klac'] },
       ],
       tools: [
-        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
+        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://service.epost.go.kr/econprf.RetrieveEConprfReqSend.postal' },
         { key: 'deposit', label: '보증금 공탁', note: '법원 전자공탁', href: 'https://ekt.scourt.go.kr' },
         { key: 'calculator', label: '전월세 전환 계산기', note: '임대차분쟁조정위원회', href: 'https://adrhome.reb.or.kr/adrhome/reb/transfer/transferCalculatorForm.do?Key=10404000000002022101900' },
         { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
@@ -170,7 +170,7 @@ export const TOPIC_BRIEFINGS = {
         { title: '법원', detail: '조정이 안 되면 소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
-        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
+        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://service.epost.go.kr/econprf.RetrieveEConprfReqSend.postal' },
         { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
@@ -255,7 +255,7 @@ export const TOPIC_BRIEFINGS = {
         { title: '법원', detail: '조정이 안 되면 소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
-        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
+        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://service.epost.go.kr/econprf.RetrieveEConprfReqSend.postal' },
         { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },
@@ -339,7 +339,7 @@ export const TOPIC_BRIEFINGS = {
         { title: '법원', detail: '나가지 않으면 명도소송으로 가요', parts: ['precedents'], help: ['klac'] },
       ],
       tools: [
-        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://www.epost.go.kr' },
+        { key: 'certified', label: '내용증명 보내기', note: '인터넷우체국', href: 'https://service.epost.go.kr/econprf.RetrieveEConprfReqSend.postal' },
         { key: 'contract', label: '주택임대차 표준계약서', note: '임대차분쟁조정위원회 · PDF', href: 'https://adrhome.reb.or.kr/adrhome/reb/file/downloadContract.do?fileName=%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%20%ED%91%9C%EC%A4%80%EA%B3%84%EC%95%BD%EC%84%9C.pdf' },
       ],
     },

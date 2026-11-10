@@ -475,6 +475,7 @@ describe('분쟁 해결사', () => {
     for (const name of ['준비할 자료', '서식·도구', '도움받을 곳']) {
       expect(screen.getAllByRole('heading', { name }).length).toBeGreaterThan(0);
     }
+    expect(screen.getByRole('link', { name: /내용증명 보내기/ })).toHaveAttribute('href', expect.stringContaining('econprf.RetrieveEConprfReqSend'));
     expect(screen.getByRole('link', { name: /보증금 공탁/ })).toHaveAttribute('href', 'https://ekt.scourt.go.kr');
     // 서식·도구는 기관 메인이 아니라 그 기능 페이지로 바로 간다.
     expect(screen.getByRole('link', { name: /전월세 전환 계산기/ })).toHaveAttribute('href', expect.stringContaining('transferCalculatorForm.do'));
