@@ -401,6 +401,18 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     assert.deepEqual((await search(TYPE_WORD)).keys, ['type-strong-precedent', 'type-case', 'type-precedent']);
   });
 
+  test('sourceKey로 정해 둔 자료만 가져오고, 목록 항목에 sourceKey를 함께 준다', async () => {
+    const keys = [`${KEY_PREFIX}phrase`, `${KEY_PREFIX}content-only`];
+    const result = await findReferences({
+      filters: { sourceKey: { in: keys } },
+      keyword: undefined,
+      page: 1,
+      size: 20,
+      orderBy: { field: 'createdAt', direction: 'desc' },
+    });
+    assert.deepEqual(result.items.map((item) => item.sourceKey).sort(), [...keys].sort());
+  });
+
   test('관련도 점수에서 %는 와일드카드가 아니라 글자 그대로 찾는다', async () => {
     // %를 와일드카드로 읽으면 percent-summary의 제목 '칠칠칠X'도 맞아 제목+요약 점수로 앞서게 된다.
     const { keys } = await search('칠칠칠%');

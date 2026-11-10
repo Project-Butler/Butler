@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -140,12 +142,20 @@ const renderAt = (path) => {
   );
 };
 
-const lastListParams = () => api.getDisputeReferenceList.mock.calls.at(-1)[0];
+// 근거 자료(sourceKeys)로 부르는 요청은 빼고, 목록·사례를 부른 마지막 요청
+const lastListParams = () => api.getDisputeReferenceList.mock.calls.filter(([params]) => !params?.sourceKeys).at(-1)[0];
+
+// 상황 안내의 근거 자료: 키 모양으로 종류를 정해 돌려준다(서버처럼 sourceKey를 같이 준다).
+const refTypeOf = (key) => (key.includes('-P-') || key.startsWith('lawgo-prec') ? 'PRECEDENT' : key.startsWith('law-') ? 'GUIDELINE' : 'CASE');
+const basisRefsResponse = (sourceKeys) =>
+  listResponse(sourceKeys.split(',').map((key) => ({ ...CASE_ITEM, id: `ref-${key}`, sourceKey: key, type: refTypeOf(key), title: `자료 ${key}` })));
 
 describe('분쟁 해결사', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    api.getDisputeReferenceList.mockResolvedValue(listResponse([CASE_ITEM]));
+    api.getDisputeReferenceList.mockImplementation(async (params) =>
+      params?.sourceKeys ? basisRefsResponse(params.sourceKeys) : listResponse([CASE_ITEM]),
+    );
     api.getDisputeReference.mockResolvedValue(CASE_DETAIL);
     api.getDisputeRelatedReferences.mockResolvedValue(RELATED);
     // 서버처럼 유형(쉼표)·검색어로 거른다.
@@ -536,12 +546,25 @@ describe('분쟁 해결사', () => {
     expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '모두 펼치기' }));
 
-    // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 관련 판례 찾기로 판례 탭 검색을 연다.
+    // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 근거 자료(법령·사례)는 자료 찾기를 거치지 않고 그 자료 상세로 바로 간다.
     await user.click(screen.getAllByRole('button', { name: '근거 보기' })[0]);
     expect(screen.getByText('주택임대차보호법 제6조의2 (묵시적 갱신 시 계약의 해지)')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '관련 판례 찾기' }));
-    expect(await screen.findByRole('heading', { name: '자료 찾기' })).toBeInTheDocument();
-    await waitFor(() => expect(lastListParams()).toMatchObject({ q: '묵시적', type: 'PRECEDENT' }));
+    expect(await screen.findByRole('button', { name: /법령\s*자료 law-hlpa-6-2/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /사례\s*자료 casebook-2025-H-06-1/ }));
+    expect(await screen.findByRole('heading', { name: CASE_DETAIL.title })).toBeInTheDocument();
+    expect(api.getDisputeReference).toHaveBeenLastCalledWith('ref-casebook-2025-H-06-1');
+  });
+
+  it('내 경우 카드의 [비슷한 사례 보기]는 자료 찾기가 아니라 그 카드에 붙인 조정 사례 상세로 바로 간다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes/topics/deposit');
+
+    await screen.findByRole('heading', { name: '보증금 반환' });
+    const [firstSimilar] = await screen.findAllByRole('button', { name: '비슷한 사례 보기' });
+    await user.click(firstSimilar);
+
+    expect(await screen.findByRole('heading', { name: CASE_DETAIL.title })).toBeInTheDocument();
+    expect(api.getDisputeReference).toHaveBeenLastCalledWith('ref-casebook-2025-H-03-3');
   });
 
   it('나머지 상황도 같은 구조로 안내하고, 상황마다 그 분류의 사례를 가져온다', async () => {
@@ -581,6 +604,21 @@ describe('상황 안내 단계', () => {
       expect(used('tools').sort(), key).toEqual(guide.tools.map((tool) => tool.key).sort());
       expect(used('help').sort(), key).toEqual(HELP_ROUTES.map((route) => route.key).sort());
       expect(used('parts').sort(), key).toEqual(['caseRefs', 'documents', 'precedents']);
+    }
+  });
+  it('문장마다 붙인 근거 자료(refs)는 모두 시드 자료에 있는 sourceKey다', () => {
+    // 테스트는 apps/butler에서 돈다(vitest 기본 cwd).
+    const seedDir = resolve(process.cwd(), '../api/prisma/seed-data') + '/';
+    const seedKeys = new Set(
+      readdirSync(seedDir)
+        .filter((file) => file.endsWith('.json'))
+        .flatMap((file) => JSON.parse(readFileSync(`${seedDir}${file}`, 'utf8')))
+        .map((reference) => reference.sourceKey)
+        .filter(Boolean),
+    );
+    for (const [key, { guide }] of Object.entries(TOPIC_BRIEFINGS)) {
+      const refs = [...guide.checks, ...guide.cases].flatMap((item) => item.refs ?? []);
+      expect(refs.filter((ref) => !seedKeys.has(ref)), key).toEqual([]);
     }
   });
 });

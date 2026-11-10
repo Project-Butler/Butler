@@ -38,6 +38,11 @@ export const DisputeTopicPage = () => {
     size: CASE_COUNT,
   });
 
+  // 상황 안내 문장마다 붙인 근거 자료(refs)를 한 번에 받아 sourceKey로 찾는다.
+  const refKeys = [...new Set([...(briefing?.guide.checks ?? []), ...(briefing?.guide.cases ?? [])].flatMap((item) => item.refs ?? []))];
+  const basisRefList = useGetDisputeReferenceList({ sourceKeys: refKeys.join(','), size: refKeys.length }, { enabled: refKeys.length > 0 });
+  const basisRefs = new Map((basisRefList.data?.data ?? []).map((reference) => [reference.sourceKey, reference]));
+
   useEffect(() => {
     window.scrollTo?.(0, 0);
   }, [topicKey]);
@@ -107,8 +112,7 @@ export const DisputeTopicPage = () => {
         helpRoutes={HELP_ROUTES}
         cases={caseItems}
         precedents={precedents}
-        onSearch={(q) => onNavigate('disputeSearch', { q })}
-        onSearchPrecedent={(q) => onNavigate('disputeSearch', { q, tab: 'PRECEDENT' })}
+        basisRefs={basisRefs}
         onOpenReference={openReference}
         // 안내를 다 읽고도 답이 없을 때의 AI 입구(맨 끝)
         onAsk={askAboutTopic}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, FileCheck2, Scale, Search } from 'lucide-react';
+import { TYPE_LABELS } from '../../utils/disputeReference';
 import { Button } from '@butler/ui';
 import { HelpRouteCard } from './HelpRouteCard';
 import { ReferenceCard } from './ReferenceCard';
@@ -17,9 +18,14 @@ const Part = ({ title, children }) => (
   </div>
 );
 
-// 문장 아래 [근거 보기]: 근거 조문·판례와 적용 조건을 펼치고, 관련 판례 검색으로 잇는다.
+// 법령 조문도 DB 종류는 GUIDELINE이라 sourceKey(law-…)로 '법령'이라고 따로 적는다.
+const refTypeLabel = (reference) => (reference.sourceKey.startsWith('law-') ? '법령' : TYPE_LABELS[reference.type]);
+
+// 문장 아래 [근거 보기]: 근거 조문·판례와 적용 조건을 펼치고, 그 문장의 근거 자료(refs)로 바로 간다.
 // 화면 문장이 짧게 일반화되어 있어서, 왜 그렇게 썼는지와 언제 달라지는지를 바로 확인할 수 있게 한다.
-const BasisToggle = ({ item, onSearchPrecedent }) => {
+// basisRefs: sourceKey → 자료(목록 항목). 아직 못 받았거나 없는 자료는 링크를 그리지 않는다.
+const BasisToggle = ({ item, basisRefs, onOpenReference }) => {
+  const references = (item.refs ?? []).map((key) => basisRefs.get(key)).filter(Boolean);
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="mt-2">
@@ -42,16 +48,24 @@ const BasisToggle = ({ item, onSearchPrecedent }) => {
             <dt className="font-semibold text-ink-2">적용 조건</dt>
             <dd className="break-keep text-ink">{item.condition}</dd>
           </div>
-          <dd>
-            <button
-              type="button"
-              onClick={() => onSearchPrecedent(item.precedentQ ?? item.q)}
-              className="flex min-h-9 items-center gap-0.5 font-semibold text-accent hover:text-accent-strong"
-            >
-              관련 판례 찾기
-              <ChevronRight size={14} />
-            </button>
-          </dd>
+          {references.length > 0 && (
+            <div>
+              <dt className="font-semibold text-ink-2">근거 자료</dt>
+              {references.map((reference) => (
+                <dd key={reference.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenReference(reference.id)}
+                    className="flex min-h-9 items-start gap-1 py-1.5 text-left font-semibold text-accent hover:text-accent-strong"
+                  >
+                    <span className="shrink-0 text-ink-3">{refTypeLabel(reference)}</span>
+                    <span className="break-keep">{reference.title}</span>
+                    <ChevronRight size={14} className="mt-0.5 shrink-0" />
+                  </button>
+                </dd>
+              ))}
+            </div>
+          )}
         </dl>
       )}
     </div>
@@ -59,7 +73,7 @@ const BasisToggle = ({ item, onSearchPrecedent }) => {
 };
 
 // precedents: [{ reference, question }] — 자주 묻는 질문의 근거 판례와 그 질문(왜 관련 있는지)
-export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onSearchPrecedent, onOpenReference, onAsk }) => {
+export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, onOpenReference, onAsk }) => {
   const steps = [FIRST_STEP, ...guide.procedure];
   // 처음엔 모두 펼쳐 둔다(한눈에 읽고, 필요 없는 단계만 접기).
   const [openSteps, setOpenSteps] = useState(() => new Set(steps.map((_, i) => i)));
@@ -72,6 +86,10 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onS
       return next;
     });
   const toggleAll = () => setOpenSteps(isAllOpen ? new Set() : new Set(steps.map((_, i) => i)));
+
+  // '내 경우에는' 카드의 [비슷한 사례 보기]: 그 카드 refs 중 첫 조정 사례로 바로 간다.
+  const similarCaseOf = (item) =>
+    (item.refs ?? []).map((key) => basisRefs.get(key)).find((reference) => reference?.type === 'CASE');
 
   const renderPart = (part) => {
     switch (part) {
@@ -86,7 +104,7 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onS
                   <div className="min-w-0">
                     <p className="text-body font-semibold text-ink">{check.label}</p>
                     <p className="mt-0.5 break-keep text-sub text-ink-2">{check.detail}</p>
-                    <BasisToggle item={check} onSearchPrecedent={onSearchPrecedent} />
+                    <BasisToggle item={check} basisRefs={basisRefs} onOpenReference={onOpenReference} />
                   </div>
                 </li>
               ))}
@@ -101,15 +119,17 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, onSearch, onS
                 <li key={item.key} className="flex flex-col rounded-card border border-line bg-surface p-4 lg:p-5">
                   <p className="text-card font-semibold text-ink">{item.title}</p>
                   <p className="mt-2 break-keep text-body text-ink-2">{item.action}</p>
-                  <BasisToggle item={item} onSearchPrecedent={onSearchPrecedent} />
-                  <button
-                    type="button"
-                    onClick={() => onSearch(item.q)}
-                    className="mt-3 flex min-h-11 items-center gap-0.5 self-start text-label font-semibold text-accent hover:text-accent-strong"
-                  >
-                    비슷한 사례 보기
-                    <ChevronRight size={16} />
-                  </button>
+                  <BasisToggle item={item} basisRefs={basisRefs} onOpenReference={onOpenReference} />
+                  {similarCaseOf(item) && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenReference(similarCaseOf(item).id)}
+                      className="mt-3 flex min-h-11 items-center gap-0.5 self-start text-label font-semibold text-accent hover:text-accent-strong"
+                    >
+                      비슷한 사례 보기
+                      <ChevronRight size={16} />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
