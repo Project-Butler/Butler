@@ -7,7 +7,7 @@ import { SearchBox } from '../components/DisputeReference/SearchBox';
 import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { TopicTile } from '../components/DisputeReference/TopicTile';
 import { DISPUTE_TOPICS } from '../utils/disputeReference';
-import { HELP_ROUTES, SEARCH_EXAMPLES } from '../utils/disputePortal';
+import { HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
 
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
@@ -32,13 +32,13 @@ export const DisputeHomePage = () => {
           onClear={() => setKeyword('')}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sub font-semibold text-ink-3">많이 찾는 질문</span>
+          <span className="text-sub font-semibold text-ink-3">자주 묻는 질문</span>
           <ul className="contents">
-            {SEARCH_EXAMPLES.map((example) => (
+            {POPULAR_QUESTIONS.map((example) => (
               <li key={example.label}>
                 <button
                   type="button"
-                  onClick={() => search(example.q)}
+                  onClick={() => onNavigate('disputeTopic', { topicKey: example.topicKey, faq: example.faq })}
                   className="min-h-9 rounded-full border border-line bg-surface px-3 text-sub text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   {example.label}

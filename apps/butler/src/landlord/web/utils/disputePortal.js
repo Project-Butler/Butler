@@ -514,12 +514,15 @@ export const TOPIC_BRIEFINGS = {
   },
 };
 
-// 검색창 아래 예시 질문. 지금 검색은 단어 포함으로 찾아서(#4 의미 검색 전) 문장 대신 핵심 단어(q)로 찾는다.
-// 고른 주제·순서는 원본 사례·상담 446건에서 건수가 많은 유형 순(갱신·종료 148 · 월세 조정 56 · 보증금 55, 11-10 집계).
-export const SEARCH_EXAMPLES = [
-  { label: '갱신 거절해도 되나요?', q: '갱신거절' },
-  { label: '월세 얼마까지 올릴 수 있나요?', q: '증액' },
-  { label: '보증금이 아직 안 들어왔어요', q: '보증금 반환' },
+// 첫 화면 검색창 아래 '자주 묻는 질문'. 누르면 그 상황 안내에서 정리된 답을 바로 펼친다(topicKey + faq).
+// 고른 질문·순서는 원본 사례·상담 446건(상담사례집 = 실제로 기관에 물은 질문 포함)에서 주제별 건수가 많은 순(11-10 집계):
+// 갱신 거절·실거주 48 · 월세 인상 48 · 중도 해지 42 · 묵시적 갱신 32 · 보증금 공제 18. 권리금(27)은 상가라 뺐다.
+export const POPULAR_QUESTIONS = [
+  { label: '실거주로 갱신을 거절할 수 있나요?', topicKey: 'renewal', faq: 'renewal-refuse-realuse' },
+  { label: '월세 얼마까지 올릴 수 있나요?', topicKey: 'rent', faq: 'rent-increase-cap' },
+  { label: '세입자가 중간에 나가겠대요', topicKey: 'renewal', faq: 'renewal-early-termination' },
+  { label: '묵시적 갱신 후 해지하면?', topicKey: 'renewal', faq: 'renewal-implicit-termination' },
+  { label: '보증금에서 수리비를 빼려면?', topicKey: 'deposit', faq: 'deposit-deduct-proof' },
 ];
 
 // 상황 안내 맨 위 '자주 묻는 질문' 칩. 칩마다 자주 묻는 질문(apps/api/prisma/seed-data/dispute-faqs.json의 key) 하나를 연결해,

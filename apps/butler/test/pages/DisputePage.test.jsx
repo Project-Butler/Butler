@@ -96,6 +96,13 @@ const FAQS = [
     answer: '묵시적으로 표시되어 기간 안에 도달하면 유효해요.',
     references: [],
   },
+  {
+    key: 'rent-increase-cap',
+    category: 'RENT_ADJUSTMENT',
+    question: '갱신할 때 월세를 얼마까지 올릴 수 있나요?',
+    answer: '갱신할 때는 기존 금액의 5%를 넘게 올릴 수 없어요.',
+    references: [],
+  },
 ];
 
 const ChatProbe = () => {
@@ -439,21 +446,36 @@ describe('분쟁 해결사', () => {
       expect(names.some((name) => name.startsWith(label))).toBe(true);
     }
     // 쉬운 이름 아래 대표 질문만 둔다(분류 기준은 코드에만 두고 화면에는 적지 않는다).
-    expect(screen.getByText('공제할 수 있는 비용은?')).toBeInTheDocument();
+    expect(screen.getByText('바로 돌려줄 돈이 없다면?')).toBeInTheDocument();
     expect(screen.queryByText(/법정 분류|분류 기준/)).not.toBeInTheDocument();
     expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr');
     expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
     expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '1644-5599' })).toHaveAttribute('href', 'tel:1644-5599');
-    // 많이 찾는 질문은 원본 사례가 많은 유형 순(갱신·종료 → 월세 조정 → 보증금)
-    expect(screen.getAllByRole('button', { name: /갱신 거절해도|월세 얼마까지|보증금이 아직/ }).map((button) => button.textContent)).toEqual([
-      '갱신 거절해도 되나요?',
+    // 자주 묻는 질문 5개는 원본 사례·상담에 많이 나온 순서
+    const popular = within(screen.getByText('자주 묻는 질문').parentElement).getAllByRole('button').map((button) => button.textContent);
+    expect(popular.slice(0, 5)).toEqual([
+      '실거주로 갱신을 거절할 수 있나요?',
       '월세 얼마까지 올릴 수 있나요?',
-      '보증금이 아직 안 들어왔어요',
+      '세입자가 중간에 나가겠대요',
+      '묵시적 갱신 후 해지하면?',
+      '보증금에서 수리비를 빼려면?',
     ]);
     // 최근 이슈(뉴스)는 첫 화면에서 뺐다.
     expect(screen.queryByText('최근 임대차 이슈')).not.toBeInTheDocument();
+  });
+
+  it('첫 화면 자주 묻는 질문을 누르면 그 상황 안내에서 답을 바로 펼친다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes');
+
+    await user.click(screen.getByRole('button', { name: '월세 얼마까지 올릴 수 있나요?' }));
+
+    expect(await screen.findByRole('heading', { name: '월세·보증금 조정' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '얼마까지 올릴 수 있나' })).toHaveAttribute('aria-pressed', 'true');
+    const selected = await screen.findByRole('region', { name: '고른 질문' });
+    expect(await within(selected).findByText(/5%를 넘게 올릴 수 없어요/)).toBeInTheDocument();
   });
 
   it('상황 안내 맨 위 질문 칩을 누르면 그 질문을 고른 칩으로 표시하고 답을 바로 아래 펼치며, 다시 누르면 푼다', async () => {
