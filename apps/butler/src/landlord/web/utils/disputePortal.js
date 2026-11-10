@@ -515,10 +515,11 @@ export const TOPIC_BRIEFINGS = {
 };
 
 // 검색창 아래 예시 질문. 지금 검색은 단어 포함으로 찾아서(#4 의미 검색 전) 문장 대신 핵심 단어(q)로 찾는다.
+// 고른 주제·순서는 원본 사례·상담 446건에서 건수가 많은 유형 순(갱신·종료 148 · 월세 조정 56 · 보증금 55, 11-10 집계).
 export const SEARCH_EXAMPLES = [
-  { label: '보증금이 아직 안 들어왔어요', q: '보증금 반환' },
-  { label: '세입자가 수리를 요구해요', q: '수선' },
   { label: '갱신 거절해도 되나요?', q: '갱신거절' },
+  { label: '월세 얼마까지 올릴 수 있나요?', q: '증액' },
+  { label: '보증금이 아직 안 들어왔어요', q: '보증금 반환' },
 ];
 
 // 상황 안내 맨 위 '자주 묻는 질문' 칩. 칩마다 자주 묻는 질문(apps/api/prisma/seed-data/dispute-faqs.json의 key) 하나를 연결해,
@@ -526,16 +527,14 @@ export const SEARCH_EXAMPLES = [
 // 칩은 같은 계층이라 순서는 일이 벌어지는 차례(계약 → 계약 중 → 끝날 때 → 끝난 뒤)로 둔다. 클릭 기록이 쌓이면 많이 찾는 순으로 바꾼다.
 export const TOPIC_QUESTIONS = {
   deposit: [
-    { label: '언제 돌려줘야 하나', faq: 'deposit-new-tenant-delay' },
+    { label: '새 임차인을 못 구했을 때', faq: 'deposit-new-tenant-delay' },
     { label: '공제할 수 있는 비용', faq: 'deposit-deduct-proof' },
     { label: '일부만 돌려줄 때', faq: 'deposit-partial-return' },
     { label: '못 돌려줄 때 대응', faq: 'deposit-cannot-return' },
-    { label: '새 임차인과 관계', faq: 'deposit-new-tenant-relation' },
   ],
   restore: [
     { label: '원상복구 범위', faq: 'restore-normal-wear' },
     { label: '도배·장판 비용', faq: 'restore-full-replacement' },
-    { label: '입주 사진이 없을 때', faq: 'restore-no-photo' },
   ],
   repair: [
     { label: '수리 특약', faq: 'repair-waiver-clause' },
@@ -623,9 +622,9 @@ export const DATA_SOURCES = [
   { label: '가이드', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
 ];
 
-// 첫 화면 맨 아래 '기관 연락처'. 전화번호는 HELP_ROUTES에 적힌 번호만 쓰고, 번호를 확인하지 못한 곳은 홈페이지로 잇는다.
+// 첫 화면·자료 찾기 맨 아래 '기관 연락처'. 번호는 기관 공식 안내에서 확인한 것만 쓴다(조정위원회 1644-5599는 조정 절차 페이지, 11-10 확인).
 export const CONTACTS = [
-  { name: '주택임대차분쟁조정위원회(한국부동산원)', value: '홈페이지', href: 'https://adrhome.reb.or.kr/adrhome/reb/main' },
+  { name: '주택임대차분쟁조정위원회(한국부동산원)', value: '1644-5599', href: 'tel:1644-5599' },
   { name: '서울시 전월세종합지원센터', value: '02-2133-1200', href: 'tel:02-2133-1200' },
   { name: '대한법률구조공단', value: '132', href: 'tel:132' },
 ];

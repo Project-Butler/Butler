@@ -285,7 +285,7 @@ describe('분쟁 해결사', () => {
 
     await user.click(await screen.findByRole('button', { name: /^보증금 반환/ }));
     await screen.findByRole('heading', { name: '보증금 반환' });
-    for (const name of ['언제 돌려줘야 하나', '공제할 수 있는 비용', '공제할 수 있는 비용', '일부만 돌려줄 때']) {
+    for (const name of ['새 임차인을 못 구했을 때', '공제할 수 있는 비용', '공제할 수 있는 비용', '일부만 돌려줄 때']) {
       await user.click(screen.getByRole('button', { name }));
     }
 
@@ -445,6 +445,13 @@ describe('분쟁 해결사', () => {
     expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr');
     expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '1644-5599' })).toHaveAttribute('href', 'tel:1644-5599');
+    // 많이 찾는 질문은 원본 사례가 많은 유형 순(갱신·종료 → 월세 조정 → 보증금)
+    expect(screen.getAllByRole('button', { name: /갱신 거절해도|월세 얼마까지|보증금이 아직/ }).map((button) => button.textContent)).toEqual([
+      '갱신 거절해도 되나요?',
+      '월세 얼마까지 올릴 수 있나요?',
+      '보증금이 아직 안 들어왔어요',
+    ]);
     // 최근 이슈(뉴스)는 첫 화면에서 뺐다.
     expect(screen.queryByText('최근 임대차 이슈')).not.toBeInTheDocument();
   });
