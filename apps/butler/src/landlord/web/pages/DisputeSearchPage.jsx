@@ -6,6 +6,7 @@ import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { ReferenceCard } from '../components/DisputeReference/ReferenceCard';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
+import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { DISPUTE_TOPICS, findTopic, REFERENCE_TYPES } from '../utils/disputeReference';
@@ -281,6 +282,8 @@ export const DisputeSearchPage = () => {
           AI에게 물어보기
         </Button>
       </div>
+
+      <SourceFooter />
 
       <LegalNotice />
     </div>

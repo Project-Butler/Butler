@@ -379,12 +379,14 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('button', { name: '손해배상' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('결과가 없으면 알려 주고, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
+  it('결과가 없으면 알려 주고, 아래에 자료 출처·기관 연락처를 두며, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     api.getDisputeReferenceList.mockResolvedValue(listResponse([], { CASE: 0, PRECEDENT: 0, GUIDELINE: 0 }));
     renderAt('/disputes/search?q=%EB%B0%98%EB%A0%A4%EA%B2%AC');
 
     expect(await screen.findByText('맞는 질문이나 사례를 찾지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '자료 출처' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
 
     expect(screen.getByText('챗봇 화면 · 반려견')).toBeInTheDocument();
