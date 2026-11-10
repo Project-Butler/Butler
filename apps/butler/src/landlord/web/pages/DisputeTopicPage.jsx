@@ -61,7 +61,7 @@ export const DisputeTopicPage = () => {
   const askAboutTopic = () => askAi(`${topic.label} 문제로 상담하고 싶어요.\n제 상황: `);
   const header = (
     <div className="flex flex-col gap-3">
-      <PageHeader title={topic.label} description={`법정 분류 · ${topic.legal}`} onBack={goBack} />
+      <PageHeader title={topic.label} onBack={goBack} />
       <div className="rounded-card bg-accent-soft p-4 lg:p-5">
         <p className="break-keep text-card font-semibold text-accent-strong">{briefing.headline}</p>
         <p className="mt-2 text-sub text-ink-2">근거 · {briefing.laws.join(', ')}</p>

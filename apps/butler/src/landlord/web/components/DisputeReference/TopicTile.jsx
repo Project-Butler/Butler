@@ -19,7 +19,7 @@ export const TopicIcon = ({ topicKey }) => {
   );
 };
 
-// 첫 화면 분쟁 유형 카드. 쉬운 이름·대표 질문을 크게, 공식 분류(조정위원회 조정 대상)는 작게 두고, 누르면 상황 안내로 간다.
+// 첫 화면 분쟁 유형 카드. 쉬운 이름과 대표 질문만 두고, 누르면 상황 안내로 간다.
 export const TopicTile = ({ topic, onClick }) => (
   <button
     type="button"
@@ -30,7 +30,6 @@ export const TopicTile = ({ topic, onClick }) => (
     <span className="min-w-0 flex-1">
       <span className="block break-keep text-card font-semibold text-ink">{topic.label}</span>
       <span className="mt-0.5 block break-keep text-sub text-ink-2">{topic.hint}</span>
-      <span className="mt-1 block break-keep text-sub text-ink-3">법정 분류 · {topic.legal}</span>
     </span>
     <ChevronRight size={16} className="shrink-0 text-ink-3" />
   </button>

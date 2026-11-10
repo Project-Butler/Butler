@@ -430,18 +430,17 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText(/챗봇 화면 · 원상복구·손해배상 문제로 상담하고 싶어요/)).toBeInTheDocument();
   });
 
-  it('첫 화면은 유형(쉬운 이름·대표 질문·법정 분류)·도움받을 곳·자료 출처·기관 연락처만 보여 주는 브리핑이다', () => {
+  it('첫 화면은 유형(쉬운 이름·대표 질문)·도움받을 곳·자료 출처·기관 연락처만 보여 주는 브리핑이다', () => {
     renderAt('/disputes');
 
     expect(screen.getByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
-    expect(screen.getByText(/분류 기준: 주택임대차분쟁조정위원회 조정 대상/)).toBeInTheDocument();
     const names = screen.getAllByRole('button').map((button) => button.textContent);
     for (const label of ['보증금 반환', '월세·보증금 조정', '수리 책임', '계약 갱신·종료', '원상복구·손해배상', '기타']) {
       expect(names.some((name) => name.startsWith(label))).toBe(true);
     }
-    // 쉬운 이름 아래 대표 질문, 그 아래 공식 분류 이름을 작게 둔다.
+    // 쉬운 이름 아래 대표 질문만 둔다(분류 기준은 코드에만 두고 화면에는 적지 않는다).
     expect(screen.getByText('공제할 수 있는 비용은?')).toBeInTheDocument();
-    expect(screen.getByText('법정 분류 · 차임·보증금 증감')).toBeInTheDocument();
+    expect(screen.queryByText(/법정 분류|분류 기준/)).not.toBeInTheDocument();
     expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr');
@@ -478,7 +477,6 @@ describe('분쟁 해결사', () => {
     await user.click(screen.getByRole('button', { name: /^원상복구·손해배상/ }));
 
     expect(await screen.findByRole('heading', { name: '원상복구·손해배상' })).toBeInTheDocument();
-    expect(screen.getByText('법정 분류 · 손해배상')).toBeInTheDocument();
     expect(screen.getByText(/자연스럽게 닳은 건 책임이 아니에요/)).toBeInTheDocument();
   });
 

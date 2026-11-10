@@ -12,7 +12,7 @@ import { HELP_ROUTES, SEARCH_EXAMPLES } from '../utils/disputePortal';
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
 // 임대차 분쟁 센터 첫 화면은 '브리핑'이다. 고르기만 하고 긴 내용은 누르면 넘어가는 화면(상황 안내·자료 찾기)에 둔다.
-// 검색 + 많이 찾는 질문 → 분쟁 유형(조정위원회 조정 대상 이름과 기준) → 도움받을 곳 요약 → 자료 출처·기관 연락처.
+// 검색 + 많이 찾는 질문 → 분쟁 유형(조정위원회 조정 대상 순서, 이름은 쉬운 말) → 도움받을 곳 요약 → 자료 출처·기관 연락처.
 // 첫 화면에는 AI 입구를 두지 않는다(찾다가 없을 때만 — DisputePage 참고). 레퍼런스: 정부24·찾기쉬운 생활법령정보 메인.
 export const DisputeHomePage = () => {
   const { onNavigate } = useOutletContext();
@@ -59,10 +59,7 @@ export const DisputeHomePage = () => {
       </header>
 
       <section className="flex flex-col gap-3">
-        <div>
-          <SectionTitle>분쟁 유형</SectionTitle>
-          <p className="mt-1 text-sub text-ink-3">분류 기준: 주택임대차분쟁조정위원회 조정 대상 (주택임대차보호법 제14조, 시행령 제22조)</p>
-        </div>
+        <SectionTitle>분쟁 유형</SectionTitle>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {DISPUTE_TOPICS.map((topic) => (
             <li key={topic.key}>
