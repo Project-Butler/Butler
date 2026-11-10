@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, FileCheck2, Scale, Search } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileCheck2, Scale, Search } from 'lucide-react';
+import { DOCUMENT_GUIDE } from '../../utils/disputePortal';
 import { TYPE_LABELS } from '../../utils/disputeReference';
 import { Button } from '@butler/ui';
 import { HelpRouteCard } from './HelpRouteCard';
@@ -146,6 +147,25 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, on
                 </li>
               ))}
             </ul>
+            <div className="flex flex-col gap-1 text-sub">
+              <p className="break-keep text-ink-2">{DOCUMENT_GUIDE.text}</p>
+              <ul className="flex flex-wrap gap-x-4">
+                {DOCUMENT_GUIDE.links.map((link) => (
+                  <li key={link.href}>
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-h-9 items-center gap-1 font-semibold text-accent hover:text-accent-strong"
+                    >
+                      {link.label}
+                      <span className="font-normal text-ink-3">· {link.note}</span>
+                      <ExternalLink size={14} />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </Part>
         );
       case 'caseRefs':

@@ -533,6 +533,9 @@ describe('분쟁 해결사', () => {
     }
     expect(screen.getByRole('link', { name: /내용증명 보내기/ })).toHaveAttribute('href', expect.stringContaining('econprf.RetrieveEConprfReqSend'));
     expect(screen.getByRole('link', { name: /보증금 공탁/ })).toHaveAttribute('href', 'https://ekt.scourt.go.kr');
+    // 준비할 자료 아래에 기관이 정한 조정 신청 서류 안내로 바로 잇는다.
+    expect(screen.getByRole('link', { name: /신청 서류 안내/ })).toHaveAttribute('href', expect.stringContaining('housing.seoul.go.kr'));
+    expect(screen.getByRole('link', { name: /조정신청서 서식/ })).toHaveAttribute('href', expect.stringContaining('10306000000002022101717'));
     // 서식·도구는 기관 메인이 아니라 그 기능 페이지로 바로 간다.
     expect(screen.getByRole('link', { name: /전월세 전환 계산기/ })).toHaveAttribute('href', expect.stringContaining('transferCalculatorForm.do'));
     expect(screen.getByRole('link', { name: /주택임대차 표준계약서/ })).toHaveAttribute('href', expect.stringContaining('downloadContract.do'));
