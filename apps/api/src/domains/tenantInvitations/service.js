@@ -70,6 +70,9 @@ const toInvitationResponse = (invitation, now, inviteUrl = null) => ({
   inviteUrl,
   expiresAt: invitation.expiresAt.toISOString(),
   sharedDocumentCount: invitation._count.documents,
+  // 임대인 화면용: 연결 날짜, 본인 확인 하루 한도에 닿은 시각(결정 14 안내). 공개 요약(A-08)에는 쓰지 않는다.
+  acceptedAt: invitation.acceptedAt ? invitation.acceptedAt.toISOString() : null,
+  landlordAlertedAt: invitation.landlordAlertedAt ? invitation.landlordAlertedAt.toISOString() : null,
   createdAt: invitation.createdAt.toISOString(),
 });
 
