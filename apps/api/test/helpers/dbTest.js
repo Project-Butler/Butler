@@ -56,7 +56,10 @@ export const createDbFixture = () => {
     const propertyIds = properties.map((property) => property.id);
 
     await prisma.activity.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.propertyLog.deleteMany({ where: { propertyId: { in: propertyIds } } });
+    // 공유 문서·확인 세션은 초대를 지우면 cascade로 지워진다.
+    await prisma.tenantInvitation.deleteMany({ where: { contract: { ownership: { propertyId: { in: propertyIds } } } } });
     await prisma.contract.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.ownershipVerificationAttempt.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.consent.deleteMany({ where: { userId: { in: userIds } } });

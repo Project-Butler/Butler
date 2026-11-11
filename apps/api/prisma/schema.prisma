@@ -130,6 +130,10 @@ model User {
 
   ownershipVerificationAttempts OwnershipVerificationAttempt[]
 
+  createdTenantInvitations  TenantInvitation[] @relation("CreatedTenantInvitations")
+  acceptedTenantInvitations TenantInvitation[] @relation("AcceptedTenantInvitations")
+  notifications             Notification[]
+
   @@map("users")
 }
 
@@ -528,7 +532,8 @@ model Contract {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tickets Ticket[]
+  tickets           Ticket[]
+  tenantInvitations TenantInvitation[]
 
   // 같은 소유 관계 안에서 해지 안 된 계약끼리 기간 겹침 금지 — ex_contract_period (마이그레이션 SQL)
   @@index([ownershipId])
@@ -658,7 +663,8 @@ model Document {
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  evidenceFor Ownership[]
+  evidenceFor      Ownership[]
+  invitationShares TenantInvitationDocument[]
 
   @@index([resourceType, resourceId])
   @@index([uploaderId])
@@ -760,6 +766,93 @@ model OwnershipVerificationAttempt {
   @@index([ownershipId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@map("ownership_verification_attempts")
+}
+
+// 임차인 초대(docs/11 개발 계획 2-1, 명세 4-1). 토큰 원문은 저장하지 않고 sha256 hex만 둔다.
+// 만료(EXPIRED)는 저장하지 않고 expiresAt으로 조회 때 계산한다.
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELED
+
+  @@map("invitation_status")
+}
+
+// 계약당 PENDING 하나, ACCEPTED 하나 — 부분 유니크 uq_tenant_invitation_pending·uq_tenant_invitation_accepted (마이그레이션 SQL)
+model TenantInvitation {
+  id         String           @id @default(uuid()) @db.Uuid
+  contractId String           @map("contract_id") @db.Uuid
+  contract   Contract         @relation(fields: [contractId], references: [id])
+  tokenHash  String           @unique @map("token_hash") @db.VarChar(64)
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime         @map("expires_at") @db.Timestamptz(3)
+  acceptedAt DateTime?        @map("accepted_at") @db.Timestamptz(3)
+  acceptedBy String?          @map("accepted_by") @db.Uuid
+  acceptor   User?            @relation("AcceptedTenantInvitations", fields: [acceptedBy], references: [id])
+  canceledAt DateTime?        @map("canceled_at") @db.Timestamptz(3)
+  createdBy  String           @map("created_by") @db.Uuid
+  creator    User             @relation("CreatedTenantInvitations", fields: [createdBy], references: [id])
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // 본인 확인 대입 방지(V-04). 초대 행을 FOR UPDATE로 잠그고 갱신한다.
+  verifyFailCount       Int       @default(0) @map("verify_fail_count")
+  verifyFailWindowStart DateTime? @map("verify_fail_window_start") @db.Timestamptz(3)
+  nextVerifyAt          DateTime? @map("next_verify_at") @db.Timestamptz(3)
+  // 하루 한도 알림을 임대인에게 보낸 시각(하루 한 번).
+  landlordAlertedAt     DateTime? @map("landlord_alerted_at") @db.Timestamptz(3)
+
+  documents     TenantInvitationDocument[]
+  verifications TenantInvitationVerification[]
+
+  @@index([contractId, createdAt(sort: Desc)])
+  @@map("tenant_invitations")
+}
+
+// 초대와 함께 공유한 계약 서류. 수락 뒤 임차인이 볼 수 있는 범위다.
+model TenantInvitationDocument {
+  invitationId String           @map("invitation_id") @db.Uuid
+  invitation   TenantInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  documentId   String           @map("document_id") @db.Uuid
+  document     Document         @relation(fields: [documentId], references: [id])
+
+  @@id([invitationId, documentId])
+  @@index([documentId])
+  @@map("tenant_invitation_documents")
+}
+
+// 본인 확인 세션(V-01 결과). 쿠키 값의 sha256만 저장한다. 만료 행은 V-01 때 그 초대 것을 함께 지운다.
+model TenantInvitationVerification {
+  id               String           @id @default(uuid()) @db.Uuid
+  idHash           String           @unique @map("id_hash") @db.VarChar(64)
+  invitationId     String           @map("invitation_id") @db.Uuid
+  invitation       TenantInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  // sha256(contractId + tenantPhone). 계약 번호가 바뀌면 세션이 무효가 된다.
+  phoneFingerprint String           @map("phone_fingerprint") @db.VarChar(64)
+  expiresAt        DateTime         @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([invitationId])
+  @@map("tenant_invitation_verifications")
+}
+
+// 인앱 알림(api-contract.md 7장). type은 등록형 문자열(platform/notify.js의 NOTIFICATION_TYPES)이라 enum이 아니다.
+// TODO: 90일 보관 정리.
+model Notification {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  type        String    @db.VarChar(60)
+  title       String
+  body        String
+  link        String?
+  relatedType String?   @map("related_type") @db.VarChar(40)
+  relatedId   String?   @map("related_id") @db.Uuid
+  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====
