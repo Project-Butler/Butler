@@ -17,6 +17,7 @@ import disputesRouter from './domains/disputes/router.js';
 import documentsRouter, { filesRouter, storageContentRouter } from './domains/documents/router.js';
 import jobsRouter from './domains/jobs/router.js';
 import landlordBuildingsRouter from './domains/landlordBuildings/router.js';
+import notificationsRouter from './domains/notifications/router.js';
 import ownershipVerificationsRouter, { ownershipVerificationResultRouter } from './domains/ownershipVerifications/router.js';
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
@@ -56,6 +57,7 @@ app.use('/api/v1/landlord-buildings', landlordBuildingsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/activities', activitiesRouter);
 app.use('/api/v1/jobs', jobsRouter);
+app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/community', communityRouter);
 
