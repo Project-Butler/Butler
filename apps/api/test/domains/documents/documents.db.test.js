@@ -303,7 +303,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
 
     const unsupported = await postJson(stranger, '/documents', {
       uploadSessionId: strangerSession.body.data.id,
-      resourceType: 'CONTRACT',
+      resourceType: 'TICKET',
       resourceId: randomUUID(),
     });
     assert.equal(unsupported.status, 400);
