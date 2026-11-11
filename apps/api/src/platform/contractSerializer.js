@@ -15,6 +15,16 @@ export const CONTRACT_INCLUDE = {
       property: { include: { complex: true } },
     },
   },
+  tenant: { select: { id: true, name: true } },
+  // 최신 초대 1건(응답의 tenant.invitationStatus 계산용)
+  tenantInvitations: { orderBy: { createdAt: 'desc' }, take: 1 },
+};
+
+// 최신 초대 상태. PENDING인데 만료 시각이 지났으면 EXPIRED(R-14). 초대가 없으면 null.
+const toInvitationStatus = (invitation, now) => {
+  if (!invitation) return null;
+  if (invitation.status === 'PENDING' && invitation.expiresAt <= now) return 'EXPIRED';
+  return invitation.status;
 };
 
 // 요청자와 계약의 관계. 볼 수 없으면 null(호출하는 쪽이 404로 숨긴다).
@@ -54,8 +64,14 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     // 끝난 소유 관계는 인증이 남아 있어도 false다.
     landlordVerified: !ownership.endedAt && computeOwnershipVerificationStatus(ownership, now) === 'VERIFIED',
     endReason: ownership.endReason ?? null,
-    // 초대(invitationStatus)는 보류(명세 D-18) — 초대 기능이 생기면 최신 초대 상태를 넣는다.
-    tenant: { name: contract.tenantName, phone: contract.tenantPhone, userId: contract.tenantId, invitationStatus: null },
+    tenant: {
+      name: contract.tenantName,
+      phone: contract.tenantPhone,
+      userId: contract.tenantId,
+      invitationStatus: toInvitationStatus(contract.tenantInvitations?.[0], now),
+      // 연결된 임차인 계정 이름은 소유자·이전 소유자에게만 보인다(임차인·운영자는 null).
+      accountName: viewer === 'OWNER' || viewer === 'FORMER_OWNER' ? (contract.tenant?.name ?? null) : null,
+    },
     terminatedOn: toDateOnlyString(contract.terminatedOn),
     terminationReason: contract.terminationReason ?? null,
     previousContractId: contract.previousContractId ?? null,
