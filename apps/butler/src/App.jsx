@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { FullScreenStatus } from './auth/FullScreenStatus';
 import { GuestOnly } from './auth/GuestOnly';
+import { getInviteTokenFromPath } from './auth/invitePath';
 import { LoginPage } from './auth/LoginPage';
 import { OAuthSignupPage } from './auth/OAuthSignupPage';
 import { RegisterPage } from './auth/RegisterPage';
@@ -15,9 +16,22 @@ import { getSurface } from './surface/getSurface';
 const AdminRoutes = lazy(() => import('./admin/AdminRoutes').then((module) => ({ default: module.AdminRoutes })));
 const LandlordWebRoutes = lazy(() => import('./landlord/web/LandlordWebRoutes').then((module) => ({ default: module.LandlordWebRoutes })));
 const LandlordAppRoutes = lazy(() => import('./landlord/app/LandlordAppRoutes').then((module) => ({ default: module.LandlordAppRoutes })));
+// 공개 초대 화면(/invite/:token). 링크를 연 사람만 내려받는다.
+const InviteRoutes = lazy(() => import('./invite/InviteRoutes').then((module) => ({ default: module.InviteRoutes })));
 const TenantRoutes = lazy(() => import('./tenant/TenantRoutes').then((module) => ({ default: module.TenantRoutes })));
 
 const WAITING = <FullScreenStatus>불러오는 중입니다</FullScreenStatus>;
+
+// 초대 화면에서 온 로그인(from 이 /invite/:token)은 PC 에서도 앱 모양이다(초대 경로는 항상 앱 모양, 개발 계획 3-2).
+const LoginRoute = ({ surface }) => {
+  const location = useLocation();
+  const loginSurface = getInviteTokenFromPath(location.state?.from) ? 'app' : surface;
+  return (
+    <GuestOnly>
+      <LoginPage surface={loginSurface} />
+    </GuestOnly>
+  );
+};
 
 // 분기는 두 번이다. ① 역할로 admin·landlord·tenant 를 고르고(RequireRole + 주소 접두어) ② 임대인이면 surface 로 web·app 을 고른다.
 // 관리자는 항상 웹, 임차인은 항상 앱 화면이다. 역할 폴더는 auth·store·surface 를 import하지 못하므로 필요한 값은 props 로 넘긴다.
@@ -45,9 +59,17 @@ export const App = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={<GuestOnly><LoginPage surface={surface} /></GuestOnly>} />
+      <Route path="/login" element={<LoginRoute surface={surface} />} />
       <Route path="/register" element={<GuestOnly><RegisterPage surface={surface} /></GuestOnly>} />
       <Route path="/register/oauth" element={<GuestOnly><OAuthSignupPage surface={surface} /></GuestOnly>} />
+      <Route
+        path="/invite/:token/*"
+        element={
+          <Suspense fallback={WAITING}>
+            <InviteRoutes />
+          </Suspense>
+        }
+      />
       <Route
         path="/admin/*"
         element={

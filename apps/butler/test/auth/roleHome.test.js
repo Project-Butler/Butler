@@ -69,6 +69,31 @@ describe('resolveAfterLogin: from 은 내 역할 접두어일 때만', () => {
     expect(resolveAfterLogin(from, 'LANDLORD')).toBe('/landlord/home');
   });
 
+  it.each([
+    ['초대 주소', '/invite/abc_DEF-1', '/invite/abc_DEF-1'],
+    ['가입하고 돌아온 표지가 붙은 초대 주소', '/invite/abc?joined=1', '/invite/abc?joined=1'],
+  ])('임차인은 %s 로 돌아간다', (_name, from, expected) => {
+    expect(resolveAfterLogin(from, 'TENANT')).toBe(expected);
+  });
+
+  it.each([
+    ['임대인', 'LANDLORD', '/landlord/home'],
+    ['관리자', 'ADMIN', '/admin/dashboard'],
+  ])('%s 은 초대 주소로 돌아가지 않고 역할 홈', (_name, role, home) => {
+    expect(resolveAfterLogin('/invite/abc', role)).toBe(home);
+  });
+
+  it.each([
+    ['토큰 없는 초대 주소', '/invite/'],
+    ['초대 접두어 자체', '/invite'],
+    ['초대 주소 뒤 상위 경로 이동', '/invite/abc/../../admin/users'],
+    ['인코딩된 상위 경로 이동', '/invite/%2e%2e/admin'],
+    ['프로토콜 상대 주소', '//evil.example/invite/abc'],
+    ['접두어로 시작만 하는 다른 경로', '/invitex/abc'],
+  ])('안전하지 않은 초대 from(%s) → 임차인 홈', (_name, from) => {
+    expect(resolveAfterLogin(from, 'TENANT')).toBe('/tenant/home');
+  });
+
   it('알 수 없는 역할은 null (호출부가 별도 화면으로 처리)', () => {
     expect(resolveAfterLogin('/landlord/home', 'SUPERUSER')).toBeNull();
   });
