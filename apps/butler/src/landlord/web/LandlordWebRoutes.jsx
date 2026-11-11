@@ -91,11 +91,20 @@ const PropertyDetailRoute = ({ isVerifyOpen = false, isLogModalOpen = false, ...
     if (state?.fromDetail || state?.fromPage) window.history.back();
     else onNavigate('propertyDetail', { propertyId }, { replace: true });
   }, [state, onNavigate, propertyId]);
+  const focusContractId = searchParams.get('contract') ?? undefined;
+  // 계약 등록 직후 초대 팝업(state.inviteContractId)은 한 번만: 팝업을 띄우면 같은 주소로 바꿔 state를 지운다.
+  const inviteContractId = isVerifyOpen || isLogModalOpen ? undefined : state?.inviteContractId;
+  const clearInviteState = useCallback(
+    () => onNavigate('propertyDetail', { propertyId, contractId: focusContractId }, { replace: true }),
+    [onNavigate, propertyId, focusContractId],
+  );
   return (
     <PropertyDetailPage
       key={propertyId}
       propertyId={propertyId}
-      focusContractId={searchParams.get('contract') ?? undefined}
+      focusContractId={focusContractId}
+      inviteContractId={inviteContractId}
+      onInviteHandled={clearInviteState}
       isVerifyOpen={isVerifyOpen}
       verifyNotice={isVerifyOpen ? state?.notice : undefined}
       onCloseVerify={closeOverlay}

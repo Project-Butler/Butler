@@ -61,8 +61,9 @@ const ContractRegisterForm = ({ title, description, initialPropertyId, previous,
       previousContractId: previous?.id ?? null,
     });
     // 등록 화면 기록은 그 호실 상세(계약 영역)로 바꾼다(뒤로 가면 다시 등록 폼이 나오지 않게).
+    // 새 계약 id를 넘겨 호실 상세 위에 임차인 초대 팝업(A1)을 바로 띄운다.
     if (data) {
-      onNavigate('propertyDetail', { propertyId: property.id }, { replace: true });
+      onNavigate('propertyDetail', { propertyId: property.id, inviteContractId: data.id }, { replace: true });
       return;
     }
     if (error?.status === 400) setServerFieldErrors(toServerFieldErrors(error));

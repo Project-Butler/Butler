@@ -1,11 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge, Button } from '@butler/ui';
-import { CalendarClock, CalendarDays, ChevronDown, ChevronRight, Clock, Coins, FileText, History, KeyRound, Phone, Plus, StickyNote, User, Wallet } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Coins,
+  FileText,
+  History,
+  Info,
+  KeyRound,
+  Link2,
+  Phone,
+  Plus,
+  Send,
+  ShieldAlert,
+  StickyNote,
+  User,
+  Wallet,
+} from 'lucide-react';
 import { ContractTermination } from '../ContractTermination/ContractTermination';
 import { IconTile } from '../IconTile/IconTile';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
+import { TenantInviteModal } from '../TenantInviteModal/TenantInviteModal';
 import { useGetContract } from '../../../../shared/useGetContract';
 import { useGetContractList } from '../../hooks/useGetContractList';
+import { useGetTenantInvitationList } from '../../hooks/useGetTenantInvitationList';
 import {
   CONTRACT_LEGAL_NOTICE,
   formatContractAmount,
@@ -19,6 +40,7 @@ import {
   getLeaseTypeLabel,
   isContractInProgress,
 } from '../../utils/contract';
+import { getInvitationChip, hasVerifyFailureAlert, isAccountNameDifferent } from '../../utils/tenantInvite';
 
 const PAST_SIZE = 10;
 
@@ -29,6 +51,72 @@ const Cell = ({ icon: Icon, label, children }) => (
     <div className="mt-0.5 flex items-center gap-2 font-num text-body font-semibold tabular-nums text-ink">{children}</div>
   </div>
 );
+
+const CHIP_ICON = { PENDING: Clock, ACCEPTED: Link2 };
+const ACTION_LABEL = { reissue: '링크 다시 만들기', renew: '새 링크 만들기', invite: '임차인 초대' };
+
+// 임차인 앱 연결 상태(A4): 초대 대기 · 링크 만료 · 앱 연결됨 칩과 [링크 다시 만들기]·[새 링크 만들기]·[임차인 초대].
+// 대기 칩의 만료일과 본인 확인 실패 안내는 최신 초대(A-07)로 읽는다. 읽기 전용 계약은 버튼 없이 칩만 보여 준다.
+const TenantInviteStatus = ({ contract, invitationsReloadKey, onInvite, onUnauthorized }) => {
+  const invitationStatus = contract.tenant?.invitationStatus ?? null;
+  const needsLatest = !contract.isReadOnly && invitationStatus === 'PENDING';
+  const invitations = useGetTenantInvitationList(needsLatest ? contract.id : undefined, { onUnauthorized });
+  const { refetch } = invitations;
+  useEffect(() => {
+    if (invitationsReloadKey > 0) refetch();
+  }, [invitationsReloadKey, refetch]);
+
+  const latest = invitations.data?.[0];
+  const chip = getInvitationChip(invitationStatus, latest);
+  const action = contract.isReadOnly ? null : chip.action;
+  const ChipIcon = CHIP_ICON[chip.kind];
+  const accountName = contract.tenant?.accountName;
+  const showFailureAlert = hasVerifyFailureAlert(invitationStatus, latest);
+
+  // 읽기 전용인데 초대한 적도 없으면 이 줄을 그리지 않는다.
+  if (!chip.label && !action) return null;
+
+  return (
+    <div className="space-y-2 border-b border-line px-5 py-3">
+      <div className="flex items-center gap-3">
+        <p className="text-sub font-semibold text-ink-2">임차인 앱</p>
+        {chip.label ? (
+          <Badge tone={chip.tone} className="inline-flex items-center gap-1 font-num tabular-nums">
+            {ChipIcon && <ChipIcon size={12} aria-hidden="true" />}
+            {chip.label}
+          </Badge>
+        ) : (
+          <span className="text-sub text-ink-3">아직 초대하지 않았어요. 링크를 보내면 임차인이 앱에서 계약서를 보고 수리 요청을 보내요.</span>
+        )}
+        <span className="flex-1" />
+        {action && (
+          <Button variant={action === 'reissue' ? 'secondary' : 'primary'} size="h44" onClick={onInvite} className="inline-flex shrink-0 items-center gap-1.5">
+            {action === 'invite' && <Send size={15} aria-hidden="true" />}
+            {ACTION_LABEL[action]}
+          </Button>
+        )}
+      </div>
+      {chip.kind === 'ACCEPTED' && accountName && (
+        <p className="text-sub text-ink-3">
+          앱 계정: <span className="text-ink-2">{accountName}</span> · 수리 요청을 앱으로 받아요
+        </p>
+      )}
+      {chip.kind === 'ACCEPTED' && isAccountNameDifferent(accountName, contract.tenantName) && (
+        <p className="flex items-center gap-1.5 text-sub text-warn-ink">
+          <Info size={14} className="shrink-0" aria-hidden="true" />
+          앱 계정 이름이 계약의 이름과 달라요
+        </p>
+      )}
+      {showFailureAlert && (
+        <p className="flex items-start gap-1.5 rounded-input bg-warn-soft px-3 py-2.5 text-sub text-warn-ink">
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+          본인 확인이 여러 번 실패했어요. 링크가 다른 사람에게 갔다면 새 링크를 만들어 보세요.
+        </p>
+      )}
+      {invitations.error && <p className="text-sub text-crit-ink">{invitations.error.message}</p>}
+    </div>
+  );
+};
 
 // 지난 계약 한 줄: 누르면 펼쳐서 연락처·메모·해지 내용을 본다(계약 상세 페이지를 대신한다).
 const PastContractRow = ({ contract, defaultOpen, onUnauthorized }) => {
@@ -81,7 +169,17 @@ const PastContractRow = ({ contract, defaultOpen, onUnauthorized }) => {
 // 호실 상세의 계약 영역(계약 상세 페이지를 흡수). 지금 계약(진행 중 → 시작 전) 하나를 크게, 지난 계약은 펼쳐 보는 목록.
 // 버튼은 이 영역 안에만: [해지](펼침)·[수정]·[갱신 계약 등록], 계약이 없으면 [계약 등록](인증 완료 호실만).
 // focusContractId: /contracts/:id 로 들어온 계약. 지난 계약이면 펼쳐 둔다.
-export const PropertyContractArea = ({ propertyId, ownershipId, canRegister, focusContractId, onNavigate, onUnauthorized }) => {
+// autoInviteContractId: 계약 등록 직후 넘어온 새 계약 id. 그 계약을 불러와 초대 팝업을 A1부터 한 번 띄우고 onAutoInviteHandled로 알린다.
+export const PropertyContractArea = ({
+  propertyId,
+  ownershipId,
+  canRegister,
+  focusContractId,
+  autoInviteContractId,
+  onAutoInviteHandled,
+  onNavigate,
+  onUnauthorized,
+}) => {
   const hookOptions = { onUnauthorized };
   const currentList = useGetContractList({ ownershipId, status: 'ACTIVE,EXPIRING_SOON,UPCOMING', sort: 'endDate:asc', size: 1 }, hookOptions);
   const pastList = useGetContractList(
@@ -93,6 +191,23 @@ export const PropertyContractArea = ({ propertyId, ownershipId, canRegister, foc
   const contract = currentQuery.data;
   const [isTerminating, setIsTerminating] = useState(false);
   const pastContracts = pastList.data?.items ?? [];
+  const [inviteModal, setInviteModal] = useState(null); // { contract, startStep } | null
+  const [invitationsReloadKey, setInvitationsReloadKey] = useState(0);
+
+  // 등록 직후 팝업: 갱신 계약(시작 전)은 지금 계약 자리에 안 보일 수 있어 그 계약을 따로 불러온다. 한 번만 띄운다.
+  const [pendingAutoInviteId, setPendingAutoInviteId] = useState(autoInviteContractId);
+  const autoInviteQuery = useGetContract(pendingAutoInviteId, hookOptions);
+  useEffect(() => {
+    if (!pendingAutoInviteId || (!autoInviteQuery.data && !autoInviteQuery.error)) return;
+    if (autoInviteQuery.data && !autoInviteQuery.data.isReadOnly) setInviteModal({ contract: autoInviteQuery.data, startStep: 'intro' });
+    setPendingAutoInviteId(undefined);
+    onAutoInviteHandled?.();
+  }, [pendingAutoInviteId, autoInviteQuery.data, autoInviteQuery.error, onAutoInviteHandled]);
+
+  const handleInvited = () => {
+    currentQuery.refetch();
+    setInvitationsReloadKey((prev) => prev + 1);
+  };
 
   const refresh = () => {
     setIsTerminating(false);
@@ -188,6 +303,12 @@ export const PropertyContractArea = ({ propertyId, ownershipId, canRegister, foc
               {getLeaseTypeLabel(contract.leaseType)} 계약 · {CONTRACT_LEGAL_NOTICE}
             </span>
           </div>
+          <TenantInviteStatus
+            contract={contract}
+            invitationsReloadKey={invitationsReloadKey}
+            onInvite={() => setInviteModal({ contract, startStep: 'documents' })}
+            onUnauthorized={onUnauthorized}
+          />
           <div className="grid grid-cols-3 gap-px bg-line">
             <Cell icon={Coins} label="보증금">{formatWon(contract.deposit)}</Cell>
             <Cell icon={Wallet} label="월세">{isMonthly ? formatWon(contract.monthlyRent) : '—'}</Cell>
@@ -241,6 +362,15 @@ export const PropertyContractArea = ({ propertyId, ownershipId, canRegister, foc
         </div>
       )}
       {pastList.error && <NoticeBox className="mx-5 mb-4">{pastList.error.message}</NoticeBox>}
+      {inviteModal && (
+        <TenantInviteModal
+          contract={inviteModal.contract}
+          startStep={inviteModal.startStep}
+          onClose={() => setInviteModal(null)}
+          onInvited={handleInvited}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
     </section>
   );
 };
