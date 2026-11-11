@@ -112,7 +112,11 @@ describe('소셜 로그인', { skip: dbTestSkip }, () => {
       const email = newEmail();
       const existing = await createPasswordUser(email, { verified: true, role });
 
-      await assert.rejects(resolveOAuthUser('GOOGLE', profileOf(email)), { code: 'OAUTH_ROLE_NOT_ALLOWED', httpStatus: 403 });
+      await assert.rejects(resolveOAuthUser('GOOGLE', profileOf(email)), {
+        code: 'OAUTH_ROLE_NOT_ALLOWED',
+        httpStatus: 403,
+        ...(role === 'TENANT' ? { message: '이메일로 로그인해 주세요.' } : {}),
+      });
       assert.equal(await prisma.oAuthAccount.count({ where: { userId: existing.id } }), 0);
     }
   });
