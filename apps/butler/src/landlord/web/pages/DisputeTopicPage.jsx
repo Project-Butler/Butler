@@ -71,19 +71,23 @@ export const DisputeTopicPage = () => {
         <p className="break-keep text-card font-semibold text-accent-strong">{briefing.headline}</p>
         <p className="mt-2 text-sub text-ink-2">근거 · {briefing.laws.join(', ')}</p>
       </div>
-      {/* 자주 묻는 질문 칩(카카오 고객센터 추천 키워드처럼 한 줄, 넘기는 캐러셀 아님). 누르면 바로 아래 '고른 질문'에 답을 펼친다. */}
-      <ul className="flex flex-wrap gap-1.5" aria-label="자주 묻는 질문">
-        {(TOPIC_QUESTIONS[topicKey] ?? []).map((question) => (
-          <li key={question.faq}>
-            <FilterChip
-              selected={question.faq === selectedFaqKey}
-              onClick={() => toggleFaq(question.faq)}
-            >
-              {question.label}
-            </FilterChip>
-          </li>
-        ))}
-      </ul>
+      {/* 자주 묻는 질문 칩(카카오 고객센터 추천 키워드처럼 한 줄, 넘기는 캐러셀 아님). 누르면 바로 아래 '고른 질문'에 답을 펼친다.
+          상황 전체 목록이 아니라 사례가 많은 질문만 고른 것이라, 첫 화면과 같은 '자주 묻는 질문' 라벨을 보이게 둔다. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-sub font-semibold text-ink-3">자주 묻는 질문</span>
+        <ul className="contents">
+          {(TOPIC_QUESTIONS[topicKey] ?? []).map((question) => (
+            <li key={question.faq}>
+              <FilterChip
+                selected={question.faq === selectedFaqKey}
+                onClick={() => toggleFaq(question.faq)}
+              >
+                {question.label}
+              </FilterChip>
+            </li>
+          ))}
+        </ul>
+      </div>
       {selectedFaq && (
         <section className="mt-3 flex flex-col gap-3" aria-label="고른 질문">
           <SectionTitle>고른 질문</SectionTitle>

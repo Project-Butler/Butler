@@ -493,6 +493,8 @@ describe('분쟁 해결사', () => {
     renderAt('/disputes/topics/restore');
 
     expect(await screen.findByRole('heading', { name: '원상복구·손해배상' })).toBeInTheDocument();
+    // 칩은 상황 전체 목록이 아니라 자주 묻는 질문이라는 걸 첫 화면과 같은 라벨로 보여 준다.
+    expect(within(screen.getByText('자주 묻는 질문').parentElement).getByRole('button', { name: '원상복구 범위' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '원상복구 범위' }));
 
     expect(screen.getByRole('button', { name: '원상복구 범위' })).toHaveAttribute('aria-pressed', 'true');
