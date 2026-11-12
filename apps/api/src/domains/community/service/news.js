@@ -112,8 +112,11 @@ export const orderComplexesForRun = (complexes, lastCollectedById, limit = COMPL
 // 단지 수집 대상: 호실을 등록한 임대인(활성 소유, 인증 취소 제외)이 있는 단지. 오래 안 모은 단지부터(한 번도 안 모은 단지가 맨 앞),
 // 같으면 id 순, 한 번에 COMPLEX_MAX_PER_RUN 까지. 각 대상에 검색어 이름과 제목 검사 함수를 붙인다.
 // 흔한 이름 판정: 전국 단지(Complex) 중 "아파트" 를 뗀 이름(띄어쓰기 무시)이 같은 단지 수.
-export const buildComplexNewsTargets = async () => {
-  const ids = await listAllOwnedComplexIds();
+// complexIds(테스트용 — cron 은 넘기지 않는다): 후보를 이 단지들로 좁힌다. 소유 규칙 · 순서 규칙 · 한도는 그대로라
+// 테스트가 같은 DB 를 쓰는 다른 테스트의 단지 수와 상관없이 늘 같은 결과를 본다.
+export const buildComplexNewsTargets = async ({ complexIds } = {}) => {
+  const owned = await listAllOwnedComplexIds();
+  const ids = complexIds ? owned.filter((id) => complexIds.includes(id)) : owned;
   if (ids.length === 0) return [];
   const [complexes, allNames, cursors] = await Promise.all([
     prisma.complex.findMany({
@@ -180,10 +183,12 @@ export const collectNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions
 };
 
 // 우리 단지 수집 — 주어진 시간 안에서 오래 안 모은 단지부터. 시간이 모자라면 남은 단지는 시도하지 않고(순번 그대로) 다음 번으로.
-export const collectComplexNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
+// 시도한 단지는 시각이 적혀 다음 번에 뒤로 가므로, 한 번에 COMPLEX_MAX_PER_RUN 을 넘는 단지도 다음 실행들에서 차례가 온다.
+// complexIds 는 테스트용(buildComplexNewsTargets 참고).
+export const collectComplexNews = async ({ budgetMs = RUN_BUDGET_MS, complexIds, ...providerOptions } = {}) => {
   const now = providerOptions.now ?? Date.now;
   const fetchOptions = { ...providerOptions, now, deadline: now() + budgetMs };
-  const targets = await buildComplexNewsTargets();
+  const targets = await buildComplexNewsTargets({ complexIds });
   const results = [];
   let complexesLeft = 0;
   for (const [index, target] of targets.entries()) {
@@ -207,11 +212,11 @@ export const collectComplexNews = async ({ budgetMs = RUN_BUDGET_MS, ...provider
 
 // GET /api/cron/community-news — 지역 · 전국을 먼저, 남은 시간에 우리 단지. 한 실행의 시간 예산(RUN_BUDGET_MS)을 둘이 나눠 쓴다.
 // 지역 · 전국(collectNews)과 단지(collectComplexNews)를 나눠 둔 것은 지역 · 전국 수집의 동작을 단지 뉴스 전과 똑같이 두려고.
-export const collectAllNews = async ({ budgetMs = RUN_BUDGET_MS, ...providerOptions } = {}) => {
+export const collectAllNews = async ({ budgetMs = RUN_BUDGET_MS, complexIds, ...providerOptions } = {}) => {
   const now = providerOptions.now ?? Date.now;
   const startedAt = now();
   const regional = await collectNews({ ...providerOptions, budgetMs });
-  const complex = await collectComplexNews({ ...providerOptions, budgetMs: Math.max(0, budgetMs - (now() - startedAt)) });
+  const complex = await collectComplexNews({ ...providerOptions, complexIds, budgetMs: Math.max(0, budgetMs - (now() - startedAt)) });
   return {
     inserted: regional.inserted + complex.inserted,
     results: [...regional.results, ...complex.results],

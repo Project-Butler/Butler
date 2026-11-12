@@ -20,7 +20,7 @@ import {
   updatePost,
 } from '../../../src/domains/community/service.js';
 import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
-import { buildComplexNewsTargets, buildNewsTargets, collectAllNews, collectNews, findNews } from '../../../src/domains/community/service/news.js';
+import { buildComplexNewsTargets, buildNewsTargets, collectAllNews, collectComplexNews, collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
 const REGION = '1135010600'; // createDbFixture 의 단지 법정동(서울 노원구 중계동)
@@ -550,11 +550,13 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         const xml = `<rss><channel>${item(`${name} 전세 매물 증가`, `complex-${name}-pass`)}${item(`${name} 가을 음악회`, `complex-${name}-drop`)}</channel></rss>`;
         return new Response(xml, { status: 200 });
       };
-      const quietCollect = async () => {
+      // 단지 후보는 그 테스트가 만든 단지로 좁힌다(complexIds) — 같은 DB 를 쓰는 다른 테스트가 단지를 30곳 넘게 만들어도
+      // 이 테스트의 단지가 이번 몫(COMPLEX_MAX_PER_RUN)에서 밀리지 않게. 소유 규칙 · 순서 규칙은 그대로 적용된다.
+      const quietCollect = async (complexIds) => {
         const info = console.info;
         console.info = () => {};
         try {
-          return await collectAllNews({ fetchImpl: complexFetch }); // cron 이 부르는 것(지역 · 전국 → 단지)
+          return await collectAllNews({ fetchImpl: complexFetch, complexIds }); // cron 이 부르는 것(지역 · 전국 → 단지)
         } finally {
           console.info = info;
         }
@@ -571,7 +573,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         const revoked = await createNamedComplex('단지뉴스취소');
         await addUnit(owner, revoked, { status: 'REVOKED' });
 
-        const result = await quietCollect();
+        const result = await quietCollect([unverified.id, revoked.id]);
         const rows = Object.fromEntries(result.results.filter((row) => row.scope === 'COMPLEX').map((row) => [row.scopeCode, row]));
         // 이름 그대로 · "아파트" 뗀 이름 두 검색어, 검색어마다 기사 둘 중 음악회 기사는 걸러진다
         assert.deepEqual(
@@ -589,6 +591,45 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         // 시도한 단지는 시각이 남고, 대상이 아닌 단지는 남지 않는다
         assert.ok(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: unverified.id } } }));
         assert.equal(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: revoked.id } } }), null);
+      });
+
+      test('한 번 몫(COMPLEX_MAX_PER_RUN)보다 단지가 많으면 다음 실행에서 남은 단지부터 — 오래 안 모은 단지 차례로 모두 돈다', async () => {
+        const owner = await createUser();
+        const complexes = [];
+        for (let i = 0; i < COMPLEX_MAX_PER_RUN + 2; i += 1) {
+          const complex = await createNamedComplex(`단지뉴스차례${String(i).padStart(2, '0')}`);
+          await addUnit(owner, complex);
+          complexes.push(complex);
+        }
+        const ids = complexes.map((complex) => complex.id);
+        const byId = (a, b) => a.localeCompare(b); // 서비스의 같은 시각 순서(orderComplexesForRun)와 같게
+        const emptyFetch = async () => new Response('<rss><channel></channel></rss>', { status: 200 });
+        const run = async () => {
+          const info = console.info;
+          console.info = () => {};
+          try {
+            const result = await collectComplexNews({ fetchImpl: emptyFetch, complexIds: ids });
+            assert.equal(result.complexesLeft, 0);
+            return result.results.map((row) => row.scopeCode);
+          } finally {
+            console.info = info;
+          }
+        };
+
+        // 1회: 한 번도 안 모은 32곳 중 id 순 30곳 — 2곳은 못 돈다
+        const first = await run();
+        assert.equal(first.length, COMPLEX_MAX_PER_RUN);
+        assert.deepEqual(first, [...ids].sort(byId).slice(0, COMPLEX_MAX_PER_RUN));
+        const missed = ids.filter((id) => !first.includes(id)).sort(byId);
+        assert.equal(missed.length, 2);
+        // 2회: 못 돈 2곳(시각 없음)이 맨 앞, 이어서 1회에 먼저 돈 순서대로(시각이 오래된 순) — 1회 끝 두 곳은 이번엔 빠진다
+        const second = await run();
+        assert.deepEqual(second, [...missed, ...first.slice(0, COMPLEX_MAX_PER_RUN - 2)]);
+        // 두 번 만에 모든 단지가 한 번 이상 시도됐다(기사가 0건이어도 시각이 남는다)
+        assert.equal(await prisma.communityNewsCursor.count({ where: { scope: 'COMPLEX', scopeCode: { in: ids } } }), ids.length);
+        // 3회: 가장 오래 전에 시도한 단지(1회 끝 두 곳)가 맨 앞 — 같은 30곳만 도는 일이 없다
+        const third = await run();
+        assert.deepEqual(third.slice(0, 2), first.slice(COMPLEX_MAX_PER_RUN - 2));
       });
 
       test('지역 · 전국 수집(collectNews)은 단지를 건드리지 않는다 — 단지는 cron(collectAllNews)이 이어서 모은다', async () => {
@@ -615,12 +656,11 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         // 같은 이름 단지가 다른 동네에 하나 더(호실 없음 — 수집 대상은 아니지만 이름 수에는 든다)
         await fixture.createComplex({ name: mine.name, regionId: OTHER_REGION });
 
-        const targets = await buildComplexNewsTargets();
-        assert.ok(targets.length <= COMPLEX_MAX_PER_RUN);
         assert.ok((await listAllOwnedComplexIds()).includes(mine.id));
-        // 한 번도 안 모은 단지가 맨 앞이므로 새 단지는 이번 몫에 든다(안 모은 단지가 30곳 넘게 쌓여 있지 않다면)
-        const target = targets.find((row) => row.scopeCode === mine.id);
-        assert.ok(target, '한 번도 안 모은 단지가 30곳 넘게 있어 새 단지가 이번 몫에 들지 않았다');
+        const targets = await buildComplexNewsTargets({ complexIds: [mine.id] });
+        assert.equal(targets.length, 1);
+        const [target] = targets;
+        assert.equal(target.scopeCode, mine.id);
         assert.deepEqual(target.complexQueryNames, [mine.name, mine.name.replace(/아파트$/, '')]);
         assert.equal(target.filter(`${mine.name} 전세 매물 증가`), false);
         assert.equal(target.filter(`노원 ${mine.name} 전세 매물 증가`), true);
@@ -630,7 +670,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         const complex = await createNamedComplex('단지뉴스읽기');
         const owner = await createUser();
         await addUnit(owner, complex, { status: 'UNVERIFIED' });
-        await quietCollect();
+        await quietCollect([complex.id]);
 
         const ok = await api(owner, `/community/complexes/${complex.id}/news?page=1&size=5`);
         assert.equal(ok.status, 200);

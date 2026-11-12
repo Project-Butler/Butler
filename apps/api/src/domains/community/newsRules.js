@@ -38,7 +38,11 @@ export const MAX_FEED_LENGTH = 2 * 1024 * 1024;
 export const RUN_BUDGET_MS = 45 * 1000;
 // 왜 20건: 검색어 하나에 최신 20건이면 하루치로 충분하다
 export const MAX_ARTICLES_PER_QUERY = 20;
-// 왜: 단지가 많아도 한 번에 이 수까지만 시도한다(나머지는 다음 번 — 오래 안 모은 단지부터라 굶는 단지가 없다)
+// 왜: 단지가 많아도 한 번에 이 수까지만 시도한다(나머지는 다음 번 — 오래 안 모은 단지부터라 굶는 단지가 없다).
+// 순서: 마지막으로 시도한 시각(community_news_cursors, scope COMPLEX)이 오래된 단지부터 — 한 번도 안 모은 단지가 맨 앞,
+//       시각이 같으면 단지 id 순(service/news.js orderComplexesForRun).
+// 시도: 검색어를 하나라도 불렀으면 기사가 0건이어도 그 시각을 적어 다음 번에는 뒤로 간다. 시간이 모자라 시도하지 못한 단지는
+//       시각이 그대로라 다음 번에도 앞에 남는다 — 그래서 31번째 이후 단지도 다음 실행들에서 차례가 온다
 export const COMPLEX_MAX_PER_RUN = 30;
 
 // ===== 기간(검색 연산자) =====
