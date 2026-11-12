@@ -127,6 +127,8 @@ model User {
   uploads           Upload[]
   uploadedDocuments Document[]    @relation("UploadedDocuments")
   authoredLogs      PropertyLog[] @relation("AuthoredPropertyLogs")
+  threadParticipations ThreadParticipant[]
+  sentThreadMessages   ThreadMessage[] @relation("SentThreadMessages")
 
   ownershipVerificationAttempts OwnershipVerificationAttempt[]
 
@@ -612,6 +614,62 @@ model Ticket {
   @@index([contractId])
   @@index([requesterId])
   @@map("tickets")
+}
+
+// 임대인·임차인 소통 스레드(계약 6장). 계약·티켓 하나에 스레드 하나.
+// 붙는 곳은 contextType + contextId 다형 참조라 FK가 없다(Document와 같은 방식).
+// contextType은 등록형 문자열(CONTRACT, TICKET, 피처가 추가)이라 enum이 아니다.
+model Thread {
+  id          String @id @default(uuid()) @db.Uuid
+  contextType String @map("context_type") @db.VarChar(40)
+  contextId   String @map("context_id") @db.Uuid
+
+  // 마지막 메시지 시각(목록의 "최근 메시지 순"). 메시지가 없으면 null.
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  participants ThreadParticipant[]
+  messages     ThreadMessage[]
+
+  @@unique([contextType, contextId])
+  @@map("threads")
+}
+
+// 스레드 참여자(임대인·임차인 2명). 참여자는 서버가 정하고, 읽은 위치를 사람마다 둔다.
+model ThreadParticipant {
+  id       String @id @default(uuid()) @db.Uuid
+  threadId String @map("thread_id") @db.Uuid
+  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId   String @map("user_id") @db.Uuid
+  user     User   @relation(fields: [userId], references: [id])
+
+  // 마지막으로 읽은 메시지. 안 읽은 수는 이 메시지 다음의 상대 메시지 수다.
+  lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
+  lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+  @@map("thread_participants")
+}
+
+// 메시지. 수정·삭제하지 않는다. 운영자가 숨기면 isHidden(응답 body는 null).
+model ThreadMessage {
+  id       String @id @default(uuid()) @db.Uuid
+  threadId String @map("thread_id") @db.Uuid
+  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId String @map("sender_id") @db.Uuid
+  sender   User   @relation("SentThreadMessages", fields: [senderId], references: [id])
+
+  body     String
+  isHidden Boolean   @default(false) @map("is_hidden")
+  hiddenAt DateTime? @map("hidden_at") @db.Timestamptz(3)
+
+  // 응답의 sentAt. 커서(createdAt desc, id desc)에 쓴다.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([threadId, createdAt])
+  @@map("thread_messages")
 }
 
 // 업로드 세션 (노션 6번 12장, 계약 6장 POST /files/upload-sessions).

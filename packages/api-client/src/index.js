@@ -60,6 +60,13 @@ export { getTicket } from './apis/tickets/getTicket';
 export { postTicket } from './apis/tickets/postTicket';
 export { patchTicket } from './apis/tickets/patchTicket';
 
+export { postThread } from './apis/threads/postThread';
+export { getThreadList } from './apis/threads/getThreadList';
+export { getThread } from './apis/threads/getThread';
+export { getThreadMessageList } from './apis/threads/getThreadMessageList';
+export { postThreadMessage } from './apis/threads/postThreadMessage';
+export { postThreadRead } from './apis/threads/postThreadRead';
+
 export { postUploadSession } from './apis/documents/postUploadSession';
 export { putUploadContent } from './apis/documents/putUploadContent';
 export { postDocument } from './apis/documents/postDocument';
