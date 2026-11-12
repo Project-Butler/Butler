@@ -9,10 +9,11 @@ const TONE_CLASS = {
   rejected: 'bg-crit-soft text-crit-ink',
 };
 
-export const Badge = ({ children, tone = 'default', className = '' }) => {
+// mobile: 앱(모바일) 화면용 — Figma Badge 는 글자 chip 줄 높이 1.5(높이 26). 웹은 기존(1.3). D-day 처럼 숫자 글꼴 단계(1.3)인 칩은 mobile 을 주지 않는다.
+export const Badge = ({ children, tone = 'default', mobile = false, className = '' }) => {
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-1 text-chip font-semibold ${TONE_CLASS[tone] ?? TONE_CLASS.default} ${className}`}
+      className={`inline-block rounded-full px-2.5 py-1 ${mobile ? 'text-m-chip' : 'text-chip'} font-semibold ${TONE_CLASS[tone] ?? TONE_CLASS.default} ${className}`}
     >
       {children}
     </span>

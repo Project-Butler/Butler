@@ -89,6 +89,8 @@ const DEV_USERS = [
   { id: '00000000-0000-4000-8000-000000000001', email: 'landlord@butler.test', name: '김집주', phone: '01011112222', birthDate: '1975-03-15', role: 'LANDLORD' },
   { id: '00000000-0000-4000-8000-000000000002', email: 'tenant@butler.test', name: '이세입', phone: '01033334444', birthDate: '1992-07-21', role: 'TENANT' },
   { id: '00000000-0000-4000-8000-000000000003', email: 'admin@butler.test', name: '박운영', phone: '01055556666', birthDate: '1988-11-02', role: 'ADMIN' },
+  // 임대인 앱 화면(#98) 확인용. 부동산·계약이 없는 빈 계정이라 빈 홈과 부동산 등록을 처음부터 확인할 수 있다.
+  { id: '00000000-0000-4000-8000-000000000004', email: 'landapp@butler.test', name: '최앱주', phone: '01077778888', birthDate: '1980-05-09', role: 'LANDLORD' },
 ];
 
 const isLocalDatabase = () => {

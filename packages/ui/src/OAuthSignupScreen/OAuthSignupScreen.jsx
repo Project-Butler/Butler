@@ -1,91 +1,20 @@
-import { useEffect, useState } from 'react';
 import { Home } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../Card/Card';
 import { TextField } from '../TextField/TextField';
-import {
-  AgreementCheckbox,
-  BIRTH_YEAR_MIN,
-  NAME_MAX_LENGTH,
-  pickFieldErrors,
-  todayString,
-  validateProfileFields,
-} from '../RegisterScreen/registerShared';
+import { AgreementCheckbox, BIRTH_YEAR_MIN, NAME_MAX_LENGTH, todayString } from '../RegisterScreen/registerShared';
+import { useOAuthSignupForm } from './useOAuthSignupForm';
 
-const FIELD_NAMES = ['name', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
 const PROVIDER_LABEL = { GOOGLE: '구글', KAKAO: '카카오' };
-const EXPIRED_MESSAGE = '소셜 로그인 시간이 지났습니다. 처음부터 다시 시도해주세요.';
 
-// 소셜 로그인으로 처음 온 사람의 추가 정보 화면. 이메일은 제공자가 알려 준 값으로 고정이고, 이름은 고칠 수 있다.
-//  loadInfo(): { provider, email, name }을 돌려준다. 로그인 시간이 지났으면 401로 던진다.
-//  onSubmit({ name, phone, birthDate, termsAgreed, privacyAgreed }): 가입을 마무리한다.
-// 두 함수가 던진 오류의 error.response.data.error(code, message, details)를 칸별 오류와 위쪽 안내로 나눠 보여 준다.
+// 소셜 로그인으로 처음 온 사람의 추가 정보 화면(웹). 이메일은 제공자가 알려 준 값으로 고정이고, 이름은 고칠 수 있다.
+// 불러오기·입력·검증·서버 오류 처리는 useOAuthSignupForm 이 한다(앱 MobileOAuthSignupScreen 과 같음).
 export const OAuthSignupScreen = ({ brand = 'Butler', subtitle, footer, loadInfo, onSubmit }) => {
-  const [info, setInfo] = useState(null);
-  const [loadError, setLoadError] = useState('');
-  const [values, setValues] = useState({ name: '', birthDate: '', phone: '', termsAgreed: false, privacyAgreed: false });
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [formError, setFormError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { info, loadError, values, setValue, fieldErrors, formError, isSubmitting, submit } = useOAuthSignupForm({ loadInfo, onSubmit });
 
-  useEffect(() => {
-    let isActive = true;
-    loadInfo()
-      .then((result) => {
-        if (!isActive) return;
-        setInfo(result);
-        setValues((current) => ({ ...current, name: result.name ?? '' }));
-      })
-      .catch((error) => {
-        if (!isActive) return;
-        const apiError = error?.response?.data?.error;
-        setLoadError(apiError?.code === 'OAUTH_SIGNUP_EXPIRED' ? EXPIRED_MESSAGE : (apiError?.message ?? '정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'));
-      });
-    return () => {
-      isActive = false;
-    };
-    // loadInfo는 부모가 매 렌더 새로 만들 수 있어 의존성에 넣지 않는다(화면을 열 때 한 번만 부른다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const setValue = (field) => (event) => {
-    const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
-    setValues((current) => ({ ...current, [field]: value }));
-    setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
-  };
-
-  const handleSubmit = async (event) => {
+  const handleSubmit = (event) => {
     event.preventDefault();
-    if (isSubmitting) return;
-
-    const errors = validateProfileFields(values);
-    setFieldErrors(errors);
-    setFormError('');
-    if (Object.keys(errors).length > 0) return;
-
-    setIsSubmitting(true);
-    try {
-      await onSubmit({
-        name: values.name.trim(),
-        phone: values.phone.trim() || null,
-        birthDate: values.birthDate,
-        termsAgreed: values.termsAgreed,
-        privacyAgreed: values.privacyAgreed,
-      });
-    } catch (submitError) {
-      const apiError = submitError?.response?.data?.error;
-      if (apiError?.code === 'OAUTH_SIGNUP_EXPIRED') {
-        setLoadError(EXPIRED_MESSAGE);
-        return;
-      }
-      const serverFieldErrors = pickFieldErrors(apiError?.details, FIELD_NAMES);
-      setFieldErrors(serverFieldErrors);
-      if (Object.keys(serverFieldErrors).length === 0) {
-        setFormError(apiError?.message ?? '가입에 실패했습니다. 잠시 후 다시 시도해주세요.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    submit();
   };
 
   const header = (
