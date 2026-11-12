@@ -283,7 +283,7 @@ export const DisputeSearchPage = () => {
         </Button>
       </div>
 
-      <SourceFooter />
+      <SourceFooter showContacts />
 
       <LegalNotice />
     </div>

@@ -1,18 +1,18 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink, Phone } from 'lucide-react';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
 import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { TopicTile } from '../components/DisputeReference/TopicTile';
 import { DISPUTE_TOPICS } from '../utils/disputeReference';
-import { HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
+import { CONTACTS, HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
 
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
 // 임대차 분쟁 센터 첫 화면은 '브리핑'이다. 고르기만 하고 긴 내용은 누르면 넘어가는 화면(상황 안내·자료 찾기)에 둔다.
-// 검색 + 많이 찾는 질문 → 분쟁 유형(조정위원회 조정 대상 순서, 이름은 쉬운 말) → 도움받을 곳 요약 → 자료 출처·기관 연락처.
+// 검색 + 자주 묻는 질문 → 분쟁 유형(조정위원회 조정 대상 순서, 이름은 쉬운 말) → 도움받을 곳(연락처 포함) → 자료 출처.
 // 첫 화면에는 AI 입구를 두지 않는다(찾다가 없을 때만 — DisputePage 참고). 레퍼런스: 정부24·찾기쉬운 생활법령정보 메인.
 export const DisputeHomePage = () => {
   const { onNavigate } = useOutletContext();
@@ -76,6 +76,8 @@ export const DisputeHomePage = () => {
         <ul className="grid gap-3 lg:grid-cols-3">
           {HELP_ROUTES.map((route) => {
             const action = route.actions.find((item) => item.primary) ?? route.actions[0];
+            // 연락처는 따로 모으지 않고 그 기관 카드 안에(Citizens Advice처럼 상황별 안내 아래 그 번호).
+            const contact = CONTACTS.find((item) => item.key === route.key);
             return (
               <li
                 key={route.key}
@@ -86,7 +88,21 @@ export const DisputeHomePage = () => {
                   <span className="mt-1 flex flex-wrap items-center gap-2 text-sub text-accent-strong">
                     → {route.name}
                     <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-chip font-semibold">{route.badge}</span>
+                    {route.region && <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-chip font-semibold text-ink-2">{route.region}</span>}
                   </span>
+                  {contact && (
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 text-sub">
+                      <a
+                        href={contact.href}
+                        aria-label={`${contact.name} ${contact.value} 전화 걸기`}
+                        className="flex min-h-9 items-center gap-1 font-num font-semibold tabular-nums text-ink-2 hover:text-accent"
+                      >
+                        <Phone size={14} />
+                        {contact.value}
+                      </a>
+                      {contact.note && <span className="text-ink-3">{contact.note}</span>}
+                    </span>
+                  )}
                 </span>
                 <a
                   href={action.href}
