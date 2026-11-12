@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useGetCommunityProfile } from '../../hooks/useGetCommunityProfile';
-import { toApiError } from '../../utils/apiError';
+import { toApiError } from '../../../../shared/apiError';
 import { NicknameDialog } from './NicknameDialog';
 
 // 닉네임 대화상자를 여는 곳을 한데 모은다(PC 명세 10절 "언제 뜨나").

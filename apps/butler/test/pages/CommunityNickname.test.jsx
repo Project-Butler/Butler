@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommunityPage } from '../../src/pages/CommunityPage';
+import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
 
 const api = vi.hoisted(() => ({
   getMyBuildings: vi.fn(),
@@ -80,9 +80,9 @@ const renderAt = (path) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
         <Routes>
-          <Route path="/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
+          <Route path="/landlord/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
         </Routes>
         <LocationProbe />
       </MemoryRouter>
@@ -158,11 +158,11 @@ describe('닉네임', () => {
     await screen.findByRole('button', { name: '닉네임 정하기' }, FIRST_RENDER);
     await userEvent.click(await screen.findByRole('button', { name: '글쓰기' }));
     expect(dialog()).toBeInTheDocument();
-    expect(screen.getByTestId('location')).toHaveTextContent('/community/board');
+    expect(screen.getByTestId('location')).toHaveTextContent('/landlord/community/board');
 
     await userEvent.type(within(dialog()).getByLabelText('닉네임'), '삼전동 부자');
     await userEvent.click(within(dialog()).getByRole('button', { name: '저장' }));
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/community/posts/new'));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/landlord/community/posts/new'));
   });
 
   it('닉네임 없이 댓글 [등록]: 대화상자를 먼저 — 저장해도 쓰던 댓글이 남고, 다시 누르면 등록된다', async () => {
