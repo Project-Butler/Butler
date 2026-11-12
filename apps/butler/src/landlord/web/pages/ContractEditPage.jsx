@@ -1,70 +1,20 @@
-import { useState } from 'react';
 import { Badge, Button, Card } from '@butler/ui';
-import {
-  CONTRACT_FORM_FIELDS,
-  ContractForm,
-  isContractFormComplete,
-  toContractFields,
-  toContractForm,
-  toServerFieldErrors,
-  validateContractForm,
-} from '../components/ContractForm/ContractForm';
+import { ContractForm } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContract } from '../../../shared/useGetContract';
-import { usePatchContract } from '../hooks/usePatchContract';
-import { getContractStatusBadge, isContractInProgress } from '../utils/contract';
-
-// 진행 중 계약은 연락처·메모·월세 입금일만 바꿀 수 있다(D-13, 서버 contractRules.js와 같은 허용 목록). 나머지 칸은 보기만.
-const EDITABLE_WHILE_ACTIVE = ['tenantPhone', 'memo', 'rentPaymentDay'];
-const LOCKED_WHILE_ACTIVE = CONTRACT_FORM_FIELDS.filter((field) => !EDITABLE_WHILE_ACTIVE.includes(field));
-
-// 바뀐 칸만 보낸다(PATCH). 진행 중이면 잠긴 칸은 아예 보지 않는다.
-const toChangedFields = (original, form, lockedFields) => {
-  const before = toContractFields(original);
-  const after = toContractFields(form);
-  return Object.fromEntries(
-    Object.entries(after).filter(([key, value]) => !lockedFields.includes(key) && value !== before[key]),
-  );
-};
+import { useContractEditForm } from '../hooks/useContractEditForm';
+import { getContractStatusBadge } from '../utils/contract';
 
 const ContractEditForm = ({ contract, onUnauthorized }) => {
-  const patch = usePatchContract({ onUnauthorized });
-  const [original] = useState(() => toContractForm(contract));
-  const [form, setForm] = useState(original);
-  const [serverFieldErrors, setServerFieldErrors] = useState({});
-
-  const isActive = isContractInProgress(contract.status);
-  const lockedFields = isActive ? LOCKED_WHILE_ACTIVE : [];
-  const clientErrors = validateContractForm(form);
-  const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
-  const changes = toChangedFields(original, form, lockedFields);
-  const hasChanges = Object.keys(changes).length > 0;
-  const isSubmitting = patch.isLoading;
-  // 입금일이 없던 기존 월세 계약은 입금일을 고르지 않아도 수정할 수 있다(전세→월세로 바꾸면 필수).
-  const rentPaymentDayOptional = original.leaseType === 'MONTHLY' && original.rentPaymentDay === '';
-  const isReady = hasChanges && isContractFormComplete(form, { rentPaymentDayOptional }) && Object.keys(clientErrors).length === 0;
+  const { form, updateField, fieldError, lockedFields, isActive, isReady, isSubmitting, save, submitErrorMessage } =
+    useContractEditForm({ contract, onUnauthorized });
   const status = getContractStatusBadge(contract);
-
-  const updateField = (name, value) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
 
   const handleSave = async (event) => {
     event?.preventDefault();
-    if (!isReady || isSubmitting) return;
-    const { data, error } = await patch.updateContract(contract.id, changes);
-    if (data) {
-      window.history.back();
-      return;
-    }
-    if (error?.status === 400) setServerFieldErrors(toServerFieldErrors(error));
+    if (await save()) window.history.back();
   };
-
-  const submitError = patch.error;
-  const hasMappedFieldError =
-    submitError?.status === 400 && submitError.details.some(({ field }) => CONTRACT_FORM_FIELDS.includes(field));
 
   return (
     <form onSubmit={handleSave} className="w-full max-w-4xl">
@@ -92,7 +42,7 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
           lockedFields={lockedFields}
         />
 
-        {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
+        {submitErrorMessage && <NoticeBox>{submitErrorMessage}</NoticeBox>}
 
         <div className="flex justify-end gap-3 border-t border-line pt-5">
           <Button type="button" variant="secondary" onClick={() => window.history.back()} disabled={isSubmitting}>
