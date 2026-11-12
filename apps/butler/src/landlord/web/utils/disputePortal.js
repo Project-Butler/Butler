@@ -612,18 +612,20 @@ export const HELP_ROUTES = [
 export const DATA_SOURCES = [
   {
     label: '조정사례',
+    title: '한국부동산원·LH 조정사례집',
     detail: '2025 주택·상가건물 임대차분쟁 조정사례집(국토교통부·한국부동산원·LH), 2022 주택임대차분쟁 조정사례집(국토교통부)',
     href: 'https://adrhome.reb.or.kr/adrhome/reb/main',
   },
-  { label: '조정사례', detail: '대한법률구조공단 임대차분쟁조정위원회 조정사례집', href: 'https://www.hldcc.or.kr/hp/li/arrCaseList.do' },
-  { label: '상담사례', detail: '주택·상가건물 임대차 상담사례집(국토교통부·한국부동산원, 서울특별시)', href: 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419' },
-  { label: '판례·법령', detail: '국가법령정보센터 판례, 주택임대차보호법·민법 등 현행 법령', href: 'https://www.law.go.kr' },
-  { label: '가이드', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
+  { label: '조정사례', title: '법률구조공단 조정사례집', detail: '대한법률구조공단 임대차분쟁조정위원회 조정사례집', href: 'https://www.hldcc.or.kr/hp/li/arrCaseList.do' },
+  { label: '상담사례', title: '임대차 상담사례집', detail: '주택·상가건물 임대차 상담사례집(국토교통부·한국부동산원, 서울특별시)', href: 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419' },
+  { label: '판례·법령', title: '국가법령정보센터', detail: '국가법령정보센터 판례, 주택임대차보호법·민법 등 현행 법령', href: 'https://www.law.go.kr' },
+  { label: '가이드', title: '서울시 주택임대차보호법 가이드북', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
 ];
 
 // 첫 화면·자료 찾기 맨 아래 '기관 연락처'. 번호는 기관 공식 안내에서 확인한 것만 쓴다(조정위원회 1644-5599는 조정 절차 페이지, 11-10 확인).
+// note(운영시간·요금)도 공식 페이지에 있는 것만: 조정위원회는 절차 페이지, 132는 공단 메인 '통화료 발신자 부담'. 서울시 센터는 안내마다 시간이 달라 비워 둔다(11-12 확인).
 export const CONTACTS = [
-  { name: '주택임대차분쟁조정위원회(한국부동산원)', value: '1644-5599', href: 'tel:1644-5599' },
+  { name: '주택임대차분쟁조정위원회(한국부동산원)', value: '1644-5599', href: 'tel:1644-5599', note: '평일 9:00~17:30' },
   { name: '서울시 전월세종합지원센터', value: '02-2133-1200', href: 'tel:02-2133-1200' },
-  { name: '대한법률구조공단', value: '132', href: 'tel:132' },
+  { name: '대한법률구조공단', value: '132', href: 'tel:132', note: '통화료 발신자 부담' },
 ];

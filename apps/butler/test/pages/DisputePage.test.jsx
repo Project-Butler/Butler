@@ -417,7 +417,7 @@ describe('분쟁 해결사', () => {
 
     expect(await screen.findByText('맞는 질문이나 사례를 찾지 못했어요')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '자료 출처' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: /대한법률구조공단 132/ })).toHaveAttribute('href', 'tel:132');
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
 
     expect(screen.getByText('챗봇 화면 · 반려견')).toBeInTheDocument();
@@ -461,8 +461,12 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr');
-    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '132' })).toHaveAttribute('href', 'tel:132');
-    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: '1644-5599' })).toHaveAttribute('href', 'tel:1644-5599');
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: /대한법률구조공단 132/ })).toHaveAttribute('href', 'tel:132');
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: /1644-5599/ })).toHaveAttribute('href', 'tel:1644-5599');
+    // 운영시간은 공식 안내에서 확인한 것만 붙인다.
+    expect(screen.getByText('평일 9:00~17:30')).toBeInTheDocument();
+    // 출처는 눌러 보는 칸: 자료 이름 + [원문 보기]
+    expect(within(screen.getByRole('region', { name: '자료 출처' })).getAllByText('원문 보기')).toHaveLength(5);
     // 자주 묻는 질문 5개는 원본 사례·상담에 많이 나온 순서
     const popular = within(screen.getByText('자주 묻는 질문').parentElement).getAllByRole('button').map((button) => button.textContent);
     expect(popular.slice(0, 5)).toEqual([

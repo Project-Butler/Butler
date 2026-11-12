@@ -72,14 +72,18 @@ export const DisputeHomePage = () => {
       {/* 기관 상세(대상·비용·기간)는 상황 안내의 '분쟁조정'·'법원' 단계에 있고, 여기서는 언제 어디로 가는지만 보여 준다. */}
       <section className="flex flex-col gap-3">
         <SectionTitle>어디에 도움을 요청할까요?</SectionTitle>
-        <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+        {/* PC(lg)는 기관마다 카드 3칸(언제 → 기관 → 아래 주 버튼), 좁은 화면은 한 줄씩 세로로 쌓고 버튼은 오른쪽에 둔다. */}
+        <ul className="grid gap-3 lg:grid-cols-3">
           {HELP_ROUTES.map((route) => {
             const action = route.actions.find((item) => item.primary) ?? route.actions[0];
             return (
-              <li key={route.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 lg:px-5">
+              <li
+                key={route.key}
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-line bg-surface px-4 py-3 lg:flex-col lg:flex-nowrap lg:items-stretch lg:p-5"
+              >
                 <span className="min-w-0 flex-1">
-                  <span className="block break-keep text-body font-semibold text-ink">{route.when}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-2 text-sub text-accent-strong">
+                  <span className="block break-keep text-body font-semibold text-ink lg:text-card">{route.when}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-sub text-accent-strong">
                     → {route.name}
                     <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-chip font-semibold">{route.badge}</span>
                   </span>
@@ -88,7 +92,7 @@ export const DisputeHomePage = () => {
                   href={action.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex min-h-11 items-center gap-1 text-label font-semibold text-accent hover:text-accent-strong"
+                  className="flex min-h-11 items-center justify-center gap-1 text-label font-semibold text-accent hover:text-accent-strong lg:rounded-btn lg:bg-accent lg:text-surface lg:hover:bg-accent-strong lg:hover:text-surface"
                 >
                   {action.label}
                   <ExternalLink size={14} />
