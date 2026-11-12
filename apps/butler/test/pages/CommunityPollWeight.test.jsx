@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommunityPage } from '../../src/pages/CommunityPage';
+import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
 
 // 투표권 = 범위 안 인증 호실 수(PC 명세 v3 6절): 참여 전 표 수 안내 · 참여 뒤 "참여함 · N표" · 결과 "참여 n명 · 총 m표".
 const api = vi.hoisted(() => ({
@@ -68,9 +68,9 @@ const renderAt = (path) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
         <Routes>
-          <Route path="/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
+          <Route path="/landlord/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
