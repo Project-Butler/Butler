@@ -55,6 +55,11 @@ export { postManagementLog } from './apis/managementLogs/postManagementLog';
 export { patchManagementLog } from './apis/managementLogs/patchManagementLog';
 export { deleteManagementLog } from './apis/managementLogs/deleteManagementLog';
 
+export { getTicketList } from './apis/tickets/getTicketList';
+export { getTicket } from './apis/tickets/getTicket';
+export { postTicket } from './apis/tickets/postTicket';
+export { patchTicket } from './apis/tickets/patchTicket';
+
 export { postUploadSession } from './apis/documents/postUploadSession';
 export { putUploadContent } from './apis/documents/putUploadContent';
 export { postDocument } from './apis/documents/postDocument';

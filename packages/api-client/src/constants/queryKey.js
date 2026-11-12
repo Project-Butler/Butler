@@ -11,6 +11,8 @@ export const queryKey = {
   PROPERTY_DETAIL: 'property',
   PROPERTY_OWNERSHIPS: 'property_ownerships',
   PROPERTY_OWNERSHIP_DETAIL: 'property_ownership',
+  TICKETS: 'tickets',
+  TICKET_DETAIL: 'ticket',
   DISPUTE_CHATS: 'dispute_chats',
   DISPUTE_CHAT_DETAIL: 'dispute_chat',
   ADMIN_DASHBOARD: 'admin_dashboard',
