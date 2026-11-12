@@ -56,6 +56,8 @@ export const createDbFixture = () => {
     const propertyIds = properties.map((property) => property.id);
 
     await prisma.activity.deleteMany({ where: { userId: { in: userIds } } });
+    // 티켓이 관리 로그·계약을 가리키므로 먼저 지운다.
+    await prisma.ticket.deleteMany({ where: { propertyId: { in: propertyIds } } });
     await prisma.propertyLog.deleteMany({ where: { propertyId: { in: propertyIds } } });
     await prisma.contract.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.ownershipVerificationAttempt.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });

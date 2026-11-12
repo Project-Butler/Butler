@@ -3,6 +3,8 @@ export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_FILE_NAME_LENGTH = 255;
 // 관리 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
 export const MAX_LOG_ATTACHMENTS = 10;
+// 티켓 첨부 최대 10개(계약 5장)
+export const MAX_TICKET_ATTACHMENTS = 10;
 
 export const DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE', 'PHOTO', 'OTHER'];
 // 다운로드 URL 발급을 감사 로그에 남기는 문서 유형(계약 10장 DOCUMENT_DOWNLOAD_URL_ISSUED)
