@@ -3,9 +3,12 @@
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { after, describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
+import app from '../../../src/app.js';
+import { signAccessToken } from '../../../src/domains/auth/service.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
-import { requireRegionMember, requireRegionOwner } from '../../../src/domains/community/platformBridge.js';
+import { listAllOwnedComplexIds, requireRegionMember, requireRegionOwner } from '../../../src/domains/community/platformBridge.js';
+import { COMPLEX_MAX_PER_RUN } from '../../../src/domains/community/newsRules.js';
 import {
   createComment,
   createPost,
@@ -17,7 +20,7 @@ import {
   updatePost,
 } from '../../../src/domains/community/service.js';
 import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
-import { buildNewsTargets, collectNews, findNews } from '../../../src/domains/community/service/news.js';
+import { buildComplexNewsTargets, buildNewsTargets, collectAllNews, collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
 const REGION = '1135010600'; // createDbFixture 의 단지 법정동(서울 노원구 중계동)
@@ -37,6 +40,10 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
     await prisma.communityPoll.deleteMany({ where: { authorId: { in: userIds } } });
     await prisma.communityNewsItem.deleteMany({ where: { id: { in: newsIds } } });
     await fixture.cleanup();
+    // 단지 수집 순번(community_news_cursors)은 단지에 FK 가 없어 단지를 지워도 남는다 — 지워진 단지의 행을 치운다
+    const cursorCodes = (await prisma.communityNewsCursor.findMany({ where: { scope: 'COMPLEX' }, select: { scopeCode: true } })).map((row) => row.scopeCode);
+    const alive = new Set((await prisma.complex.findMany({ where: { id: { in: cursorCodes } }, select: { id: true } })).map((row) => row.id));
+    await prisma.communityNewsCursor.deleteMany({ where: { scope: 'COMPLEX', scopeCode: { in: cursorCodes.filter((code) => !alive.has(code)) } } });
   });
 
   const createUser = async (role = 'LANDLORD') => {
@@ -511,6 +518,147 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       const sido = await findNews(REGION, { scope: 'SIDO', page: 1, size: 10 });
       assert.equal(sido.meta.region.sidoLabel, '서울');
       assert.ok(!('sidoFallback' in sido.meta));
+    });
+
+    describe('우리 단지', () => {
+      const OTHER_REGION = '1171010100'; // 시드에 있는 다른 법정동(서울 송파구 잠실동)
+      let server;
+      let origin;
+
+      before(async () => {
+        server = await new Promise((resolve) => {
+          const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+        });
+        origin = `http://127.0.0.1:${server.address().port}`;
+      });
+
+      after(async () => {
+        await new Promise((resolve) => server.close(resolve));
+        for (const id of userIds) await prisma.rateLimit.deleteMany({ where: { id: { contains: id } } });
+      });
+
+      // 이름이 겹치지 않는 단지(흔한 이름 규칙에 걸리지 않게)
+      const createNamedComplex = async (label, extra = {}) => {
+        return fixture.createComplex({ name: `${label}${runId.slice(0, 8)}아파트`, ...extra });
+      };
+      // 단지 검색어(따옴표로 묶인 이름)에는 그 이름이 든 기사 둘(하나는 부동산 낱말 없음), 지역 · 전국 검색어에는 빈 응답
+      const complexFetch = async (url) => {
+        const q = new URL(url).searchParams.get('q');
+        const quoted = q.match(/^"([^"]+)"/);
+        if (!quoted) return new Response('<rss><channel></channel></rss>', { status: 200 });
+        const name = quoted[1];
+        const xml = `<rss><channel>${item(`${name} 전세 매물 증가`, `complex-${name}-pass`)}${item(`${name} 가을 음악회`, `complex-${name}-drop`)}</channel></rss>`;
+        return new Response(xml, { status: 200 });
+      };
+      const quietCollect = async () => {
+        const info = console.info;
+        console.info = () => {};
+        try {
+          return await collectAllNews({ fetchImpl: complexFetch }); // cron 이 부르는 것(지역 · 전국 → 단지)
+        } finally {
+          console.info = info;
+        }
+      };
+      const api = (user, pathname) =>
+        fetch(`${origin}/api/v1${pathname}`, {
+          headers: { ...(user ? { Cookie: `access_token=${signAccessToken(user)}` } : {}), 'X-Requested-With': 'butler-web' },
+        });
+
+      test('수집 대상 단지 = 호실 등록 임대인이 있는 단지 — 인증 전은 들어가고, 인증 취소만 있는 단지는 빠진다', async () => {
+        const owner = await createUser();
+        const unverified = await createNamedComplex('단지뉴스인증전');
+        await addUnit(owner, unverified, { status: 'UNVERIFIED' });
+        const revoked = await createNamedComplex('단지뉴스취소');
+        await addUnit(owner, revoked, { status: 'REVOKED' });
+
+        const result = await quietCollect();
+        const rows = Object.fromEntries(result.results.filter((row) => row.scope === 'COMPLEX').map((row) => [row.scopeCode, row]));
+        // 이름 그대로 · "아파트" 뗀 이름 두 검색어, 검색어마다 기사 둘 중 음악회 기사는 걸러진다
+        assert.deepEqual(
+          { fetched: rows[unverified.id]?.fetched, filtered: rows[unverified.id]?.filtered, inserted: rows[unverified.id]?.inserted },
+          { fetched: 4, filtered: 2, inserted: 2 },
+        );
+        assert.equal(rows[unverified.id].complexName, unverified.name);
+        assert.equal(rows[revoked.id], undefined);
+        assert.equal(result.complexesLeft, 0);
+
+        const saved = await prisma.communityNewsItem.findMany({ where: { ...testRows, scope: 'COMPLEX', scopeCode: unverified.id }, select: { title: true } });
+        assert.equal(saved.length, 2);
+        assert.ok(saved.every((row) => row.title.includes('전세')));
+        assert.equal(await prisma.communityNewsItem.count({ where: { scope: 'COMPLEX', scopeCode: revoked.id } }), 0);
+        // 시도한 단지는 시각이 남고, 대상이 아닌 단지는 남지 않는다
+        assert.ok(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: unverified.id } } }));
+        assert.equal(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: revoked.id } } }), null);
+      });
+
+      test('지역 · 전국 수집(collectNews)은 단지를 건드리지 않는다 — 단지는 cron(collectAllNews)이 이어서 모은다', async () => {
+        const owner = await createUser();
+        const complex = await createNamedComplex('단지뉴스지역만');
+        await addUnit(owner, complex);
+        const info = console.info;
+        console.info = () => {};
+        try {
+          const regional = await collectNews({ fetchImpl: complexFetch });
+          assert.ok(regional.results.every((row) => row.scope !== 'COMPLEX'));
+          assert.ok(!('complexesLeft' in regional));
+        } finally {
+          console.info = info;
+        }
+        assert.equal(await prisma.communityNewsItem.count({ where: { scope: 'COMPLEX', scopeCode: complex.id } }), 0);
+        assert.equal(await prisma.communityNewsCursor.findUnique({ where: { scope_scopeCode: { scope: 'COMPLEX', scopeCode: complex.id } } }), null);
+      });
+
+      test('대상마다 검색어 이름 · 흔한 이름 판정이 붙는다 — 같은 이름 단지가 둘이면 동 · 구 이름 없는 제목은 탈락', async () => {
+        const owner = await createUser();
+        const mine = await createNamedComplex('단지뉴스흔한');
+        await addUnit(owner, mine);
+        // 같은 이름 단지가 다른 동네에 하나 더(호실 없음 — 수집 대상은 아니지만 이름 수에는 든다)
+        await fixture.createComplex({ name: mine.name, regionId: OTHER_REGION });
+
+        const targets = await buildComplexNewsTargets();
+        assert.ok(targets.length <= COMPLEX_MAX_PER_RUN);
+        assert.ok((await listAllOwnedComplexIds()).includes(mine.id));
+        // 한 번도 안 모은 단지가 맨 앞이므로 새 단지는 이번 몫에 든다(안 모은 단지가 30곳 넘게 쌓여 있지 않다면)
+        const target = targets.find((row) => row.scopeCode === mine.id);
+        assert.ok(target, '한 번도 안 모은 단지가 30곳 넘게 있어 새 단지가 이번 몫에 들지 않았다');
+        assert.deepEqual(target.complexQueryNames, [mine.name, mine.name.replace(/아파트$/, '')]);
+        assert.equal(target.filter(`${mine.name} 전세 매물 증가`), false);
+        assert.equal(target.filter(`노원 ${mine.name} 전세 매물 증가`), true);
+      });
+
+      test('읽기: 그 단지 동네의 호실 등록자는 인증 전이어도 200, 다른 동네 임대인 · 임차인 403, 없는 단지 404', async () => {
+        const complex = await createNamedComplex('단지뉴스읽기');
+        const owner = await createUser();
+        await addUnit(owner, complex, { status: 'UNVERIFIED' });
+        await quietCollect();
+
+        const ok = await api(owner, `/community/complexes/${complex.id}/news?page=1&size=5`);
+        assert.equal(ok.status, 200);
+        const body = await ok.json();
+        assert.equal(body.data.length, 2);
+        assert.ok(body.data.every((row) => row.scope === 'COMPLEX' && row.title.includes(complex.name.replace(/아파트$/, ''))));
+        assert.deepEqual(body.meta.complex, { id: complex.id, name: complex.name, legalDongCode: REGION });
+        assert.equal(body.meta.total, 2);
+
+        // 같은 동네 다른 단지의 호실 등록자도 읽을 수 있다(읽기 자격은 법정동 단위)
+        const neighbor = await createUser();
+        await addUnit(neighbor, await fixture.createComplex());
+        assert.equal((await api(neighbor, `/community/complexes/${complex.id}/news`)).status, 200);
+
+        const elsewhere = await createUser();
+        await addUnit(elsewhere, await createNamedComplex('단지뉴스다른동네', { regionId: OTHER_REGION }));
+        const denied = await api(elsewhere, `/community/complexes/${complex.id}/news`);
+        assert.equal(denied.status, 403);
+        assert.equal((await denied.json()).error.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
+        const tenant = await createUser('TENANT');
+        assert.equal((await api(tenant, `/community/complexes/${complex.id}/news`)).status, 403);
+
+        for (const id of [randomUUID(), 'not-a-uuid']) {
+          const missing = await api(owner, `/community/complexes/${id}/news`);
+          assert.equal(missing.status, 404);
+          assert.equal((await missing.json()).error.code, 'COMMUNITY_COMPLEX_NOT_FOUND');
+        }
+      });
     });
   });
 

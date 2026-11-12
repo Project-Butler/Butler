@@ -6,9 +6,11 @@ import {
   checkLegalDongCode,
   getPoll,
   getPost,
+  listComplexNews,
   listMyBuildings,
   listNews,
   listReports,
+  loadNewsComplex,
   listPolls,
   listPosts,
   loadComment,
@@ -82,6 +84,9 @@ router.get('/polls/:pollId', generalRateLimiter, loadPoll, ownerOfPollRegion, ge
 
 // 뉴스: 읽기만. 수집은 cronRouter.js 의 /api/cron/community-news
 router.get('/regions/:legalDongCode/news', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listNews);
+// 우리 단지 뉴스: 읽기 자격은 그 단지 법정동의 읽기 자격과 같다(호실을 등록한 임대인, 인증 전 포함)
+const ownerOfComplexRegion = requireRegionOwner((req) => req.communityComplex.regionId);
+router.get('/complexes/:complexId/news', generalRateLimiter, loadNewsComplex, ownerOfComplexRegion, listComplexNews);
 router.post('/polls/:pollId/votes', landlordOnly, generalRateLimiter, loadPoll, memberOfPollRegion, postVote);
 // 삭제는 등록자 본인·참여자 0명일 때만. 자격은 보지 않는다(글 삭제와 같음).
 router.delete('/polls/:pollId', landlordOnly, generalRateLimiter, loadPoll, removePoll);
