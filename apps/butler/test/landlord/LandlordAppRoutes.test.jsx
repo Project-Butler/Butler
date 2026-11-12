@@ -76,7 +76,7 @@ describe('임대인 앱: 하단 탭', () => {
 
   it.each([
     ['/landlord/contracts', '탭에 없는 주소'],
-    ['/landlord/contracts/c-1/edit', '탭에 없는 주소'],
+    ['/landlord/contracts/c-1/edit', '하단 탭이 없는 입력 화면'],
     ['/landlord/propertiesx', '접두어로 시작만 하는 주소'],
     ['/landlord/homeless', '접두어로 시작만 하는 주소'],
     ['/landlord/communityx', '접두어로 시작만 하는 주소'],
@@ -114,7 +114,6 @@ describe('임대인 앱: 준비 중 화면', () => {
     '/landlord/settings',
     '/landlord/contracts',
     '/landlord/contracts/new',
-    '/landlord/contracts/c-1/edit',
     '/landlord/properties/p-1/verify',
     '/landlord/logs/l-1',
     '/landlord/no-such-page',
@@ -142,6 +141,19 @@ describe('임대인 앱: 내 자산·상세 화면의 셸', () => {
     renderAt('/landlord/contracts/c-1');
     expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+  });
+
+  it('계약 수정(/landlord/contracts/:id/edit)은 "준비 중"이 아니고 하단 탭 없이 뒤로 가기 상단 바를 쓴다', () => {
+    renderAt('/landlord/contracts/c-1/edit');
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('heading', { name: '계약 수정' })).toBeInTheDocument();
+  });
+
+  it('주소로 바로 들어온 계약 수정에서 뒤로 가기를 누르면 그 계약 관리로 간다', async () => {
+    renderAt('/landlord/contracts/c-1/edit');
+    await userEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' }));
+    expect(where()).toBe('/landlord/contracts/c-1');
   });
 
   it.each(['/landlord/properties/p-1', '/landlord/logs'])('%s 는 뒤로 가기 상단 바와 하단 탭을 함께 쓴다', (path) => {
