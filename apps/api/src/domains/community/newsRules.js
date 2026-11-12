@@ -129,4 +129,4 @@ export const SIDO_FALLBACK_THRESHOLD = 5;
 export const SIDO_FALLBACK_SIZE = 10;
 // "최근" 의 기준(일)
 export const RECENT_DAYS = 30;
-// (화면 쪽 규칙: 브리핑 최근 뉴스 5건 중 단지 기사를 먼저 최대 2건 — apps/landlord BriefingNews.jsx)
+// (화면 쪽 규칙: 브리핑 최근 뉴스 5건 중 단지 기사를 먼저 최대 2건 — apps/butler/src/landlord/web/components/CommunityBriefing/BriefingNews.jsx)
