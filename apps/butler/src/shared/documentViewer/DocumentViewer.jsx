@@ -359,10 +359,12 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
       </div>
 
       <div className="mx-auto w-full max-w-[430px] shrink-0">
-        <p className="py-2 text-center text-m-sub text-white/60">
-          {!isImage ? 'PDF 는 새 탭에서 열려요' : isZoomed ? '끌어서 옮기기 · 두 번 누르면 원래 크기' : '두 손가락으로 벌리거나 두 번 눌러 확대'}
-        </p>
-        <div className="space-y-3 px-4 pb-4">
+        {(!isImage || isZoomed) && (
+          <p className="py-2 text-center text-m-sub text-white/60">
+            {!isImage ? 'PDF 는 새 탭에서 열려요' : '끌어서 옮기기 · 두 번 누르면 원래 크기'}
+          </p>
+        )}
+        <div className="space-y-3 px-4 pb-4 pt-2">
           {!isZoomed && documents.length > 1 && (
             <ul aria-label="파일 목록" className="flex justify-center gap-1.5 overflow-x-auto">
               {documents.map((document, position) => {
