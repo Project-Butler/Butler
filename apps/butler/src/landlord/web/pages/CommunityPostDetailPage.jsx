@@ -12,6 +12,7 @@ import { ReportDialog } from '../components/CommunityBoard/ReportDialog';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { LockedCard } from '../components/CommunityLayout/LockedCard';
+import { AuthorName } from '../components/CommunityNickname/AuthorName';
 import { getBlockedMessage } from '../utils/communityBoardLabels';
 import { formatKstDateTime } from '../utils/communityFormat';
 
@@ -46,8 +47,7 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
   const data = post.data;
   const canWrite = data?.canWrite ?? false;
 
-  const submitComment = async (event) => {
-    event.preventDefault();
+  const sendComment = async () => {
     const body = draft.trim();
     if (!body) return;
     setActionError('');
@@ -55,8 +55,16 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
       await addComment.mutateAsync({ postId, complexId: building.complexId, body });
       setDraft('');
     } catch (error) {
-      setActionError(getErrorMessage(error));
+      // 닉네임이 없어 막혔으면 닉네임 대화상자가 열린다 — 쓰던 댓글은 그대로 둔다
+      if (!frame.nickname.handleWriteError(error)) setActionError(getErrorMessage(error));
     }
+  };
+
+  // 닉네임이 없으면 대화상자를 먼저 띄운다. 저장하면 쓰던 댓글이 그대로 남은 입력칸으로 돌아온다(바로 보내지 않는다)
+  const submitComment = (event) => {
+    event.preventDefault();
+    if (!draft.trim()) return;
+    frame.nickname.ensure(sendComment, { afterSave: null });
   };
 
   const deleteComment = async (commentId) => {
@@ -111,7 +119,7 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <CategoryChip category={data.category} />
-                <span className="text-label font-semibold text-ink-2">{data.authorLabel}</span>
+                <AuthorName nickname={data.authorNickname} label={data.authorLabel} />
                 <Badge tone="success" className="inline-flex items-center gap-1.5 whitespace-nowrap">
                   <i aria-hidden="true" className="block h-1.5 w-1.5 rounded-full bg-ok" />
                   인증 완료
@@ -142,7 +150,7 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
                   {data.comments.map((comment) => (
                     <li key={comment.id} className="border-t border-line py-3 first:border-t-0 first:pt-0">
                       <div className="mb-1 flex items-center gap-1.5">
-                        <span className="text-label font-semibold text-ink-2">{comment.authorLabel}</span>
+                        <AuthorName nickname={comment.authorNickname} label={comment.authorLabel} />
                         <span className="font-num text-sub font-medium tabular-nums text-ink-3">
                           {formatKstDateTime(comment.createdAt)}
                         </span>

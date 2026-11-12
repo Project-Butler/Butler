@@ -3,13 +3,15 @@
 // 누가 언제 숨겼는지는 그 두 칸에만 남는다(플랫폼 감사 기록 함수가 아직 없다 — 해제하면 지워진다).
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
+import { loadNicknames, nicknameOf } from './nicknames.js';
 
 const throwNotFound = (code, message) => {
   throw new AppError(code, 404, message);
 };
 
 // 신고 대상 요약. 운영자가 판단할 수 있게 작성자 id 와 숨김·삭제 상태까지 준다(운영자 전용 응답).
-const toReportTarget = (report) => {
+// authorNickname: 작성자의 지금 닉네임(없으면 null) — 화면과 같은 "닉네임 (authorLabel)" 을 운영자도 본다.
+const toReportTarget = (report, nicknames) => {
   if (report.post) {
     return {
       type: 'POST',
@@ -17,6 +19,7 @@ const toReportTarget = (report) => {
       legalDongCode: report.post.legalDongCode,
       title: report.post.title,
       authorId: report.post.authorId,
+      authorNickname: nicknameOf(nicknames, report.post.authorId),
       authorLabel: report.post.authorLabel,
       hiddenAt: report.post.hiddenAt?.toISOString() ?? null,
       deletedAt: report.post.deletedAt?.toISOString() ?? null,
@@ -28,13 +31,14 @@ const toReportTarget = (report) => {
     postId: report.comment.postId,
     body: report.comment.body,
     authorId: report.comment.authorId,
+    authorNickname: nicknameOf(nicknames, report.comment.authorId),
     authorLabel: report.comment.authorLabel,
     hiddenAt: report.comment.hiddenAt?.toISOString() ?? null,
     deletedAt: report.comment.deletedAt?.toISOString() ?? null,
   };
 };
 
-const toReport = (report) => ({
+const toReport = (report, nicknames) => ({
   id: report.id,
   reason: report.reason,
   detail: report.detail,
@@ -43,7 +47,7 @@ const toReport = (report) => ({
   handledAt: report.handledAt?.toISOString() ?? null,
   handledByUserId: report.handledByUserId,
   createdAt: report.createdAt.toISOString(),
-  target: toReportTarget(report),
+  target: toReportTarget(report, nicknames),
 });
 
 const REPORT_INCLUDE = {
@@ -68,7 +72,9 @@ export const findReports = async ({ status, reason, page, size }) => {
     }),
     prisma.communityReport.count({ where }),
   ]);
-  return { items: reports.map(toReport), meta: { page, size, total, hasNext: page * size < total } };
+  // 신고 대상 작성자를 한 번에
+  const nicknames = await loadNicknames(reports.map((report) => (report.post ?? report.comment).authorId));
+  return { items: reports.map((report) => toReport(report, nicknames)), meta: { page, size, total, hasNext: page * size < total } };
 };
 
 // PATCH /community/admin/reports/:reportId — 처리하면(RESOLVED·DISMISSED) 누가 언제 처리했는지 남기고,
@@ -82,7 +88,8 @@ export const updateReportStatus = async (admin, reportId, status) => {
     data: { status, ...handled },
     include: REPORT_INCLUDE,
   });
-  return toReport(report);
+  const target = report.post ?? report.comment;
+  return toReport(report, await loadNicknames([target.authorId]));
 };
 
 const toHiddenState = (row) => ({

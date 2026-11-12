@@ -12,6 +12,7 @@ import { DdayBadge } from '../components/CommunityPoll/DdayBadge';
 import { ScopeChip } from '../components/CommunityPoll/ScopeChip';
 import { PollDisclaimer } from '../components/CommunityPoll/PollDisclaimer';
 import { PollResults } from '../components/CommunityPoll/PollResults';
+import { AuthorName } from '../components/CommunityNickname/AuthorName';
 import { formatKstDateTime } from '../utils/communityFormat';
 
 // 선택지 한 줄: 원형 라디오 + 문구, 고르면 accent-soft 바탕 + accent 테두리.
@@ -92,6 +93,8 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
               <div className="flex flex-wrap items-center gap-2">
                 <DdayBadge closesAt={data.closesAt} isClosed={data.isClosed} />
                 <span className="text-sub text-ink-3">참여 {num(data.voteCount)}명</span>
+                {/* 만든 사람 — 글 작성자와 같은 "닉네임 (괄호 표기)". 미리보기(locked)에는 서버가 주지 않는다 */}
+                {data.authorLabel && <AuthorName nickname={data.authorNickname} label={data.authorLabel} />}
               </div>
             </div>
             {data.description && (

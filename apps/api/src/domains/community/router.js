@@ -4,6 +4,7 @@ import { generalRateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
   checkLegalDongCode,
+  getMyProfile,
   getPoll,
   getPost,
   listComplexNews,
@@ -26,11 +27,12 @@ import {
   postPost,
   postReport,
   postVote,
+  putMyProfile,
   removeComment,
   removePoll,
   removePost,
 } from './controller.js';
-import { requireRegionMember, requireRegionOwner } from './platformBridge.js';
+import { requireAnyRegionOwner, requireRegionMember, requireRegionOwner } from './platformBridge.js';
 
 const router = Router();
 
@@ -50,6 +52,10 @@ const memberOfPathRegion = requireRegionMember((req) => req.params.legalDongCode
 const memberOfPostRegion = requireRegionMember((req) => req.communityPost.legalDongCode);
 const ownerOfPathRegion = requireRegionOwner((req) => req.params.legalDongCode);
 const ownerOfPostRegion = requireRegionOwner((req) => req.communityPost.legalDongCode);
+
+// 내 닉네임: 커뮤니티를 읽을 수 있는 임대인(어느 동네든 호실 등록, 인증 전 포함). 글 · 댓글 · 투표 만들기는 닉네임이 있어야 한다(서비스)
+router.get('/me/profile', landlordOnly, generalRateLimiter, requireAnyRegionOwner, getMyProfile);
+router.put('/me/profile', landlordOnly, generalRateLimiter, requireAnyRegionOwner, putMyProfile);
 
 router.get('/regions/:legalDongCode/posts', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listPosts);
 router.post(

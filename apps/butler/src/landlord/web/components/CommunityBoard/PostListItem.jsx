@@ -9,7 +9,7 @@ export const PostListItem = ({ post, onOpen }) => (
       <h3 className="mb-1 text-body font-semibold">{post.title}</h3>
       <div className="flex items-center justify-between gap-3">
         <span className="text-sub leading-tight text-ink-3">
-          {post.authorLabel} · <span className="font-num font-medium tabular-nums">{formatKstDate(post.createdAt)}</span>
+          {post.authorNickname ? `${post.authorNickname} (${post.authorLabel})` : post.authorLabel} · <span className="font-num font-medium tabular-nums">{formatKstDate(post.createdAt)}</span>
         </span>
         <span className="flex flex-none items-center gap-1 text-chip font-semibold text-ink-3" aria-label={`댓글 ${post.commentCount}개`}>
           <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />

@@ -31,6 +31,7 @@ export const queryKey = {
   COMMUNITY_POLL_DETAIL: 'community_poll',
   COMMUNITY_NEWS: 'community_news',
   COMMUNITY_COMPLEX_NEWS: 'community_complex_news',
+  COMMUNITY_PROFILE: 'community_profile',
   // 커뮤니티 시세(지금은 화면 쪽 예시 데이터, 플랫폼 시세 API 가 생기면 같은 키로 그 응답을 담는다)
   COMMUNITY_MARKET_PRICES: 'community_market_prices',
 };

@@ -19,7 +19,8 @@ import {
   findPosts,
   updatePost,
 } from '../../../src/domains/community/service.js';
-import { setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
+import { findReports, setCommentHidden, setPollHidden, setPostHidden } from '../../../src/domains/community/service/admin.js';
+import { findMyProfile, setMyNickname } from '../../../src/domains/community/service/profiles.js';
 import { buildComplexNewsTargets, buildNewsTargets, collectAllNews, collectComplexNews, collectNews, findNews } from '../../../src/domains/community/service/news.js';
 import { castVote, createPoll, deletePoll, findPollDetail, findPolls } from '../../../src/domains/community/service/polls.js';
 
@@ -31,8 +32,20 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
   const userIds = [];
   const newsIds = [];
+  let server;
+  let origin;
+
+  before(async () => {
+    server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    origin = `http://127.0.0.1:${server.address().port}`;
+  });
 
   after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    for (const id of userIds) await prisma.rateLimit.deleteMany({ where: { id: { contains: id } } });
+    await prisma.communityProfile.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.communityReport.deleteMany({ where: { reporterId: { in: userIds } } });
     await prisma.communityComment.deleteMany({ where: { authorId: { in: userIds } } });
     await prisma.communityPost.deleteMany({ where: { authorId: { in: userIds } } });
@@ -46,11 +59,29 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
     await prisma.communityNewsCursor.deleteMany({ where: { scope: 'COMPLEX', scopeCode: { in: cursorCodes.filter((code) => !alive.has(code)) } } });
   });
 
-  const createUser = async (role = 'LANDLORD') => {
+  // 글 · 댓글 · 투표를 만들려면 닉네임이 있어야 한다(3차 ③) — 테스트 사용자는 기본으로 닉네임을 하나 갖는다.
+  // nickname: false 면 닉네임 없이(닉네임 규칙 테스트용)
+  const createUser = async (role = 'LANDLORD', { nickname = true } = {}) => {
     const user = await fixture.createUser(role);
     userIds.push(user.id);
+    if (nickname) {
+      const name = `t${randomUUID().replace(/-/g, '').slice(0, 10)}`;
+      await prisma.communityProfile.create({ data: { userId: user.id, nickname: name, nicknameKey: name } });
+    }
     return user;
   };
+
+  // HTTP 로 부르기(라우터의 자격 · 에러 모양까지 본다). 쿠키 인증 + CSRF 헤더
+  const api = (user, pathname, { method = 'GET', body } = {}) =>
+    fetch(`${origin}/api/v1${pathname}`, {
+      method,
+      headers: {
+        ...(user ? { Cookie: `access_token=${signAccessToken(user)}` } : {}),
+        'X-Requested-With': 'butler-web',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
 
   // 호실 하나 + 소유 관계. status 기본 VERIFIED(유효 1년). expired 면 어제 만료.
   const addUnit = async (user, complex, { buildingNo = '101', unitNo = randomUUID().slice(0, 6), exclusiveArea = null, status = 'VERIFIED', verifiedAt = new Date(), expired = false } = {}) => {
@@ -522,20 +553,6 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
 
     describe('우리 단지', () => {
       const OTHER_REGION = '1171010100'; // 시드에 있는 다른 법정동(서울 송파구 잠실동)
-      let server;
-      let origin;
-
-      before(async () => {
-        server = await new Promise((resolve) => {
-          const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
-        });
-        origin = `http://127.0.0.1:${server.address().port}`;
-      });
-
-      after(async () => {
-        await new Promise((resolve) => server.close(resolve));
-        for (const id of userIds) await prisma.rateLimit.deleteMany({ where: { id: { contains: id } } });
-      });
 
       // 이름이 겹치지 않는 단지(흔한 이름 규칙에 걸리지 않게)
       const createNamedComplex = async (label, extra = {}) => {
@@ -561,11 +578,6 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
           console.info = info;
         }
       };
-      const api = (user, pathname) =>
-        fetch(`${origin}/api/v1${pathname}`, {
-          headers: { ...(user ? { Cookie: `access_token=${signAccessToken(user)}` } : {}), 'X-Requested-With': 'butler-web' },
-        });
-
       test('수집 대상 단지 = 호실 등록 임대인이 있는 단지 — 인증 전은 들어가고, 인증 취소만 있는 단지는 빠진다', async () => {
         const owner = await createUser();
         const unverified = await createNamedComplex('단지뉴스인증전');
@@ -783,7 +795,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       const { items, meta } = await findPosts(viewer, REGION, LIST);
       const item = items.find((row) => row.title === '목록 글');
       assert.ok(item);
-      assert.deepEqual(Object.keys(item).sort(), ['authorLabel', 'category', 'commentCount', 'createdAt', 'id', 'isMine', 'title']);
+      assert.deepEqual(Object.keys(item).sort(), ['authorLabel', 'authorNickname', 'category', 'commentCount', 'createdAt', 'id', 'isMine', 'title']);
       assert.equal(meta.canWrite, false);
     });
 
@@ -914,6 +926,176 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         'complexId', 'legalDongCode', 'memberCount', 'name', 'regionName', 'unitAreas', 'unitCount',
         'verificationStatus', 'verifyPropertyId',
       ]);
+    });
+  });
+
+  describe('닉네임', () => {
+    // 닉네임은 전체에서 하나라 실행마다 꼬리를 바꾼다(소문자 hex 6자)
+    const tag = randomUUID().replace(/-/g, '').slice(0, 6);
+    const nick = (head) => `${head}${tag}`;
+    const errorOf = async (promise) => {
+      try {
+        await promise;
+      } catch (error) {
+        return error;
+      }
+      return assert.fail('에러가 나야 한다');
+    };
+    const later = (days) => new Date(Date.now() + days * DAY);
+    const asPost = (post) => ({ id: post.id, legalDongCode: post.legalDongCode, authorId: null });
+
+    test('처음 정하기 → 첫 바꾸기는 바로 → 그 뒤 30일 안에는 409(다음 가능일) → 30일 뒤에는 된다', async () => {
+      const user = await createUser('LANDLORD', { nickname: false });
+      assert.deepEqual(await findMyProfile(user, {}), { nickname: null, nextChangeAt: null, previewLabel: null });
+
+      const first = await setMyNickname(user, { nickname: `  ${nick('첫')}  ` });
+      assert.deepEqual([first.nickname, first.nextChangeAt], [nick('첫'), null]); // 앞뒤 공백은 뗀다
+      const changed = await setMyNickname(user, { nickname: nick('둘') });
+      assert.equal(changed.nickname, nick('둘'));
+      assert.ok(Math.abs(new Date(changed.nextChangeAt).getTime() - later(30).getTime()) < 60_000, changed.nextChangeAt);
+      // 지금과 같은 닉네임을 보내면 바꾼 것으로 치지 않는다
+      assert.equal((await setMyNickname(user, { nickname: nick('둘') })).nextChangeAt, changed.nextChangeAt);
+
+      const tooSoon = await errorOf(setMyNickname(user, { nickname: nick('셋') }));
+      assert.equal(tooSoon.code, 'COMMUNITY_NICKNAME_CHANGE_TOO_SOON');
+      assert.equal(tooSoon.httpStatus, 409);
+      assert.match(tooSoon.message, /^\d{4}년 \d{1,2}월 \d{1,2}일부터 바꿀 수 있습니다\.$/);
+      assert.equal((await setMyNickname(user, { nickname: nick('셋') }, later(30.01))).nickname, nick('셋'));
+    });
+
+    test('형식 · 금지 낱말은 400, 영문 대소문자 · 띄어쓰기만 다른 닉네임은 이미 쓰는 닉네임(409)', async () => {
+      const first = await createUser('LANDLORD', { nickname: false });
+      const second = await createUser('LANDLORD', { nickname: false });
+      const cases = [
+        ['가', 'COMMUNITY_NICKNAME_INVALID'], // 2자 미만
+        ['가나다라마바사아자차카타파', 'COMMUNITY_NICKNAME_INVALID'], // 12자 초과
+        ['삼전동  부자', 'COMMUNITY_NICKNAME_INVALID'], // 공백 둘
+        ['삼전 동 부자', 'COMMUNITY_NICKNAME_INVALID'], // 공백 두 군데
+        ['ㅋㅋㅋ', 'COMMUNITY_NICKNAME_INVALID'], // 낱자
+        ['부자임대인!', 'COMMUNITY_NICKNAME_INVALID'], // 기호
+        ['버틀러지기', 'COMMUNITY_NICKNAME_NOT_ALLOWED'],
+        ['ADMIN kim', 'COMMUNITY_NICKNAME_NOT_ALLOWED'], // 대소문자 무시
+        ['운영 자', 'COMMUNITY_NICKNAME_NOT_ALLOWED'], // 띄어 써도
+      ];
+      for (const [nickname, code] of cases) {
+        const error = await errorOf(setMyNickname(first, { nickname }));
+        assert.deepEqual([error.code, error.httpStatus], [code, 400], nickname);
+      }
+      await setMyNickname(first, { nickname: `Rich ${tag}` });
+      for (const nickname of [`rich ${tag}`, `RICH${tag}`, `rich${tag.toUpperCase()}`]) {
+        const error = await errorOf(setMyNickname(second, { nickname }));
+        assert.deepEqual([error.code, error.httpStatus], ['COMMUNITY_NICKNAME_TAKEN', 409], nickname);
+      }
+      assert.equal((await findMyProfile(second, {})).nickname, null);
+    });
+
+    test('같은 닉네임을 동시에 정하면 DB 유일 제약으로 한 사람만 된다', async () => {
+      const users = [];
+      for (let n = 0; n < 3; n += 1) users.push(await createUser('LANDLORD', { nickname: false }));
+      const results = await Promise.allSettled(users.map((user) => setMyNickname(user, { nickname: nick('동시') })));
+      assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+      assert.ok(results.filter((result) => result.status === 'rejected').every((result) => result.reason.code === 'COMMUNITY_NICKNAME_TAKEN'));
+      assert.equal(await prisma.communityProfile.count({ where: { nicknameKey: nick('동시') } }), 1);
+    });
+
+    test('닉네임 없이 글 · 댓글 · 투표 만들기는 403 COMMUNITY_NICKNAME_REQUIRED, 정하면 된다', async () => {
+      const complex = await fixture.createComplex();
+      const writer = await createUser('LANDLORD', { nickname: false });
+      await addUnit(writer, complex);
+      const other = await createUser();
+      await addUnit(other, complex);
+      const post = await createPost(other, REGION, postInput(complex.id, '닉네임 없는 사람의 댓글 대상'));
+
+      const attempts = [
+        () => createPost(writer, REGION, postInput(complex.id)),
+        () => createComment(writer, asPost(post), { complexId: complex.id, body: '댓글' }),
+        () => createPoll(writer, REGION, pollInput(complex.id)),
+      ];
+      for (const attempt of attempts) {
+        const error = await errorOf(attempt());
+        assert.deepEqual([error.code, error.httpStatus], ['COMMUNITY_NICKNAME_REQUIRED', 403]);
+      }
+      // HTTP 로도 같은 에러(라우터의 쓰기 자격을 지난 뒤 서비스가 막는다)
+      const response = await api(writer, `/community/regions/${REGION}/posts`, { method: 'POST', body: postInput(complex.id) });
+      assert.equal(response.status, 403);
+      assert.equal((await response.json()).error.code, 'COMMUNITY_NICKNAME_REQUIRED');
+      assert.equal(await prisma.communityPost.count({ where: { authorId: writer.id } }), 0);
+      assert.equal(await prisma.communityPoll.count({ where: { authorId: writer.id } }), 0);
+
+      await setMyNickname(writer, { nickname: nick('작성') });
+      assert.equal((await createPost(writer, REGION, postInput(complex.id))).authorNickname, nick('작성'));
+    });
+
+    test('바꾸면 옛 글도 새 닉네임, 괄호 표기는 쓸 때 그대로 — 목록 · 상세 · 댓글 · 투표 · 운영자', async () => {
+      const complex = await fixture.createComplex({ name: '닉네임테스트아파트' });
+      const author = await createUser('LANDLORD', { nickname: false });
+      await addUnit(author, complex, { buildingNo: '103' });
+      await setMyNickname(author, { nickname: nick('옛') });
+      const post = await createPost(author, REGION, postInput(complex.id, '닉네임 바꾸기 전 글'));
+      await createComment(author, asPost(post), { complexId: complex.id, body: '바꾸기 전 댓글' });
+      const poll = await createPoll(author, REGION, pollInput(complex.id, { title: '닉네임 바꾸기 전 투표' }));
+      const reader = await createUser();
+      await addUnit(reader, complex);
+      await createPostReport(reader, { id: post.id, authorId: author.id }, { reason: 'SPAM', detail: null });
+
+      await setMyNickname(author, { nickname: nick('새') }); // 처음 정한 뒤 첫 바꾸기
+      const shown = (row) => [row.authorNickname, row.authorLabel];
+      const expected = [nick('새'), '닉네임테스트아파트 103동 임대인'];
+      assert.deepEqual(shown((await findPosts(reader, REGION, LIST)).items.find((item) => item.id === post.id)), expected);
+      const detail = await findPostDetail(reader, post.id);
+      assert.deepEqual(shown(detail), expected);
+      assert.deepEqual(shown(detail.comments[0]), expected);
+      assert.deepEqual(shown(await findPollDetail(reader, poll.id)), expected);
+      const report = (await findReports({ page: 1, size: 1000 })).items.find((row) => row.target.id === post.id);
+      assert.deepEqual(shown(report.target), expected);
+    });
+
+    test('닉네임이 없는 작성자(옛 글)는 authorNickname null 과 표기만 — 목록 · 상세 · 댓글 · 미리보기', async () => {
+      const complex = await fixture.createComplex();
+      const author = await createUser();
+      await addUnit(author, complex);
+      const post = await createPost(author, REGION, postInput(complex.id, '닉네임 전 옛 글'));
+      await createComment(author, asPost(post), { complexId: complex.id, body: '옛 댓글' });
+      // 닉네임이 생기기 전에 쓴 글처럼 — 작성자의 닉네임 행이 없다
+      await prisma.communityProfile.delete({ where: { userId: author.id } });
+
+      const reader = await createUser();
+      await addUnit(reader, complex);
+      const listed = (await findPosts(reader, REGION, LIST)).items.find((item) => item.id === post.id);
+      assert.deepEqual([listed.authorNickname, listed.authorLabel], [null, post.authorLabel]);
+      const detail = await findPostDetail(reader, post.id);
+      assert.deepEqual([detail.authorNickname, detail.comments[0].authorNickname], [null, null]);
+
+      const unverified = await createUser();
+      await addUnit(unverified, complex, { status: 'UNVERIFIED' });
+      const locked = await findPostDetail(unverified, post.id);
+      assert.equal(locked.locked, true);
+      assert.deepEqual([locked.authorNickname, locked.authorLabel], [null, post.authorLabel]);
+    });
+
+    test('API: 호실 등록자(인증 전 포함)가 보고 정한다 · 미리보기 표기 — 임차인 · 호실 없는 임대인 · 취소만 있는 임대인은 403', async () => {
+      const complex = await fixture.createComplex({ name: '미리보기테스트아파트' });
+      const owner = await createUser('LANDLORD', { nickname: false });
+      await addUnit(owner, complex, { buildingNo: '102', status: 'UNVERIFIED' });
+      await addUnit(owner, complex, { buildingNo: '101', status: 'UNVERIFIED' });
+
+      const got = await api(owner, `/community/me/profile?complexId=${complex.id}`);
+      assert.equal(got.status, 200);
+      assert.deepEqual((await got.json()).data, { nickname: null, nextChangeAt: null, previewLabel: '미리보기테스트아파트 101동 임대인' });
+      const put = await api(owner, '/community/me/profile', { method: 'PUT', body: { nickname: nick('보기'), complexId: complex.id } });
+      assert.equal(put.status, 200);
+      assert.deepEqual((await put.json()).data, { nickname: nick('보기'), nextChangeAt: null, previewLabel: '미리보기테스트아파트 101동 임대인' });
+      const banned = await api(owner, '/community/me/profile', { method: 'PUT', body: { nickname: '운영자' } });
+      assert.equal(banned.status, 400);
+      assert.equal((await banned.json()).error.code, 'COMMUNITY_NICKNAME_NOT_ALLOWED');
+      assert.equal((await api(owner, '/community/me/profile', { method: 'PUT', body: { nickname: 3 } })).status, 400);
+
+      const tenant = await createUser('TENANT', { nickname: false });
+      const noUnit = await createUser('LANDLORD', { nickname: false });
+      const revokedOnly = await createUser('LANDLORD', { nickname: false });
+      await addUnit(revokedOnly, complex, { status: 'REVOKED' });
+      for (const user of [tenant, noUnit, revokedOnly]) assert.equal((await api(user, '/community/me/profile')).status, 403);
+      assert.equal((await (await api(noUnit, '/community/me/profile')).json()).error.code, 'COMMUNITY_REGION_OWNER_REQUIRED');
     });
   });
 });
