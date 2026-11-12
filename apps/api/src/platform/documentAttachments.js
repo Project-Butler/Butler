@@ -4,6 +4,7 @@ import { AppError } from './AppError.js';
 
 export const MANAGEMENT_LOG_RESOURCE = 'MANAGEMENT_LOG';
 export const TICKET_RESOURCE = 'TICKET';
+export const THREAD_MESSAGE_RESOURCE = 'THREAD_MESSAGE';
 
 // 응답의 attachments 항목. 목록 응답에는 URL을 넣지 않는다(화면이 문서마다 다운로드 URL을 받는다).
 export const toAttachmentResponse = (document) => ({
