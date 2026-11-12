@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, ExternalLink, Minimize2, RotateCw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, ExternalLink, Minimize2, X } from 'lucide-react';
 import { formatBytes, getFileBadge, isImageDocument } from './documentFiles';
 import {
   clampOffset,
@@ -38,15 +38,15 @@ const useElementSize = (ref) => {
   return size;
 };
 
-// 돌린 사진을 상자 안에 꽉 차게 그리는 스타일(가운데 기준).
-const rotatedImageStyle = (natural, fit, rotation) => ({
+// 사진을 상자 안에 꽉 차게 그리는 스타일(가운데 기준).
+const fittedImageStyle = (natural, fit) => ({
   position: 'absolute',
   left: '50%',
   top: '50%',
   width: natural.width * fit.ratio,
   height: natural.height * fit.ratio,
   maxWidth: 'none',
-  transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+  transform: 'translate(-50%, -50%)',
 });
 
 const PdfSlide = ({ document, onOpen }) => (
@@ -67,13 +67,12 @@ const PdfSlide = ({ document, onOpen }) => (
 
 // 사진 크게 보기(시안 B4) · 확대한 상태(B5). 공유된 파일 전체를 한 줄로 넘긴다(옆으로 밀기 · 화살표 · 아래 썸네일).
 //   - 두 손가락 벌리기 · 두 번 누르기 · (PC) 휠로 확대, 확대하면 끌어서 옮기고 오른쪽 위 작은 지도와 배율 칩을 보여 준다.
-//   - [돌리기]는 보기만 돌린다(파일은 그대로). [저장]은 그때 받은 새 주소로 원본을 내려받는다.
+//   - [저장]은 그때 받은 새 주소로 원본을 내려받는다. 돌리기는 두지 않는다.
 //   - PDF 칸·썸네일은 새 탭에서 PDF 를 연다. 자동 보정·글자 판독은 하지 않는다.
 // documents: [{ id, fileName, mimeType, sizeBytes }], urls: useDocumentUrls 의 결과.
 export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => {
   const [index, setIndex] = useState(() => Math.min(Math.max(0, startIndex), documents.length - 1));
   const [view, setView] = useState(RESET_VIEW);
-  const [rotations, setRotations] = useState({});
   const [naturals, setNaturals] = useState({});
   const [swipeDx, setSwipeDx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -87,9 +86,8 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
 
   const current = documents[index];
   const isImage = isImageDocument(current);
-  const rotation = rotations[current?.id] ?? 0;
   const natural = naturals[current?.id];
-  const content = useMemo(() => (natural ? fitInto(natural, stage, rotation) : { ratio: 1, width: 0, height: 0 }), [natural, stage, rotation]);
+  const content = useMemo(() => (natural ? fitInto(natural, stage) : { ratio: 1, width: 0, height: 0 }), [natural, stage]);
   const isZoomed = view.scale > MIN_SCALE;
   const entry = urls.entries[current?.id];
   const { load } = urls;
@@ -248,11 +246,6 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
     }
   };
 
-  const rotate = () => {
-    setRotations((prev) => ({ ...prev, [current.id]: ((prev[current.id] ?? 0) + 90) % 360 }));
-    setView(RESET_VIEW);
-  };
-
   const save = async () => {
     setSaveError('');
     const ok = await urls.save(current);
@@ -270,7 +263,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
     if (width && height) setNaturals((prev) => ({ ...prev, [current.id]: { width, height } }));
   };
 
-  const miniFit = natural ? fitInto(natural, MINI_MAP_BOX, rotation) : null;
+  const miniFit = natural ? fitInto(natural, MINI_MAP_BOX) : null;
   const rect = visibleRect(view.scale, view.offset, stage, content);
 
   if (!current) return null;
@@ -321,7 +314,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
                 onError={() => urls.reportError(current.id)}
                 style={
                   natural && content.ratio
-                    ? rotatedImageStyle(natural, content, rotation)
+                    ? fittedImageStyle(natural, content)
                     : { position: 'absolute', left: '50%', top: '50%', maxWidth: '100%', maxHeight: '100%', transform: 'translate(-50%, -50%)', opacity: 0 }
                 }
                 className="pointer-events-none shadow-lg"
@@ -350,7 +343,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
         {isZoomed && isImage && miniFit && entry?.url && (
           <div aria-hidden="true" className="absolute right-3 top-3 rounded border border-white/40 bg-white/20 p-1">
             <div className="relative overflow-hidden rounded-sm" style={{ width: miniFit.width, height: miniFit.height }}>
-              <img src={entry.url} alt="" draggable={false} style={rotatedImageStyle(natural, miniFit, rotation)} />
+              <img src={entry.url} alt="" draggable={false} style={fittedImageStyle(natural, miniFit)} />
               <span
                 className="absolute border-2 border-accent"
                 style={{ left: `${rect.left * 100}%`, top: `${rect.top * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }}
@@ -400,22 +393,19 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
               {saveError}
             </p>
           )}
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid gap-2 ${isZoomed || !isImage ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {isZoomed ? (
               <button type="button" onClick={() => setView(RESET_VIEW)} className={TOOL_BUTTON}>
                 <Minimize2 size={16} strokeWidth={1.8} aria-hidden="true" />
                 원래 크기
               </button>
-            ) : isImage ? (
-              <button type="button" onClick={rotate} className={TOOL_BUTTON}>
-                <RotateCw size={16} strokeWidth={1.8} aria-hidden="true" />
-                돌리기
-              </button>
             ) : (
-              <button type="button" onClick={() => urls.open(current)} className={TOOL_BUTTON}>
-                <ExternalLink size={16} strokeWidth={1.8} aria-hidden="true" />
-                열기
-              </button>
+              !isImage && (
+                <button type="button" onClick={() => urls.open(current)} className={TOOL_BUTTON}>
+                  <ExternalLink size={16} strokeWidth={1.8} aria-hidden="true" />
+                  열기
+                </button>
+              )
             )}
             <button type="button" onClick={save} className={TOOL_BUTTON}>
               <Download size={16} strokeWidth={1.8} aria-hidden="true" />

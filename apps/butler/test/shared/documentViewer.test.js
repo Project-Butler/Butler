@@ -41,11 +41,11 @@ describe('공유 파일 구분', () => {
 describe('뷰어 계산', () => {
   const stage = { width: 300, height: 400 };
 
-  it('사진을 무대에 맞춘다(돌리면 가로세로가 바뀐다)', () => {
+  it('사진을 무대에 맞춘다(비율 유지)', () => {
     expect(fitInto({ width: 600, height: 800 }, stage)).toEqual({ ratio: 0.5, width: 300, height: 400 });
-    const sideways = fitInto({ width: 600, height: 800 }, stage, 90);
-    expect(sideways.width).toBeCloseTo(300);
-    expect(sideways.height).toBeCloseTo(225);
+    const wide = fitInto({ width: 800, height: 600 }, stage);
+    expect(wide.width).toBeCloseTo(300);
+    expect(wide.height).toBeCloseTo(225);
   });
 
   it('배율은 1~4배', () => {

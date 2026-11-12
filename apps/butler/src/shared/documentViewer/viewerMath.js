@@ -7,17 +7,11 @@ export const SWIPE_THRESHOLD = 50;
 
 export const clampScale = (scale) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 
-// 90·270도 돌리면 가로세로가 바뀐다.
-export const isSideways = (rotation) => ((rotation % 360) + 360) % 180 !== 0;
-
-// 원본 크기(natural)를 무대 안에 꽉 차게(비율 유지) 놓았을 때의 배율과 보이는 크기. 돌린 방향을 반영한다.
-export const fitInto = (natural, box, rotation = 0) => {
+// 원본 크기(natural)를 무대 안에 꽉 차게(비율 유지) 놓았을 때의 배율과 보이는 크기.
+export const fitInto = (natural, box) => {
   if (!natural?.width || !natural?.height || !box?.width || !box?.height) return { ratio: 1, width: 0, height: 0 };
-  const sideways = isSideways(rotation);
-  const effectiveWidth = sideways ? natural.height : natural.width;
-  const effectiveHeight = sideways ? natural.width : natural.height;
-  const ratio = Math.min(box.width / effectiveWidth, box.height / effectiveHeight);
-  return { ratio, width: effectiveWidth * ratio, height: effectiveHeight * ratio };
+  const ratio = Math.min(box.width / natural.width, box.height / natural.height);
+  return { ratio, width: natural.width * ratio, height: natural.height * ratio };
 };
 
 // 확대한 사진이 무대 밖으로 빈 곳을 남기지 않게 옮김 범위를 묶는다. 무대보다 작은 방향은 가운데에 고정한다.

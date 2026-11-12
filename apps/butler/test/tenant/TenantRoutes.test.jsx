@@ -184,7 +184,7 @@ describe('임차인 계약서(E2)', () => {
     await userEvent.click(await screen.findByRole('button', { name: '사진 1 크게 보기' }));
     const dialog = screen.getByRole('dialog', { name: '계약서 크게 보기' });
     expect(within(dialog).getByText('1 / 1')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /돌리기/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /돌리기/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /저장/ })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
