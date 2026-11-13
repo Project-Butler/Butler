@@ -605,22 +605,34 @@ export const HELP_ROUTES = [
       ['방법', '전화 132 · 예약 방문'],
       ['비용', '상담 무료'],
     ],
-    actions: [{ label: '상담 안내', href: 'https://www.klac.or.kr', primary: true }],
+    actions: [{ label: '상담 안내', href: 'https://www.klac.or.kr/legalstruct/consultationGuidance.do', primary: true }],
   },
 ];
 
 // 첫 화면 맨 아래 '자료 출처'. 화면의 사례·판례·법령·가이드가 어디서 왔는지 밝힌다(사례집 고지: 인용 시 출처 표시).
-// 목록은 apps/api/prisma/seed-data/README.md의 출처와 같게 둔다.
+// 목록은 apps/api/prisma/seed-data/README.md의 출처와 같게 두고, 링크는 기관 메인이 아니라 그 사례집을 받는 글로 바로 간다(11-13 확인).
+// 국토부 2022 조정사례집은 공식 게시 글을 찾지 못해 링크 없이 부동산원 항목 설명에만 적는다.
 export const DATA_SOURCES = [
   {
     label: '조정사례',
     title: '한국부동산원·LH 조정사례집',
     detail: '2025 주택·상가건물 임대차분쟁 조정사례집(국토교통부·한국부동산원·LH), 2022 주택임대차분쟁 조정사례집(국토교통부)',
-    href: 'https://adrhome.reb.or.kr/adrhome/reb/main',
+    href: 'https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10501000000002022101718&boardIdx=179&boardNo=4',
   },
-  { label: '조정사례', title: '법률구조공단 조정사례집', detail: '대한법률구조공단 임대차분쟁조정위원회 조정사례집', href: 'https://www.hldcc.or.kr/hp/li/arrCaseList.do' },
-  { label: '상담사례', title: '임대차 상담사례집', detail: '주택·상가건물 임대차 상담사례집(국토교통부·한국부동산원, 서울특별시)', href: 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419' },
-  { label: '판례·법령', title: '국가법령정보센터', detail: '국가법령정보센터 판례, 주택임대차보호법·민법 등 현행 법령', href: 'https://www.law.go.kr' },
+  {
+    label: '조정사례',
+    title: '법률구조공단 조정사례집',
+    detail: '대한법률구조공단 주택 및 상가건물임대차분쟁 조정사례집(2025·2023·2018)',
+    href: 'https://www.hldcc.or.kr/hp/li/arrCaseDetail.do?bbsSn=1831',
+  },
+  {
+    label: '상담사례',
+    title: '한국부동산원 상담사례집',
+    detail: '2025 주택 및 상가건물 임대차 상담사례집, 2024 주택임대차 상담사례집(한국부동산원)',
+    href: 'https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10501000000002022101718&boardIdx=181&boardNo=4',
+  },
+  { label: '상담사례', title: '서울시 상가임대차 상담사례집', detail: '2023 상가임대차 상담사례집(서울특별시)', href: 'https://sftc.seoul.go.kr/fe/bbs/NR_view.do?bbsCd=2&bbsSeq=419' },
+  { label: '판례·법령', title: '국가법령정보센터', detail: '국가법령정보센터 판례, 주택임대차보호법·민법 등 현행 법령', href: 'https://www.law.go.kr/법령/주택임대차보호법' },
   { label: '가이드', title: '서울시 주택임대차보호법 가이드북', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
 ];
 
