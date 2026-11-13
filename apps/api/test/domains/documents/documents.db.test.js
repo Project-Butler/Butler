@@ -303,7 +303,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
 
     const unsupported = await postJson(stranger, '/documents', {
       uploadSessionId: strangerSession.body.data.id,
-      resourceType: 'TICKET',
+      resourceType: 'PROPERTY',
       resourceId: randomUUID(),
     });
     assert.equal(unsupported.status, 400);
@@ -335,10 +335,10 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     await putContent(expiredSession.body.data.uploadUrl, JPEG);
     const neverUploaded = await createSession(user);
     const freshSession = await createSession(user);
-    // 만료 후 1시간은 남긴다
+    // 만료 후 2시간은 남긴다(Supabase 서명 업로드 URL 유효 시간)
     const graceSession = await createSession(user);
-    await prisma.upload.update({ where: { id: graceSession.body.data.id }, data: { expiresAt: new Date(Date.now() - 30 * 60_000) } });
-    const past = new Date(Date.now() - 2 * 3600_000);
+    await prisma.upload.update({ where: { id: graceSession.body.data.id }, data: { expiresAt: new Date(Date.now() - 90 * 60_000) } });
+    const past = new Date(Date.now() - 3 * 3600_000);
     await prisma.upload.updateMany({ where: { id: { in: [expiredSession.body.data.id, neverUploaded.body.data.id] } }, data: { expiresAt: past } });
 
     const stale = await uploadDocument(user);

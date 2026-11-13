@@ -34,7 +34,8 @@ export const issueSharedDocumentDownloadUrl = async (client, { invitation, docum
   const storage = selectStorage();
   if (!storage) throw new AppError('STORAGE_UNAVAILABLE', 503, '사진·문서 첨부를 준비 중입니다. 잠시 후 다시 시도해 주세요.');
   const expiresAt = new Date(getNow().getTime() + INVITATION_DOWNLOAD_URL_TTL_MS);
-  const url = storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
+  // Supabase 드라이버는 비동기라 기다린다(local은 바로 값을 준다).
+  const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
   if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
     await audit.record({
       actor: null,

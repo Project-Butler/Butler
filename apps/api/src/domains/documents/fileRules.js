@@ -3,6 +3,8 @@ export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_FILE_NAME_LENGTH = 255;
 // 관리 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
 export const MAX_LOG_ATTACHMENTS = 10;
+// 티켓 첨부 최대 10개(계약 5장)
+export const MAX_TICKET_ATTACHMENTS = 10;
 
 export const DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE', 'PHOTO', 'OTHER'];
 // 다운로드 URL 발급을 감사 로그에 남기는 문서 유형(계약 10장 DOCUMENT_DOWNLOAD_URL_ISSUED)
@@ -38,4 +40,9 @@ export const matchesDeclaredType = (buffer, mimeType) => Boolean(SIGNATURES[mime
 export const SIGNATURE_PEEK_BYTES = 16;
 
 // 저장 경로는 업로드 id로만 만든다(원본 파일 이름을 쓰지 않아 경로 조작을 막는다).
+// 모든 저장소 드라이버가 같은 경로를 쓴다(local은 폴더 안 경로, supabase는 버킷 안 객체 이름).
 export const toStoragePath = (uploadId) => `uploads/${uploadId}`;
+
+// toStoragePath()가 만드는 모양만 받는다(경로 조작 방지). 드라이버가 파일을 다루기 전에 확인한다.
+const STORAGE_PATH_PATTERN = /^uploads\/[0-9a-f-]{36}$/;
+export const isStoragePath = (storagePath) => typeof storagePath === 'string' && STORAGE_PATH_PATTERN.test(storagePath);

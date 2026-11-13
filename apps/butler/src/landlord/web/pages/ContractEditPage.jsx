@@ -1,73 +1,24 @@
-import { useState } from 'react';
 import { AlertTriangle, FileText } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
-import {
-  CONTRACT_FORM_FIELDS,
-  ContractForm,
-  isContractFormComplete,
-  toContractFields,
-  toContractForm,
-  toServerFieldErrors,
-  validateContractForm,
-} from '../components/ContractForm/ContractForm';
+import { ContractForm } from '../components/ContractForm/ContractForm';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { FormNoticeStrip, FormPageLayout } from '../components/FormPageLayout/FormPageLayout';
 import { FormSummary } from '../components/FormSummary/FormSummary';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContract } from '../../../shared/useGetContract';
-import { usePatchContract } from '../hooks/usePatchContract';
-import { formatContractAmount, formatPeriod, formatRentPaymentDay, getContractStatusBadge, isContractInProgress } from '../utils/contract';
+import { useContractEditForm } from '../hooks/useContractEditForm';
+import { formatContractAmount, formatPeriod, formatRentPaymentDay, getContractStatusBadge } from '../utils/contract';
 
-// 진행 중 계약은 연락처·메모·월세 입금일만 바꿀 수 있다(D-13, 서버 contractRules.js와 같은 허용 목록). 나머지 칸은 보기만.
-const EDITABLE_WHILE_ACTIVE = ['tenantPhone', 'memo', 'rentPaymentDay'];
-const LOCKED_WHILE_ACTIVE = CONTRACT_FORM_FIELDS.filter((field) => !EDITABLE_WHILE_ACTIVE.includes(field));
-
-// 바뀐 칸만 보낸다(PATCH). 진행 중이면 잠긴 칸은 아예 보지 않는다.
-const toChangedFields = (original, form, lockedFields) => {
-  const before = toContractFields(original);
-  const after = toContractFields(form);
-  return Object.fromEntries(
-    Object.entries(after).filter(([key, value]) => !lockedFields.includes(key) && value !== before[key]),
-  );
-};
-
+// 입력·검증·저장 로직은 useContractEditForm(앱 계약 수정과 같이 씀). 이 화면은 구역 폼·요약 패널 모양만 정한다.
 const ContractEditForm = ({ contract, onUnauthorized }) => {
   const title = '계약 수정';
-  const patch = usePatchContract({ onUnauthorized });
-  const [original] = useState(() => toContractForm(contract));
-  const [form, setForm] = useState(original);
-  const [serverFieldErrors, setServerFieldErrors] = useState({});
-
-  const isActive = isContractInProgress(contract.status);
-  const lockedFields = isActive ? LOCKED_WHILE_ACTIVE : [];
-  const clientErrors = validateContractForm(form);
-  const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
-  const changes = toChangedFields(original, form, lockedFields);
-  const hasChanges = Object.keys(changes).length > 0;
-  const isSubmitting = patch.isLoading;
-  // 입금일이 없던 기존 월세 계약은 입금일을 고르지 않아도 수정할 수 있다(전세→월세로 바꾸면 필수).
-  const rentPaymentDayOptional = original.leaseType === 'MONTHLY' && original.rentPaymentDay === '';
-  const isReady = hasChanges && isContractFormComplete(form, { rentPaymentDayOptional }) && Object.keys(clientErrors).length === 0;
+  const { form, updateField, fieldError, lockedFields, isActive, isReady, isSubmitting, hasChanges, save, submitErrorMessage } =
+    useContractEditForm({ contract, onUnauthorized });
   const status = getContractStatusBadge(contract);
 
-  const updateField = (name, value) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
-
   const handleSave = async () => {
-    if (!isReady || isSubmitting) return;
-    const { data, error } = await patch.updateContract(contract.id, changes);
-    if (data) {
-      window.history.back();
-      return;
-    }
-    if (error?.status === 400) setServerFieldErrors(toServerFieldErrors(error));
+    if (await save()) window.history.back();
   };
-
-  const submitError = patch.error;
-  const hasMappedFieldError =
-    submitError?.status === 400 && submitError.details.some(({ field }) => CONTRACT_FORM_FIELDS.includes(field));
 
   const isMonthly = form.leaseType === 'MONTHLY';
   const summaryRows = [
@@ -114,7 +65,7 @@ const ContractEditForm = ({ contract, onUnauthorized }) => {
       summary={
         <FormSummary icon={FileText} title="수정" rows={summaryRows}>
           {!hasChanges && <p className="text-sub text-ink-3">바꾼 칸이 있어야 저장할 수 있어요.</p>}
-          {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
+          {submitErrorMessage && <NoticeBox>{submitErrorMessage}</NoticeBox>}
         </FormSummary>
       }
     >

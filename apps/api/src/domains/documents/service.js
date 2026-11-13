@@ -1,5 +1,5 @@
 // 파일·문서(계약 6장). 업로드 순서: 업로드 세션 → uploadUrl로 PUT → POST /documents 등록.
-// 저장소는 storage/index.js가 고른다(지금은 임시 로컬 저장소뿐). 못 쓰면 503 STORAGE_UNAVAILABLE.
+// 저장소는 storage/index.js가 고른다(임시 로컬 저장소 또는 Supabase Storage). 못 쓰면 503 STORAGE_UNAVAILABLE.
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
@@ -7,7 +7,7 @@ import { getNow } from '../../platform/dateUtils.js';
 import { assertDocumentsDeletable, CONTRACT_RESOURCE, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { AUDITED_DOWNLOAD_TYPES, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
-import { getResourcePolicy } from './resourcePolicies.js';
+import { getResourcePolicy, visibleDocumentWhere } from './resourcePolicies.js';
 import { removeStoredObjects, selectStorage } from './storage/index.js';
 
 // 결정 Q2: 업로드 15분, 다운로드 5분
@@ -15,8 +15,9 @@ export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
 export const DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
 // 미연결 문서는 24시간 안에 안 붙으면 정리한다(계약 6장)
 export const UNATTACHED_DOCUMENT_TTL_MS = 24 * 60 * 60 * 1000;
-// 만료된 업로드 세션은 1시간 더 두고 지운다(만료 직전에 시작한 업로드·등록이 끝날 여유)
-export const UPLOAD_CLEANUP_GRACE_MS = 60 * 60 * 1000;
+// 만료된 업로드 세션은 2시간 더 두고 지운다. 만료 직전에 시작한 업로드·등록이 끝날 여유이고,
+// Supabase 서명 업로드 URL은 발급 뒤 2시간 유효(바꿀 수 없음)라 그 안에 늦게 올라온 파일도 행과 함께 지우기 위해서다.
+export const UPLOAD_CLEANUP_GRACE_MS = 2 * 60 * 60 * 1000;
 const CLEANUP_BATCH = 200;
 
 export const requireStorage = () => {
@@ -62,7 +63,7 @@ export const createUploadSession = async (user, { fileName, mimeType, sizeBytes,
   await prisma.upload.create({
     data: { id, userId: user.id, fileName, mimeType, sizeBytes: BigInt(sizeBytes), type: documentType, storagePath: toStoragePath(id), expiresAt },
   });
-  const target = storage.createUploadTarget({ uploadId: id, mimeType, expiresAt });
+  const target = await storage.createUploadTarget({ uploadId: id, mimeType, expiresAt });
   return { id, ...target, expiresAt: expiresAt.toISOString() };
 };
 
@@ -158,7 +159,7 @@ const canViewDocument = async (user, document) => {
   const policy = getResourcePolicy(document.resourceType);
   if (!policy) return document.uploaderId === user.id;
   if (!(await policy.canView(user, document.resourceId))) return false;
-  const visibleWhere = await policy.documentWhere(user, document.resourceId);
+  const visibleWhere = await visibleDocumentWhere(policy, user, document.resourceId);
   if (Object.keys(visibleWhere).length === 0) return true;
   return (await prisma.document.count({ where: { AND: [{ id: document.id }, visibleWhere] } })) > 0;
 };
@@ -173,7 +174,7 @@ const findVisibleDocument = async (user, documentId) => {
 export const findResourceDocuments = async (user, { resourceType, resourceId, page, size }) => {
   const policy = getResourcePolicy(resourceType);
   if (!(await policy.canView(user, resourceId))) policy.throwNotFound();
-  const where = { AND: [{ resourceType, resourceId, deletedAt: null }, await policy.documentWhere(user, resourceId)] };
+  const where = { AND: [{ resourceType, resourceId, deletedAt: null }, await visibleDocumentWhere(policy, user, resourceId)] };
   const [total, rows] = await Promise.all([
     prisma.document.count({ where }),
     prisma.document.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (page - 1) * size, take: size }),
@@ -190,7 +191,7 @@ export const findDocumentForUser = async (user, documentId) => toDocumentRespons
 export const createDocumentDownloadUrl = async (document, { actor = null, req } = {}) => {
   const storage = requireStorage();
   const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
-  const url = storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
+  const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
   if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
     await audit.record({
       actor,
