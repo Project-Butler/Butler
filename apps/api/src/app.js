@@ -22,6 +22,8 @@ import ownershipVerificationsRouter, { ownershipVerificationResultRouter } from 
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
 import tenantInvitationsRouter, { contractTenantInvitationsRouter } from './domains/tenantInvitations/router.js';
+import threadsRouter from './domains/threads/router.js';
+import ticketsRouter from './domains/tickets/router.js';
 import { csrfGuard } from './middlewares/csrfGuard.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { requestId } from './platform/requestId.js';
@@ -54,6 +56,8 @@ app.use('/api/v1/contracts/:contractId/tenant-invitations', contractTenantInvita
 app.use('/api/v1/contracts', contractsRouter);
 app.use('/api/v1/tenant-invitations', tenantInvitationsRouter);
 app.use('/api/v1/management-logs', managementLogsRouter);
+app.use('/api/v1/tickets', ticketsRouter);
+app.use('/api/v1/threads', threadsRouter);
 app.use('/api/v1/files', filesRouter);
 app.use('/api/v1/documents', documentsRouter);
 app.use('/api/v1/landlord-buildings', landlordBuildingsRouter);
