@@ -838,19 +838,19 @@ enum InvitationStatus {
 
 // 계약당 PENDING 하나, ACCEPTED 하나 — 부분 유니크 uq_tenant_invitation_pending·uq_tenant_invitation_accepted (마이그레이션 SQL)
 model TenantInvitation {
-  id         String           @id @default(uuid()) @db.Uuid
-  contractId String           @map("contract_id") @db.Uuid
-  contract   Contract         @relation(fields: [contractId], references: [id])
-  tokenHash  String           @unique @map("token_hash") @db.VarChar(64)
-  status     InvitationStatus @default(PENDING)
-  expiresAt  DateTime         @map("expires_at") @db.Timestamptz(3)
-  acceptedAt DateTime?        @map("accepted_at") @db.Timestamptz(3)
-  acceptedBy String?          @map("accepted_by") @db.Uuid
-  acceptor   User?            @relation("AcceptedTenantInvitations", fields: [acceptedBy], references: [id])
-  canceledAt DateTime?        @map("canceled_at") @db.Timestamptz(3)
-  createdBy  String           @map("created_by") @db.Uuid
-  creator    User             @relation("CreatedTenantInvitations", fields: [createdBy], references: [id])
-  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  id           String           @id @default(uuid()) @db.Uuid
+  contractId   String           @map("contract_id") @db.Uuid
+  contract     Contract         @relation(fields: [contractId], references: [id])
+  tokenHash    String           @unique @map("token_hash") @db.VarChar(64)
+  status       InvitationStatus @default(PENDING)
+  expiresAt    DateTime         @map("expires_at") @db.Timestamptz(3)
+  acceptedAt   DateTime?        @map("accepted_at") @db.Timestamptz(3)
+  acceptedById String?          @map("accepted_by_id") @db.Uuid
+  acceptor     User?            @relation("AcceptedTenantInvitations", fields: [acceptedById], references: [id])
+  canceledAt   DateTime?        @map("canceled_at") @db.Timestamptz(3)
+  createdById  String           @map("created_by_id") @db.Uuid
+  creator      User             @relation("CreatedTenantInvitations", fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   // 본인 확인 대입 방지(V-04). 초대 행을 FOR UPDATE로 잠그고 갱신한다.
   verifyFailCount       Int       @default(0) @map("verify_fail_count")
@@ -897,17 +897,18 @@ model TenantInvitationVerification {
 // 인앱 알림(api-contract.md 7장). type은 등록형 문자열(platform/notify.js의 NOTIFICATION_TYPES)이라 enum이 아니다.
 // TODO: 90일 보관 정리.
 model Notification {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  user        User      @relation(fields: [userId], references: [id])
-  type        String    @db.VarChar(60)
-  title       String
-  body        String
-  link        String?
-  relatedType String?   @map("related_type") @db.VarChar(40)
-  relatedId   String?   @map("related_id") @db.Uuid
-  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  user         User      @relation(fields: [userId], references: [id])
+  type         String    @db.VarChar(60)
+  title        String
+  body         String
+  link         String?
+  // 다형 참조(컨벤션: resourceType + resourceId, FK 없음). 응답에서는 related: { resourceType, resourceId }.
+  resourceType String?   @map("resource_type") @db.VarChar(40)
+  resourceId   String?   @map("resource_id") @db.Uuid
+  readAt       DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
