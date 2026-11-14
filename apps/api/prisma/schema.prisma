@@ -369,18 +369,18 @@ model KaptComplex {
 // K-apt 쪽이 알려 준 도로명주소(엑셀·기본정보 API). 키는 kaptAddress.js의
 // parseRoadAddress()·toRoadNameKey() 규칙. 소스별로 mark-and-sweep(import_run_id).
 model KaptAddressLink {
-  source          String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
-  roadSigunguCd   String   @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String   @map("road_name_key")
-  roadUnderground Boolean  @map("road_underground")
-  roadMainNo      Int      @map("road_main_no")
-  roadSubNo       Int      @map("road_sub_no")
-  kaptCode        String   @map("kapt_code") @db.VarChar(20)
-  importRunId     String?  @map("import_run_id") @db.Uuid
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  source            String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
+  roadSigunguCd     String   @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String   @map("road_name_key")
+  isRoadUnderground Boolean  @map("is_road_underground")
+  roadMainNo        Int      @map("road_main_no")
+  roadSubNo         Int      @map("road_sub_no")
+  kaptCode          String   @map("kapt_code") @db.VarChar(20)
+  importRunId       String?  @map("import_run_id") @db.Uuid
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@id([source, roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo, kaptCode])
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@id([source, roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo, kaptCode])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("kapt_address_links")
 }
@@ -389,20 +389,20 @@ model KaptAddressLink {
 // K-apt 단지와 맞은 건물만 저장한다. 같은 필지 형제 조회용 식 인덱스
 // (substr(building_mgt_no, 1, 19))는 마이그레이션 SQL에 있다.
 model JusoBuildingLink {
-  buildingMgtNo   String    @id @map("building_mgt_no") @db.VarChar(25)
-  roadSigunguCd   String    @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String    @map("road_name_key")
-  roadUnderground Boolean   @map("road_underground")
-  roadMainNo      Int       @map("road_main_no")
-  roadSubNo       Int       @map("road_sub_no")
-  roadCode        String?   @map("road_code") @db.VarChar(12)
-  kaptCode        String    @map("kapt_code") @db.VarChar(20)
-  matchRule       String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
-  importRunId     String?   @map("import_run_id") @db.Uuid
-  appliedFileDate DateTime? @map("applied_file_date") @db.Date
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buildingMgtNo     String    @id @map("building_mgt_no") @db.VarChar(25)
+  roadSigunguCd     String    @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String    @map("road_name_key")
+  isRoadUnderground Boolean   @map("is_road_underground")
+  roadMainNo        Int       @map("road_main_no")
+  roadSubNo         Int       @map("road_sub_no")
+  roadCode          String?   @map("road_code") @db.VarChar(12)
+  kaptCode          String    @map("kapt_code") @db.VarChar(20)
+  matchRule         String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
+  importRunId       String?   @map("import_run_id") @db.Uuid
+  appliedFileDate   DateTime? @map("applied_file_date") @db.Date
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("juso_building_links")
 }
