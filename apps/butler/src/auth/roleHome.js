@@ -19,5 +19,7 @@ export const resolveAfterLogin = (from, role) => {
   const pathOnly = from.split(/[?#]/)[0];
   // ../ 와 인코딩된 %2e%2e/ 모두 막는다.
   if (pathOnly.split('/').some((segment) => /^(\.|%2e){2}$/i.test(segment))) return home;
+  // 임차인 초대 주소(/invite/:token)는 TENANT 만 돌아간다. 임대인·관리자는 초대를 수락할 수 없으니 역할 홈이다.
+  if (role === 'TENANT' && /^\/invite\/[^/?#]+/.test(from)) return from;
   return isInside(from, ROLE_PREFIX[role]) ? from : home;
 };

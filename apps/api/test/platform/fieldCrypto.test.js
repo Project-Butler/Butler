@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decryptField, encryptField } from '../../src/platform/fieldCrypto.js';
+import { decryptField, decryptWithPurpose, encryptField, encryptWithPurpose } from '../../src/platform/fieldCrypto.js';
 
 const KEY = 'a'.repeat(64);
 
@@ -46,3 +46,42 @@ test('변조되었거나 키가 다른 암호문은 null(응답 전체를 깨뜨
   withKey('b'.repeat(64), () => assert.equal(decryptField(stored), null));
   withKey(KEY, () => assert.equal(decryptField('enc:v1:zz'), null));
 });
+
+test('용도별 암호화: 같은 용도로만 복호화되고 평문이 보이지 않는다', () =>
+  withKey(KEY, () => {
+    const sealed = encryptWithPurpose('oauth-invite', 'invite-token-123');
+    assert.ok(!sealed.includes('invite-token-123'));
+    assert.match(sealed, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/); // 쿠키에 그대로 넣을 수 있다
+    assert.equal(decryptWithPurpose('oauth-invite', sealed), 'invite-token-123');
+    assert.notEqual(encryptWithPurpose('oauth-invite', 'x'), encryptWithPurpose('oauth-invite', 'x'));
+    // 다른 용도·개인정보 필드 복호화로는 열리지 않는다
+    assert.equal(decryptWithPurpose('other', sealed), null);
+    assert.equal(decryptField(`enc:v1:${sealed.split('.').join(':')}`), null);
+  }));
+
+test('용도별 복호화: 없음·형식 오류·변조·다른 키는 null', (t) =>
+  withKey(KEY, () => {
+    t.mock.method(console, 'error', () => {});
+    const sealed = encryptWithPurpose('oauth-invite', 'token');
+    for (const bad of [undefined, null, '', 'abc', 'a.b', 'a.b.c.d', 123]) {
+      assert.equal(decryptWithPurpose('oauth-invite', bad), null, String(bad));
+    }
+    const [iv, tag, data] = sealed.split('.');
+    const flipped = Buffer.from(data, 'base64url');
+    flipped[0] ^= 1;
+    assert.equal(decryptWithPurpose('oauth-invite', [iv, tag, flipped.toString('base64url')].join('.')), null);
+    assert.equal(withKey('b'.repeat(64), () => decryptWithPurpose('oauth-invite', sealed)), null);
+  }));
+
+test('용도별 암호화: 키가 없으면 500으로 실패한다', () =>
+  withKey(undefined, () => {
+    const errors = [];
+    const original = console.error;
+    console.error = (...args) => errors.push(args);
+    try {
+      assert.throws(() => encryptWithPurpose('oauth-invite', 'x'), { code: 'INTERNAL_ERROR' });
+      assert.throws(() => decryptWithPurpose('oauth-invite', 'a.b.c'), { code: 'INTERNAL_ERROR' });
+    } finally {
+      console.error = original;
+    }
+  }));

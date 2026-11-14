@@ -34,6 +34,7 @@ test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, �
     birthDate: '1990-01-31',
     role: 'LANDLORD',
     emailVerificationToken: 'verified-token', // secret-guard:allow 테스트용 더미 값
+    invitationToken: null,
   });
 });
 
@@ -167,16 +168,24 @@ test('role=ADMIN은 403 ROLE_NOT_ALLOWED — 가입으로 운영자를 만들 �
   assert.throws(() => parseRegisterBody({ ...valid(), role: 'ADMIN', invitationToken: 'abc' }), { code: 'ROLE_NOT_ALLOWED' });
 });
 
-test('role=TENANT 또는 invitationToken이 있으면 422 — 초대 도메인 전에는 임차인 가입 불가', () => {
+test('초대 없이 role=TENANT면 422 TENANT_INVITATION_UNAVAILABLE', () => {
   assert.throws(() => parseRegisterBody({ ...valid(), role: 'TENANT' }), {
     code: 'TENANT_INVITATION_UNAVAILABLE',
     httpStatus: 422,
   });
-  assert.throws(() => parseRegisterBody({ ...valid(), invitationToken: 'abc' }), { code: 'TENANT_INVITATION_UNAVAILABLE' });
   // 빈 토큰은 없는 것과 같다
+  assert.throws(() => parseRegisterBody({ ...valid(), role: 'TENANT', invitationToken: '  ' }), { code: 'TENANT_INVITATION_UNAVAILABLE' });
   assert.equal(parseRegisterBody({ ...valid(), invitationToken: '' }).role, 'LANDLORD');
-  assert.equal(parseRegisterBody({ ...valid(), invitationToken: null }).role, 'LANDLORD');
+  assert.equal(parseRegisterBody({ ...valid(), invitationToken: null }).invitationToken, null);
   assert.ok(failsOn({ ...valid(), invitationToken: 123 }, 'invitationToken'));
+});
+
+test('invitationToken이 있으면 role은 서버가 TENANT로 정한다(본문 role 무시·생략 가능)', () => {
+  for (const role of ['LANDLORD', 'TENANT', undefined, 'whatever']) {
+    const result = parseRegisterBody({ ...valid(), role, invitationToken: '  abc  ' });
+    assert.equal(result.role, 'TENANT', String(role));
+    assert.equal(result.invitationToken, 'abc');
+  }
 });
 
 test('형식 오류가 있으면 role 정책보다 먼저 400으로 알려준다', () => {

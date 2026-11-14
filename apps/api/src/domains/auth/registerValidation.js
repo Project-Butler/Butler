@@ -157,36 +157,46 @@ export const parseRegisterBody = (body) => {
     details.push({ field: 'emailVerificationToken', reason: '이메일 인증을 완료해주세요.' });
   }
 
-  const { role } = body;
-  if (typeof role !== 'string' || !['LANDLORD', 'TENANT', 'ADMIN'].includes(role)) {
-    details.push({ field: 'role', reason: 'LANDLORD, TENANT 중 하나여야 합니다.' });
-  }
-  if (body.invitationToken !== undefined && body.invitationToken !== null && typeof body.invitationToken !== 'string') {
+  const { invitationToken } = body;
+  if (invitationToken !== undefined && invitationToken !== null && typeof invitationToken !== 'string') {
     details.push({ field: 'invitationToken', reason: '문자열이어야 합니다.' });
+  }
+  const invited = typeof invitationToken === 'string' && invitationToken.trim() !== '';
+  // 초대 가입이면 role은 서버가 TENANT로 정하므로 본문 role을 요구하지 않는다(보내도 무시, ADMIN만 아래에서 거절).
+  const { role: bodyRole } = body;
+  if (!invited && (typeof bodyRole !== 'string' || !['LANDLORD', 'TENANT', 'ADMIN'].includes(bodyRole))) {
+    details.push({ field: 'role', reason: 'LANDLORD, TENANT 중 하나여야 합니다.' });
   }
   throwIfInvalid(details);
 
   // 형식이 맞는 요청에 대해서만 정책 위반을 알린다. ADMIN은 가입으로 만들 수 없다(운영자 계정은 내부 발급).
-  if (role === 'ADMIN') {
+  if (bodyRole === 'ADMIN') {
     throw new AppError('ROLE_NOT_ALLOWED', 403, '해당 역할로는 가입할 수 없습니다.');
   }
-  // 임차인은 임대인이 보낸 초대 링크로만 가입한다. 초대(계약) 도메인이 생기기 전까지는 어떤 토큰도 받지 않는다.
-  if (role === 'TENANT' || !isBlank(body.invitationToken)) {
-    throw new AppError(
-      'TENANT_INVITATION_UNAVAILABLE',
-      422,
-      '임차인 가입은 임대인이 보낸 초대 링크로만 할 수 있으며, 아직 지원 준비 중입니다.',
-    );
+  // 임차인은 임대인이 보낸 초대 링크로만 가입한다(초대 토큰 + 확인 세션은 가입 트랜잭션에서 본다).
+  if (!invited && bodyRole === 'TENANT') {
+    throw new AppError('TENANT_INVITATION_UNAVAILABLE', 422, '임차인 가입은 임대인이 보낸 초대 링크로만 할 수 있어요.');
   }
+  const role = invited ? 'TENANT' : bodyRole;
 
-  return { email, password, name, phone, birthDate, role, emailVerificationToken: emailVerificationToken.trim() };
+  return {
+    email,
+    password,
+    name,
+    phone,
+    birthDate,
+    role,
+    emailVerificationToken: emailVerificationToken.trim(),
+    invitationToken: invited ? invitationToken.trim() : null,
+  };
 };
 
 // 소셜 가입 마무리(POST /auth/oauth/signup) 입력. 이메일은 제공자가 준 값을 쓰므로 받지 않는다.
-// 이름은 제공자가 준 값이 기본이고, 보내면 그 값으로 바꾼다. role은 LANDLORD로 고정이다(임차인은 초대 가입).
+// 이름은 제공자가 준 값이 기본이고, 보내면 그 값으로 바꾼다. role은 서버가 정한다:
+// 기본은 LANDLORD, 초대 쿠키(bt_oi)로 온 가입(invited)만 TENANT(초대 확인은 가입 트랜잭션에서 한다).
 export const OAUTH_SIGNUP_FIELDS = ['name', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
 
-export const parseOAuthSignupBody = (body, defaultName) => {
+export const parseOAuthSignupBody = (body, defaultName, { invited = false } = {}) => {
   assertAllowedBody(body, OAUTH_SIGNUP_FIELDS);
 
   const details = [];
@@ -197,5 +207,5 @@ export const parseOAuthSignupBody = (body, defaultName) => {
   validateAgreement(body.privacyAgreed, 'privacyAgreed', '개인정보 수집·이용', details);
   throwIfInvalid(details);
 
-  return { name, phone, birthDate, role: 'LANDLORD' };
+  return { name, phone, birthDate, role: invited ? 'TENANT' : 'LANDLORD' };
 };

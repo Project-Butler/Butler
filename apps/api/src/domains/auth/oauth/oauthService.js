@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { AppError } from '../../../platform/AppError.js';
 import { encryptField } from '../../../platform/fieldCrypto.js';
 import { prisma } from '../../../platform/prismaClient.js';
+import { acceptInvitationInTx } from '../../tenantInvitations/service.js';
 import { PRIVACY_VERSION, TERMS_VERSION, createSessionRecord, revokeSessionByToken, setCookies } from '../service.js';
 
 const SIGNUP_TICKET_TTL_MS = 15 * 60 * 1000;
@@ -49,7 +50,8 @@ const isUniqueViolation = (error, column) =>
 // 소셜 프로필로 누구인지 정한다.
 //  1) 이미 연결된 소셜 계정이면 그 사용자로 로그인
 //  2) 검증된 이메일이 기존 계정과 같고, 그 계정의 이메일도 인증번호로 확인된(email_verified_at) 계정이면 그 계정에 연결
-//     확인된 적 없는 계정이면 연결하지 않고 거절한다(OAUTH_EMAIL_IN_USE). 임대인이 아닌 계정도 거절한다(OAUTH_ROLE_NOT_ALLOWED)
+//     확인된 적 없는 계정이면 연결하지 않고 거절한다(OAUTH_EMAIL_IN_USE). 이메일로 새로 연결하는 것은 임대인 계정만이고,
+//     같은 이메일의 임차인·관리자 계정은 거절한다(OAUTH_ROLE_NOT_ALLOWED)
 //  3) 둘 다 아니면 가입이 필요하다 → { user: null }
 // 카카오는 is_email_valid·is_email_verified가 모두 true일 때만 검증된 이메일로 본다.
 // 이메일이 없거나 검증되지 않았으면 2)·3)을 하지 않고 거절한다(남의 이메일로 계정을 선점하는 것을 막는다).
@@ -77,9 +79,11 @@ export const resolveOAuthUser = async (provider, profile) => {
   if (!existing) return { user: null };
 
   assertUserUsable(existing);
-  // 소셜 로그인은 임대인에게만 연다. 같은 이메일의 임차인·관리자 계정에는 연결하지 않는다(관리자 계정 보호).
+  // 이메일이 같은 기존 계정에 소셜 계정을 새로 붙이는 것은 임대인 계정만 한다. 소셜로 가입한 계정(임차인 초대 가입 포함)은
+  // 위 1)에서 연결된 계정으로 로그인된다. 이메일로 가입한 임차인·관리자 계정에는 연결하지 않는다(관리자 계정 보호).
   if (existing.role !== 'LANDLORD') {
-    throw new AppError('OAUTH_ROLE_NOT_ALLOWED', 403, '임대인 계정만 소셜 로그인을 사용할 수 있습니다.');
+    const message = existing.role === 'TENANT' ? '이메일로 로그인해 주세요.' : '임대인 계정만 소셜 로그인을 사용할 수 있습니다.';
+    throw new AppError('OAUTH_ROLE_NOT_ALLOWED', 403, message);
   }
   // 기존 계정의 이메일을 인증번호로 확인한 적이 없으면 연결하지 않는다. 인증 없이 가입할 수 있던 때는
   // 남의 이메일로 먼저 가입해 둔 사람이 소셜 로그인한 본인 계정에 들어올 수 있기 때문이다.
@@ -104,7 +108,9 @@ export const resolveOAuthUser = async (provider, profile) => {
 
 // 소셜로 처음 오는 사람의 가입을 마무리한다. 사용자·소셜 연결·약관 동의·첫 세션을 한 트랜잭션으로 만들고 쿠키를 내려준다.
 // ticket은 verifySignupTicket을 통과한 값, input은 parseOAuthSignupBody를 통과한 값이다.
-export const registerOAuthUser = async (req, res, ticket, { name, phone, birthDate, role }) => {
+// invitationId가 있으면(초대 쿠키 bt_oi, role TENANT) 같은 트랜잭션에서 초대를 수락한다(확인 세션 bt_iv를 잠근 뒤 다시 본다).
+// 수락이 실패하면 사용자·소셜 연결도 만들어지지 않는다.
+export const registerOAuthUser = async (req, res, ticket, { name, phone, birthDate, role }, { invitationId = null } = {}) => {
   const encryptedPhone = phone ? encryptField(phone) : null;
   const encryptedBirthDate = encryptField(birthDate);
   const agreedAt = new Date();
@@ -135,6 +141,7 @@ export const registerOAuthUser = async (req, res, ticket, { name, phone, birthDa
           { userId: user.id, type: 'PRIVACY_REQUIRED', version: PRIVACY_VERSION, agreed: true, agreedAt, ip },
         ],
       });
+      if (invitationId) await acceptInvitationInTx(tx, { invitationId, userId: user.id, req });
       return { created: user, refreshToken: await createSessionRecord(tx, req, user) };
     }));
   } catch (error) {
