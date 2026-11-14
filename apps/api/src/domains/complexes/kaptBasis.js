@@ -84,9 +84,9 @@ export const toKaptBasisColumns = (item, now) => {
 // 도로명 키 → kapt_address_links(KAPT_API) 한 행. 이미 있으면 그대로(같은 키·같은 단지).
 const upsertApiLink = (prisma, kaptCode, key) =>
   prisma.$executeRaw`
-    INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code, updated_at)
+    INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code, updated_at)
     VALUES ('KAPT_API', ${key.sigunguCd}, ${key.roadNameKey}, ${key.underground}, ${key.mainNo}, ${key.subNo}, ${kaptCode}, now())
-    ON CONFLICT (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code) DO NOTHING`;
+    ON CONFLICT (source, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code) DO NOTHING`;
 
 // basis_error에 남길 짧은 사유. 원본 메시지(URL·키가 섞일 수 있음)는 넣지 않는다.
 const toFailureReason = (error) => {

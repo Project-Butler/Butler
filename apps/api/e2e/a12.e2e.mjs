@@ -267,7 +267,7 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   const aptRows = search186.body.data?.filter((x) => (x.roadAddress ?? '').endsWith('186')) ?? [];
   const existing186Links = await db.kaptAddressLink.count({ where: { source: 'KAPT_API', roadSigunguCd: '11350', roadNameKey: '동일로207길', roadMainNo: 186, roadSubNo: 0 } });
   if (existing186Links === 0) {
-    await db.$executeRaw`INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code, updated_at)
+    await db.$executeRaw`INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code, updated_at)
       VALUES ('KAPT_API','11350','동일로207길',false,186,0,'A13987305',now()), ('KAPT_API','11350','동일로207길',false,186,0,'A13993901',now())`;
     insertedKaptTestLinks = true;
   }

@@ -204,7 +204,7 @@ const writeBasisColumns = (tx, columns, fileDate, now) =>
 
 const writeLinks = (tx, links, runId) =>
   tx.$executeRaw`
-    INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no,
+    INSERT INTO kapt_address_links (source, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no,
       kapt_code, import_run_id, updated_at)
     SELECT 'KAPT_EXCEL', u.sgg, u.rnk, u.ug, u.mn, u.sn, u.kc, ${runId}::uuid, now()
     FROM unnest(
@@ -215,7 +215,7 @@ const writeLinks = (tx, links, runId) =>
       ${links.map((link) => link.subNo)}::int[],
       ${links.map((link) => link.kaptCode)}::varchar[]
     ) AS u(sgg, rnk, ug, mn, sn, kc)
-    ON CONFLICT (source, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code)
+    ON CONFLICT (source, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code)
     DO UPDATE SET import_run_id = EXCLUDED.import_run_id, updated_at = now()`;
 
 // fileDate: 엑셀 추출일 'YYYY-MM-DD'

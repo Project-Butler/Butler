@@ -6,7 +6,7 @@ const link = (mgt, kaptCode, extra = {}) => ({
   buildingMgtNo: mgt,
   roadSigunguCd: '11350',
   roadNameKey: '섬밭로',
-  roadUnderground: false,
+  isRoadUnderground: false,
   roadMainNo: 285,
   roadSubNo: 0,
   kaptCode,

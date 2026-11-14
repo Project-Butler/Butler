@@ -19,11 +19,11 @@ export const refillComplexKaptCodes = async (client, keys = null) => {
         FROM (
           SELECT l.kapt_code FROM kapt_address_links l
           WHERE l.road_sigungu_cd = c2.sigungu_code AND l.road_name_key = c2.road_name_key
-            AND l.road_underground = c2.is_underground AND l.road_main_no = c2.building_main_no AND l.road_sub_no = c2.building_sub_no
+            AND l.is_road_underground = c2.is_underground AND l.road_main_no = c2.building_main_no AND l.road_sub_no = c2.building_sub_no
           UNION ALL
           SELECT j.kapt_code FROM juso_building_links j
           WHERE j.road_sigungu_cd = c2.sigungu_code AND j.road_name_key = c2.road_name_key
-            AND j.road_underground = c2.is_underground AND j.road_main_no = c2.building_main_no AND j.road_sub_no = c2.building_sub_no
+            AND j.is_road_underground = c2.is_underground AND j.road_main_no = c2.building_main_no AND j.road_sub_no = c2.building_sub_no
         ) u
         JOIN kapt_complexes kc ON kc.kapt_code = u.kapt_code AND kc.is_active
         ORDER BY CASE WHEN btrim(kc.sale_type) IN ('분양', '혼합') THEN 0 WHEN btrim(kc.sale_type) = '임대' THEN 1 ELSE 2 END,

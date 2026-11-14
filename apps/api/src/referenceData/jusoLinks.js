@@ -7,7 +7,7 @@ export const BATCH_SIZE = 2000;
 const keyOf = (row) => ({
   sigunguCd: row.roadSigunguCd,
   roadNameKey: row.roadNameKey,
-  underground: row.roadUnderground,
+  underground: row.isRoadUnderground,
   mainNo: row.roadMainNo,
   subNo: row.roadSubNo,
 });
@@ -37,7 +37,7 @@ export const writeLinkBatch = async (
   const touched = [...upserts.map((link) => link.buildingMgtNo), ...deletes];
   if (keySet && touched.length > 0) {
     const before = await tx.$queryRaw`
-      SELECT road_sigungu_cd AS "roadSigunguCd", road_name_key AS "roadNameKey", road_underground AS "roadUnderground",
+      SELECT road_sigungu_cd AS "roadSigunguCd", road_name_key AS "roadNameKey", is_road_underground AS "isRoadUnderground",
              road_main_no AS "roadMainNo", road_sub_no AS "roadSubNo"
       FROM juso_building_links WHERE building_mgt_no = ANY(${touched}::varchar[])`;
     for (const row of before) keySet.add(keyOf(row));
@@ -46,14 +46,14 @@ export const writeLinkBatch = async (
   let upserted = 0;
   if (upserts.length > 0) {
     upserted = await tx.$executeRaw`
-      INSERT INTO juso_building_links AS l (building_mgt_no, road_sigungu_cd, road_name_key, road_underground, road_main_no,
+      INSERT INTO juso_building_links AS l (building_mgt_no, road_sigungu_cd, road_name_key, is_road_underground, road_main_no,
         road_sub_no, road_code, kapt_code, match_rule, import_run_id, applied_file_date, updated_at)
       SELECT u.mgt, u.sgg, u.rnk, u.ug, u.mn, u.sn, u.rc, u.kc, u.mr, ${runId}::uuid, ${fileDate}::date, now()
       FROM unnest(
         ${upserts.map((link) => link.buildingMgtNo)}::varchar[],
         ${upserts.map((link) => link.roadSigunguCd)}::varchar[],
         ${upserts.map((link) => link.roadNameKey)}::text[],
-        ${upserts.map((link) => link.roadUnderground)}::boolean[],
+        ${upserts.map((link) => link.isRoadUnderground)}::boolean[],
         ${upserts.map((link) => link.roadMainNo)}::int[],
         ${upserts.map((link) => link.roadSubNo)}::int[],
         ${upserts.map((link) => link.roadCode)}::varchar[],
@@ -62,13 +62,13 @@ export const writeLinkBatch = async (
       ) AS u(mgt, sgg, rnk, ug, mn, sn, rc, kc, mr)
       ON CONFLICT (building_mgt_no) DO UPDATE SET
         road_sigungu_cd = EXCLUDED.road_sigungu_cd, road_name_key = EXCLUDED.road_name_key,
-        road_underground = EXCLUDED.road_underground, road_main_no = EXCLUDED.road_main_no,
+        is_road_underground = EXCLUDED.is_road_underground, road_main_no = EXCLUDED.road_main_no,
         road_sub_no = EXCLUDED.road_sub_no, road_code = EXCLUDED.road_code, kapt_code = EXCLUDED.kapt_code,
         match_rule = EXCLUDED.match_rule, import_run_id = EXCLUDED.import_run_id,
         applied_file_date = EXCLUDED.applied_file_date, updated_at = now()
-      WHERE (l.road_sigungu_cd, l.road_name_key, l.road_underground, l.road_main_no, l.road_sub_no, l.road_code,
+      WHERE (l.road_sigungu_cd, l.road_name_key, l.is_road_underground, l.road_main_no, l.road_sub_no, l.road_code,
              l.kapt_code, l.match_rule)
-        IS DISTINCT FROM (EXCLUDED.road_sigungu_cd, EXCLUDED.road_name_key, EXCLUDED.road_underground,
+        IS DISTINCT FROM (EXCLUDED.road_sigungu_cd, EXCLUDED.road_name_key, EXCLUDED.is_road_underground,
              EXCLUDED.road_main_no, EXCLUDED.road_sub_no, EXCLUDED.road_code, EXCLUDED.kapt_code, EXCLUDED.match_rule)
         OR (${markRun} AND l.import_run_id IS DISTINCT FROM EXCLUDED.import_run_id)`;
     if (keySet) for (const link of upserts) keySet.add(keyOf(link));
@@ -91,7 +91,7 @@ export const applyRoadRenames = async (tx, renames, keySet = null) => {
   const keys = renames.map((rename) => rename.roadNameKey);
   if (keySet) {
     const before = await tx.$queryRaw`
-      SELECT DISTINCT l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.road_underground AS "roadUnderground",
+      SELECT DISTINCT l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.is_road_underground AS "isRoadUnderground",
              l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo"
       FROM juso_building_links l JOIN unnest(${codes}::varchar[], ${keys}::text[]) AS u(rc, rnk) ON l.road_code = u.rc
       WHERE l.road_name_key IS DISTINCT FROM u.rnk`;
@@ -101,7 +101,7 @@ export const applyRoadRenames = async (tx, renames, keySet = null) => {
     UPDATE juso_building_links l SET road_name_key = u.rnk, updated_at = now()
     FROM unnest(${codes}::varchar[], ${keys}::text[]) AS u(rc, rnk)
     WHERE l.road_code = u.rc AND l.road_name_key IS DISTINCT FROM u.rnk
-    RETURNING l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.road_underground AS "roadUnderground",
+    RETURNING l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey", l.is_road_underground AS "isRoadUnderground",
       l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo"`;
   if (keySet) for (const row of links) keySet.add(keyOf(row));
   // 주소 글자는 옛 도로명이 처음 나오는 한 곳만 새 이름으로 바꾼다(건물명 괄호 안 같은 글자는 그대로).
