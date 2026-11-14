@@ -34,7 +34,7 @@ let insertedKaptTestLinks = false;
 let fixtureLandlordId;
 let fixtureIds = {};
 let apiAvailable = false;
-let report = (name, ok, info = {}) => console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${JSON.stringify(info)}`);
+let report = (name, ok, info = {}) => console.info(`${ok ? 'PASS' : 'FAIL'} ${name} ${JSON.stringify(info)}`);
 
 const pause = (ms = 325) => new Promise((resolve) => setTimeout(resolve, ms));
 const apiCall = async (cookie, method, route, data, headers = {}) => {
@@ -65,9 +65,9 @@ const dbCounts = async () => db.$queryRaw`SELECT
 
 before(async () => {
   try { const r = await fetch(`${BASE}/auth/me`, { signal: AbortSignal.timeout(2500) }); apiAvailable = r.status > 0; }
-  catch (error) { apiAvailable = false; console.log(`API probe failed: ${error.cause?.code ?? error.name}`); }
+  catch (error) { apiAvailable = false; console.info(`API probe failed: ${error.cause?.code ?? error.name}`); }
   if (apiAvailable) for (const row of await db.addressCache.findMany({ select: { sourceKey: true } })) baselineSearchKeys.add(row.sourceKey);
-  if (!apiAvailable) console.log('SKIP: local API is unreachable at http://localhost:4000/api/v1');
+  if (!apiAvailable) console.info('SKIP: local API is unreachable at http://localhost:4000/api/v1');
 });
 
 after(async () => {
@@ -91,7 +91,7 @@ after(async () => {
         kapt_address_links: insertedKaptTestLinks ? await db.kaptAddressLink.count({ where: { source: 'KAPT_API', roadSigunguCd: '11350', roadNameKey: '동일로207길', roadMainNo: 186, roadSubNo: 0 } }) : 0,
         rate_limits: rateCounterRows[0]?.n ?? 0,
       };
-      console.log('CREATED_ROW_COUNTS', JSON.stringify(createdCounts));
+      console.info('CREATED_ROW_COUNTS', JSON.stringify(createdCounts));
       const propIds = [...createdPropertyIds];
       if (propIds.length) await db.$executeRaw`DELETE FROM contracts WHERE ownership_id IN (SELECT id FROM ownerships WHERE property_id = ANY(${propIds}::uuid[]))`;
       await db.$executeRaw`DELETE FROM activities WHERE user_id = ${tempUserId}::uuid`;
@@ -109,7 +109,7 @@ after(async () => {
         await db.$executeRaw`DELETE FROM rate_limits WHERE key IN (${`general:${user.id}`}, ${`complex-search:${user.id}`}) OR key LIKE ${`login:${user.email}:%`}`;
       }
       const remaining = await dbCounts();
-      console.log('CLEANUP remaining created rows', JSON.stringify(remaining[0]));
+      console.info('CLEANUP remaining created rows', JSON.stringify(remaining[0]));
     } catch (error) { console.error('CLEANUP ERROR', error.message); }
   }
   await db.$disconnect();
@@ -307,7 +307,7 @@ test('A-12 use-case and exception E2E against local API', async (t) => {
   }
 
   // Avoid invoking cron endpoints: reference plan explicitly limits real K-apt cron to one call.
-  console.log('NOTE cron endpoints intentionally not invoked; no real K-apt cron call consumed.');
-  console.log('NOTE not exercised: verified-owner PATCH success (requires a dedicated verified-owner fixture), timezone/day-boundary behavior, and Juso zero-row/provider-failure simulation.');
-  console.log('NOTE Playwright is not installed; browser flow is not automated.');
+  console.info('NOTE cron endpoints intentionally not invoked; no real K-apt cron call consumed.');
+  console.info('NOTE not exercised: verified-owner PATCH success (requires a dedicated verified-owner fixture), timezone/day-boundary behavior, and Juso zero-row/provider-failure simulation.');
+  console.info('NOTE Playwright is not installed; browser flow is not automated.');
 });

@@ -2,6 +2,7 @@
 // 채우고, 도로명주소를 도로명 키로 바꿔 kapt_address_links(source KAPT_API)에 쓴다. 도로명 키는 kapt_complexes에 두지 않는다
 // (단지 하나가 도로명주소 여럿 — 키는 연결 표에만). 부르는 곳: 백필 스크립트(prisma/backfillKaptBasis.js, 엑셀에 없는 단지),
 // 매일 cron(/api/cron/reference-data 30~45초 구간, 새 단지). 모든 호출은 api_usages 카운터(apiUsage.js)를 거친다.
+import { getNow } from '../../platform/dateUtils.js';
 import { KAPT_BASIS_API, spendApiCall } from './apiUsage.js';
 import { parseJibunLot, parseRoadAddress } from './kaptAddress.js';
 import { ExternalServiceError } from './provider/ExternalServiceError.js';
@@ -125,7 +126,7 @@ export const fillKaptBasis = async ({
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
   throttlePauseMs = DEFAULT_THROTTLE_PAUSE_MS,
   onProgress = () => {},
-  now = () => new Date(),
+  now = getNow,
 }) => {
   const rows = await prisma.kaptComplex.findMany({
     where: { basisFetchedAt: null, basisAttempts: { lt: MAX_BASIS_ATTEMPTS }, isActive: true },
