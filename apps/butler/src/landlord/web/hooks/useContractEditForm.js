@@ -67,6 +67,8 @@ export const useContractEditForm = ({ contract, onUnauthorized }) => {
     isActive,
     isReady,
     isSubmitting,
+    // 바꾼 칸이 있는지(웹 요약 패널의 "바꾼 칸이 있어야 저장할 수 있어요" 안내).
+    hasChanges,
     save,
     // 칸 아래에 붙이지 못한 오류만 폼 아래에 따로 보여 준다.
     submitErrorMessage: submitError && !hasMappedFieldError ? submitError.message : null,

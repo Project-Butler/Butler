@@ -51,7 +51,7 @@ const ContractEditForm = ({ contract, onUnauthorized, goBack }) => {
           </NoticeBox>
         )}
 
-        <ContractForm form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} lockedFields={lockedFields} fullWidthRentDay />
+        <ContractForm form={form} onChange={updateField} fieldError={fieldError} disabled={isSubmitting} lockedFields={lockedFields} layout="stacked" />
 
         {submitErrorMessage && <NoticeBox>{submitErrorMessage}</NoticeBox>}
       </section>

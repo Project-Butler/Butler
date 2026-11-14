@@ -62,11 +62,12 @@ const BUILDERS = {
     search: relation && relation !== 'OWNER' ? `?relation=${encodeURIComponent(relation)}` : '',
   }),
   propertyRegister: () => ({ pathname: '/properties/new' }),
-  propertyDetail: ({ propertyId }) => ({ pathname: `/properties/${propertyId}` }),
-  // 등록 직후 안내(notice)는 주소에 남기지 않고 history state로만 넘긴다.
-  propertyVerify: ({ propertyId, notice }) => ({
+  // contractId: /contracts/:id 로 들어온 계약(호실 상세의 계약 영역에서 지난 계약이면 펼쳐 둔다)
+  propertyDetail: ({ propertyId, contractId }) => ({ pathname: `/properties/${propertyId}`, search: contractId ? `?contract=${contractId}` : '' }),
+  // 호실 상세 위 인증 팝업. 등록 직후 안내(notice)와 호실 상세에서 열었는지(fromDetail)는 history state로만 넘긴다.
+  propertyVerify: ({ propertyId, notice, fromDetail }) => ({
     pathname: `/properties/${propertyId}/verify`,
-    state: notice ? { notice } : undefined,
+    state: notice || fromDetail ? { ...(notice && { notice }), ...(fromDetail && { fromDetail }) } : undefined,
   }),
   supportInquiry: () => ({ pathname: '/support/inquiry' }),
   contracts: () => ({ pathname: '/contracts' }),
@@ -82,10 +83,22 @@ const BUILDERS = {
   // 호실 필터(propertyId)는 주소에 남긴다. 사이드바 '관리 로그' 메뉴 key(log)도 목록으로 보낸다.
   logs: ({ propertyId } = {}) => ({ pathname: '/logs', search: propertyId ? `?propertyId=${propertyId}` : '' }),
   log: () => ({ pathname: '/logs' }),
-  logRegister: () => ({ pathname: '/logs/new' }),
+  // 기록 추가·수정은 목록·호실 상세 위 팝업. 호실 필터(propertyId)는 주소에 남기고, 화면에서 열었는지(fromPage)는 history state로만.
+  logRegister: ({ propertyId, fromPage } = {}) => ({
+    pathname: '/logs/new',
+    search: propertyId ? `?propertyId=${propertyId}` : '',
+    state: fromPage ? { fromPage } : undefined,
+  }),
   logDetail: ({ logId }) => ({ pathname: `/logs/${logId}` }),
-  logEdit: ({ logId }) => ({ pathname: `/logs/${logId}/edit` }),
-  propertyLogRegister: ({ propertyId }) => ({ pathname: `/properties/${propertyId}/logs/new` }),
+  logEdit: ({ logId, propertyId, fromPage }) => ({
+    pathname: `/logs/${logId}/edit`,
+    search: propertyId ? `?propertyId=${propertyId}` : '',
+    state: fromPage ? { fromPage } : undefined,
+  }),
+  propertyLogRegister: ({ propertyId, fromPage }) => ({
+    pathname: `/properties/${propertyId}/logs/new`,
+    state: fromPage ? { fromPage } : undefined,
+  }),
   setup: () => ({ pathname: '/setup' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),

@@ -1,11 +1,16 @@
 import { useCallback, useState } from 'react';
 import { Badge, Button, Card, TextField } from '@butler/ui';
+import { Archive, Building2, History, MapPin, Pencil, Plus } from 'lucide-react';
+import { DateTile } from '../components/DateTile/DateTile';
+import { IconTile } from '../components/IconTile/IconTile';
 import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
-import { VerificationFailedNotice } from '../components/VerificationFailedNotice/VerificationFailedNotice';
+import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
+import { LogFormModal } from '../components/LogFormModal/LogFormModal';
+import { VerifyModal } from '../components/VerifyModal/VerifyModal';
+import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
 import { useGetComplex } from '../hooks/useGetComplex';
-import { useGetContractList } from '../hooks/useGetContractList';
 import { useGetLatestOwnershipVerification } from '../hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetOwnershipRenewalNoticeList } from '../hooks/useGetOwnershipRenewalNoticeList';
@@ -15,7 +20,7 @@ import { usePatchProperty } from '../hooks/usePatchProperty';
 import { usePatchPropertyOwnership } from '../hooks/usePatchPropertyOwnership';
 import { usePostPropertyOwnershipEnd } from '../hooks/usePostPropertyOwnershipEnd';
 import { toFieldErrors } from '../../../shared/apiError';
-import { formatContractAmount, formatPeriod, formatWon, getContractDdayBadge, getContractStatusBadge } from '../utils/contract';
+import { formatWon } from '../utils/contract';
 import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '../utils/floor';
 import { formatDateKST, formatNumber } from '../utils/format';
 import {
@@ -26,14 +31,7 @@ import {
   validateExclusiveArea,
   validatePurchasePrice,
 } from '../utils/formValidation';
-import {
-  END_REASONS,
-  getVerificationAction,
-  isSoldReason,
-  toOwnershipEndBody,
-  VERIFICATION_REVOKED_MESSAGE,
-  VERIFICATION_RUNNING_MESSAGE,
-} from '../utils/ownershipVerification';
+import { END_REASONS, isSoldReason, toOwnershipEndBody } from '../utils/ownershipVerification';
 import { formatUnitLabel } from '../utils/unitAddress';
 import {
   EQUIPMENT_OPTIONS,
@@ -45,8 +43,9 @@ import {
 } from '../utils/unitListing';
 import { getVerificationBadge } from '../utils/verificationBadge';
 
-// 값이 없으면 '—'. numeric이면 숫자 글꼴, seal이면 검증된 값을 뜻하는 남색 글자.
-const InfoRow = ({ label, value, numeric = false, seal = false }) => (
+// 값이 없으면 '—'(optional이면 줄을 숨김). numeric이면 숫자 글꼴, seal이면 검증된 값을 뜻하는 남색 글자.
+const InfoRow = ({ label, value, numeric = false, seal = false, optional = false }) =>
+  optional && (value == null || value === '') ? null : (
   <div className="flex gap-4 py-2.5">
     <dt className="w-24 shrink-0 text-body text-ink-3">{label}</dt>
     <dd className={`min-w-0 flex-1 text-body ${seal ? 'text-seal-ink' : 'text-ink'} ${numeric ? 'font-num tabular-nums' : ''}`}>
@@ -105,7 +104,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
   const showErrorBox = patch.error && !(patch.error.status === 400 && (fieldErrors.exclusiveArea || fieldErrors.floor));
 
   return (
-    <Card className="space-y-4 p-6">
+    <Card className="space-y-4 p-5">
       <SectionTitle
         action={
           !isEditing && (
@@ -124,16 +123,17 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
         <InfoRow label="지번" value={complex?.jibunAddress} />
         <InfoRow label="법정동" value={complex?.region.fullName} />
         <InfoRow label="동·호" value={formatUnitLabel(property.buildingNo, property.unitNo)} />
-        <InfoRow label="준공일" value={buildingInfo?.approvalDate} numeric />
+        <InfoRow label="준공일" value={buildingInfo?.approvalDate} numeric optional />
         <InfoRow
           label="세대수"
           value={buildingInfo?.householdCount != null ? `${formatNumber(buildingInfo.householdCount)}세대` : null}
           numeric
+          optional
         />
         {!isEditing && (
           <>
-            <InfoRow label="전용면적" value={property.exclusiveArea != null ? `${property.exclusiveArea}㎡` : null} numeric />
-            <InfoRow label="층" value={formatFloor(property.floor)} numeric />
+            <InfoRow label="전용면적" value={property.exclusiveArea != null ? `${property.exclusiveArea}㎡` : null} numeric optional />
+            <InfoRow label="층" value={formatFloor(property.floor)} numeric optional />
           </>
         )}
       </dl>
@@ -174,8 +174,8 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
 };
 
 // 내 소유 정보: 취득 연월·매입가 수정, 호실 삭제(= 소유 관계 종료, 확인 패널). 종료된 소유 관계는 조회만.
-// 권리자 인증: 진행 표시·실패 안내·재인증 안내와 다음 행동([인증하기]·[재인증]·[문의하기]).
-const OwnershipSection = ({ ownership, attempt, isAttemptRunning, renewalNotice, onNavigate, onSaved, onEnded, onUnauthorized }) => {
+// 권리자 인증 상태·버튼은 오른쪽 위 VerificationPanel이 맡는다.
+const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const end = usePostPropertyOwnershipEnd({ onUnauthorized });
   const [mode, setMode] = useState('view'); // view | edit | end
@@ -183,13 +183,7 @@ const OwnershipSection = ({ ownership, attempt, isAttemptRunning, renewalNotice,
   const [fieldErrors, setFieldErrors] = useState({});
   const [endReason, setEndReason] = useState(null);
 
-  const badge = getVerificationBadge(ownership.verificationStatus);
   const isVerified = ownership.verificationStatus === 'VERIFIED';
-  const verificationAction = getVerificationAction(ownership);
-  const goVerify = () => onNavigate('propertyVerify', { propertyId: ownership.property.id });
-  const goInquiry = () => onNavigate('supportInquiry');
-  // 재인증 안내(만료 30일 전부터)와 실패 안내는 아직 할 일이 남았을 때만 보여 준다.
-  const showFailed = ownership.isActive && !isAttemptRunning && attempt?.status === 'FAILED' && verificationAction && verificationAction !== 'INQUIRY';
 
   const startEdit = () => {
     setDraft({
@@ -236,13 +230,20 @@ const OwnershipSection = ({ ownership, attempt, isAttemptRunning, renewalNotice,
     patch.error && !(patch.error.status === 400 && (fieldErrors.acquiredYearMonth || fieldErrors.purchasePrice));
 
   return (
-    <Card className="space-y-4 p-6">
-      <SectionTitle action={<Badge tone={badge.tone}>{badge.label}</Badge>}>내 소유 정보</SectionTitle>
-
-      {ownership.isActive && isAttemptRunning && <NoticeBox tone="seal">{VERIFICATION_RUNNING_MESSAGE}</NoticeBox>}
-      {showFailed && <VerificationFailedNotice onInquiry={goInquiry} />}
-      {ownership.isActive && verificationAction === 'INQUIRY' && <NoticeBox>{VERIFICATION_REVOKED_MESSAGE}</NoticeBox>}
-      {renewalNotice && <NoticeBox tone="warn">{renewalNotice.message}</NoticeBox>}
+    <Card className="space-y-4 p-5">
+      <SectionTitle
+        action={
+          ownership.isActive &&
+          mode === 'view' && (
+            <Button variant="secondary" size="sm" onClick={startEdit}>
+              <Pencil size={14} className="-ml-0.5 mr-1 inline-block" />
+              수정
+            </Button>
+          )
+        }
+      >
+        내 소유 정보
+      </SectionTitle>
 
       {mode !== 'edit' && (
         <dl className="divide-y divide-line">
@@ -260,23 +261,11 @@ const OwnershipSection = ({ ownership, attempt, isAttemptRunning, renewalNotice,
       )}
 
       {ownership.isActive && mode === 'view' && (
-        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-          {(verificationAction === 'VERIFY' || verificationAction === 'RENEW') && (
-            <Button variant="verifyOutline" size="sm" onClick={goVerify} disabled={isAttemptRunning}>
-              {isAttemptRunning ? '인증 진행 중' : verificationAction === 'RENEW' ? '재인증' : '인증하기'}
-            </Button>
-          )}
-          {verificationAction === 'INQUIRY' && (
-            <Button variant="secondary" size="sm" onClick={goInquiry}>
-              문의하기
-            </Button>
-          )}
-          <Button variant="secondary" size="sm" onClick={startEdit}>
-            수정
-          </Button>
-          <Button variant="secondary" size="sm" onClick={startEnd}>
-            호실 삭제
-          </Button>
+        <div className="border-t border-line pt-3">
+          <button type="button" onClick={startEnd} className="inline-flex items-center gap-1.5 text-sub font-medium text-crit-ink hover:underline">
+            <Archive size={14} aria-hidden="true" />
+            호실 삭제(소유 종료)
+          </button>
         </div>
       )}
 
@@ -405,7 +394,7 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
   };
 
   return (
-    <Card className="space-y-4 p-6">
+    <Card className="space-y-4 p-5">
       <SectionTitle
         action={
           ownership.isActive &&
@@ -419,11 +408,24 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
         임대 조건
       </SectionTitle>
 
-      {!isEditing && (
+      {!isEditing && (getUnitTypeLabel(ownership.unitType) || formatEquipment(ownership.equipment, ownership.equipmentEtc)) && (
         <dl className="divide-y divide-line">
-          <InfoRow label="방 구성" value={getUnitTypeLabel(ownership.unitType)} />
-          <InfoRow label="설비" value={formatEquipment(ownership.equipment, ownership.equipmentEtc)} />
+          <InfoRow label="방 구성" value={getUnitTypeLabel(ownership.unitType)} optional />
+          <InfoRow label="설비" value={formatEquipment(ownership.equipment, ownership.equipmentEtc)} optional />
         </dl>
+      )}
+      {!isEditing && ownership.isActive && !getUnitTypeLabel(ownership.unitType) && !formatEquipment(ownership.equipment, ownership.equipmentEtc) && (
+        <button
+          type="button"
+          onClick={startEdit}
+          className="flex w-full items-center gap-3 rounded-input border border-dashed border-dash px-4 py-3 text-left text-sub text-ink-3 transition-colors hover:border-accent hover:text-accent"
+        >
+          <Plus size={16} aria-hidden="true" />
+          방 구성·설비를 넣으면 계약할 때 편해요 (선택)
+        </button>
+      )}
+      {!isEditing && !ownership.isActive && !getUnitTypeLabel(ownership.unitType) && !formatEquipment(ownership.equipment, ownership.equipmentEtc) && (
+        <p className="text-sub text-ink-3">입력한 방 구성·설비가 없어요.</p>
       )}
 
       {isEditing && (
@@ -486,115 +488,76 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
 
 const LOG_SECTION_SIZE = 5;
 
-// 내 소유 관계의 지금 계약(진행 중 → 시작 전). 기간이 겹치지 않으므로 종료일이 가장 가까운 것이 지금 계약이다.
-// 연락처·메모는 계약 상세에서 본다.
-const LeaseSection = ({ propertyId, ownershipId, canRegister, onNavigate, onUnauthorized }) => {
-  const contractList = useGetContractList(
-    { ownershipId, status: 'ACTIVE,EXPIRING_SOON,UPCOMING', sort: 'endDate:asc', size: 1 },
-    { onUnauthorized },
-  );
-  const contract = contractList.data?.items[0];
-  const status = contract && getContractStatusBadge(contract);
-  const dday = contract && getContractDdayBadge(contract);
-
-  const action = contract ? (
-    <Button variant="secondary" size="sm" onClick={() => onNavigate('contractDetail', { contractId: contract.id })}>
-      계약 보기
-    </Button>
-  ) : (
-    canRegister &&
-    contractList.data && (
-      <Button variant="secondary" size="sm" onClick={() => onNavigate('contractRegister', { propertyId })}>
-        계약 등록
-      </Button>
-    )
-  );
-
-  return (
-    <Card className="space-y-4 p-6">
-      <SectionTitle action={action}>임대 정보</SectionTitle>
-      {contractList.error && <NoticeBox>{contractList.error.message}</NoticeBox>}
-      {contractList.isLoading && !contractList.data ? (
-        <p className="py-2.5 text-body text-ink-3">불러오는 중입니다</p>
-      ) : (
-        <dl className="divide-y divide-line">
-          <InfoRow
-            label="계약 상태"
-            value={
-              contract && (
-                <span className="flex flex-wrap items-center gap-1.5">
-                  <Badge tone={status.tone}>{status.label}</Badge>
-                  {dday && (
-                    <Badge tone={dday.tone} className="font-num tabular-nums">
-                      {dday.label}
-                    </Badge>
-                  )}
-                </span>
-              )
-            }
-          />
-          <InfoRow label="임차인" value={contract?.tenantName} />
-          <InfoRow label="금액" value={contract && formatContractAmount(contract)} numeric />
-          <InfoRow label="기간" value={contract && formatPeriod(contract)} numeric />
-        </dl>
-      )}
-    </Card>
-  );
-};
-
-// 이 호실의 최근 관리 로그(S-01). 기록 추가는 지금 소유 중일 때만.
+// 이 호실의 최근 관리 로그(S-01): 날짜 타일 + 제목·칩·내용 한 줄. 기록 추가는 지금 소유 중일 때만.
 const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
   const logList = useGetManagementLogList({ propertyId, size: LOG_SECTION_SIZE }, { onUnauthorized });
   const logs = logList.data?.items ?? [];
 
   return (
-    <Card className="space-y-4 p-6">
-      <SectionTitle
-        action={
-          <span className="flex gap-2">
-            {logs.length > 0 && (
-              <Button variant="secondary" size="sm" onClick={() => onNavigate('logs', { propertyId })}>
-                전체 보기
-              </Button>
-            )}
-            {canAdd && (
-              <Button variant="secondary" size="sm" onClick={() => onNavigate('propertyLogRegister', { propertyId })}>
-                기록 추가
-              </Button>
-            )}
-          </span>
-        }
-      >
-        관리 로그
-      </SectionTitle>
-      {logList.error && <NoticeBox>{logList.error.message}</NoticeBox>}
-      {logList.isLoading && !logList.data && <p className="py-2.5 text-body text-ink-3">불러오는 중입니다</p>}
-      {logList.data && logs.length === 0 && <p className="py-2.5 text-body text-ink-3">아직 관리 로그가 없어요</p>}
-      <div className="divide-y divide-line">
-        {logs.map((log) => (
-          <button
-            key={log.id}
-            type="button"
-            onClick={() => onNavigate('logDetail', { logId: log.id })}
-            className="block w-full space-y-1.5 py-3 text-left hover:bg-surface-2"
-          >
-            <span className="flex items-center justify-between gap-3">
-              <span className="min-w-0 truncate text-body font-semibold text-ink">{log.title}</span>
-              <span className="shrink-0 font-num text-sub tabular-nums text-ink-3">{log.occurredOn}</span>
-            </span>
-            <span className="flex items-center justify-between gap-3">
-              <ManagementLogBadges log={log} />
-              {log.cost != null && <span className="shrink-0 font-num text-sub tabular-nums text-ink-2">{formatWon(log.cost)}</span>}
-            </span>
-          </button>
-        ))}
+    <section className="property-detail-page__log-area space-y-4 rounded-card border border-line bg-surface p-5" aria-labelledby="log-area-title">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="log-area-title" className="flex items-center gap-2 text-section font-semibold text-ink">
+          <History size={20} className="text-ink-3" aria-hidden="true" />
+          관리 로그
+        </h2>
+        <span className="flex gap-2">
+          {logs.length > 0 && (
+            <Button variant="secondary" size="h44" onClick={() => onNavigate('logs', { propertyId })}>
+              전체 보기
+            </Button>
+          )}
+          {canAdd && (
+            <Button variant="secondary" size="h44" onClick={() => onNavigate('propertyLogRegister', { propertyId, fromPage: true })}>
+              <Plus size={16} className="-ml-0.5 mr-1 inline-block" />
+              기록 추가
+            </Button>
+          )}
+        </span>
       </div>
-    </Card>
+      {logList.error && <NoticeBox>{logList.error.message}</NoticeBox>}
+      {logList.isLoading && !logList.data && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+      {logList.data && logs.length === 0 && <p className="text-body text-ink-3">아직 관리 로그가 없어요</p>}
+      <ol className="space-y-3">
+        {logs.map((log) => (
+          <li key={log.id}>
+            <button
+              type="button"
+              onClick={() => onNavigate('logDetail', { logId: log.id })}
+              className="flex w-full items-start gap-3 text-left"
+            >
+              <DateTile date={log.occurredOn} />
+              <span className="min-w-0 flex-1 rounded-input border border-line px-4 py-3 transition-colors hover:bg-surface-2">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-body font-semibold text-ink">{log.title}</span>
+                  <ManagementLogBadges log={log} />
+                </span>
+                {log.content && <span className="mt-1 block truncate text-body text-ink-2">{log.content}</span>}
+              </span>
+              <span className="w-24 shrink-0 pt-3 text-right font-num text-body tabular-nums text-ink-2">{log.cost != null ? formatWon(log.cost) : ''}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 };
 
 // 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
-export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerified, onNavigate, onUnauthorized }) => {
+// isVerifyOpen: /properties/:id/verify 로 들어오면 권리자 인증 팝업을 띄운다(onCloseVerify로 닫는다).
+// isLogModalOpen: /properties/:id/logs/new 로 들어오면 이 호실로 고정한 기록 추가 팝업을 띄운다. 저장하면 관리 로그를 새로 고친다.
+export const PropertyDetailPage = ({
+  propertyId,
+  focusContractId,
+  isVerifyOpen = false,
+  verifyNotice,
+  onCloseVerify,
+  isLogModalOpen = false,
+  onCloseLogModal,
+  verifiedLegalDongCodes,
+  onVerified,
+  onNavigate,
+  onUnauthorized,
+}) => {
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
   const property = propertyQuery.data;
@@ -624,11 +587,12 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
   });
 
   const goBack = () => window.history.back();
+  const [logReloadKey, setLogReloadKey] = useState(0);
 
   if (!property) {
     return (
-      <div className="w-full max-w-6xl space-y-6">
-        <PageHeader title="호실 상세" onBack={goBack} />
+      <div className="w-full space-y-6">
+        <PageHeader title="호실 상세" />
         {propertyQuery.error ? (
           <NoticeBox>{propertyQuery.error.message}</NoticeBox>
         ) : (
@@ -640,76 +604,109 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
 
   const status = getPropertyStatusBadge(property.status);
   const verification = getVerificationBadge(property.myRelation?.verificationStatus);
+  const address = complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress;
+  const ownership = ownershipQuery.data;
 
+  // 호실 상세 = 워크스페이스: 본문(계약 영역·관리 로그) + 오른쪽 보조 패널(권리자 인증·호실 정보·임대 조건·내 소유 정보).
+  // 버튼은 각 영역 안에만 둔다(머리에는 호실 이름·주소·상태만).
   return (
-    <div className="w-full max-w-6xl space-y-6 pb-10">
-      <PageHeader
-        title={property.displayName}
-        description={complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress}
-        onBack={goBack}
-        actions={
-          <>
+    <div className="property-detail-page w-full space-y-5 pb-10">
+      <header className="property-detail-page__header flex items-start gap-4">
+        <IconTile icon={Building2} tone="accent" size="xl" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-h1 font-semibold text-ink">{property.displayName}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {address && (
+              <span className="inline-flex items-center gap-1 text-sub text-ink-3">
+                <MapPin size={13} aria-hidden="true" />
+                {address}
+              </span>
+            )}
             <Badge tone={status.tone}>{status.label}</Badge>
             {property.myRelation?.type === 'OWNER' && <Badge tone={verification.tone}>{verification.label}</Badge>}
-          </>
-        }
-      />
+          </div>
+        </div>
+      </header>
       {propertyQuery.error && <NoticeBox>{propertyQuery.error.message}</NoticeBox>}
       {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
       {ownershipQuery.error && <NoticeBox>{ownershipQuery.error.message}</NoticeBox>}
 
-      <div className="grid grid-cols-2 items-start gap-6">
-        <div className="space-y-6">
-          <BasicInfoSection
-            property={property}
-            complex={complexQuery.data}
-            onSaved={propertyQuery.refetch}
-            onUnauthorized={onUnauthorized}
-          />
-          {ownershipQuery.data && (
-            <ListingSection
-              key={`listing-${ownershipQuery.data.id}`}
-              ownership={ownershipQuery.data}
-              onSaved={ownershipQuery.refetch}
-              onUnauthorized={onUnauthorized}
-            />
-          )}
-        </div>
-
-        <div className="space-y-6">
+      <div className="grid grid-cols-3 items-start gap-5">
+        <div className="col-span-2 space-y-5">
           {property.myRelation?.ownershipId && (
-            <LeaseSection
+            <PropertyContractArea
               propertyId={property.id}
               ownershipId={property.myRelation.ownershipId}
               canRegister={property.myRelation.type === 'OWNER' && property.myRelation.verificationStatus === 'VERIFIED'}
+              focusContractId={focusContractId}
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />
           )}
           {property.myRelation?.ownershipId && (
             <LogSection
+              key={logReloadKey}
               propertyId={property.id}
               canAdd={property.myRelation.type === 'OWNER'}
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />
           )}
-          {ownershipQuery.data && (
-            <OwnershipSection
-              key={ownershipQuery.data.id}
-              ownership={ownershipQuery.data}
+        </div>
+
+        <aside className="property-detail-page__side-panel-stack space-y-5">
+          {ownership && (
+            <VerificationPanel
+              ownership={ownership}
               attempt={latestAttempt.data}
               isAttemptRunning={latestAttempt.isActive}
-              renewalNotice={renewal.notices.find((notice) => notice.id === ownershipQuery.data.id)}
-              onNavigate={onNavigate}
+              renewalNotice={renewal.notices.find((notice) => notice.id === ownership.id)}
+              onVerify={() => onNavigate('propertyVerify', { propertyId: property.id, fromDetail: true })}
+              onInquiry={() => onNavigate('supportInquiry')}
+            />
+          )}
+          <BasicInfoSection property={property} complex={complexQuery.data} onSaved={propertyQuery.refetch} onUnauthorized={onUnauthorized} />
+          {ownership && (
+            <ListingSection key={`listing-${ownership.id}`} ownership={ownership} onSaved={ownershipQuery.refetch} onUnauthorized={onUnauthorized} />
+          )}
+          {ownership && (
+            <OwnershipSection
+              key={ownership.id}
+              ownership={ownership}
               onSaved={ownershipQuery.refetch}
               // 들어온 화면(내 부동산·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
               onEnded={goBack}
               onUnauthorized={onUnauthorized}
             />
           )}
-        </div>
+        </aside>
       </div>
+
+      {isLogModalOpen && (
+        <LogFormModal
+          fixedPropertyId={property.id}
+          onClose={onCloseLogModal}
+          onSaved={() => {
+            setLogReloadKey((prev) => prev + 1);
+            onCloseLogModal();
+          }}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
+      {isVerifyOpen && (
+        <VerifyModal
+          propertyName={property.displayName}
+          ownership={activeOwnershipId ? ownership : undefined}
+          isNotOwner={!activeOwnershipId}
+          latest={latestAttempt}
+          notice={verifyNotice}
+          onClose={onCloseVerify}
+          onInquiry={() => onNavigate('supportInquiry')}
+          onRegisterAnother={() => onNavigate('propertyRegister')}
+          onRevoked={refetchOwnership}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
     </div>
   );
 };
