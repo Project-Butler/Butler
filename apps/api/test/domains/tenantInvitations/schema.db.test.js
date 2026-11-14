@@ -34,7 +34,7 @@ describe('초대 테이블 제약', { skip: dbTestSkip }, () => {
   };
   const invite = (contract, landlord, data = {}) =>
     prisma.tenantInvitation.create({
-      data: { contractId: contract.id, createdBy: landlord.id, tokenHash: sha256(randomUUID()), expiresAt: inDays(7), ...data },
+      data: { contractId: contract.id, createdById: landlord.id, tokenHash: sha256(randomUUID()), expiresAt: inDays(7), ...data },
     });
   const rejectsUnique = (promise) =>
     assert.rejects(promise, (error) => {
@@ -67,7 +67,7 @@ describe('초대 테이블 제약', { skip: dbTestSkip }, () => {
     const landlord = await fixture.createUser();
     const tenant = await fixture.createUser('TENANT');
     const contract = await createContract(landlord);
-    const accepted = { status: 'ACCEPTED', acceptedAt: new Date(), acceptedBy: tenant.id };
+    const accepted = { status: 'ACCEPTED', acceptedAt: new Date(), acceptedById: tenant.id };
     const first = await invite(contract, landlord, accepted);
     await rejectsUnique(invite(contract, landlord, accepted));
     await rejectsUnique(invite(await createContract(landlord), landlord, { tokenHash: first.tokenHash }));

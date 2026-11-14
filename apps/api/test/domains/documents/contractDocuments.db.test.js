@@ -96,8 +96,8 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
         tokenHash: randomUUID().replace(/-/g, '').padEnd(64, '0'),
         status,
         expiresAt: new Date(Date.now() + DAY_MS),
-        createdBy: creator.id,
-        ...(status === 'ACCEPTED' ? { acceptedAt: new Date(), acceptedBy } : {}),
+        createdById: creator.id,
+        ...(status === 'ACCEPTED' ? { acceptedAt: new Date(), acceptedById: acceptedBy } : {}),
         documents: { create: documentIds.map((documentId) => ({ documentId })) },
       },
     });

@@ -115,7 +115,7 @@ export const issueInvitation = async (user, contractId, { sharedDocumentIds }, r
           tokenHash: hashToken(token),
           expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
           createdAt: now,
-          createdBy: user.id,
+          createdById: user.id,
           documents: { create: sharedDocumentIds.map((documentId) => ({ documentId })) },
         },
         include: INVITATION_INCLUDE,
@@ -321,7 +321,7 @@ export const acceptInvitationInTx = async (tx, { invitationId, userId, req, acto
   if (linked.count === 0) throwTenantAlreadyLinked();
   const accepted = await tx.tenantInvitation.updateMany({
     where: { id: invitationId, status: 'PENDING', expiresAt: { gt: now } },
-    data: { status: 'ACCEPTED', acceptedAt: now, acceptedBy: userId },
+    data: { status: 'ACCEPTED', acceptedAt: now, acceptedById: userId },
   });
   if (accepted.count === 0) throwInvitationUnusable('INVITATION_EXPIRED');
 

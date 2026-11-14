@@ -29,7 +29,7 @@ const resolveViewer = async (user, contractId) => {
 
 // 연결된 임차인이 볼 수 있는 문서: 그 계약의 수락한(본인이 수락한) 초대에 공유된 문서
 export const sharedWithTenantWhere = (user, contractId) => ({
-  invitationShares: { some: { invitation: { contractId, status: 'ACCEPTED', acceptedBy: user.id } } },
+  invitationShares: { some: { invitation: { contractId, status: 'ACCEPTED', acceptedById: user.id } } },
 });
 
 export const contractDocumentPolicy = {

@@ -38,7 +38,7 @@ test('잘못된 값은 필드별로 모아 400', () => {
 test('응답 모양: related는 둘 다 있을 때 객체, 없으면 null', () => {
   const createdAt = new Date('2026-11-11T01:02:03.000Z');
   const base = { id: ID, type: 'TENANT_INVITATION_ACCEPTED', title: 't', body: 'b', link: null, readAt: null, createdAt };
-  assert.deepEqual(toNotificationResponse({ ...base, relatedType: null, relatedId: null }), {
+  assert.deepEqual(toNotificationResponse({ ...base, resourceType: null, resourceId: null }), {
     id: ID,
     type: 'TENANT_INVITATION_ACCEPTED',
     title: 't',
@@ -48,7 +48,7 @@ test('응답 모양: related는 둘 다 있을 때 객체, 없으면 null', () =
     readAt: null,
     createdAt: '2026-11-11T01:02:03.000Z',
   });
-  assert.deepEqual(toNotificationResponse({ ...base, relatedType: 'CONTRACT', relatedId: ID, readAt: createdAt }).related, {
+  assert.deepEqual(toNotificationResponse({ ...base, resourceType: 'CONTRACT', resourceId: ID, readAt: createdAt }).related, {
     resourceType: 'CONTRACT',
     resourceId: ID,
   });
@@ -65,7 +65,7 @@ test('notify: 등록한 type만 받는다', () => {
     title: 't',
     body: 'b',
     link: null,
-    relatedType: 'CONTRACT',
-    relatedId: ID,
+    resourceType: 'CONTRACT',
+    resourceId: ID,
   });
 });
