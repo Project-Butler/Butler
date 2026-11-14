@@ -2,6 +2,7 @@
 import { AppError } from './AppError.js';
 import { getTodayKST } from './dateUtils.js';
 import { lockHistoryLogDocumentsInTx } from './documentAttachments.js';
+import { cancelContractInvitationsInTx } from './tenantInvitationLifecycle.js';
 
 const throwOwnershipEnded = () => {
   throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
@@ -41,6 +42,8 @@ export const endOwnershipInTx = async (tx, ownership, { endReason, note, checkAc
   if (count === 0) throwOwnershipEnded();
   // 호실 이력이 다음 소유자에게 넘어가므로 거기 붙은 문서를 잠근다(삭제 불가).
   await lockHistoryLogDocumentsInTx(tx, ownership.id);
+  // 끝난 소유 관계의 계약은 읽기 전용이라 PENDING 초대를 CANCELED, 확인 세션은 폐기한다(docs/11 2-3).
+  await cancelContractInvitationsInTx(tx, { ownershipId: ownership.id });
 
   return tx.ownership.findUnique({ where: { id: ownership.id }, include: { property: { include: { complex: true } } } });
 };

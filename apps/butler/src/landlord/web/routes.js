@@ -63,7 +63,12 @@ const BUILDERS = {
   }),
   propertyRegister: () => ({ pathname: '/properties/new' }),
   // contractId: /contracts/:id 로 들어온 계약(호실 상세의 계약 영역에서 지난 계약이면 펼쳐 둔다)
-  propertyDetail: ({ propertyId, contractId }) => ({ pathname: `/properties/${propertyId}`, search: contractId ? `?contract=${contractId}` : '' }),
+  // inviteContractId: 방금 등록한 계약. 호실 상세가 임차인 초대 팝업을 한 번 띄운다(history state로만, 새로고침·뒤로가기로 다시 뜨지 않게 화면이 지운다).
+  propertyDetail: ({ propertyId, contractId, inviteContractId }) => ({
+    pathname: `/properties/${propertyId}`,
+    search: contractId ? `?contract=${contractId}` : '',
+    state: inviteContractId ? { inviteContractId } : undefined,
+  }),
   // 호실 상세 위 인증 팝업. 등록 직후 안내(notice)와 호실 상세에서 열었는지(fromDetail)는 history state로만 넘긴다.
   propertyVerify: ({ propertyId, notice, fromDetail }) => ({
     pathname: `/properties/${propertyId}/verify`,

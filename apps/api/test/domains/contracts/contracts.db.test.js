@@ -118,6 +118,63 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     assert.equal(await prisma.activity.count({ where: { userId: user.id, type: 'CONTRACT_CREATED' } }), 1);
   });
 
+  test('초대 상태: PENDING·만료(EXPIRED)·ACCEPTED, 연결 전 계정 이름은 null', async () => {
+    const user = await fixture.createUser();
+    const { ownership } = await createOwnedUnit(user);
+    const contract = await createContract(user, contractInput(ownership.id));
+    const invite = (data) =>
+      prisma.tenantInvitation.create({
+        data: { contractId: contract.id, tokenHash: randomUUID().replace(/-/g, '').padEnd(64, '0'), createdBy: user.id, expiresAt: new Date(Date.now() + 86400000), ...data },
+      });
+    const status = async () => (await findContractForUser(user, contract.id)).tenant.invitationStatus;
+
+    assert.equal(await status(), null);
+    await invite({ status: 'CANCELED', canceledAt: new Date(), createdAt: new Date(Date.now() - 3000) });
+    assert.equal(await status(), 'CANCELED');
+    const expired = await invite({ createdAt: new Date(Date.now() - 2000), expiresAt: new Date(Date.now() - 1000) });
+    assert.equal(await status(), 'EXPIRED');
+    // 계약당 PENDING은 1건뿐이라 만료된 초대를 취소 처리한 뒤 새 초대를 만든다.
+    await prisma.tenantInvitation.update({ where: { id: expired.id }, data: { status: 'CANCELED', canceledAt: new Date() } });
+    await invite({ createdAt: new Date(Date.now() - 1000) });
+    assert.equal(await status(), 'PENDING');
+    const tenant = await fixture.createUser();
+    await invite({ status: 'ACCEPTED', acceptedAt: new Date(), acceptedBy: tenant.id });
+    assert.equal(await status(), 'ACCEPTED');
+    assert.equal((await findContractForUser(user, contract.id)).tenant.accountName, null);
+  });
+
+  test('연결된 임차인 계정 이름은 소유자·이전 소유자에게만 보인다', async () => {
+    const user = await fixture.createUser();
+    const tenant = await fixture.createUser();
+    const admin = await fixture.createUser('ADMIN');
+    const { ownership } = await createOwnedUnit(user);
+    const contract = await createContract(user, contractInput(ownership.id));
+    await prisma.contract.update({ where: { id: contract.id }, data: { tenantId: tenant.id } });
+    const tenantName = (await prisma.user.findUnique({ where: { id: tenant.id } })).name;
+
+    assert.equal((await findContractForUser(user, contract.id)).tenant.accountName, tenantName);
+    assert.equal((await findContractForUser(tenant, contract.id)).tenant.accountName, null);
+    assert.equal((await findContractForUser(admin, contract.id)).tenant.accountName, null);
+    await prisma.ownership.update({ where: { id: ownership.id }, data: { endedAt: new Date(), endReason: 'SOLD' } });
+    assert.equal((await findContractForUser(user, contract.id)).tenant.accountName, tenantName);
+  });
+
+  test('초기 세팅 임차인 초대 단계는 수락된 초대가 있어야 완료된다', async () => {
+    const user = await fixture.createUser();
+    const tenant = await fixture.createUser();
+    const { ownership } = await createOwnedUnit(user);
+    const contract = await createContract(user, contractInput(ownership.id));
+    const data = { contractId: contract.id, createdBy: user.id, expiresAt: new Date(Date.now() + 86400000) };
+    const hash = () => randomUUID().replace(/-/g, '').padEnd(64, '0');
+
+    await prisma.tenantInvitation.create({ data: { ...data, tokenHash: hash() } });
+    assert.deepEqual((await findLandlordSetup(user)).steps[2], { key: 'TENANT_INVITE', done: false, count: 0 });
+    await prisma.tenantInvitation.create({ data: { ...data, tokenHash: hash(), status: 'ACCEPTED', acceptedAt: new Date(), acceptedBy: tenant.id } });
+    const setup = await findLandlordSetup(user);
+    assert.deepEqual(setup.steps[2], { key: 'TENANT_INVITE', done: true, count: 1 });
+    assert.equal(setup.progress, 75);
+  });
+
   test('검사 순서와 에러 코드', async () => {
     const user = await fixture.createUser();
     const other = await fixture.createUser();

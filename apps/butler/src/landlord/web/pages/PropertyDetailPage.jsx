@@ -548,6 +548,8 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
 export const PropertyDetailPage = ({
   propertyId,
   focusContractId,
+  inviteContractId,
+  onInviteHandled,
   isVerifyOpen = false,
   verifyNotice,
   onCloseVerify,
@@ -639,6 +641,8 @@ export const PropertyDetailPage = ({
               ownershipId={property.myRelation.ownershipId}
               canRegister={property.myRelation.type === 'OWNER' && property.myRelation.verificationStatus === 'VERIFIED'}
               focusContractId={focusContractId}
+              autoInviteContractId={inviteContractId}
+              onAutoInviteHandled={onInviteHandled}
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />
