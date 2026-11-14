@@ -65,10 +65,10 @@ export const findKaptByRoadKeys = async (client, keys) => {
       ${indexed.map(({ key }) => key.subNo)}::int[]
     ) AS k(idx, sgg, rnk, ug, mn, sn)
     JOIN (
-      SELECT road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code FROM kapt_address_links
+      SELECT road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code FROM kapt_address_links
       UNION ALL
-      SELECT road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code FROM juso_building_links
-    ) l ON l.road_sigungu_cd = k.sgg AND l.road_name_key = k.rnk AND l.road_underground = k.ug
+      SELECT road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code FROM juso_building_links
+    ) l ON l.road_sigungu_cd = k.sgg AND l.road_name_key = k.rnk AND l.is_road_underground = k.ug
        AND l.road_main_no = k.mn AND l.road_sub_no = k.sn
     JOIN kapt_complexes kc ON kc.kapt_code = l.kapt_code AND kc.is_active`;
 

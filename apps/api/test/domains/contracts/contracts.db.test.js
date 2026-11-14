@@ -124,7 +124,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const contract = await createContract(user, contractInput(ownership.id));
     const invite = (data) =>
       prisma.tenantInvitation.create({
-        data: { contractId: contract.id, tokenHash: randomUUID().replace(/-/g, '').padEnd(64, '0'), createdBy: user.id, expiresAt: new Date(Date.now() + 86400000), ...data },
+        data: { contractId: contract.id, tokenHash: randomUUID().replace(/-/g, '').padEnd(64, '0'), createdById: user.id, expiresAt: new Date(Date.now() + 86400000), ...data },
       });
     const status = async () => (await findContractForUser(user, contract.id)).tenant.invitationStatus;
 
@@ -138,7 +138,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     await invite({ createdAt: new Date(Date.now() - 1000) });
     assert.equal(await status(), 'PENDING');
     const tenant = await fixture.createUser();
-    await invite({ status: 'ACCEPTED', acceptedAt: new Date(), acceptedBy: tenant.id });
+    await invite({ status: 'ACCEPTED', acceptedAt: new Date(), acceptedById: tenant.id });
     assert.equal(await status(), 'ACCEPTED');
     assert.equal((await findContractForUser(user, contract.id)).tenant.accountName, null);
   });
@@ -164,12 +164,12 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const tenant = await fixture.createUser();
     const { ownership } = await createOwnedUnit(user);
     const contract = await createContract(user, contractInput(ownership.id));
-    const data = { contractId: contract.id, createdBy: user.id, expiresAt: new Date(Date.now() + 86400000) };
+    const data = { contractId: contract.id, createdById: user.id, expiresAt: new Date(Date.now() + 86400000) };
     const hash = () => randomUUID().replace(/-/g, '').padEnd(64, '0');
 
     await prisma.tenantInvitation.create({ data: { ...data, tokenHash: hash() } });
     assert.deepEqual((await findLandlordSetup(user)).steps[2], { key: 'TENANT_INVITE', done: false, count: 0 });
-    await prisma.tenantInvitation.create({ data: { ...data, tokenHash: hash(), status: 'ACCEPTED', acceptedAt: new Date(), acceptedBy: tenant.id } });
+    await prisma.tenantInvitation.create({ data: { ...data, tokenHash: hash(), status: 'ACCEPTED', acceptedAt: new Date(), acceptedById: tenant.id } });
     const setup = await findLandlordSetup(user);
     assert.deepEqual(setup.steps[2], { key: 'TENANT_INVITE', done: true, count: 1 });
     assert.equal(setup.progress, 75);

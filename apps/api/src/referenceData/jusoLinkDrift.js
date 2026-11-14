@@ -14,7 +14,7 @@ const outcomeId = (link) =>
   `${link.kaptCode}|${roadKeyId({
     sigunguCd: link.roadSigunguCd,
     roadNameKey: link.roadNameKey,
-    underground: link.roadUnderground,
+    underground: link.isRoadUnderground,
     mainNo: link.roadMainNo,
     subNo: link.roadSubNo,
   })}`;
@@ -58,7 +58,7 @@ export const runJusoDrift = async ({ prisma, sourcePath, log = () => {} }) => {
     log(`전체분 계산: ${collected.rowsRead}줄, 연결 ${collected.links.size}행`);
     const dbRows = await prisma.$queryRaw`
       SELECT building_mgt_no AS "buildingMgtNo", road_sigungu_cd AS "roadSigunguCd", road_name_key AS "roadNameKey",
-             road_underground AS "roadUnderground", road_main_no AS "roadMainNo", road_sub_no AS "roadSubNo", kapt_code AS "kaptCode"
+             is_road_underground AS "isRoadUnderground", road_main_no AS "roadMainNo", road_sub_no AS "roadSubNo", kapt_code AS "kaptCode"
       FROM juso_building_links`;
     return { rowsRead: collected.rowsRead, ...compareDriftLinks(collected.links, dbRows) };
   } finally {

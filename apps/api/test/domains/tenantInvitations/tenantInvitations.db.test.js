@@ -40,7 +40,7 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     storageDir = await mkdtemp(path.join(os.tmpdir(), 'butler-invite-'));
     Object.assign(process.env, {
       STORAGE_DRIVER: 'local',
-      STORAGE_SIGNING_SECRET: 'invite-test-secret', // secret-guard:allow 테스트용 더미 값
+      STORAGE_SIGNING_SECRET: randomUUID(), // 테스트마다 새로 만드는 더미 값
       LOCAL_STORAGE_DIR: storageDir,
       TENANT_APP_URL: 'https://tenant.example.test/',
     });
@@ -198,7 +198,7 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal(new Date(data.expiresAt).getTime() - new Date(data.createdAt).getTime(), 7 * 86400000);
     const row = await invitationRow(data.id);
     assert.equal(row.tokenHash, hashToken(tokenOf(data.inviteUrl)));
-    assert.equal(row.createdBy, landlord.id);
+    assert.equal(row.createdById, landlord.id);
     const auditRow = await prisma.auditLog.findFirst({ where: { action: 'TENANT_INVITATION_ISSUED', resourceId: contract.id } });
     assert.ok(auditRow.summary.includes(data.id));
     assert.ok(!JSON.stringify(auditRow).includes(tokenOf(data.inviteUrl)));
@@ -469,12 +469,12 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal((await prisma.contract.findUnique({ where: { id: contract.id } })).tenantId, tenant.id);
     const row = await invitationRow(invitationId);
     assert.equal(row.status, 'ACCEPTED');
-    assert.equal(row.acceptedBy, tenant.id);
+    assert.equal(row.acceptedById, tenant.id);
     assert.ok(row.acceptedAt);
     assert.equal(await prisma.tenantInvitationVerification.count({ where: { invitationId, revokedAt: null } }), 0);
     const notification = await prisma.notification.findFirst({ where: { userId: landlord.id, type: 'TENANT_INVITATION_ACCEPTED' } });
     assert.equal(notification.link, `/properties/${property.id}`);
-    assert.equal(notification.relatedId, contract.id);
+    assert.equal(notification.resourceId, contract.id);
     const auditRow = await prisma.auditLog.findFirst({ where: { action: 'TENANT_INVITATION_ACCEPTED', resourceId: contract.id } });
     assert.equal(auditRow.actorId, tenant.id);
     assert.ok(!JSON.stringify(auditRow).includes(token));

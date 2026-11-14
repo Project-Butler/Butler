@@ -76,8 +76,8 @@ describe('알림 API', { skip: dbTestSkip }, () => {
         related: { resourceType: 'CONTRACT', resourceId: contractId },
       }),
     );
-    assert.equal(row.relatedType, 'CONTRACT');
-    assert.equal(row.relatedId, contractId);
+    assert.equal(row.resourceType, 'CONTRACT');
+    assert.equal(row.resourceId, contractId);
     assert.equal(row.readAt, null);
 
     await assert.rejects(

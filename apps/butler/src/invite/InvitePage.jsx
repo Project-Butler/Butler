@@ -16,17 +16,15 @@ import { useSessionStore } from '../store/sessionStore';
 import { CHECK_SESSION, decideAfterContract, decideInitialScreen, decideVerifyError, SCREEN, screenForError, toInviteErrorKind } from './inviteState';
 import { ConfirmScreen } from './screens/ConfirmScreen';
 import { ContractScreen } from './screens/ContractScreen';
-import {
-  AcceptedLinkScreen,
-  AddedScreen,
-  AlreadyAddedScreen,
-  DailyLimitScreen,
-  ErrorScreen,
-  LinkedOtherScreen,
-  LoadingScreen,
-  UnusableScreen,
-  WrongRoleScreen,
-} from './screens/StatusScreens';
+import { AcceptedLinkScreen } from './screens/AcceptedLinkScreen';
+import { AddedScreen } from './screens/AddedScreen';
+import { AlreadyAddedScreen } from './screens/AlreadyAddedScreen';
+import { DailyLimitScreen } from './screens/DailyLimitScreen';
+import { ErrorScreen } from './screens/ErrorScreen';
+import { LinkedOtherScreen } from './screens/LinkedOtherScreen';
+import { LoadingScreen } from './screens/LoadingScreen';
+import { UnusableScreen } from './screens/UnusableScreen';
+import { WrongRoleScreen } from './screens/WrongRoleScreen';
 import { SummaryScreen } from './screens/SummaryScreen';
 import { VerifyScreen } from './screens/VerifyScreen';
 

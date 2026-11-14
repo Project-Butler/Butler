@@ -45,14 +45,14 @@ describe('juso 변동분 적용', { skip: dbTestSkip }, () => {
       ],
     });
     const link = (roadNameKey, roadMainNo, kaptCode) => ({
-      source: 'KAPT_API', roadSigunguCd: '99999', roadNameKey, roadUnderground: false, roadMainNo, roadSubNo: 0, kaptCode,
+      source: 'KAPT_API', roadSigunguCd: '99999', roadNameKey, isRoadUnderground: false, roadMainNo, roadSubNo: 0, kaptCode,
     });
     await prisma.kaptAddressLink.createMany({
       data: [link('testro', 1, 'DBTK00001'), link('newro', 2, 'DBTK00002'), link('newro', 2, 'DBTK00001'), link('offro', 3, 'DBTK00003'), link('newro', 5, 'DBTK00002')],
     });
     // 삭제 상한(전체의 2%) 계산이 표가 비어 있어도 맞게 채움 행
     await prisma.$executeRaw`
-      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code, match_rule)
+      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code, match_rule)
       SELECT ${`${MGT_PREFIX}19`} || lpad(g::text, 13, '0'), '99999', 'filler', false, g, 0, 'DBTK00001', 'ROAD_KEY'
       FROM generate_series(1, ${FILLER}) g`;
     complex = await fixture.createComplex({

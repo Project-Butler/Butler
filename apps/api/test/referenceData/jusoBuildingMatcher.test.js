@@ -50,10 +50,10 @@ const makeLine = (overrides = {}) => {
 
 const LOOKUP = buildKaptLookup({
   roadLinks: [
-    { roadSigunguCd: '11350', roadNameKey: '섬밭로', roadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
+    { roadSigunguCd: '11350', roadNameKey: '섬밭로', isRoadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
     // 한 주소를 분양·임대 단지가 같이 씀(학여울청구)
-    { roadSigunguCd: '11350', roadNameKey: '동일로207길', roadUnderground: false, roadMainNo: 186, roadSubNo: 0, kaptCode: 'A13993901', saleType: '임대' },
-    { roadSigunguCd: '11350', roadNameKey: '동일로207길', roadUnderground: false, roadMainNo: 186, roadSubNo: 0, kaptCode: 'A13987305', saleType: '분양' },
+    { roadSigunguCd: '11350', roadNameKey: '동일로207길', isRoadUnderground: false, roadMainNo: 186, roadSubNo: 0, kaptCode: 'A13993901', saleType: '임대' },
+    { roadSigunguCd: '11350', roadNameKey: '동일로207길', isRoadUnderground: false, roadMainNo: 186, roadSubNo: 0, kaptCode: 'A13987305', saleType: '분양' },
   ],
   lots: [{ legalDongCode: '1135010600', mainLot: 504, subLot: 1, kaptCode: 'A13986306', saleType: '분양' }],
 });
@@ -107,7 +107,7 @@ test('맞추기: 공동주택 + 도로명 키 → ROAD_KEY', () => {
     buildingMgtNo: '1135010600105030000000001',
     roadSigunguCd: '11350',
     roadNameKey: '섬밭로',
-    roadUnderground: false,
+    isRoadUnderground: false,
     roadMainNo: 285,
     roadSubNo: 0,
     roadCode: '113504154190',

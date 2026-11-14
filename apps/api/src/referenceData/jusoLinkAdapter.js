@@ -186,7 +186,7 @@ const hasKaptCandidate = (row, lookup) => {
 const isSameAddressAsExisting = (row, existing) =>
   existing &&
   existing.roadCode === row.roadCode &&
-  existing.roadUnderground === row.underground &&
+  existing.isRoadUnderground === row.underground &&
   existing.roadMainNo === row.mainNo &&
   existing.roadSubNo === row.subNo;
 

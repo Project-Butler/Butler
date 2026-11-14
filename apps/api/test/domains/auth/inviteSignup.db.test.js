@@ -192,7 +192,7 @@ describe('임차인 초대 가입', { skip: dbTestSkip }, () => {
     assert.equal((await prisma.contract.findUnique({ where: { id: contract.id } })).tenantId, userId);
     const invitation = await prisma.tenantInvitation.findUnique({ where: { id: invitationId } });
     assert.equal(invitation.status, 'ACCEPTED');
-    assert.equal(invitation.acceptedBy, userId);
+    assert.equal(invitation.acceptedById, userId);
     assert.equal(await prisma.tenantInvitationVerification.count({ where: { invitationId, revokedAt: null } }), 0);
   };
 

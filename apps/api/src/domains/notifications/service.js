@@ -1,5 +1,6 @@
 import { AppError } from '../../platform/AppError.js';
 import { afterCreatedAtCursor, toCursorPage } from '../../platform/createdAtCursor.js';
+import { getNow } from '../../platform/dateUtils.js';
 import { toNotificationResponse } from '../../platform/notify.js';
 import { prisma } from '../../platform/prismaClient.js';
 
@@ -23,10 +24,10 @@ export const markNotificationRead = async (user, notificationId) => {
   });
   if (!notification) throw new AppError('NOTIFICATION_NOT_FOUND', 404, '알림을 찾을 수 없습니다.');
   if (!notification.readAt) {
-    await prisma.notification.updateMany({ where: { id: notification.id, readAt: null }, data: { readAt: new Date() } });
+    await prisma.notification.updateMany({ where: { id: notification.id, readAt: null }, data: { readAt: getNow() } });
   }
 };
 
 export const markAllNotificationsRead = async (user) => {
-  await prisma.notification.updateMany({ where: { userId: user.id, readAt: null }, data: { readAt: new Date() } });
+  await prisma.notification.updateMany({ where: { userId: user.id, readAt: null }, data: { readAt: getNow() } });
 };

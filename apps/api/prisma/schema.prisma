@@ -369,18 +369,18 @@ model KaptComplex {
 // K-apt 쪽이 알려 준 도로명주소(엑셀·기본정보 API). 키는 kaptAddress.js의
 // parseRoadAddress()·toRoadNameKey() 규칙. 소스별로 mark-and-sweep(import_run_id).
 model KaptAddressLink {
-  source          String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
-  roadSigunguCd   String   @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String   @map("road_name_key")
-  roadUnderground Boolean  @map("road_underground")
-  roadMainNo      Int      @map("road_main_no")
-  roadSubNo       Int      @map("road_sub_no")
-  kaptCode        String   @map("kapt_code") @db.VarChar(20)
-  importRunId     String?  @map("import_run_id") @db.Uuid
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  source            String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
+  roadSigunguCd     String   @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String   @map("road_name_key")
+  isRoadUnderground Boolean  @map("is_road_underground")
+  roadMainNo        Int      @map("road_main_no")
+  roadSubNo         Int      @map("road_sub_no")
+  kaptCode          String   @map("kapt_code") @db.VarChar(20)
+  importRunId       String?  @map("import_run_id") @db.Uuid
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@id([source, roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo, kaptCode])
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@id([source, roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo, kaptCode])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("kapt_address_links")
 }
@@ -389,20 +389,20 @@ model KaptAddressLink {
 // K-apt 단지와 맞은 건물만 저장한다. 같은 필지 형제 조회용 식 인덱스
 // (substr(building_mgt_no, 1, 19))는 마이그레이션 SQL에 있다.
 model JusoBuildingLink {
-  buildingMgtNo   String    @id @map("building_mgt_no") @db.VarChar(25)
-  roadSigunguCd   String    @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String    @map("road_name_key")
-  roadUnderground Boolean   @map("road_underground")
-  roadMainNo      Int       @map("road_main_no")
-  roadSubNo       Int       @map("road_sub_no")
-  roadCode        String?   @map("road_code") @db.VarChar(12)
-  kaptCode        String    @map("kapt_code") @db.VarChar(20)
-  matchRule       String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
-  importRunId     String?   @map("import_run_id") @db.Uuid
-  appliedFileDate DateTime? @map("applied_file_date") @db.Date
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buildingMgtNo     String    @id @map("building_mgt_no") @db.VarChar(25)
+  roadSigunguCd     String    @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String    @map("road_name_key")
+  isRoadUnderground Boolean   @map("is_road_underground")
+  roadMainNo        Int       @map("road_main_no")
+  roadSubNo         Int       @map("road_sub_no")
+  roadCode          String?   @map("road_code") @db.VarChar(12)
+  kaptCode          String    @map("kapt_code") @db.VarChar(20)
+  matchRule         String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
+  importRunId       String?   @map("import_run_id") @db.Uuid
+  appliedFileDate   DateTime? @map("applied_file_date") @db.Date
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("juso_building_links")
 }
@@ -838,19 +838,19 @@ enum InvitationStatus {
 
 // 계약당 PENDING 하나, ACCEPTED 하나 — 부분 유니크 uq_tenant_invitation_pending·uq_tenant_invitation_accepted (마이그레이션 SQL)
 model TenantInvitation {
-  id         String           @id @default(uuid()) @db.Uuid
-  contractId String           @map("contract_id") @db.Uuid
-  contract   Contract         @relation(fields: [contractId], references: [id])
-  tokenHash  String           @unique @map("token_hash") @db.VarChar(64)
-  status     InvitationStatus @default(PENDING)
-  expiresAt  DateTime         @map("expires_at") @db.Timestamptz(3)
-  acceptedAt DateTime?        @map("accepted_at") @db.Timestamptz(3)
-  acceptedBy String?          @map("accepted_by") @db.Uuid
-  acceptor   User?            @relation("AcceptedTenantInvitations", fields: [acceptedBy], references: [id])
-  canceledAt DateTime?        @map("canceled_at") @db.Timestamptz(3)
-  createdBy  String           @map("created_by") @db.Uuid
-  creator    User             @relation("CreatedTenantInvitations", fields: [createdBy], references: [id])
-  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  id           String           @id @default(uuid()) @db.Uuid
+  contractId   String           @map("contract_id") @db.Uuid
+  contract     Contract         @relation(fields: [contractId], references: [id])
+  tokenHash    String           @unique @map("token_hash") @db.VarChar(64)
+  status       InvitationStatus @default(PENDING)
+  expiresAt    DateTime         @map("expires_at") @db.Timestamptz(3)
+  acceptedAt   DateTime?        @map("accepted_at") @db.Timestamptz(3)
+  acceptedById String?          @map("accepted_by_id") @db.Uuid
+  acceptor     User?            @relation("AcceptedTenantInvitations", fields: [acceptedById], references: [id])
+  canceledAt   DateTime?        @map("canceled_at") @db.Timestamptz(3)
+  createdById  String           @map("created_by_id") @db.Uuid
+  creator      User             @relation("CreatedTenantInvitations", fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   // 본인 확인 대입 방지(V-04). 초대 행을 FOR UPDATE로 잠그고 갱신한다.
   verifyFailCount       Int       @default(0) @map("verify_fail_count")
@@ -897,17 +897,18 @@ model TenantInvitationVerification {
 // 인앱 알림(api-contract.md 7장). type은 등록형 문자열(platform/notify.js의 NOTIFICATION_TYPES)이라 enum이 아니다.
 // TODO: 90일 보관 정리.
 model Notification {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  user        User      @relation(fields: [userId], references: [id])
-  type        String    @db.VarChar(60)
-  title       String
-  body        String
-  link        String?
-  relatedType String?   @map("related_type") @db.VarChar(40)
-  relatedId   String?   @map("related_id") @db.Uuid
-  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  user         User      @relation(fields: [userId], references: [id])
+  type         String    @db.VarChar(60)
+  title        String
+  body         String
+  link         String?
+  // 다형 참조(컨벤션: resourceType + resourceId, FK 없음). 응답에서는 related: { resourceType, resourceId }.
+  resourceType String?   @map("resource_type") @db.VarChar(40)
+  resourceId   String?   @map("resource_id") @db.Uuid
+  readAt       DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")

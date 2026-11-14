@@ -29,8 +29,8 @@ export const notify = (client, { userId, type, title, body, link = null, related
       title,
       body,
       link,
-      relatedType: related?.resourceType ?? null,
-      relatedId: related?.resourceId ?? null,
+      resourceType: related?.resourceType ?? null,
+      resourceId: related?.resourceId ?? null,
     },
   });
 };
@@ -41,8 +41,8 @@ export const toNotificationResponse = (notification) => ({
   title: notification.title,
   body: notification.body,
   link: notification.link ?? null,
-  related: notification.relatedType
-    ? { resourceType: notification.relatedType, resourceId: notification.relatedId ?? null }
+  related: notification.resourceType
+    ? { resourceType: notification.resourceType, resourceId: notification.resourceId ?? null }
     : null,
   readAt: notification.readAt ? notification.readAt.toISOString() : null,
   createdAt: notification.createdAt.toISOString(),
