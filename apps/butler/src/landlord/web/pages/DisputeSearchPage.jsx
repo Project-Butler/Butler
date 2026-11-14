@@ -19,6 +19,14 @@ const SEARCH_DELAY_MS = 300;
 
 const ALL_TAB = 'ALL';
 const FAQ_TAB = 'FAQ';
+
+// 제안한 검색어 뒤의 목적격 조사: 끝 글자에 받침이 있으면 "을", 없으면 "를"("보증금을", "전세 사기를").
+// 끝이 한글이 아니면(숫자·영문) 읽는 법을 몰라 "을(를)".
+const objectParticle = (text) => {
+  const code = text.trim().codePointAt(text.trim().length - 1);
+  if (code === undefined || code < 0xac00 || code > 0xd7a3) return '을(를)';
+  return (code - 0xac00) % 28 === 0 ? '를' : '을';
+};
 const REFERENCE_TYPE_VALUES = REFERENCE_TYPES.map(({ value }) => value);
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
@@ -112,6 +120,16 @@ export const DisputeSearchPage = () => {
   const showReferences = tab !== FAQ_TAB;
   const totalPages = meta ? Math.ceil(meta.total / PAGE_SIZE) : 0;
   const hasNoResult = !isCounting && faqItems.length + referenceTotal === 0;
+  // 띄어 쓴 단어가 모두 들어간 자료가 없으면 서버가 일부 단어만 든 자료를 단어 많은 순으로 보내고 partialMatch로 알린다.
+  const partialMatch = meta?.partialMatch;
+  // 질문도 같은 규칙으로 완화한다(질문 목록은 배열이라 질문마다 같은 partialMatch가 붙어 온다).
+  const faqPartialMatch = faqItems[0]?.partialMatch;
+  // 오타로 보이는 단어가 있으면 서버가 고친 검색어를 제안한다(결과는 입력한 검색어 그대로). 누르면 그 말로 다시 찾는다.
+  const suggestion = meta?.suggestion;
+  const searchSuggestion = () => {
+    setKeyword(suggestion.query);
+    search(suggestion.query);
+  };
 
   // 고른 칩을 다시 누르면 상황을 풀고 전체에서 본다.
   const selectTopic = (key) => updateParams({ topic: topic?.key === key ? null : key, tab: null });
@@ -170,6 +188,20 @@ export const DisputeSearchPage = () => {
         </div>
       )}
 
+      {suggestion && (
+        <p className="text-body text-ink-2">
+          혹시{' '}
+          <button
+            type="button"
+            onClick={searchSuggestion}
+            className="min-h-11 font-semibold text-accent underline hover:text-accent-strong"
+          >
+            {suggestion.query}
+          </button>
+          {objectParticle(suggestion.query)} 찾으셨나요?
+        </p>
+      )}
+
       {isCounting && !list.error && !faqs.error && (
         <p className="py-6 text-center text-body text-ink-3">찾는 중…</p>
       )}
@@ -199,6 +231,12 @@ export const DisputeSearchPage = () => {
               )}
             </div>
           )}
+          {faqPartialMatch && (
+            <p role="status" className="rounded-card border border-line bg-surface-2 px-4 py-3 text-body text-ink-2">
+              모든 단어가 들어간 질문이 없어서, 일부 단어만 들어간 질문을 보여 드려요. 단어가 많이 들어간 질문(
+              {faqPartialMatch.termCount}개 중 최대 {faqPartialMatch.matchedTermCount}개)이 위에 있어요.
+            </p>
+          )}
           <FaqList key={`${topic?.key}-${q}-${tab}`} faqs={shownFaqs} onOpenReference={openReference} />
         </section>
       )}
@@ -206,6 +244,13 @@ export const DisputeSearchPage = () => {
       {tab === FAQ_TAB && !isCounting && faqItems.length === 0 && !hasNoResult && (
         <p className="rounded-card border border-line bg-surface px-5 py-6 text-center text-body text-ink-2">
           맞는 질문이 없어요. 사례·판례 탭을 확인해 보세요.
+        </p>
+      )}
+
+      {showReferences && references.length > 0 && partialMatch && (
+        <p role="status" className="rounded-card border border-line bg-surface-2 px-4 py-3 text-body text-ink-2">
+          모든 단어가 들어간 자료가 없어서, 일부 단어만 들어간 자료를 보여 드려요. 단어가 많이 들어간 자료(
+          {partialMatch.termCount}개 중 최대 {partialMatch.matchedTermCount}개)가 위에 있어요.
         </p>
       )}
 

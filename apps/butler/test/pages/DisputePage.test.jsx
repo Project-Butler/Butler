@@ -207,6 +207,66 @@ describe('분쟁 해결사', () => {
     expect(screen.queryByText('어떤 상황인가요?')).not.toBeInTheDocument();
   });
 
+  it('모든 단어가 들어간 자료가 없어 서버가 조건을 완화하면(partialMatch) 일부 단어만 들어간 결과라고 알린다', async () => {
+    api.getDisputeReferenceList.mockImplementation(async ({ q } = {}) => {
+      const response = listResponse([CASE_ITEM]);
+      return q ? { ...response, meta: { ...response.meta, partialMatch: { matchedTermCount: 2, termCount: 4 } } } : response;
+    });
+    renderAt('/disputes/search?q=집주인이%20보증금을%20안%20돌려줘요');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('일부 단어만 들어간 자료를 보여 드려요');
+    expect(screen.getByRole('status')).toHaveTextContent('4개 중 최대 2개');
+    expect(screen.getByText(CASE_ITEM.summary)).toBeInTheDocument();
+  });
+
+  it('질문도 서버가 조건을 완화하면(질문마다 partialMatch) 일부 단어만 들어간 질문이라고 알린다', async () => {
+    api.getDisputeFaqList.mockResolvedValue([{ ...FAQS[0], partialMatch: { matchedTermCount: 1, termCount: 2 } }]);
+    renderAt('/disputes/search?q=도배%20반려동물');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('일부 단어만 들어간 질문을 보여 드려요');
+    expect(screen.getByRole('status')).toHaveTextContent('2개 중 최대 1개');
+    expect(screen.getByRole('button', { name: /못 자국이 많아요/ })).toBeInTheDocument();
+  });
+
+  it('오타 제안(suggestion)이 오면 "혹시 ○○을(를) 찾으셨나요?"를 보이고, 누르면 그 말로 다시 찾는다', async () => {
+    const user = userEvent.setup();
+    api.getDisputeReferenceList.mockImplementation(async ({ q } = {}) => {
+      const response = listResponse(q === '보증굼' ? [] : [CASE_ITEM]);
+      const suggestion = q === '보증굼' ? { query: '보증금', corrections: [{ from: '보증굼', to: '보증금' }] } : null;
+      return { ...response, meta: { ...response.meta, suggestion } };
+    });
+    renderAt('/disputes/search?q=보증굼');
+
+    const button = await screen.findByRole('button', { name: '보증금' });
+    expect(button.closest('p')).toHaveTextContent('혹시 보증금을 찾으셨나요?'); // 받침 있으면 "을"
+    await user.click(button);
+
+    await waitFor(() => expect(lastListParams()).toMatchObject({ q: '보증금' }));
+    expect(screen.getByLabelText('분쟁 질문·사례 검색')).toHaveValue('보증금');
+    await waitFor(() => expect(screen.queryByText(/찾으셨나요/)).not.toBeInTheDocument());
+  });
+
+  it.each([
+    ['전세 사기', '혹시 전세 사기를 찾으셨나요?'], // 받침 없음 → "를"
+    ['2020다226452', '혹시 2020다226452을(를) 찾으셨나요?'], // 끝이 숫자 → "을(를)"
+  ])('제안 문구의 조사는 끝 글자 받침에 맞춘다: %s', async (query, sentence) => {
+    api.getDisputeReferenceList.mockImplementation(async () => {
+      const response = listResponse([]);
+      return { ...response, meta: { ...response.meta, suggestion: { query, corrections: [] } } };
+    });
+    renderAt('/disputes/search?q=아무말');
+
+    const button = await screen.findByRole('button', { name: query });
+    expect(button.closest('p')).toHaveTextContent(sentence);
+  });
+
+  it('조건을 완화하지 않은 결과에는 일부 단어 안내를 보이지 않는다', async () => {
+    renderAt('/disputes/search?q=도배비');
+
+    expect(await screen.findByText(CASE_ITEM.summary)).toBeInTheDocument();
+    expect(screen.queryByText(/모든 단어가 들어간 자료가 없어서/)).not.toBeInTheDocument();
+  });
+
   it('첫 화면의 [사례·판례 전체 보기]는 조건 없는 자료 찾기로 가고, [뒤로]는 첫 화면으로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes');
