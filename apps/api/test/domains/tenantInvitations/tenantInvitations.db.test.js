@@ -40,7 +40,7 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     storageDir = await mkdtemp(path.join(os.tmpdir(), 'butler-invite-'));
     Object.assign(process.env, {
       STORAGE_DRIVER: 'local',
-      STORAGE_SIGNING_SECRET: 'invite-test-secret', // secret-guard:allow 테스트용 더미 값
+      STORAGE_SIGNING_SECRET: randomUUID(), // 테스트마다 새로 만드는 더미 값
       LOCAL_STORAGE_DIR: storageDir,
       TENANT_APP_URL: 'https://tenant.example.test/',
     });
