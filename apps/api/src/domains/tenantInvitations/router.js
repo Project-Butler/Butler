@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authGuard } from '../../middlewares/authGuard.js';
+import { authGuard, optionalAuth } from '../../middlewares/authGuard.js';
 import { generalRateLimiter, rateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
@@ -35,8 +35,9 @@ contractTenantInvitationsRouter.post('/', postTenantInvitation);
 contractTenantInvitationsRouter.get('/', getTenantInvitations);
 
 // 토큰 경로(/tenant-invitations/:token...). 요약·본인 확인·열람은 로그인 없이, 수락은 TENANT 로그인 + 확인 세션.
+// 요약은 로그인했으면 누가 연 것인지 본다(수락된 초대를 다른 임차인이 열면 CONTRACT_TENANT_ALREADY_LINKED).
 const router = Router();
-router.get('/:token', invitationPublicRateLimiter, getTenantInvitationSummary);
+router.get('/:token', invitationPublicRateLimiter, optionalAuth, getTenantInvitationSummary);
 router.post('/:token/verify', invitationVerifyRateLimiter, postTenantInvitationVerify);
 router.get('/:token/contract', invitationPublicRateLimiter, getTenantInvitationContract);
 router.post('/:token/documents/:documentId/download-url', invitationPublicRateLimiter, postTenantInvitationDocumentDownloadUrl);

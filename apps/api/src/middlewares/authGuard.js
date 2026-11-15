@@ -4,6 +4,20 @@ import { AppError } from '../platform/AppError.js';
 // access_token 만료는 다른 401과 코드를 구분한다 — 프론트 interceptor가
 // AUTH_TOKEN_EXPIRED일 때만 자동으로 /auth/refresh를 부르고, 그 밖의 401은
 // 바로 로그인 화면으로 보내기 때문이다(api-contract.md 1장 "인증(쿠키)").
+// 공개 경로용: 유효한 access_token이 있으면 req.user를 채우고, 없거나 만료·위조면 로그인 전으로 보고 그대로 넘긴다.
+// 공개 경로는 로그인 없이도 열려야 하므로 401을 내지 않는다(만료 401을 내면 프론트가 refresh 실패 때 /login으로 보낸다).
+export const optionalAuth = (req, res, next) => {
+  const token = req.cookies?.access_token;
+  if (!token) return next();
+  try {
+    const payload = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    req.user = { id: payload.userId, role: payload.role };
+  } catch {
+    // 로그인 전으로 본다.
+  }
+  return next();
+};
+
 export const authGuard = (req, res, next) => {
   const token = req.cookies?.access_token;
 

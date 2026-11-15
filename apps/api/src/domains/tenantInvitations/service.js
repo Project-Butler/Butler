@@ -156,9 +156,19 @@ export const listInvitations = async (user, contractId) => {
 };
 
 // A-08 GET /tenant-invitations/:token — 공개. 금액·임차인 정보는 넣지 않는다(R-15).
-export const findInvitationSummary = async (token) => {
+// viewer: 로그인했으면 { id, role }, 아니면 null. 수락된 초대를 수락한 사람이 아닌 임차인이 열면
+// '이미 수락됨'(F2: 내 계약) 대신 '다른 계정이 연결함'(F1 LINKED_OTHER)으로 알린다. 그 밖은 로그인 여부와 같다.
+export const findInvitationSummary = async (token, viewer = null) => {
   const invitation = await findInvitationByToken(prisma, token);
   const now = getNow();
+  if (
+    viewer?.role === 'TENANT' &&
+    invitation &&
+    computeInvitationStatus(invitation, now) === 'ACCEPTED' &&
+    invitation.acceptedById !== viewer.id
+  ) {
+    throwTenantAlreadyLinked();
+  }
   assertUsableInvitation(invitation, now);
   const { contract } = invitation;
   const { ownership } = contract;
