@@ -69,7 +69,7 @@ export const getTenantInvitations = async (req, res, next) => {
 // A-08
 export const getTenantInvitationSummary = async (req, res, next) => {
   try {
-    sendData(res, await findInvitationSummary(req.params.token));
+    sendData(res, await findInvitationSummary(req.params.token, req.user ?? null));
   } catch (error) {
     next(error);
   }

@@ -488,6 +488,24 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal(reuse.body.error.code, 'INVITATION_ALREADY_ACCEPTED');
   });
 
+  test('공개 요약: 수락된 초대를 다른 임차인이 열면 409 CONTRACT_TENANT_ALREADY_LINKED, 수락한 본인·로그인 전·임대인은 INVITATION_ALREADY_ACCEPTED', async () => {
+    const { landlord, token, iv } = await issueAndVerify();
+    const [owner, other] = [await createUser('TENANT'), await createUser('TENANT')];
+    assert.equal((await api(`/tenant-invitations/${token}/accept`, { method: 'POST', user: owner, cookies: [`bt_iv=${iv}`] })).status, 200);
+
+    const asOther = await api(`/tenant-invitations/${token}`, { user: other });
+    assert.equal(asOther.status, 409);
+    assert.equal(asOther.body.error.code, 'CONTRACT_TENANT_ALREADY_LINKED');
+    for (const user of [owner, null, landlord]) {
+      const result = await api(`/tenant-invitations/${token}`, user ? { user } : {});
+      assert.equal(result.status, 409);
+      assert.equal(result.body.error.code, 'INVITATION_ALREADY_ACCEPTED', user?.role ?? 'guest');
+    }
+    // 로그인 쿠키가 깨져 있어도 공개 요약은 로그인 전처럼 연다(401을 내지 않는다).
+    const broken = await api(`/tenant-invitations/${token}`, { cookies: ['access_token=broken'] });
+    assert.equal(broken.body.error.code, 'INVITATION_ALREADY_ACCEPTED');
+  });
+
   test('동시 수락 2건 → 하나만 성공(409)', async () => {
     const { token, iv, contract } = await issueAndVerify();
     const second = await verify(token, '5432');

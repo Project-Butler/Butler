@@ -52,15 +52,16 @@ const readInviteToken = (req) => {
   return typeof sealed === 'string' && sealed !== '' ? decryptWithPurpose(INVITE_PURPOSE, sealed) : null;
 };
 
-// ?invite=<token>은 bt_iv가 그 초대의 유효한 확인 세션일 때만 받아들인다. 아니면 무시(null).
-const acceptInviteParam = async (req) => {
+// ?invite=<token>은 bt_iv가 그 초대의 유효한 확인 세션일 때만 받아들인다.
+// 결과: { token: null }(초대 없이 시작) | { token }(받아들임) | { token, rejected: true }(확인 세션이 없거나 쓸 수 없는 초대).
+const readInviteParam = async (req) => {
   const token = req.query?.invite;
-  if (typeof token !== 'string' || token === '') return null;
+  if (typeof token !== 'string' || token === '') return { token: null };
   try {
     await requireVerification(prisma, req, await findInvitationByToken(prisma, token));
-    return token;
+    return { token };
   } catch (error) {
-    if (error instanceof AppError) return null;
+    if (error instanceof AppError) return { token, rejected: true };
     throw error;
   }
 };
@@ -71,7 +72,14 @@ export const startOAuth = async (req, res, next) => {
   try {
     const config = getProvider(req.params.provider);
     const base = frontendUrl();
-    const inviteToken = await acceptInviteParam(req);
+    const invite = await readInviteParam(req);
+    // 초대 화면에서 시작했는데 확인 세션이 끝났으면(또는 초대를 쓸 수 없으면) 초대 없이 이어 가지 않는다 —
+    // 그대로 가면 일반 소셜 가입이 되어 임대인 계정이 생기고 초대는 수락되지 않는다. 초대 화면으로 돌려보내 다시 확인하게 한다.
+    if (invite.rejected) {
+      res.clearCookie(INVITE_COOKIE, oauthCookieOptions);
+      return res.redirect(`${base}${failurePath(invite.token, 'INVITATION_VERIFY_REQUIRED')}`);
+    }
+    const inviteToken = invite.token;
     const state = createState();
     let url;
     try {
@@ -85,7 +93,7 @@ export const startOAuth = async (req, res, next) => {
     }
 
     res.cookie(STATE_COOKIE, state, { ...oauthCookieOptions, maxAge: STATE_TTL_MS });
-    // 초대로 시작하면 bt_oi를 새로 두고, 아니면(invite 없음·확인 세션 없음) 남은 bt_oi를 지운다.
+    // 초대로 시작하면 bt_oi를 새로 두고, 아니면(invite 없음) 남은 bt_oi를 지운다.
     if (inviteToken) {
       res.cookie(INVITE_COOKIE, encryptWithPurpose(INVITE_PURPOSE, inviteToken), {
         ...oauthCookieOptions,

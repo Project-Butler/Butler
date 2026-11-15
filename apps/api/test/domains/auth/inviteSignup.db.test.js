@@ -296,10 +296,13 @@ describe('임차인 초대 가입', { skip: dbTestSkip }, () => {
     assert.ok(!line.includes(context.token));
     for (const part of [/HttpOnly/, /SameSite=Lax/, /Path=\/api\/v1\/auth\/oauth/, /Max-Age=1800/]) assert.match(line, part);
 
-    for (const cookies of [[], [`bt_iv=${other.iv}`]]) {
-      const ignored = await api(`/auth/oauth/google?invite=${context.token}`, { cookies });
-      assert.equal(ignored.status, 302);
-      assert.ok(!ignored.cookies.bt_oi, cookies.join()); // 두지 않는다(남은 것은 지운다)
+    // 확인 세션이 없거나 다른 초대 것이면 제공자로 보내지 않고(일반 가입 → 임대인 계정이 되지 않게) 초대 화면으로 돌려보낸다.
+    for (const cookies of [[], [`bt_iv=${other.iv}`], [`bt_iv=${other.iv}`, `bt_oi=${started.cookies.bt_oi}`]]) {
+      const rejected = await api(`/auth/oauth/google?invite=${context.token}`, { cookies });
+      assert.equal(rejected.status, 302);
+      assert.equal(rejected.location, `${FRONT}/invite/${context.token}?oauth_error=INVITATION_VERIFY_REQUIRED`, cookies.join());
+      assert.ok(!rejected.cookies.bt_oi, cookies.join()); // 두지 않는다(남은 것은 지운다)
+      assert.ok(!rejected.cookies.oauth_state, cookies.join());
     }
     const plain = await api('/auth/oauth/google', { cookies: [`bt_oi=${started.cookies.bt_oi}`] });
     assert.equal(plain.cookies.bt_oi, ''); // invite 없이 시작하면 남은 bt_oi를 지운다
