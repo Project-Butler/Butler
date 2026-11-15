@@ -36,14 +36,14 @@ const LIST_SELECT = {
   keywords: true,
   sourceTitle: true,
   sourcePage: true,
-  // 원문 링크(sourceUrl)를 만드는 데만 쓰고 응답에서는 뺀다(toListItem).
+  // 시드 자료의 고정 키. 화면이 특정 자료를 sourceKeys로 다시 찾을 때 쓴다(id는 DB마다 달라짐). 원문 링크(sourceUrl)도 이걸로 만든다.
   sourceKey: true,
   caseNumber: true,
 };
 
-const toListItem = ({ sourceKey, caseNumber, ...item }) => ({
+const toListItem = ({ caseNumber, ...item }) => ({
   ...item,
-  sourceUrl: toSourceUrl({ sourceKey, title: item.title, caseNumber }),
+  sourceUrl: toSourceUrl({ sourceKey: item.sourceKey, title: item.title, caseNumber }),
 });
 
 // 검색어를 공백으로 나눈 단어 목록(중복 제거). "보증금 반환"은 ['보증금', '반환'].
@@ -689,7 +689,7 @@ export const findReferenceSummariesBySourceKeys = async (sourceKeys) => {
   if (sourceKeys.length === 0) return new Map();
   const references = await prisma.disputeReference.findMany({
     where: { sourceKey: { in: sourceKeys } },
-    select: { sourceKey: true, id: true, type: true, category: true, title: true },
+    select: { sourceKey: true, id: true, type: true, category: true, title: true, sourceTitle: true },
   });
   return new Map(references.map(({ sourceKey, ...reference }) => [sourceKey, reference]));
 };

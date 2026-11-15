@@ -6,6 +6,7 @@ import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { ReferenceCard } from '../components/DisputeReference/ReferenceCard';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
+import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { DISPUTE_TOPICS, findTopic, REFERENCE_TYPES } from '../utils/disputeReference';
@@ -35,7 +36,7 @@ const sum = (values) => values.reduce((total, value) => total + value, 0);
 // 조건이 없으면 전체 자료를 보여 준다(상황 고르기는 첫 화면 몫이라 여기에는 타일을 두지 않는다).
 // 조건(topic·q·tab)은 주소에 둬서 사례 상세에서 돌아와도 그대로 남는다.
 export const DisputeSearchPage = () => {
-  const { askAi, setAiSuggestions, openReference, goBack, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onUnauthorized } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const topic = findTopic(searchParams.get('topic'));
   const q = searchParams.get('q') ?? '';
@@ -82,11 +83,6 @@ export const DisputeSearchPage = () => {
   useEffect(() => {
     setKeyword((current) => (current.trim() === q ? current : q));
   }, [q]);
-
-  // 오른쪽 AI: 검색어가 있으면 그 말로 물어볼 질문, 없으면 기본 질문
-  useEffect(() => {
-    setAiSuggestions?.(q ? [`'${q}' 관련해서 제 상황을 물어보고 싶어요`, `'${q}'이(가) 무슨 뜻인지 쉽게 설명해 주세요`] : null);
-  }, [q, setAiSuggestions]);
 
   const category = topic ? topic.categories.join(',') : undefined;
   const faqs = useGetDisputeFaqList({ category, q: q || undefined });
@@ -280,12 +276,14 @@ export const DisputeSearchPage = () => {
       )}
 
       <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
-        <p className="text-card font-semibold text-ink">찾는 내용이 없나요?</p>
+        <p className="text-card font-semibold text-ink">답을 찾지 못하셨나요?</p>
         <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 비슷한 사례를 찾아 정리해 드려요.</p>
         <Button onClick={() => askAi(q)} className="mt-4 min-h-11 px-5">
           AI에게 물어보기
         </Button>
       </div>
+
+      <SourceFooter showContacts />
 
       <LegalNotice />
     </div>

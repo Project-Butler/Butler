@@ -1,14 +1,17 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DisputeHomePage } from '../../src/landlord/web/pages/DisputeHomePage';
 import { DisputePage } from '../../src/landlord/web/pages/DisputePage';
 import { DisputeReferenceDetailPage } from '../../src/landlord/web/pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from '../../src/landlord/web/pages/DisputeSearchPage';
 import { DisputeTopicPage } from '../../src/landlord/web/pages/DisputeTopicPage';
 import { buildLocation } from '../../src/landlord/web/routes';
+import { HELP_ROUTES, TOPIC_BRIEFINGS } from '../../src/landlord/web/utils/disputePortal';
 import { breakNumberedItems, splitSections } from '../../src/landlord/web/utils/disputeReference';
 
 const api = vi.hoisted(() => ({
@@ -84,7 +87,9 @@ const FAQS = [
     category: 'DAMAGES',
     question: '세입자가 나가면서 벽에 못 자국이 많아요. 도배비를 보증금에서 빼도 되나요?',
     answer: '통상의 손모는 특약이 없으면 임차인이 원상회복할 의무가 없어요.',
-    references: [{ id: 'ref-case', type: 'CASE', category: 'DAMAGES', title: CASE_ITEM.title }],
+    references: [
+      { id: 'ref-case', type: 'CASE', category: 'DAMAGES', title: CASE_ITEM.title, sourceTitle: '2025 주택·상가건물 임대차분쟁 조정사례집' },
+    ],
   },
   {
     key: 'renewal-implicit-request',
@@ -93,17 +98,14 @@ const FAQS = [
     answer: '묵시적으로 표시되어 기간 안에 도달하면 유효해요.',
     references: [],
   },
+  {
+    key: 'rent-increase-cap',
+    category: 'RENT_ADJUSTMENT',
+    question: '갱신할 때 월세를 얼마까지 올릴 수 있나요?',
+    answer: '갱신할 때는 기존 금액의 5%를 넘게 올릴 수 없어요.',
+    references: [],
+  },
 ];
-
-// 화면 폭(미디어 쿼리) 흉내. true면 PC 넓은 화면(오른쪽 AI 패널).
-const setWide = (isWide) => {
-  window.matchMedia = vi.fn().mockImplementation((query) => ({
-    matches: isWide,
-    media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  }));
-};
 
 const ChatProbe = () => {
   const { state } = useLocation();
@@ -140,15 +142,20 @@ const renderAt = (path) => {
   );
 };
 
-const lastListParams = () => api.getDisputeReferenceList.mock.calls.at(-1)[0];
+// 근거 자료(sourceKeys)로 부르는 요청은 빼고, 목록·사례를 부른 마지막 요청
+const lastListParams = () => api.getDisputeReferenceList.mock.calls.filter(([params]) => !params?.sourceKeys).at(-1)[0];
+
+// 상황 안내의 근거 자료: 키 모양으로 종류를 정해 돌려준다(서버처럼 sourceKey를 같이 준다).
+const refTypeOf = (key) => (key.includes('-P-') || key.startsWith('lawgo-prec') ? 'PRECEDENT' : key.startsWith('law-') ? 'GUIDELINE' : 'CASE');
+const basisRefsResponse = (sourceKeys) =>
+  listResponse(sourceKeys.split(',').map((key) => ({ ...CASE_ITEM, id: `ref-${key}`, sourceKey: key, type: refTypeOf(key), title: `자료 ${key}` })));
 
 describe('분쟁 해결사', () => {
-  const originalMatchMedia = window.matchMedia;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    setWide(false);
-    api.getDisputeReferenceList.mockResolvedValue(listResponse([CASE_ITEM]));
+    api.getDisputeReferenceList.mockImplementation(async (params) =>
+      params?.sourceKeys ? basisRefsResponse(params.sourceKeys) : listResponse([CASE_ITEM]),
+    );
     api.getDisputeReference.mockResolvedValue(CASE_DETAIL);
     api.getDisputeRelatedReferences.mockResolvedValue(RELATED);
     // 서버처럼 유형(쉼표)·검색어로 거른다.
@@ -160,10 +167,6 @@ describe('분쟁 해결사', () => {
       ),
     );
     api.getDisputeChatList.mockResolvedValue({ data: [], meta: { page: 1, size: 20, total: 0, hasNext: false } });
-  });
-
-  afterEach(() => {
-    window.matchMedia = originalMatchMedia;
   });
 
   it('조건 없이 들어오면 전체 자료와 상황 칩을 보여 주고, 칩을 누르면 그 상황의 질문과 사례로 좁힌다', async () => {
@@ -293,6 +296,20 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
   });
 
+  it('상황 안내에서 질문 칩을 여러 번 눌렀다 풀어도 기록이 쌓이지 않아 [뒤로] 한 번에 첫 화면으로 간다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes');
+
+    await user.click(await screen.findByRole('button', { name: /^보증금 반환/ }));
+    await screen.findByRole('heading', { name: '보증금 반환' });
+    for (const name of ['새 임차인을 못 구했을 때', '공제할 수 있는 비용', '공제할 수 있는 비용', '일부만 돌려줄 때']) {
+      await user.click(screen.getByRole('button', { name }));
+    }
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+    expect(await screen.findByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
+  });
+
   it('주소로 바로 들어온 자료 찾기의 [뒤로]는 임대차 분쟁 센터로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/search?q=%EB%8F%84%EB%B0%B0');
@@ -393,18 +410,20 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('button', { name: '원상복구·손해배상' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('결과가 없으면 알려 주고, 좁은 화면에서 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
+  it('결과가 없으면 알려 주고, 아래에 자료 출처·기관 연락처를 두며, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     api.getDisputeReferenceList.mockResolvedValue(listResponse([], { CASE: 0, PRECEDENT: 0, GUIDELINE: 0 }));
     renderAt('/disputes/search?q=%EB%B0%98%EB%A0%A4%EA%B2%AC');
 
     expect(await screen.findByText('맞는 질문이나 사례를 찾지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '자료 출처' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: /대한법률구조공단 132/ })).toHaveAttribute('href', 'tel:132');
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
 
     expect(screen.getByText('챗봇 화면 · 반려견')).toBeInTheDocument();
   });
 
-  it('좁은 화면에서 [내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
+  it('사례 상세 하단 [내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/references/ref-case');
 
@@ -413,72 +432,152 @@ describe('분쟁 해결사', () => {
     expect(screen.getByText(/챗봇 화면 · "퇴거 후 벽지·장판 손상/)).toBeInTheDocument();
   });
 
-  it('넓은 화면은 오른쪽에 AI를 늘 두고, 보고 있는 자료에 맞는 질문 칩을 주며, 접으면 버튼 하나만 남는다', async () => {
-    setWide(true);
-    const user = userEvent.setup();
-    renderAt('/disputes/references/ref-case');
-
-    const panel = await screen.findByRole('complementary', { name: 'AI에게 물어보기' });
-    const applyQuestion = `"${CASE_ITEM.title}" 사례가 제 상황에도 해당하는지 알고 싶어요.\n제 상황:`;
-    await user.click(await within(panel).findByRole('button', { name: applyQuestion }));
-    expect(within(panel).getByLabelText('상담 질문')).toHaveValue(applyQuestion);
-    // 같은 일을 하는 본문 버튼은 넓은 화면에 두지 않는다.
-    expect(screen.queryByRole('button', { name: '내 상황에 적용해 보기' })).not.toBeInTheDocument();
-
-    await user.click(within(panel).getByRole('button', { name: '접기' }));
-    expect(screen.queryByRole('complementary', { name: 'AI에게 물어보기' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
-    // 접었다 펴도 쓰던 질문은 남는다.
-    expect(within(screen.getByRole('complementary', { name: 'AI에게 물어보기' })).getByLabelText('상담 질문')).toHaveValue(applyQuestion);
-    expect(screen.getByRole('heading', { name: CASE_ITEM.title })).toBeInTheDocument();
-  });
-
-  it('첫 화면의 질문 칩을 누르면 그 상황 안내 맨 위에 연결된 자주 묻는 질문의 답을 펼친다', async () => {
+  it('AI는 오른쪽에 붙여 두지 않고, 첫 화면에는 입구가 없으며, 상황 안내를 다 읽은 맨 끝에서 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes');
 
     expect(screen.getByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
-    expect(screen.getByText('내가 임대인이라면')).toBeInTheDocument();
-    expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', 'https://adrhome.reb.or.kr/adrhome/reb/main');
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /AI/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '원상복구 범위' }));
+    await user.click(screen.getByRole('button', { name: /^원상복구·손해배상/ }));
+    expect(await screen.findByText('답을 찾지 못하셨나요?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
+
+    expect(screen.getByText(/챗봇 화면 · 원상복구·손해배상 문제로 상담하고 싶어요/)).toBeInTheDocument();
+  });
+
+  it('첫 화면은 유형(쉬운 이름·대표 질문)·도움받을 곳·자료 출처·기관 연락처만 보여 주는 브리핑이다', () => {
+    renderAt('/disputes');
+
+    expect(screen.getByRole('heading', { name: '임대차 분쟁 센터' })).toBeInTheDocument();
+    const names = screen.getAllByRole('button').map((button) => button.textContent);
+    for (const label of ['보증금 반환', '월세·보증금 조정', '수리 책임', '계약 갱신·종료', '원상복구·손해배상', '기타']) {
+      expect(names.some((name) => name.startsWith(label))).toBe(true);
+    }
+    // 쉬운 이름 아래 대표 질문만 둔다(분류 기준은 코드에만 두고 화면에는 적지 않는다).
+    expect(screen.getByText('바로 돌려줄 돈이 없다면?')).toBeInTheDocument();
+    expect(screen.queryByText(/법정 분류|분류 기준/)).not.toBeInTheDocument();
+    expect(screen.getByText('합의는 어렵지만 소송까지는 원하지 않을 때')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /조정 신청/ })).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
+    expect(within(screen.getByRole('region', { name: '자료 출처' })).getByRole('link', { name: /국가법령정보센터/ })).toHaveAttribute('href', 'https://www.law.go.kr/법령/주택임대차보호법');
+    // 전국 서비스라 서울시 센터는 지역 한정을 카드에 밝힌다.
+    expect(screen.getByText('서울 소재 주택만')).toBeInTheDocument();
+    // 연락처는 따로 모으지 않고 도움받을 곳 카드 안에 둔다.
+    expect(screen.queryByRole('region', { name: '기관 연락처' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /대한법률구조공단 132/ })).toHaveAttribute('href', 'tel:132');
+    expect(screen.getByRole('link', { name: /1644-5599/ })).toHaveAttribute('href', 'tel:1644-5599');
+    // 운영시간은 공식 안내에서 확인한 것만 붙인다.
+    expect(screen.getByText('평일 9:00~17:30')).toBeInTheDocument();
+    // 출처는 가벼운 알약 링크 5개(자료 이름)
+    expect(within(screen.getByRole('region', { name: '자료 출처' })).getAllByRole('link')).toHaveLength(6);
+    // 자주 묻는 질문 5개는 원본 사례·상담에 많이 나온 순서
+    const popular = within(screen.getByText('자주 묻는 질문').parentElement).getAllByRole('button').map((button) => button.textContent);
+    expect(popular.slice(0, 5)).toEqual([
+      '실거주로 갱신을 거절할 수 있나요?',
+      '월세 얼마까지 올릴 수 있나요?',
+      '세입자가 중간에 나가겠대요',
+      '묵시적 갱신 후 해지하면?',
+      '보증금에서 수리비를 빼려면?',
+    ]);
+    // 최근 이슈(뉴스)는 첫 화면에서 뺐다.
+    expect(screen.queryByText('최근 임대차 이슈')).not.toBeInTheDocument();
+  });
+
+  it('첫 화면 자주 묻는 질문을 누르면 그 상황 안내에서 답을 바로 펼친다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes');
+
+    await user.click(screen.getByRole('button', { name: '월세 얼마까지 올릴 수 있나요?' }));
+
+    expect(await screen.findByRole('heading', { name: '월세·보증금 조정' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '얼마까지 올릴 수 있나' })).toHaveAttribute('aria-pressed', 'true');
+    const selected = await screen.findByRole('region', { name: '고른 질문' });
+    expect(await within(selected).findByText(/5%를 넘게 올릴 수 없어요/)).toBeInTheDocument();
+  });
+
+  it('상황 안내 맨 위 질문 칩을 누르면 그 질문을 고른 칩으로 표시하고 답을 바로 아래 펼치며, 다시 누르면 푼다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes/topics/restore');
 
     expect(await screen.findByRole('heading', { name: '원상복구·손해배상' })).toBeInTheDocument();
+    // 칩은 상황 전체 목록이 아니라 자주 묻는 질문이라는 걸 첫 화면과 같은 라벨로 보여 준다.
+    expect(within(screen.getByText('자주 묻는 질문').parentElement).getByRole('button', { name: '원상복구 범위' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '원상복구 범위' }));
+
+    expect(screen.getByRole('button', { name: '원상복구 범위' })).toHaveAttribute('aria-pressed', 'true');
     const selected = await screen.findByRole('region', { name: '고른 질문' });
     const question = await within(selected).findByRole('button', { name: /못 자국이 많아요/ });
     expect(question).toHaveAttribute('aria-expanded', 'true');
     expect(within(selected).getByText(/통상의 손모는 특약이 없으면/)).toBeInTheDocument();
+    // 답 아래에 근거 자료를 낸 곳을 적는다.
+    expect(within(selected).getByText('출처 · 2025 주택·상가건물 임대차분쟁 조정사례집')).toBeInTheDocument();
+
+    // 고른 칩을 다시 누르면 풀리고 답도 접힌다.
+    await user.click(screen.getByRole('button', { name: '원상복구 범위' }));
+    expect(screen.getByRole('button', { name: '원상복구 범위' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('region', { name: '고른 질문' })).not.toBeInTheDocument();
   });
 
   it('첫 화면에서 유형 카드 머리를 누르면 상황 안내로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes');
 
-    await user.click(screen.getByRole('button', { name: '원상복구·손해배상' }));
+    await user.click(screen.getByRole('button', { name: /^원상복구·손해배상/ }));
 
     expect(await screen.findByRole('heading', { name: '원상복구·손해배상' })).toBeInTheDocument();
     expect(screen.getByText(/자연스럽게 닳은 건 책임이 아니에요/)).toBeInTheDocument();
   });
 
-  it('보증금 반환 안내는 확인할 것·내 경우·준비 자료·판례(왜 관련 있는지)·절차·기관까지 한 화면에 보여 준다', async () => {
+  it('보증금 반환 안내는 번호 단계 5개를 처음부터 모두 펼쳐 그 단계의 자료·서식·기관을 보여 주고, 접을 수 있다', async () => {
+    const user = userEvent.setup();
     renderAt('/disputes/topics/deposit');
 
     expect(await screen.findByRole('heading', { name: '보증금 반환' })).toBeInTheDocument();
-    for (const name of ['먼저 확인하세요', '내 경우에는', '지금 준비할 자료', '해결 절차', '어디에 도움을 요청해야 하나요?', '서식·도구']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-    }
+    const steps = within(screen.getByRole('region', { name: '해결 단계' })).getAllByRole('button', { expanded: true });
+    expect(steps.map((step) => step.textContent.replace(/접기$/, ''))).toEqual(['지금 상황 확인', '협의', '문서로 알리기', '분쟁조정', '법원']);
+    expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
     expect(screen.getByText('공제 금액으로 다투는 경우')).toBeInTheDocument();
+    for (const name of ['준비할 자료', '서식·도구', '도움받을 곳']) {
+      expect(screen.getAllByRole('heading', { name }).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByRole('link', { name: /내용증명 보내기/ })).toHaveAttribute('href', expect.stringContaining('econprf.RetrieveEConprfReqSend'));
     expect(screen.getByRole('link', { name: /보증금 공탁/ })).toHaveAttribute('href', 'https://ekt.scourt.go.kr');
+    // 준비할 자료 아래에 기관이 정한 조정 신청 서류 안내로 바로 잇는다.
+    expect(screen.getByRole('link', { name: /신청 서류 안내/ })).toHaveAttribute('href', expect.stringContaining('housing.seoul.go.kr'));
+    expect(screen.getByRole('link', { name: /조정신청서 서식/ })).toHaveAttribute('href', expect.stringContaining('10306000000002022101717'));
+    // 서식·도구는 기관 메인이 아니라 그 기능 페이지로 바로 간다.
+    expect(screen.getByRole('link', { name: /전월세 전환 계산기/ })).toHaveAttribute('href', expect.stringContaining('transferCalculatorForm.do'));
+    expect(screen.getByRole('link', { name: /주택임대차 표준계약서/ })).toHaveAttribute('href', expect.stringContaining('downloadContract.do'));
+    expect(screen.getAllByRole('link', { name: /조정 신청/ })[0]).toHaveAttribute('href', expect.stringContaining('dispute/dispute.do'));
     expect(lastListParams()).toMatchObject({ type: 'CASE', category: 'DEPOSIT_RETURN', size: 3 });
 
-    // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 관련 판례 찾기로 판례 탭 검색을 연다.
-    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '모두 접기' }));
+    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /지금 상황 확인/ }));
+    expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '준비할 자료' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '모두 펼치기' }));
+
+    // 문장마다 [근거 보기]로 근거와 적용 조건을 펼치고, 근거 자료(법령·사례)는 자료 찾기를 거치지 않고 그 자료 상세로 바로 간다.
     await user.click(screen.getAllByRole('button', { name: '근거 보기' })[0]);
     expect(screen.getByText('주택임대차보호법 제6조의2 (묵시적 갱신 시 계약의 해지)')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '관련 판례 찾기' }));
-    expect(await screen.findByRole('heading', { name: '자료 찾기' })).toBeInTheDocument();
-    await waitFor(() => expect(lastListParams()).toMatchObject({ q: '묵시적', type: 'PRECEDENT' }));
+    expect(await screen.findByRole('button', { name: /법령\s*자료 law-hlpa-6-2/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /사례\s*자료 casebook-2025-H-06-1/ }));
+    expect(await screen.findByRole('heading', { name: CASE_DETAIL.title })).toBeInTheDocument();
+    expect(api.getDisputeReference).toHaveBeenLastCalledWith('ref-casebook-2025-H-06-1');
+  });
+
+  it('내 경우 카드의 [비슷한 사례 보기]는 자료 찾기가 아니라 그 카드에 붙인 조정 사례 상세로 바로 간다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes/topics/deposit');
+
+    await screen.findByRole('heading', { name: '보증금 반환' });
+    const [firstSimilar] = await screen.findAllByRole('button', { name: '비슷한 사례 보기' });
+    await user.click(firstSimilar);
+
+    expect(await screen.findByRole('heading', { name: CASE_DETAIL.title })).toBeInTheDocument();
+    expect(api.getDisputeReference).toHaveBeenLastCalledWith('ref-casebook-2025-H-03-3');
   });
 
   it('나머지 상황도 같은 구조로 안내하고, 상황마다 그 분류의 사례를 가져온다', async () => {
@@ -487,14 +586,14 @@ describe('분쟁 해결사', () => {
       ['repair', '수리 책임', '임차인이 먼저 고치고 비용을 달라는 경우', 'REPAIR_DUTY'],
       ['renewal', '계약 갱신·종료', '내가(가족이) 들어가 살려는 경우', 'RENEWAL_TERMINATION,LEASE_TERM'],
       ['rent', '월세·보증금 조정', '전세를 월세로 바꾸는 경우', 'RENT_ADJUSTMENT'],
-      ['other', '기타·제도 안내', '새 임차인 중개보수를 다투는 경우', 'GENERAL,CONTRACT_INTERPRETATION,BROKERAGE_FEE,PREMIUM'],
+      ['other', '기타', '새 임차인 중개보수를 다투는 경우', 'GENERAL,CONTRACT_INTERPRETATION,BROKERAGE_FEE,PREMIUM'],
     ];
     for (const [key, label, caseTitle, category] of topics) {
       const { unmount } = renderAt(`/disputes/topics/${key}`);
       expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '해결 단계' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: '먼저 확인하세요' })).toBeInTheDocument();
       expect(screen.getByText(caseTitle)).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: '해결 절차' })).toBeInTheDocument();
       expect(lastListParams()).toMatchObject({ type: 'CASE', category, size: 3 });
       unmount();
     }
@@ -508,6 +607,32 @@ describe('분쟁 해결사', () => {
 
     expect(await screen.findByRole('heading', { name: '자료 찾기' })).toBeInTheDocument();
     await waitFor(() => expect(lastListParams()).toMatchObject({ q: '도배' }));
+  });
+});
+
+describe('상황 안내 단계', () => {
+  it('상황마다 서식·도구와 도움받을 곳, 준비 자료·사례·판례가 빠짐없이 한 단계씩에만 들어간다', () => {
+    for (const [key, { guide }] of Object.entries(TOPIC_BRIEFINGS)) {
+      const used = (field) => guide.procedure.flatMap((step) => step[field] ?? []);
+      expect(used('tools').sort(), key).toEqual(guide.tools.map((tool) => tool.key).sort());
+      expect(used('help').sort(), key).toEqual(HELP_ROUTES.map((route) => route.key).sort());
+      expect(used('parts').sort(), key).toEqual(['caseRefs', 'documents', 'precedents']);
+    }
+  });
+  it('문장마다 붙인 근거 자료(refs)는 모두 시드 자료에 있는 sourceKey다', () => {
+    // 테스트는 apps/butler에서 돈다(vitest 기본 cwd).
+    const seedDir = resolve(process.cwd(), '../api/prisma/seed-data') + '/';
+    const seedKeys = new Set(
+      readdirSync(seedDir)
+        .filter((file) => file.endsWith('.json'))
+        .flatMap((file) => JSON.parse(readFileSync(`${seedDir}${file}`, 'utf8')))
+        .map((reference) => reference.sourceKey)
+        .filter(Boolean),
+    );
+    for (const [key, { guide }] of Object.entries(TOPIC_BRIEFINGS)) {
+      const refs = [...guide.checks, ...guide.cases].flatMap((item) => item.refs ?? []);
+      expect(refs.filter((ref) => !seedKeys.has(ref)), key).toEqual([]);
+    }
   });
 });
 
