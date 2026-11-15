@@ -202,6 +202,19 @@ describe('예외 화면', () => {
     expect(api.postLogout).toHaveBeenCalledTimes(1);
   });
 
+  it('임차인 + 다른 사람이 수락한 초대(요약 409 CONTRACT_TENANT_ALREADY_LINKED) → F1 다른 계정이 연결', async () => {
+    api.getTenantInvitationPreview.mockRejectedValue(httpError(409, 'CONTRACT_TENANT_ALREADY_LINKED'));
+    renderAt('/invite/tok', TENANT);
+    expect(await screen.findByText(/이미 다른 계정과 연결돼 있어요/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '이미 추가한 계약이에요' })).not.toBeInTheDocument();
+  });
+
+  it('소셜 시작에서 본인 확인이 끝나 돌아오면(?oauth_error=INVITATION_VERIFY_REQUIRED) B1 에 다시 확인 안내', async () => {
+    renderAt('/invite/tok?oauth_error=INVITATION_VERIFY_REQUIRED');
+    expect(await screen.findByRole('alert')).toHaveTextContent('본인 확인이 끝났어요');
+    expect(screen.getByRole('button', { name: '계약서 확인하기' })).toBeInTheDocument();
+  });
+
   it('임차인 + 이미 수락된 초대 → F2 [내 계약 보기]', async () => {
     api.getTenantInvitationPreview.mockRejectedValue(httpError(409, 'INVITATION_ALREADY_ACCEPTED'));
     renderAt('/invite/tok', TENANT);
@@ -263,6 +276,21 @@ describe('초대 가입 /invite/:token/register', () => {
     api.getTenantInvitationPreview.mockRejectedValue(httpError(409, 'INVITATION_ALREADY_ACCEPTED'));
     act(() => useSessionStore.getState().login({ user: TENANT, verifiedLegalDongCodes: [] }));
     expect(await screen.findByRole('heading', { name: '계약을 추가했어요' })).toBeInTheDocument();
+  });
+
+  it('임차인으로 로그인한 채 가입 주소를 열면 joined 없이 초대 화면으로, 남이 수락한 초대에 C3 가 나오지 않는다', async () => {
+    api.getTenantInvitationPreview.mockRejectedValue(httpError(409, 'CONTRACT_TENANT_ALREADY_LINKED'));
+    renderAt('/invite/tok/register', TENANT);
+    expect(await screen.findByText(/이미 다른 계정과 연결돼 있어요/)).toBeInTheDocument();
+    expect(where()).toBe('/invite/tok');
+    expect(screen.queryByRole('heading', { name: '계약을 추가했어요' })).not.toBeInTheDocument();
+  });
+
+  it('임차인으로 로그인한 채 소셜 가입 주소를 열어도 joined 없이 초대 화면으로', async () => {
+    api.getTenantInvitationPreview.mockRejectedValue(httpError(409, 'INVITATION_ALREADY_ACCEPTED'));
+    renderAt('/invite/tok/register/oauth', TENANT);
+    expect(await screen.findByRole('heading', { name: '이미 추가한 계약이에요' })).toBeInTheDocument();
+    expect(where()).toBe('/invite/tok');
   });
 
   it('임대인으로 로그인한 채 가입 주소를 열면 역할 홈으로(초대 주소는 TENANT 만)', async () => {
