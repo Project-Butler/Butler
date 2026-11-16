@@ -168,7 +168,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.ok(data.recentDeals.every((row) => row.complexName === '시세 테스트 헬리오' && typeof row.deposit === 'number' && row.price === null));
   });
 
-  test('동 시세: 그 법정동 거래 전부(이어진 · 못 이은 것), 못 이은 거래의 단지 이름은 원천 이름 · 면적은 양끝 포함', async () => {
+  test('동 시세: 그 법정동 거래 전부(이어진 · 못 이은 것), 못 이은 거래의 단지 이름은 원천 이름', async () => {
     const res = await api(tenant, `/api/v1/market-prices/regions/${DONG}?dealType=JEONSE&fromYearMonth=2025-12&toYearMonth=2026-11`);
     const { data } = await res.json();
     assert.equal(data.scope, 'REGION');
@@ -176,10 +176,27 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.equal(data.monthly[0].dealCount, 5);
     const names = data.recentDeals.map((row) => row.complexName);
     assert.ok(names.includes('한강극동') && names.includes('시세 테스트 현대1'));
-    const area = TRIZIUM.exclusiveArea;
-    const sale = await (await api(tenant, `/api/v1/market-prices/regions/${DONG}?dealType=SALE&areaMin=${area}&areaMax=${area}&fromYearMonth=2025-12&toYearMonth=2026-11`)).json();
-    assert.deepEqual(sale.data.recentDeals.map((row) => row.exclusiveArea), [area]);
-    assert.deepEqual([sale.data.areaMin, sale.data.areaMax], [area, area]);
+  });
+
+  test('면적 경계: areaMin < 전용면적 ≤ areaMax — 정확히 60 · 85 · 105㎡ 거래는 한 칩에만', async () => {
+    const boundary = [60, 85, 105].map((exclusiveArea) => ({
+      dealKind: 'TRADE', dealType: 'SALE', sigunguCode: SGG, contractYearMonth: '2026-10', legalDongCode: DONG, aptName: `경계 ${exclusiveArea}`,
+      exclusiveArea, floor: 1, contractDate: new Date('2026-10-15T00:00:00Z'), price: 100000000n, collectedAt: new Date(),
+    }));
+    await prisma.marketDeal.createMany({ data: boundary });
+    try {
+      const bands = [['', '60'], ['60', '85'], ['85', '105'], ['105', '']];
+      const seen = [];
+      for (const [areaMin, areaMax] of bands) {
+        const query = new URLSearchParams({ dealType: 'SALE', fromYearMonth: '2025-12', toYearMonth: '2026-11', ...(areaMin ? { areaMin } : {}), ...(areaMax ? { areaMax } : {}) });
+        const { data } = await (await api(tenant, `/api/v1/market-prices/regions/${DONG}?${query}`)).json();
+        assert.deepEqual([data.areaMin, data.areaMax], [areaMin ? Number(areaMin) : null, areaMax ? Number(areaMax) : null]);
+        seen.push(data.recentDeals.filter((row) => row.complexName.startsWith('경계')).map((row) => row.exclusiveArea).sort((a, b) => a - b));
+      }
+      assert.deepEqual(seen, [[60], [85], [105], []]);
+    } finally {
+      await prisma.marketDeal.deleteMany({ where: { sigunguCode: SGG, aptName: { startsWith: '경계 ' } } });
+    }
   });
 
   test('권한 · 에러: 로그인 필요, 없는 단지 · 법정동 404, dealType 없으면 400', async () => {

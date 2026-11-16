@@ -5,7 +5,7 @@
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { isUuid } from '../../../platform/uuid.js';
-import { DEAL_TYPES, RECENT_DEALS, SOURCE } from '../marketPriceRules.js';
+import { DEAL_TYPES, RECENT_DEALS, SOURCE, areaRange } from '../marketPriceRules.js';
 import { firstDayOf, isYearMonth, kstDate, kstYearMonth, lastDayOf, retentionMonths, shiftYearMonth, yearMonthsBetween } from '../months.js';
 import { ensureBackfillJob } from './backfillJobs.js';
 import { loadLinkIndex, relinkSigungu } from './collect.js';
@@ -110,9 +110,8 @@ const buildPrices = async ({ user, scope, complexId, legalDongCode, sigunguCode,
   // 마지막 수집 뒤에 등록된 단지 — 원천을 부르지 않고 저장된 거래를 지금 잇는다(DB 만, 다음 정기 실행 전까지만 일어난다)
   if (complexCreatedAt && complexCreatedAt > coverage.lastCollectedAt) await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));
 
-  const area = {};
-  if (query.areaMin !== null) area.gte = query.areaMin;
-  if (query.areaMax !== null) area.lte = query.areaMax;
+  // 면적: areaMin < 전용면적 ≤ areaMax(규칙 파일 areaRange — 한 거래가 이웃한 두 칩에 나오지 않게)
+  const area = areaRange(query.areaMin, query.areaMax);
   const deals = await prisma.marketDeal.findMany({
     where: {
       ...(scope === 'COMPLEX' ? { complexId } : { legalDongCode }),

@@ -81,6 +81,13 @@ export const SOURCE = '국토교통부 실거래가';
 export const RECENT_DEALS = 20;
 // 왜: 연동 규격의 dealType 세 가지
 export const DEAL_TYPES = ['SALE', 'JEONSE', 'MONTHLY'];
+// 왜 아래 끝 미포함 · 위 끝 포함(areaMin < 전용면적 ≤ areaMax): 국민주택 규모를 "85㎡ 이하" 로 부르는 관행과 화면 칩(60㎡ 이하 · 60–85 ·
+// 85–105 · 105 초과)이 같고, 한 거래가 이웃한 두 칩에 나오지 않게(11/17 양끝 포함일 때 송파 한 달 1,532건 중 13건이 두 칩에 나왔다).
+// 한쪽이 없으면 그쪽 끝은 제한 없음(첫 칩은 areaMax 만, 마지막 칩은 areaMin 만). 반환은 Prisma 숫자 조건
+export const areaRange = (areaMin, areaMax) => ({
+  ...(areaMin !== null && areaMin !== undefined ? { gt: areaMin } : {}),
+  ...(areaMax !== null && areaMax !== undefined ? { lte: areaMax } : {}),
+});
 
 // ===== 처음 보는 단지(COLLECTING) =====
 // 왜 Job: 규격이 jobId 를 준다. GET /jobs/:jobId 는 요청한 본인 · ADMIN 만 보므로 요청한 사람 이름으로 만든다(계획서 5절)
