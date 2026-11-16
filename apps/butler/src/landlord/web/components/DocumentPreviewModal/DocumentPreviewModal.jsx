@@ -50,11 +50,11 @@ export const DocumentPreviewModal = ({ document, urls, onClose }) => {
       footer={
         <>
           <Button variant="secondary" size="h44" onClick={() => urls.save(document)} disabled={preview.status === 'loading'}>
-            <Download size={16} aria-hidden="true" />
+            <Download size={16} className="-ml-0.5 mr-1.5 inline-block align-[-3px]" aria-hidden="true" />
             저장
           </Button>
           <Button variant="secondary" size="h44" onClick={openInTab}>
-            <ExternalLink size={16} aria-hidden="true" />
+            <ExternalLink size={16} className="-ml-0.5 mr-1.5 inline-block align-[-3px]" aria-hidden="true" />
             새 탭에서 열기
           </Button>
         </>
