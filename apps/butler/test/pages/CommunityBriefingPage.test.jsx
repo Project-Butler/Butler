@@ -60,7 +60,7 @@ const poll = (i, isClosed) => ({ id: `poll-${i}`, scope: 'REGION', complexId: nu
 // 시세 API 응답(연동 규격 2장 시세 모양, 금액은 원). 거래 있는 달만 monthly 에 온다
 const marketReady = (dealType) => ({
   scope: 'COMPLEX', complexId: BUILDING.complexId, legalDongCode: REGION.legalDongCode, dealType, areaMin: 60, areaMax: 85,
-  coveredFromYearMonth: '2025-12', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
+  coveredFromYearMonth: '2025-11', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
   monthly: [
     { yearMonth: '2026-08', dealCount: 4, avgPrice: 2310000000, minPrice: 2250000000, maxPrice: 2380000000, avgDeposit: null, avgMonthlyRent: null },
     { yearMonth: '2026-10', dealCount: 6, avgPrice: 2405000000, minPrice: 2330000000, maxPrice: 2470000000, avgDeposit: null, avgMonthlyRent: null },
@@ -209,10 +209,11 @@ describe('브리핑 시세 — 시세 탭과 같은 규칙(지난달까지 최�
   it('큰 숫자 · 설명 한 줄(최근 3개월 평균 · 면적대 · 매매), 차트는 빈 달을 점선으로', async () => {
     renderAt('/community/briefing');
     const market = await section('시세');
-    expect(await within(market).findByText('23억 3,333만')).toBeInTheDocument();
-    expect(within(market).getByText('최근 3개월 평균 · 60–85㎡ · 매매 23억 3,333만')).toBeInTheDocument();
+    expect(await within(market).findByText('23억 3,300만')).toBeInTheDocument();
+    expect(within(market).getByText('최근 3개월 평균 · 60–85㎡')).toBeInTheDocument();
+    expect(within(market).getByText('직전 3개월보다 ▲14.8%')).toHaveClass('text-ink-2');
     const chart = within(market).getByRole('img');
-    expect(chart).toHaveAttribute('aria-label', '최근 11개월 매매 추이');
+    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매 추이');
     expect(chart.querySelectorAll('[data-segment="gap"]')).toHaveLength(2);
     expect(chart.querySelectorAll('circle[data-month="2026-11"]')).toHaveLength(0);
   });

@@ -41,7 +41,7 @@ const ready = ({ dealType, areaMin = 60, areaMax = 85 }) => {
   const monthlyRent = dealType === 'MONTHLY';
   return {
     scope: 'COMPLEX', complexId: BUILDING.complexId, legalDongCode: REGION.legalDongCode, dealType, areaMin, areaMax,
-    coveredFromYearMonth: '2025-12', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
+    coveredFromYearMonth: '2025-11', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
     monthly: [
       { yearMonth: '2026-08', dealCount: 5, avgPrice: sale ? 2310000000 : null, minPrice: sale ? 2250000000 : null, maxPrice: sale ? 2380000000 : null, avgDeposit: sale ? null : 1100000000, avgMonthlyRent: monthlyRent ? 2500000 : null },
       { yearMonth: '2026-10', dealCount: 7, avgPrice: sale ? 2405000000 : null, minPrice: sale ? 2330000000 : null, maxPrice: sale ? 2470000000 : null, avgDeposit: sale ? null : 1150000000, avgMonthlyRent: monthlyRent ? 2600000 : null },
@@ -164,18 +164,30 @@ describe('차트 · 대표 숫자 — 빈 달은 점선, 이번 달은 빼고 �
     expect(saleLine.querySelectorAll('[data-segment="gap"]')[0]).toHaveAttribute('stroke-dasharray', '4 4');
     expect(saleLine.querySelectorAll('[data-segment="solid"]')).toHaveLength(1); // 7–8월
     // 차트 달은 모은 첫 달(2025-12)부터 지난달(2026-10)까지
-    expect(chart).toHaveAttribute('aria-label', '최근 11개월 매매·전세 추이');
+    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이');
+    // 가로축: 마지막 달에서 거꾸로 3개월마다 · 세로축: 눈금 2~3개(억)
+    expect([...chart.querySelectorAll('[data-tick="x"]')].map((text) => text.textContent)).toEqual(['26-01', '26-04', '26-07', '26-10']);
+    const yTicks = [...chart.querySelectorAll('[data-tick="y"]')].map((text) => text.textContent);
+    expect(yTicks.length).toBeGreaterThanOrEqual(2);
+    expect(yTicks.length).toBeLessThanOrEqual(3);
+    expect(yTicks.every((label) => /^\d+(\.\d+)?억$/.test(label))).toBe(true);
     expect(chart.querySelectorAll('circle[data-month="2026-11"]')).toHaveLength(0);
   });
 
-  it('큰 숫자는 최근 3개월(8~10월) 평균, 오른쪽 위는 지난달, 설명 한 줄에 몇 개월 평균 · 면적대 · 매매 · 전세', async () => {
+  it('큰 숫자는 최근 3개월(8~10월) 평균(백만 원 반올림), 오른쪽 위는 지난달, 설명은 면적대 · 전세 평균, 증감은 ▲▼ 와 비교 대상, 출처 줄은 카드 바로 아래', async () => {
     renderMarket();
     await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
     expect(screen.getByText('매매 시세')).toBeInTheDocument();
     expect(screen.getByText('2026-10')).toBeInTheDocument();
-    expect(screen.getByText('23억 3,333만')).toBeInTheDocument(); // (22억 + 24억 × 2) ÷ 3 — 이번 달 30억은 넣지 않음
-    expect(screen.getByText('최근 3개월 평균 · 60–85㎡ · 매매 23억 3,333만 · 전세 11억 5,000만')).toBeInTheDocument();
-    expect(screen.getByText('+14.3%')).toBeInTheDocument(); // 증감: 지난달까지 마지막 거래 달(10월 24억) ÷ 3개월 전(7월 21억) — 이번 달 30억은 넣지 않음
+    expect(screen.getByText('23억 3,300만')).toBeInTheDocument(); // (22억 + 24억 × 2) ÷ 3 = 23억 3,333만 → 백만 원 반올림 — 이번 달 30억은 넣지 않음
+    expect(screen.getByText('최근 3개월 평균 · 60–85㎡ · 전세 11억 5,000만')).toBeInTheDocument();
+    // 증감: 최근 3개월 평균 23억 3,333만 ÷ 직전 3개월(5~7월) 평균 (20억 × 2 + 21억) ÷ 3 = 20억 3,333만
+    const change = screen.getByText('직전 3개월보다 ▲14.8%');
+    expect(change).toHaveClass('text-ink-2');
+    expect(change).not.toHaveClass('text-ok');
+    // 출처 줄은 차트 카드 바로 아래(오른쪽 표 길이와 상관없이 스크롤 없이 보이게)
+    const source = screen.getByText((_, el) => el?.tagName === 'P' && el.textContent.startsWith('출처:'));
+    expect(source.previousElementSibling).toContainElement(screen.getByRole('img', { name: /추이/ }));
     // 이번 달 거래는 "최근 거래" 표에는 그대로
     expect(within(screen.getByRole('table')).getAllByRole('row')[1]).toHaveTextContent('2026-11-05');
   });
