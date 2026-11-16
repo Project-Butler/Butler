@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { Button } from '@butler/ui';
+import { Button, FilterChip } from '@butler/ui';
 import { FaqList } from '../components/DisputeReference/FaqList';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -8,7 +8,7 @@ import { TopicGuide } from '../components/DisputeReference/TopicGuide';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { findTopic } from '../utils/disputeReference';
-import { HELP_ROUTES, TOPIC_BRIEFINGS } from '../utils/disputePortal';
+import { HELP_ROUTES, TOPIC_BRIEFINGS, TOPIC_QUESTIONS } from '../utils/disputePortal';
 import { isUnauthorizedError } from '../../../shared/apiError';
 
 // 실제 조정 사례는 요약과 함께 3건만 보여 주고, 나머지는 자료 찾기로 잇는다.
@@ -16,18 +16,20 @@ const CASE_COUNT = 3;
 
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
-// 상황 안내: 한 줄 정리와 (칩으로 왔으면) 고른 질문의 답을 먼저 보여 주고, 아래에 끝까지 보는 안내(TopicGuide)를 붙인다.
+// 상황 안내: 한 줄 정리와 자주 묻는 질문 칩, (칩을 눌렀으면) 고른 질문의 답을 먼저 보여 주고, 아래에 끝까지 보는 안내(TopicGuide)를 붙인다.
 // 사용자가 사례집을 직접 뒤지지 않아도 되게 정리한 내용이 위에 온다.
 export const DisputeTopicPage = () => {
   const { topicKey } = useParams();
-  const { askAi, isAiDocked, setAiSuggestions, openReference, goBack, onNavigate, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onNavigate, onUnauthorized } = useOutletContext();
   const topic = findTopic(topicKey);
   const briefing = TOPIC_BRIEFINGS[topicKey];
   const category = topic?.categories.join(',');
   const faqs = useGetDisputeFaqList({ category });
-  // 첫 화면 질문 칩에서 고른 질문(?faq=key). 다른 상황 분류의 질문일 수도 있어서 전체 질문에서 찾는다.
-  const [searchParams] = useSearchParams();
+  // 맨 위 질문 칩에서 고른 질문(?faq=key). 다른 상황 분류의 질문일 수도 있어서 전체 질문에서 찾는다.
+  const [searchParams, setSearchParams] = useSearchParams();
   const selectedFaqKey = searchParams.get('faq');
+  // 고른 칩을 다시 누르면 풀린다. 같은 화면 안의 고르기라 기록을 쌓지 않는다(replace, 자료 찾기 칩과 같음).
+  const toggleFaq = (faq) => setSearchParams(faq === selectedFaqKey ? {} : { faq }, { replace: true });
   const allFaqs = useGetDisputeFaqList({});
   const selectedFaq = selectedFaqKey ? allFaqs.data?.find((faq) => faq.key === selectedFaqKey) : undefined;
   const cases = useGetDisputeReferenceList({
@@ -36,15 +38,14 @@ export const DisputeTopicPage = () => {
     size: CASE_COUNT,
   });
 
+  // 상황 안내 문장마다 붙인 근거 자료(refs)를 한 번에 받아 sourceKey로 찾는다.
+  const refKeys = [...new Set([...(briefing?.guide.checks ?? []), ...(briefing?.guide.cases ?? [])].flatMap((item) => item.refs ?? []))];
+  const basisRefList = useGetDisputeReferenceList({ sourceKeys: refKeys.join(','), size: refKeys.length }, { enabled: refKeys.length > 0 });
+  const basisRefs = new Map((basisRefList.data?.data ?? []).map((reference) => [reference.sourceKey, reference]));
+
   useEffect(() => {
     window.scrollTo?.(0, 0);
   }, [topicKey]);
-
-  // 오른쪽 AI: 이 상황 안내를 읽다가 바로 물어볼 질문
-  useEffect(() => {
-    if (!topic) return;
-    setAiSuggestions?.([`${topic.label} 문제에서 제 경우는 어디에 해당하나요?`, `${topic.label} 안내의 어려운 말을 쉽게 설명해 주세요`]);
-  }, [topic, setAiSuggestions]);
 
   useEffect(() => {
     if (isUnauthorizedError(faqs.error) || isUnauthorizedError(cases.error)) onUnauthorized?.();
@@ -70,6 +71,23 @@ export const DisputeTopicPage = () => {
         <p className="break-keep text-card font-semibold text-accent-strong">{briefing.headline}</p>
         <p className="mt-2 text-sub text-ink-2">근거 · {briefing.laws.join(', ')}</p>
       </div>
+      {/* 자주 묻는 질문 칩(카카오 고객센터 추천 키워드처럼 한 줄, 넘기는 캐러셀 아님). 누르면 바로 아래 '고른 질문'에 답을 펼친다.
+          상황 전체 목록이 아니라 사례가 많은 질문만 고른 것이라, 첫 화면과 같은 '자주 묻는 질문' 라벨을 보이게 둔다. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-sub font-semibold text-ink-3">자주 묻는 질문</span>
+        <ul className="contents">
+          {(TOPIC_QUESTIONS[topicKey] ?? []).map((question) => (
+            <li key={question.faq}>
+              <FilterChip
+                selected={question.faq === selectedFaqKey}
+                onClick={() => toggleFaq(question.faq)}
+              >
+                {question.label}
+              </FilterChip>
+            </li>
+          ))}
+        </ul>
+      </div>
       {selectedFaq && (
         <section className="mt-3 flex flex-col gap-3" aria-label="고른 질문">
           <SectionTitle>고른 질문</SectionTitle>
@@ -93,15 +111,15 @@ export const DisputeTopicPage = () => {
     <div className="flex flex-col gap-6">
       {header}
       <TopicGuide
+        key={topicKey}
         guide={briefing.guide}
         helpRoutes={HELP_ROUTES}
         cases={caseItems}
         precedents={precedents}
-        onSearch={(q) => onNavigate('disputeSearch', { q })}
-        onSearchPrecedent={(q) => onNavigate('disputeSearch', { q, tab: 'PRECEDENT' })}
+        basisRefs={basisRefs}
         onOpenReference={openReference}
-        // 넓은 화면은 오른쪽 AI가 있어서 맨 아래 AI 카드를 두지 않는다.
-        onAsk={isAiDocked ? undefined : askAboutTopic}
+        // 안내를 다 읽고도 답이 없을 때의 AI 입구(맨 끝)
+        onAsk={askAboutTopic}
       />
       <LegalNotice />
     </div>

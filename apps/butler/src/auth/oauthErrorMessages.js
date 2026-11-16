@@ -13,6 +13,8 @@ const OAUTH_ERROR_MESSAGES = {
   OAUTH_UNAVAILABLE: '소셜 로그인을 아직 사용할 수 없습니다. 이메일로 로그인해주세요.',
   AUTH_ACCOUNT_SUSPENDED: '정지된 계정입니다. 운영팀에 문의해주세요.',
   AUTH_ACCOUNT_UNAVAILABLE: '사용할 수 없는 계정입니다.',
+  // 초대 화면에서 소셜 가입을 시작했는데 본인 확인이 끝난 경우(API가 /invite/:token?oauth_error=로 돌려보낸다)
+  INVITATION_VERIFY_REQUIRED: '본인 확인이 끝났어요. 다시 확인한 뒤 소셜 가입을 이어 가 주세요.',
 };
 
 const DEFAULT_MESSAGE = '소셜 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.';

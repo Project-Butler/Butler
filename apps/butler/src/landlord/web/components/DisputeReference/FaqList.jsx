@@ -3,8 +3,12 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { TYPE_LABELS } from '../../utils/disputeReference';
 
 // 자주 묻는 질문 아코디언. 첫 질문은 펼쳐 둔다. 답 아래 근거 자료를 누르면 사례 상세로 간다.
+// 근거 자료 아래 '출처'에 자료를 낸 곳(사례집·국가법령정보센터 등)을 적는다(네이버 민원정보의 '제공' 줄처럼).
 // 질문이 늦게 도착해도 첫 질문이 펼쳐지도록, 아직 아무것도 누르지 않은 상태(FIRST)를 따로 둔다.
 const FIRST = Symbol('first');
+
+// 근거 자료의 출처 이름(같은 책은 한 번만)
+const sourcesOf = (faq) => [...new Set(faq.references.map((reference) => reference.sourceTitle).filter(Boolean))];
 
 export const FaqList = ({ faqs, onOpenReference }) => {
   const [openKey, setOpenKey] = useState(FIRST);
@@ -51,6 +55,9 @@ export const FaqList = ({ faqs, onOpenReference }) => {
                       </li>
                     ))}
                   </ul>
+                )}
+                {sourcesOf(faq).length > 0 && (
+                  <p className="mt-2 break-keep text-sub text-ink-3">출처 · {sourcesOf(faq).join(' · ')}</p>
                 )}
               </div>
             )}

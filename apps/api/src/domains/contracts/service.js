@@ -19,6 +19,7 @@ import { computeOwnershipVerificationStatus } from '../../platform/ownershipStat
 import { compareDateStrings, getNow, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { cancelContractInvitationsInTx, revokeContractVerificationsInTx } from '../../platform/tenantInvitationLifecycle.js';
 
 const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
 
@@ -270,8 +271,8 @@ export const findContractForUser = async (user, contractId, req) => {
   return respond(contract, user);
 };
 
-// 쓰기 공통: 계약을 찾고 그 소유 관계를 잠근다. 요청자가 그 소유자가 아니면 404(R-10).
-const lockContractForOwner = async (tx, user, contractId) => {
+// 쓰기 공통: 계약을 찾고 그 소유 관계를 잠근다. 요청자가 그 소유자가 아니면 404(R-10). 초대 발급(tenantInvitations)도 쓴다.
+export const lockContractForOwner = async (tx, user, contractId) => {
   const found = await tx.contract.findUnique({ where: { id: contractId }, select: { ownershipId: true } });
   if (!found) throwContractNotFound();
   const ownership = await lockOwnershipRow(tx, found.ownershipId);
@@ -319,6 +320,10 @@ export const updateContract = async (user, contractId, input, req) => {
       },
       include: CONTRACT_INCLUDE,
     });
+    // 임차인 번호가 바뀌면 그 계약 초대의 본인 확인 세션을 폐기한다(docs/11 2-2).
+    if (data.tenantPhone !== undefined && data.tenantPhone !== contract.tenantPhone) {
+      await revokeContractVerificationsInTx(tx, contract.id);
+    }
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_UPDATED, row, { fields: Object.keys(data) });
     const changedFields = Object.keys(data);
     await recordContractAudit(tx, user, req, {
@@ -354,6 +359,8 @@ export const terminateContract = async (user, contractId, { terminatedOn, reason
       data: { terminatedOn: toDbDate(terminatedOn), terminationReason: reason },
       include: CONTRACT_INCLUDE,
     });
+    // 해지한 계약의 PENDING 초대는 CANCELED, 확인 세션은 폐기(docs/11 2-3).
+    await cancelContractInvitationsInTx(tx, { id: contract.id });
     await recordContractActivity(tx, user, ACTIVITY_TYPES.CONTRACT_TERMINATED, row);
     await recordContractAudit(tx, user, req, {
       action: 'CONTRACT_TERMINATED',
