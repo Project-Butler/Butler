@@ -1,5 +1,6 @@
-// 투표 (목록 · 상세 · 만들기). 1인 1표는 DB 유니크(@@unique pollId+voterId)가 막고,
-// 마감 전에는 선택지별 득표를 응답에 넣지 않는다(참여 인원 voteCount 만).
+// 투표 (목록 · 상세 · 만들기). 투표권 = 범위 안 인증 호실 수(11/05 "보유 수로", 계획서 12-1):
+// 한 사람은 한 번만 참여하고(DB 유니크 @@unique pollId+voterId) 가진 표(weight)를 한 선택지에 모두 던진다.
+// 참여 인원은 voteCount, 표 수 합은 weightTotal(투표 · 선택지 모두). 마감 전에는 선택지별 득표 · 총 표 수를 응답에 넣지 않는다.
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { countMyVerifiedUnitsInScope, isComplexMember, isRegionMember } from '../platformBridge.js';
@@ -76,8 +77,10 @@ const isEligibleVoter = async (user, poll) => {
     : isRegionMember(user.id, poll.legalDongCode);
 };
 
-// 득표 비율(%)은 반올림한 정수. 참여가 없으면 0.
+// 득표 비율(%)은 표 수 기준 반올림한 정수. 표가 없으면 0.
 const toPercent = (count, total) => (total === 0 ? 0 : Math.round((count * 100) / total));
+
+const scopeOf = (poll) => (poll.scope === 'COMPLEX' ? { complexId: poll.complexId } : { legalDongCode: poll.legalDongCode });
 
 // GET /community/polls/:pollId
 // 그 법정동에 인증이 유효하지 않으면(미리보기) 질문 · 범위 · 마감 · 참여 인원만 주고 locked: true.
@@ -113,7 +116,7 @@ export const findPollDetail = async (user, pollId) => {
     findRegion(poll.legalDongCode),
     poll.complexId ? prisma.complex.findUnique({ where: { id: poll.complexId }, select: { name: true } }) : null,
     isEligibleVoter(user, poll),
-    countMyVerifiedUnitsInScope(user.id, poll.scope === 'COMPLEX' ? { complexId: poll.complexId } : { legalDongCode: poll.legalDongCode }),
+    countMyVerifiedUnitsInScope(user.id, scopeOf(poll)),
   ]);
 
   return {
@@ -133,16 +136,22 @@ export const findPollDetail = async (user, pollId) => {
     myOptionId: myVote?.optionId ?? null,
     isEligible,
     canVote: !isClosed && !myVote && isEligible,
+    // 지금 범위 안 인증 호실 수("인증한 호실 N개 — N표")
     myUnitCount,
+    // 내 표 수: 참여했으면 그때 굳힌 표 수, 아니면 지금 참여하면 반영될 표 수
+    myWeight: myVote ? myVote.weight : myUnitCount,
     // 머리말 배지용 — 보는 사람의 이 법정동 자격(게시판과 같음)
     ...access,
     locked: false,
-    // 마감 전에는 선택지별 득표를 넣지 않는다(참여 인원 voteCount 만)
+    // 결과(마감 뒤에만): 총 표 수, 선택지별 참여 인원 · 표 수 · 비율(표 수 기준)
+    ...(isClosed ? { weightTotal: poll.weightTotal } : {}),
     options: options.map((option) => ({
       id: option.id,
       label: option.label,
       position: option.position,
-      ...(isClosed ? { voteCount: option.voteCount, percent: toPercent(option.voteCount, poll.voteCount) } : {}),
+      ...(isClosed
+        ? { voteCount: option.voteCount, weightTotal: option.weightTotal, percent: toPercent(option.weightTotal, poll.weightTotal) }
+        : {}),
     })),
     createdAt: poll.createdAt.toISOString(),
   };
@@ -168,7 +177,8 @@ export const createPoll = async (user, legalDongCode, { scope, complexId, title,
   return findPollDetail(user, poll.id);
 };
 
-// POST /community/polls/:pollId/votes — 1인 1표. 투표와 집계를 같은 트랜잭션에서.
+// POST /community/polls/:pollId/votes — 한 사람 한 번, 가진 표를 한 선택지에 모두.
+// 표 수 계산 · 투표 행(weight 굳히기) · 집계(참여 인원 +1, 표 수 합 +weight)를 같은 트랜잭션에서.
 export const castVote = async (user, poll, { optionId }) => {
   if (isPollClosed(poll)) throw new AppError('COMMUNITY_POLL_CLOSED', 409, '마감된 투표입니다.');
   if (!(await isEligibleVoter(user, poll))) {
@@ -183,9 +193,15 @@ export const castVote = async (user, poll, { optionId }) => {
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.communityPollVote.create({ data: { pollId: poll.id, optionId, voterId: user.id } });
-      await tx.communityPollOption.update({ where: { id: optionId }, data: { voteCount: { increment: 1 } } });
-      await tx.communityPoll.update({ where: { id: poll.id }, data: { voteCount: { increment: 1 } } });
+      const weight = await countMyVerifiedUnitsInScope(user.id, scopeOf(poll), tx);
+      // 자격 검사와 이 사이에 인증이 만료 · 취소됐으면 표가 0 — 참여시키지 않는다
+      if (weight < 1) throw new AppError('COMMUNITY_POLL_NOT_ELIGIBLE', 403, '이 투표에 참여할 수 있는 임대인이 아닙니다.');
+      await tx.communityPollVote.create({ data: { pollId: poll.id, optionId, voterId: user.id, weight } });
+      await tx.communityPollOption.update({
+        where: { id: optionId },
+        data: { voteCount: { increment: 1 }, weightTotal: { increment: weight } },
+      });
+      await tx.communityPoll.update({ where: { id: poll.id }, data: { voteCount: { increment: 1 }, weightTotal: { increment: weight } } });
     });
   } catch (error) {
     if (isUniqueViolation(error)) throw new AppError('COMMUNITY_ALREADY_VOTED', 409, '이미 참여한 투표입니다.');

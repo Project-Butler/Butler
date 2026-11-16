@@ -184,7 +184,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
     };
     const pollRow = (id) => prisma.communityPoll.findUnique({ where: { id } });
 
-    test('1인 1표 — 같은 사람이 다시 참여하면 409 COMMUNITY_ALREADY_VOTED', async () => {
+    test('한 사람 한 번 참여 — 같은 사람이 다시 참여하면 409 COMMUNITY_ALREADY_VOTED', async () => {
       const { complex, author, voter } = await setup();
       const poll = await createPoll(author, REGION, pollInput(complex.id));
       await castVote(voter, await pollRow(poll.id), { optionId: poll.options[0].id });
@@ -193,6 +193,87 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
         httpStatus: 409,
       });
       assert.equal((await pollRow(poll.id)).voteCount, 1);
+    });
+
+    // ── 투표권 = 범위 안 인증 호실 수(11/05, 계획서 12-1)
+    const voteRow = (pollId, voterId) => prisma.communityPollVote.findUnique({ where: { pollId_voterId: { pollId, voterId } } });
+
+    test('표 수 = 범위 안 인증 호실 수 — 3호실이면 3표, 만료 · 취소 호실은 빠진다', async () => {
+      const { complex, author } = await setup();
+      const voter = await createUser();
+      for (let i = 0; i < 3; i += 1) await addUnit(voter, complex);
+      await addUnit(voter, complex, { expired: true });
+      await addUnit(voter, complex, { status: 'REVOKED' });
+      const poll = await createPoll(author, REGION, pollInput(complex.id));
+
+      const before = await findPollDetail(voter, poll.id);
+      assert.deepEqual([before.myUnitCount, before.myWeight], [3, 3]); // 참여 전에도 "인증한 호실 3개 — 3표"
+      await castVote(voter, await pollRow(poll.id), { optionId: poll.options[0].id });
+
+      assert.equal((await voteRow(poll.id, voter.id)).weight, 3);
+      const row = await pollRow(poll.id);
+      assert.deepEqual([row.voteCount, row.weightTotal], [1, 3]);
+      const option = await prisma.communityPollOption.findUnique({ where: { id: poll.options[0].id } });
+      assert.deepEqual([option.voteCount, option.weightTotal], [1, 3]);
+      assert.equal((await findPollDetail(voter, poll.id)).myWeight, 3);
+    });
+
+    test('우리 단지(COMPLEX)는 그 단지 호실만, 법정동(REGION)은 동 안 여러 단지 호실의 합', async () => {
+      const { complex, author } = await setup();
+      const other = await fixture.createComplex({ name: '같은동다른아파트' }); // 같은 법정동(REGION)
+      const voter = await createUser();
+      await addUnit(voter, complex);
+      await addUnit(voter, complex);
+      await addUnit(voter, other);
+      const complexPoll = await createPoll(author, REGION, pollInput(complex.id, { scope: 'COMPLEX' }));
+      const regionPoll = await createPoll(author, REGION, pollInput(complex.id));
+      await castVote(voter, await pollRow(complexPoll.id), { optionId: complexPoll.options[0].id });
+      await castVote(voter, await pollRow(regionPoll.id), { optionId: regionPoll.options[0].id });
+      assert.equal((await voteRow(complexPoll.id, voter.id)).weight, 2);
+      assert.equal((await voteRow(regionPoll.id, voter.id)).weight, 3);
+    });
+
+    test('참여 뒤 호실을 팔아도(소유 끝) 이미 던진 표는 그대로', async () => {
+      const { complex, author } = await setup();
+      const voter = await createUser();
+      const sold = await addUnit(voter, complex);
+      await addUnit(voter, complex);
+      const poll = await createPoll(author, REGION, pollInput(complex.id));
+      await castVote(voter, await pollRow(poll.id), { optionId: poll.options[1].id });
+      await prisma.ownership.updateMany({ where: { propertyId: sold.id }, data: { endedAt: new Date() } });
+
+      assert.equal((await voteRow(poll.id, voter.id)).weight, 2);
+      assert.equal((await pollRow(poll.id)).weightTotal, 2);
+      const detail = await findPollDetail(voter, poll.id);
+      assert.deepEqual([detail.myUnitCount, detail.myWeight], [1, 2]); // 지금 호실은 1개지만 던진 표는 2표
+    });
+
+    test('결과는 표 수 기준 — 참여 인원 · 총 표 수 · 선택지별 표 수 · 비율', async () => {
+      const { complex, author } = await setup();
+      const big = await createUser();
+      for (let i = 0; i < 3; i += 1) await addUnit(big, complex);
+      const small = await createUser();
+      await addUnit(small, complex);
+      const poll = await createPoll(author, REGION, pollInput(complex.id));
+      await castVote(big, await pollRow(poll.id), { optionId: poll.options[0].id });
+      await castVote(small, await pollRow(poll.id), { optionId: poll.options[1].id });
+
+      const open = await findPollDetail(author, poll.id);
+      assert.ok(!('weightTotal' in open)); // 마감 전에는 총 표 수도 주지 않는다
+      assert.ok(open.options.every((option) => !('weightTotal' in option)));
+
+      await prisma.communityPoll.update({ where: { id: poll.id }, data: { closesAt: new Date(Date.now() - 1000) } });
+      const closed = await findPollDetail(author, poll.id);
+      assert.deepEqual([closed.voteCount, closed.weightTotal], [2, 4]);
+      assert.deepEqual(closed.options.map((option) => [option.voteCount, option.weightTotal, option.percent]), [[1, 3, 75], [1, 1, 25]]);
+    });
+
+    test('투표 행의 표 수는 기본 1(기존 행) · 1 미만은 DB 가 막는다', async () => {
+      const { complex, author, voter } = await setup();
+      const poll = await createPoll(author, REGION, pollInput(complex.id));
+      const row = await prisma.communityPollVote.create({ data: { pollId: poll.id, optionId: poll.options[0].id, voterId: voter.id } });
+      assert.equal(row.weight, 1);
+      await assert.rejects(prisma.communityPollVote.update({ where: { id: row.id }, data: { weight: 0 } }));
     });
 
     test('마감 전에는 득표를 주지 않고, 마감(closesAt 지남) 뒤에는 득표·비율을 준다', async () => {
@@ -537,7 +618,7 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       const lockedClosed = await findPollDetail(viewer, poll.id);
       for (const locked of [lockedOpen, lockedClosed]) {
         assert.equal(locked.locked, true);
-        for (const key of ['options', 'hasVoted', 'myOptionId', 'canVote', 'isEligible', 'myUnitCount', 'description', 'authorLabel']) {
+        for (const key of ['options', 'hasVoted', 'myOptionId', 'canVote', 'isEligible', 'myUnitCount', 'myWeight', 'weightTotal', 'description', 'authorLabel']) {
           assert.ok(!(key in locked), key + ' 가 없어야 한다');
         }
         assert.equal(locked.title, '잠긴 투표');

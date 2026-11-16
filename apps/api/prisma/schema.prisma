@@ -1205,8 +1205,10 @@ model CommunityPoll {
   // cron 이 돌기 전까지 결과가 열리지 않는다. 서버 시계 차이는 초 단위라 실익이 작다.
   closedAt DateTime? @map("closed_at") @db.Timestamptz(3)
 
-  // 참여자 수. 투표와 같은 트랜잭션에서 올린다.
+  // 참여자 수(참여 인원). 투표와 같은 트랜잭션에서 올린다.
   voteCount Int @default(0) @map("vote_count")
+  // 총 표 수(참여자마다 그 순간의 표 수 weight 를 더한 값). 투표와 같은 트랜잭션에서 올린다.
+  weightTotal Int @default(0) @map("weight_total")
 
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
   hiddenAt       DateTime? @map("hidden_at") @db.Timestamptz(3)
@@ -1234,7 +1236,10 @@ model CommunityPollOption {
   label    String @db.VarChar(80)
   position Int
 
+  // 이 선택지를 고른 참여자 수
   voteCount Int @default(0) @map("vote_count")
+  // 이 선택지의 표 수 합(득표). 결과 비율은 이것 기준
+  weightTotal Int @default(0) @map("weight_total")
 
   votes CommunityPollVote[]
 
@@ -1250,7 +1255,7 @@ model CommunityPollVote {
 
   // pollId 는 두 가지 일을 한다.
   //   1) 아래 복합 FK 로 "이 선택지가 정말 이 투표의 것인지"를 DB 가 검사하게 하고
-  //   2) 1인 1표 유니크의 한쪽이 된다.
+  //   2) "한 사람 한 번 참여" 유니크의 한쪽이 된다.
   // CommunityPoll 로 가는 별도 relation 은 두지 않는다 — 같은 스칼라를 두 relation 에
   // 쓰면 Prisma 가 거부하고, 집계는 voteCount 로 하므로 필요도 없다.
   pollId   String              @map("poll_id") @db.Uuid
@@ -1259,10 +1264,13 @@ model CommunityPollVote {
 
   voterId String @map("voter_id") @db.Uuid
 
+  // 표 수 — 참여 순간 범위 안 인증 호실 수(11/05 "보유 수로"). 그 뒤 호실을 팔거나 인증이 만료돼도 바뀌지 않는다.
+  // 기존 행은 1. CHECK(weight >= 1)는 마이그레이션 SQL 에 직접.
+  weight Int @default(1)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  // 1인 1표. 같은 범위에 여러 호실을 보유해도 한 표.
-  // 애플리케이션 검사만 믿지 않고 DB 로 강제한다.
+  // 한 사람 한 번 참여(가진 표를 한 선택지에 모두). 애플리케이션 검사만 믿지 않고 DB 로 강제한다.
   @@unique([pollId, voterId])
   @@index([optionId])
   @@map("community_poll_votes")

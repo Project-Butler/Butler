@@ -17,8 +17,9 @@ import { isUuid } from '../../platform/uuid.js';
 // → { userId, complexId, legalDongCode, complexName, buildingNo, exclusiveArea, verifiedAt }. 호수(unitNo)는 꺼내지 않는다.
 // exclusiveArea 는 Prisma Decimal 을 number 로(없으면 null).
 // 저장값 VERIFIED로 후보를 좁히고, 만료는 computeOwnershipVerificationStatus()로 판정한다.
-const findVerifiedOwnerships = async (where) => {
-  const rows = await prisma.ownership.findMany({
+// db: 트랜잭션 안에서 부를 때 그 클라이언트(tx). 기본은 prisma.
+const findVerifiedOwnerships = async (where, db = prisma) => {
+  const rows = await db.ownership.findMany({
     where: { ...where, endedAt: null, verificationStatus: 'VERIFIED' },
     select: {
       userId: true,
@@ -207,12 +208,13 @@ export const isComplexMember = async (userId, complexId) => {
   return ownerships.length > 0;
 };
 
-// 플랫폼에 생기면 교체: 계약에 없는 함수. 투표 상세의 "N호실을 보유하고 계시지만 1표만 반영됩니다" 문구용.
-// 범위(단지 또는 법정동) 안에서 이 사용자가 인증을 보유한 호실 수.
-export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDongCode }) => {
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 투표권(표 수) — 11/05 이사님 결정 "보유 수로".
+// 범위(우리 단지 = 그 단지 / 법정동 = 그 동 안 모든 단지) 안에서 이 사용자가 인증이 유효한(만료 · 취소 아님) 활성 소유 호실 수.
+// 판정은 플랫폼 computeOwnershipVerificationStatus(findVerifiedOwnerships). 투표 때는 같은 트랜잭션(db = tx)에서 센다.
+export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDongCode }, db = prisma) => {
   if (!isUuid(userId)) return 0;
   const property = complexId ? { complexId } : { complex: { regionId: legalDongCode } };
-  return (await findVerifiedOwnerships({ userId, property })).length;
+  return (await findVerifiedOwnerships({ userId, property }, db)).length;
 };
 
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 뉴스 수집 대상(그 뉴스를 볼 수 있는 사람이 한 명이라도 있는 동 — 아무도 없는 곳은 모으지 않는다).
