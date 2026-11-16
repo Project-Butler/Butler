@@ -16,17 +16,17 @@ const done = (sigunguCode, yearMonth, dealKind, { collectedAgo = HOUR, attempted
 });
 
 describe('수집 할 일 고르기', () => {
-  test('보관 기간 = 이번 달(한국 시간)부터 거꾸로 12개월', () => {
-    assert.equal(months.length, 12);
-    assert.equal(months[0], '2025-12');
-    assert.equal(months[11], '2026-11');
+  test('보관 기간 = 이번 달(한국 시간)부터 거꾸로 13개월(완성된 달 12개 + 이번 달)', () => {
+    assert.equal(months.length, 13);
+    assert.equal(months[0], '2025-11');
+    assert.equal(months[12], '2026-11');
     // 한국 시간으로 달이 바뀌는 순간(UTC 11/30 15:00 = 한국 12/1 00:00)
-    assert.equal(retentionMonths(new Date('2026-11-30T15:00:00Z'))[11], '2026-12');
+    assert.equal(retentionMonths(new Date('2026-11-30T15:00:00Z'))[12], '2026-12');
   });
 
-  test('처음 보는 시군구는 12개월 × 매매 · 전월세 = 24 묶음, 최근 달 · 매매부터', () => {
+  test('처음 보는 시군구는 13개월 × 매매 · 전월세 = 26 묶음, 최근 달 · 매매부터', () => {
     const tasks = planCollectionTasks({ sigunguCodes: ['11710'], months, collections: [], now: NOW });
-    assert.equal(tasks.length, 24);
+    assert.equal(tasks.length, 26);
     assert.ok(tasks.every((task) => task.reason === 'BACKFILL'));
     assert.deepEqual(tasks.slice(0, 3).map((t) => `${t.yearMonth} ${t.kind}`), ['2026-11 TRADE', '2026-11 RENT', '2026-10 TRADE']);
   });

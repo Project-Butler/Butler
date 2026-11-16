@@ -24,8 +24,8 @@ describe('시세 규칙 파일', () => {
     }
   });
 
-  test('보관 12개월 · 다시 모으기 3개월 · 월세 0 이면 전세', () => {
-    assert.equal(KEEP_MONTHS, 12);
+  test('보관 13개월 · 다시 모으기 3개월 · 월세 0 이면 전세', () => {
+    assert.equal(KEEP_MONTHS, 13);
     assert.equal(REFRESH_MONTHS, 3);
     assert.equal(rentDealType(0), 'JEONSE');
     assert.equal(rentDealType(1), 'MONTHLY');

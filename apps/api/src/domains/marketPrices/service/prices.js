@@ -5,7 +5,7 @@
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { isUuid } from '../../../platform/uuid.js';
-import { DEAL_TYPES, RECENT_DEALS, SOURCE, areaRange } from '../marketPriceRules.js';
+import { DEAL_TYPES, KEEP_MONTHS, RECENT_DEALS, SOURCE, areaRange } from '../marketPriceRules.js';
 import { firstDayOf, isYearMonth, kstDate, kstYearMonth, lastDayOf, retentionMonths, shiftYearMonth, yearMonthsBetween } from '../months.js';
 import { ensureBackfillJob } from './backfillJobs.js';
 import { loadLinkIndex, relinkSigungu } from './collect.js';
@@ -22,7 +22,7 @@ const parseArea = (raw, field) => {
   return value;
 };
 
-// 쿼리 → { dealType, areaMin, areaMax, from, to }. 기본 기간은 이번 달(한국 시간)까지 최근 12개월
+// 쿼리 → { dealType, areaMin, areaMax, from, to }. 기본 기간은 보관 기간과 같다 — 이번 달(한국 시간)까지 13개월(완성된 달 12개 + 이번 달)
 export const parseMarketQuery = (query, now = new Date()) => {
   const { dealType } = query;
   if (!DEAL_TYPES.includes(dealType)) throw invalid('dealType', 'SALE · JEONSE · MONTHLY 중 하나(필수)');
@@ -33,7 +33,7 @@ export const parseMarketQuery = (query, now = new Date()) => {
     if (query[field] !== undefined && !isYearMonth(query[field])) throw invalid(field, "'YYYY-MM'");
   }
   const to = query.toYearMonth ?? kstYearMonth(now);
-  const from = query.fromYearMonth ?? shiftYearMonth(to, -11);
+  const from = query.fromYearMonth ?? shiftYearMonth(to, -(KEEP_MONTHS - 1));
   if (from > to) throw invalid('fromYearMonth', 'toYearMonth 보다 늦을 수 없음');
   return { dealType, areaMin, areaMax, from, to };
 };

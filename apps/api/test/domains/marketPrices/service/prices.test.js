@@ -6,13 +6,13 @@ const NOW = new Date('2026-11-17T03:00:00Z');
 const row = (yearMonth, values) => ({ contractYearMonth: yearMonth, price: null, deposit: null, monthlyRent: null, ...values });
 
 describe('시세 조회 조건', () => {
-  test('dealType 필수, 기본 기간은 이번 달까지 12개월, 면적은 숫자', () => {
-    assert.deepEqual(parseMarketQuery({ dealType: 'SALE' }, NOW), { dealType: 'SALE', areaMin: null, areaMax: null, from: '2025-12', to: '2026-11' });
+  test('dealType 필수, 기본 기간은 이번 달까지 13개월(완성된 달 12개 + 이번 달), 면적은 숫자', () => {
+    assert.deepEqual(parseMarketQuery({ dealType: 'SALE' }, NOW), { dealType: 'SALE', areaMin: null, areaMax: null, from: '2025-11', to: '2026-11' });
     assert.deepEqual(parseMarketQuery({ dealType: 'MONTHLY', areaMin: '60', areaMax: '85', toYearMonth: '2026-06' }, NOW), {
       dealType: 'MONTHLY',
       areaMin: 60,
       areaMax: 85,
-      from: '2025-07',
+      from: '2025-06',
       to: '2026-06',
     });
   });

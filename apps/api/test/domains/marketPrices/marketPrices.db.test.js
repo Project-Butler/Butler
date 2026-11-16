@@ -87,19 +87,19 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     await fixture.cleanup();
   });
 
-  test('수집: 12개월 × 매매 · 전월세 24 묶음, 해제 빼고 저장, 도로명 · 지번 · aptSeq 로 잇기', async () => {
+  test('수집: 13개월 × 매매 · 전월세 26 묶음, 해제 빼고 저장, 도로명 · 지번 · aptSeq 로 잇기', async () => {
     const { fetchImpl, calls } = fakeFetch();
     const summary = await collectMarketPrices({ sigunguCodes: [SGG], fetchImpl, now: () => NOW });
-    assert.equal(summary.planned, 24);
-    assert.equal(summary.done, 24);
+    assert.equal(summary.planned, 26);
+    assert.equal(summary.done, 26);
     assert.equal(summary.failed, 0);
-    assert.equal(summary.calls, 24);
-    assert.equal(calls.length, 24);
+    assert.equal(summary.calls, 26);
+    assert.equal(calls.length, 26);
     assert.equal(summary.cancelled, 1); // 송파센텀레이크(해제)
     assert.equal(summary.saved, 3 + 7);
 
     const collections = await prisma.marketCollection.findMany({ where: { sigunguCode: SGG } });
-    assert.equal(collections.length, 24);
+    assert.equal(collections.length, 26);
     assert.ok(collections.every((row) => row.status === 'SUCCEEDED' && row.collectedAt));
 
     const deals = await dealsIn();
@@ -158,7 +158,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.equal(data.jobId, null);
     assert.equal(data.source, '국토교통부 실거래가');
     assert.match(data.asOf, /^\d{4}-\d{2}-\d{2}$/);
-    assert.equal(data.coveredFromYearMonth, '2025-12');
+    assert.equal(data.coveredFromYearMonth, '2025-11');
     assert.deepEqual([data.areaMin, data.areaMax], [null, null]);
     assert.equal(data.monthly.length, 1); // 거래 있는 달(2026-10)만
     assert.deepEqual(Object.keys(data.monthly[0]).sort(), ['avgDeposit', 'avgMonthlyRent', 'avgPrice', 'dealCount', 'maxPrice', 'minPrice', 'yearMonth'].sort());
@@ -240,7 +240,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
 
     const { fetchImpl } = fakeFetch({ month: 'none' });
     const summary = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: () => Date.now() + 1000 });
-    assert.equal(summary.done, 24);
+    assert.equal(summary.done, 26);
     assert.ok(summary.jobsCompleted >= 2);
     assert.equal((await prisma.job.findUnique({ where: { id: first.jobId } })).status, 'SUCCEEDED');
     const ready = (await (await api(landlord, path)).json()).data;
@@ -299,7 +299,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     const { fetchImpl } = fakeFetch({ month: 'none' });
     const first = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now, budgetMs: REQUEST_TIMEOUT_MS + 3000 });
     assert.ok(first.done >= 1 && first.skipped >= 1, JSON.stringify(first));
-    assert.equal(first.done + first.skipped, 24);
+    assert.equal(first.done + first.skipped, 26);
     const firstDone = await prisma.marketCollection.findMany({ where: { sigunguCode: sgg }, select: { yearMonth: true, dealKind: true } });
     assert.ok(firstDone.some((row) => row.yearMonth === '2026-11' && row.dealKind === 'TRADE')); // 최근 달 · 매매부터
     const second = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: () => NOW + HOUR });
