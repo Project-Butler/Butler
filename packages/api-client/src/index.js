@@ -23,6 +23,7 @@ export { getComplex } from './apis/complexes/getComplex';
 export { postProperty } from './apis/properties/postProperty';
 export { getPropertyList } from './apis/properties/getPropertyList';
 export { getProperty } from './apis/properties/getProperty';
+export { getPropertyDocumentBox } from './apis/properties/getPropertyDocumentBox';
 export { patchProperty } from './apis/properties/patchProperty';
 
 export { getPropertyOwnershipList } from './apis/propertyOwnerships/getPropertyOwnershipList';
