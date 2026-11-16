@@ -265,6 +265,22 @@ describe('OWNERSHIP 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal(await prisma.document.count({ where: { resourceType: 'OWNERSHIP', resourceId: ownership.id } }), 0);
   });
 
+  test('C-1 감사(로그인 경로): OWNERSHIP+OTHER 다운로드는 감사 1줄, 미연결 PHOTO는 0줄', async () => {
+    const landlord = await createUser();
+    const ownership = await createOwnership(landlord);
+    const owned = await insertDocument(landlord, ownership, 'OTHER');
+    assert.equal((await postJson(landlord, `/documents/${owned.id}/download-url`, {})).status, 200);
+    const rows = await prisma.auditLog.findMany({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: owned.id } });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].actorId, landlord.id);
+
+    const photoSession = await createSession(landlord, 'PHOTO');
+    const photo = await postJson(landlord, '/documents', { uploadSessionId: photoSession });
+    assert.equal(photo.status, 201);
+    assert.equal((await postJson(landlord, `/documents/${photo.body.data.id}/download-url`, {})).status, 200);
+    assert.equal(await prisma.auditLog.count({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: photo.body.data.id } }), 0);
+  });
+
   test('증빙으로 연결된 문서는 GET /documents·단건에서 숨긴다', async () => {
     const landlord = await createUser();
     const ownership = await createOwnership(landlord);

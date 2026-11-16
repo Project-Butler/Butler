@@ -6,7 +6,7 @@ import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
 import { assertDocumentsDeletable, CONTRACT_RESOURCE, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
 import { prisma } from '../../platform/prismaClient.js';
-import { AUDITED_DOWNLOAD_TYPES, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
+import { isAuditedDownload, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
 import { getResourcePolicy, visibleDocumentWhere } from './resourcePolicies.js';
 import { removeStoredObjects, selectStorage } from './storage/index.js';
 
@@ -189,14 +189,14 @@ export const findResourceDocuments = async (user, { resourceType, resourceId, pa
 // GET /documents/:documentId
 export const findDocumentForUser = async (user, documentId) => toDocumentResponse(await findVisibleDocument(user, documentId));
 
-// 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부는 감사 로그에 남긴다.
+// 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부, 그리고 OWNERSHIP·CONTRACT에 붙은 문서는 종류와 상관없이 감사 로그에 남긴다.
 // actor: 요청자({ id, role }) 또는 null(로그인 없는 초대 열람 등 → 감사 로그 actorType SYSTEM). req는 requestId·ip용(선택).
 // 돌려주는 값: { url, expiresAt(ISO 문자열) }. 저장소를 못 쓰면 503 STORAGE_UNAVAILABLE.
 export const createDocumentDownloadUrl = async (document, { actor = null, req } = {}) => {
   const storage = requireStorage();
   const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
-  if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
+  if (isAuditedDownload(document)) {
     await audit.record({
       actor,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',

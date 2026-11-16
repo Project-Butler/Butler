@@ -22,6 +22,11 @@ export const OWNERSHIP_DOCUMENT_TYPES = ['REGISTRY_CERTIFICATE', 'SALE_CONTRACT'
 export const CONTRACT_DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'LEASE_REPORT', 'RECEIPT', 'MOVE_PHOTO', 'OTHER'];
 // 다운로드 URL 발급을 감사 로그에 남기는 문서 유형(계약 10장 DOCUMENT_DOWNLOAD_URL_ISSUED)
 export const AUDITED_DOWNLOAD_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE'];
+// 서류함에 들어가는 리소스에 붙은 문서는 종류와 상관없이 감사한다.
+export const AUDITED_DOWNLOAD_RESOURCE_TYPES = ['OWNERSHIP', 'CONTRACT'];
+// document: { type, resourceType }(Prisma Document 행 또는 같은 모양)
+export const isAuditedDownload = ({ type, resourceType }) =>
+  AUDITED_DOWNLOAD_TYPES.includes(type) || AUDITED_DOWNLOAD_RESOURCE_TYPES.includes(resourceType);
 // 계약 6장의 resourceType 목록. 권한 확인은 resourcePolicies.js에 구현된 것만 받는다.
 export const DOCUMENT_RESOURCE_TYPES = ['PROPERTY', 'OWNERSHIP', 'CONTRACT', 'TICKET', 'MANAGEMENT_LOG', 'THREAD_MESSAGE'];
 

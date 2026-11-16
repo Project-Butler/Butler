@@ -451,6 +451,17 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal((await api(`/tenant-invitations/${token}/documents/${docs[0].id}/download-url`, { method: 'POST', cookies })).status, 404);
   });
 
+  test('C-2 V-03 감사: 종류와 상관없이 계약에 붙은 공유 문서(RECEIPT)도 감사 1줄(SYSTEM, invitationId)', async () => {
+    const { token, iv, invitationId, docs } = await issueAndVerify({ documents: 1 });
+    await prisma.document.update({ where: { id: docs[0].id }, data: { type: 'RECEIPT' } });
+    const issued = await api(`/tenant-invitations/${token}/documents/${docs[0].id}/download-url`, { method: 'POST', cookies: [`bt_iv=${iv}`] });
+    assert.equal(issued.status, 200);
+    const rows = await prisma.auditLog.findMany({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: docs[0].id } });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].actorType, 'SYSTEM');
+    assert.ok(rows[0].summary.includes(`invitationId=${invitationId}`));
+  });
+
   test('수락: TENANT만, 계약 연결·ACCEPTED·알림·감사·세션 폐기·쿠키 삭제, 링크 재사용 거절', async () => {
     const { landlord, contract, property, token, iv, invitationId } = await issueAndVerify();
     const cookies = [`bt_iv=${iv}`];

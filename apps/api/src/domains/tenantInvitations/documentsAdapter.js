@@ -4,12 +4,12 @@
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
-import { AUDITED_DOWNLOAD_TYPES } from '../documents/fileRules.js';
+import { isAuditedDownload } from '../documents/fileRules.js';
 import { selectStorage } from '../documents/storage/index.js';
 
 export const INVITATION_DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
 
-const SHARED_DOCUMENT_SELECT = { id: true, type: true, fileName: true, mimeType: true, sizeBytes: true, storagePath: true };
+const SHARED_DOCUMENT_SELECT = { id: true, type: true, resourceType: true, fileName: true, mimeType: true, sizeBytes: true, storagePath: true };
 
 // 그 초대가 공유한 문서 중 숨기지 않았고 같은 계약에 붙은 것만.
 const sharedDocumentWhere = (invitation) => ({
@@ -29,14 +29,14 @@ export const toSharedDocumentResponse = (document) => ({
   sizeBytes: Number(document.sizeBytes),
 });
 
-// 5분 서명 주소. 계약서·등기부는 actor 없이(로그인 전 열람) invitationId를 summary에 남긴다.
+// 5분 서명 주소. 계약서·등기부·계약에 붙은 문서는 actor 없이(로그인 전 열람) invitationId를 summary에 남긴다.
 export const issueSharedDocumentDownloadUrl = async (client, { invitation, document, req }) => {
   const storage = selectStorage();
   if (!storage) throw new AppError('STORAGE_UNAVAILABLE', 503, '사진·문서 첨부를 준비 중입니다. 잠시 후 다시 시도해 주세요.');
   const expiresAt = new Date(getNow().getTime() + INVITATION_DOWNLOAD_URL_TTL_MS);
   // Supabase 드라이버는 비동기라 기다린다(local은 바로 값을 준다).
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
-  if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
+  if (isAuditedDownload(document)) {
     await audit.record({
       actor: null,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',
