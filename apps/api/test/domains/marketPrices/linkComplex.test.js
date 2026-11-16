@@ -71,6 +71,30 @@ describe('잇기 순서 — 도로명 → 지번 → aptSeq', () => {
     assert.equal(fromHints[0].complexId, 'c-road');
   });
 
+  test('같은 도로명주소의 다른 단지(해운대자이 1 · 2단지 모양): 양쪽 지번이 다르면 도로명으로 잇지 않고 지번으로 넘어간다', () => {
+    const road = roadKeyOf(trades[0].road); // 트리지움 도로명(잠실로 62) — 지번 잠실동 35
+    const xi1 = { id: 'xi1', sourceKey: road, regionId: '1171010100', mainLot: 35, subLot: 0, isMountain: false };
+    const xi2 = { id: 'xi2', sourceKey: 'DBTEST:xi2', regionId: '1171010100', mainLot: 37, subLot: 0, isMountain: false };
+    const sameLot = trades[0];
+    const otherLot = { ...trades[0], mainLotText: '0037', aptSeq: '11710-9999' }; // 같은 도로명 · 다른 지번(2단지)
+    const noLot = { ...trades[0], mainLotText: null, subLotText: null, jibun: null, aptSeq: '11710-8888' }; // 거래에 지번이 없음
+    const onlyXi1 = linkDeals([sameLot, otherLot, noLot], buildLinkIndex({ complexes: [xi1], regions: REGIONS }));
+    assert.deepEqual(onlyXi1.map((deal) => [deal.complexId, deal.linkMethod]), [['xi1', 'ROAD'], [null, null], ['xi1', 'ROAD']]);
+    const both = linkDeals([sameLot, otherLot], buildLinkIndex({ complexes: [xi1, xi2], regions: REGIONS }));
+    assert.deepEqual(both.map((deal) => [deal.complexId, deal.linkMethod]), [['xi1', 'ROAD'], ['xi2', 'JIBUN']]);
+    // 우리 단지 쪽에 지번이 없으면 도로명으로 잇는다(한쪽만 있으면 비교하지 않음)
+    const xi1NoLot = { id: 'xi1', sourceKey: road, regionId: '1171010100' };
+    assert.equal(linkDeals([otherLot], buildLinkIndex({ complexes: [xi1NoLot], regions: REGIONS }))[0].complexId, 'xi1');
+    // 저장된 키로 다시 이을 때도 같다
+    const index = buildLinkIndex({ complexes: [xi1, xi2], regions: REGIONS });
+    assert.deepEqual(linkStoredKeys({ roadKey: road, lotKey: '1171010100|0|37|0', aptSeq: null }, index), { complexId: 'xi2', linkMethod: 'JIBUN' });
+    assert.deepEqual(linkStoredKeys({ roadKey: road, lotKey: null, aptSeq: null }, index), { complexId: 'xi1', linkMethod: 'ROAD' });
+    assert.deepEqual(
+      linkStoredKeys({ roadKey: road, lotKey: '1171010100|0|39|0', aptSeq: null }, buildLinkIndex({ complexes: [xi1], regions: REGIONS })),
+      { complexId: null, linkMethod: null },
+    );
+  });
+
   test('겹치는 키(같은 지번의 단지 둘 · 두 단지로 가는 aptSeq)는 쓰지 않는다', () => {
     const twins = [
       { id: 'a', regionId: '1171010100', mainLot: 27, subLot: 0 },

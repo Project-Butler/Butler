@@ -2,7 +2,7 @@
 // 순서는 marketPriceRules.LINK_ORDER: 도로명 키 → 지번 → 단지 일련번호(aptSeq). 처음 맞는 것을 쓴다. 이름으로는 잇지 않는다.
 // 못 이으면 complexId = null(단지 시세에는 안 나오고 동 시세에는 들어간다).
 
-import { LINK_ORDER, ROAD_UNDERGROUND_WHEN_BLANK } from './marketPriceRules.js';
+import { LINK_ORDER, ROAD_LINK_NEEDS_SAME_LOT, ROAD_UNDERGROUND_WHEN_BLANK } from './marketPriceRules.js';
 
 const AMBIGUOUS = Symbol('ambiguous');
 
@@ -72,10 +72,14 @@ const putUnique = (map, key, value) => {
 export const buildLinkIndex = ({ complexes = [], regions = [], aptSeqHints = [] }) => {
   const byRoad = new Map();
   const byLot = new Map();
+  // 단지마다 자기 지번 키 — 도로명이 맞아도 거래 지번이 다르면 도로명으로 잇지 않으려고(ROAD_LINK_NEEDS_SAME_LOT)
+  const lotByComplex = new Map();
   for (const complex of complexes) {
     putUnique(byRoad, complexRoadKey(complex), complex.id);
     if (complex.mainLot !== null && complex.mainLot !== undefined) {
-      putUnique(byLot, lotKey(complex.regionId, { isMountain: Boolean(complex.isMountain), mainLot: complex.mainLot, subLot: complex.subLot ?? 0 }), complex.id);
+      const key = lotKey(complex.regionId, { isMountain: Boolean(complex.isMountain), mainLot: complex.mainLot, subLot: complex.subLot ?? 0 });
+      putUnique(byLot, key, complex.id);
+      lotByComplex.set(complex.id, key);
     }
   }
   const regionIdByDong = new Map();
@@ -83,7 +87,7 @@ export const buildLinkIndex = ({ complexes = [], regions = [], aptSeqHints = [] 
   for (const [key, value] of regionIdByDong) if (value === AMBIGUOUS) regionIdByDong.delete(key);
   const byAptSeq = new Map();
   for (const [aptSeq, complexId] of aptSeqHints) putUnique(byAptSeq, aptSeq, complexId);
-  return { byRoad, byLot, regionIdByDong, byAptSeq };
+  return { byRoad, byLot, lotByComplex, regionIdByDong, byAptSeq };
 };
 
 const found = (map, key) => {
@@ -97,11 +101,23 @@ export const usableKeys = (index) => {
   return { roadKeys: keysOf(index.byRoad), lotKeys: keysOf(index.byLot), aptSeqs: keysOf(index.byAptSeq) };
 };
 
-// 저장된 거래의 키 → { complexId, linkMethod }(못 이으면 null 둘). 순서는 linkDeals 와 같다
+// 도로명 키로 찾은 단지 — 거래와 그 단지 양쪽에 지번이 있고 서로 다르면 null(같은 도로명주소의 다른 단지일 수 있다)
+const byRoadSameLot = (index, roadKey, dealLot) => {
+  const complexId = found(index.byRoad, roadKey);
+  if (!complexId || !ROAD_LINK_NEEDS_SAME_LOT) return complexId;
+  const ownLot = index.lotByComplex?.get(complexId);
+  return ownLot && dealLot && ownLot !== dealLot ? null : complexId;
+};
+
+// 저장된 거래의 키 → { complexId, linkMethod }(못 이으면 null 둘). 순서 · 규칙은 linkDeals 와 같다
 export const linkStoredKeys = ({ roadKey, lotKey: storedLotKey, aptSeq }, index) => {
   for (const method of LINK_ORDER) {
     const complexId =
-      method === 'ROAD' ? found(index.byRoad, roadKey) : method === 'JIBUN' ? found(index.byLot, storedLotKey) : found(index.byAptSeq, aptSeq);
+      method === 'ROAD'
+        ? byRoadSameLot(index, roadKey, storedLotKey)
+        : method === 'JIBUN'
+          ? found(index.byLot, storedLotKey)
+          : found(index.byAptSeq, aptSeq);
     if (complexId) return { complexId, linkMethod: method };
   }
   return { complexId: null, linkMethod: null };
@@ -115,10 +131,11 @@ export const linkDeals = (deals, index) => {
   const learned = new Map(index.byAptSeq);
   const firstPass = deals.map((deal) => {
     const legalDongCode = legalDongCodeOf(deal, index.regionIdByDong);
+    const dealLot = lotKey(legalDongCode, lotOf(deal));
     for (const method of LINK_ORDER) {
       let complexId = null;
-      if (method === 'ROAD') complexId = found(index.byRoad, roadKeyOf(deal.road));
-      if (method === 'JIBUN') complexId = found(index.byLot, lotKey(legalDongCode, lotOf(deal)));
+      if (method === 'ROAD') complexId = byRoadSameLot(index, roadKeyOf(deal.road), dealLot);
+      if (method === 'JIBUN') complexId = found(index.byLot, dealLot);
       if (complexId) {
         putUnique(learned, deal.aptSeq, complexId);
         return { ...deal, legalDongCode, complexId, linkMethod: method };

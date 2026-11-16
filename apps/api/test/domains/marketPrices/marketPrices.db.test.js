@@ -10,7 +10,7 @@ import { prisma } from '../../../src/platform/prismaClient.js';
 import { roadKeyOf } from '../../../src/domains/marketPrices/linkComplex.js';
 import { BACKFILL_JOB_TYPE, REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
 import { normalizeItem, parseRtmsXml } from '../../../src/domains/marketPrices/rtmsProvider.js';
-import { collectMarketPrices, loadLinkIndex, relinkSigungu } from '../../../src/domains/marketPrices/service/collect.js';
+import { collectMarketPrices, loadLinkIndex, rebuildSigunguLinks, relinkSigungu } from '../../../src/domains/marketPrices/service/collect.js';
 import { findComplexMarketPrices } from '../../../src/domains/marketPrices/service/prices.js';
 import { EMPTY_XML, KEY_ERROR_XML, RENT_ITEMS, TRADE_ITEMS, wrapResponse } from './fixtures/rtmsResponses.js';
 
@@ -245,6 +245,30 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     const prices = await findComplexMarketPrices(landlord, late.id, query, { now: new Date() });
     assert.equal(prices.collectionStatus, 'READY');
     assert.deepEqual(prices.recentDeals.map((deal) => deal.complexName), ['시세 테스트 한강극동']);
+  });
+
+  test('같은 도로명주소의 다른 단지: 저장된 거래를 다시 이으면(원천 호출 없이) 지번이 다른 거래는 풀린다', async () => {
+    const road = 'ROAD:113509999999-0-435-0';
+    const xi1 = await fixture.createComplex({ name: '시세 테스트 자이1', sourceKey: road, mainLot: 1527, subLot: 0, isMountain: false });
+    // 옛 규칙(도로명만)으로 이어 둔 모양 — 1단지 지번 · 2단지 지번 거래가 모두 1단지에 이어져 있다
+    const base = { dealKind: 'TRADE', dealType: 'SALE', sigunguCode: SGG, contractYearMonth: '2026-10', legalDongCode: DONG, roadKey: road, exclusiveArea: 84.5, contractDate: new Date('2026-10-20T00:00:00Z'), price: 900000000n, collectedAt: new Date(), complexId: xi1.id, linkMethod: 'ROAD' };
+    await prisma.marketDeal.createMany({
+      data: [
+        { ...base, aptName: '자이1단지', aptSeq: '11350-1', lotKey: `${DONG}|0|1527|0` },
+        { ...base, aptName: '자이2단지', aptSeq: '11350-2', lotKey: `${DONG}|0|1529|0` },
+      ],
+    });
+    const before = await dealsIn({ complexId: { not: null } });
+    const result = await rebuildSigunguLinks(SGG);
+    assert.equal(result.unlinked, before.length);
+    assert.equal(result.relinked, before.length - 1); // 2단지 한 건만 빠진다
+    const rows = await dealsIn({ aptName: { in: ['자이1단지', '자이2단지'] } });
+    const byName = Object.fromEntries(rows.map((row) => [row.aptName, [row.complexId, row.linkMethod]]));
+    assert.deepEqual(byName, { 자이1단지: [xi1.id, 'ROAD'], 자이2단지: [null, null] });
+    // 다른 거래의 잇기는 그대로(도로명 · 지번 · aptSeq)
+    const after = await dealsIn({ complexId: { not: null } });
+    const key = (row) => `${row.id}|${row.complexId}|${row.linkMethod}`;
+    assert.deepEqual(after.map(key).sort(), before.filter((row) => row.aptName !== '자이2단지').map(key).sort());
   });
 
   test('시간 한도: 남은 시간이 요청 하나 몫보다 적으면 새 묶음을 시작하지 않고, 남은 것은 다음 실행에 앞에서부터', async () => {

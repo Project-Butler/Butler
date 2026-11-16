@@ -152,6 +152,14 @@ export const relinkSigungu = async (sigunguCode, index) => {
   return relinked;
 };
 
+// 잇기 규칙이 바뀌었을 때 — 그 시군구 거래의 잇기를 모두 풀고 저장해 둔 잇기 키로 처음부터 다시 잇는다(원천을 부르지 않는다).
+// 푼 뒤에 색인을 읽어야 옛 잇기에서 배운 aptSeq 가 다시 쓰이지 않는다. 반환 { unlinked, relinked }
+export const rebuildSigunguLinks = async (sigunguCode) => {
+  const { count: unlinked } = await prisma.marketDeal.updateMany({ where: { sigunguCode, complexId: { not: null } }, data: { complexId: null, linkMethod: null } });
+  const relinked = await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));
+  return { unlinked, relinked };
+};
+
 // 정기 실행 한 번. sigunguCodes 를 주면 그곳만(로컬 확인용), budgetMs 로 시간 한도를 바꾼다(테스트).
 export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs = RUN_BUDGET_MS, sigunguCodes } = {}) => {
   const startedAt = now();
