@@ -8,10 +8,14 @@ import userOff from './assets/tab-user-off.svg';
 import userOn from './assets/tab-user-on.svg';
 import usersOff from './assets/tab-users-off.svg';
 import usersOn from './assets/tab-users-on.svg';
+import wrenchOff from './assets/tab-wrench-off.svg';
+import wrenchOn from './assets/tab-wrench-on.svg';
 
 export const TAB_ICONS = {
   home: { on: homeOn, off: homeOff },
   building: { on: buildingOn, off: buildingOff },
   users: { on: usersOn, off: usersOff },
   user: { on: userOn, off: userOff },
+  // 임차인 앱 '수리 요청' 탭(#109). Figma 에 없어 같은 선 굵기·색으로 lucide wrench 모양을 옮겼다.
+  wrench: { on: wrenchOn, off: wrenchOff },
 };

@@ -1,6 +1,7 @@
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
+import { getNow } from '../../platform/dateUtils.js';
 import { endOwnershipInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -36,7 +37,7 @@ export const findMyOwnerships = async (user, { active, page, size }) => {
     prisma.ownership.count({ where }),
   ]);
 
-  const now = new Date();
+  const now = getNow();
   return {
     items: ownerships.map((ownership) => toResponse(ownership, now)),
     meta: { page, size, total, hasNext: page * size < total },

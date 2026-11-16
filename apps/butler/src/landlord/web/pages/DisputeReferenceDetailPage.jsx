@@ -26,7 +26,7 @@ const Section = ({ title, children }) => (
 // 사례 상세: 본문을 구간(상황·주장·쟁점·검토)별 카드로 나누고, 결과·출처·관련 자료를 이어 보여 준다.
 export const DisputeReferenceDetailPage = () => {
   const { referenceId } = useParams();
-  const { askAi, isAiDocked, setAiSuggestions, openReference, goBack, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onUnauthorized } = useOutletContext();
   const detail = useGetDisputeReference(referenceId);
   const related = useGetDisputeRelatedReferences(referenceId);
 
@@ -40,12 +40,6 @@ export const DisputeReferenceDetailPage = () => {
   }, [detail.error, onUnauthorized]);
 
   const reference = detail.data;
-
-  // 오른쪽 AI: 이 자료를 읽다가 바로 물어볼 질문
-  useEffect(() => {
-    if (!reference) return;
-    setAiSuggestions?.([`"${reference.title}"을(를) 쉽게 풀어 설명해 주세요`, toApplyQuestion(reference).trim()]);
-  }, [reference, setAiSuggestions]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -153,14 +147,12 @@ export const DisputeReferenceDetailPage = () => {
 
           <LegalNotice />
 
-          {/* 넓은 화면은 오른쪽 AI 질문 칩에 같은 질문이 있어서, 좁은 화면에서만 아래 고정 버튼을 둔다. */}
-          {!isAiDocked && (
-            <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
-              <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
-                내 상황에 적용해 보기
-              </Button>
-            </div>
-          )}
+          {/* 사례를 다 읽은 뒤 내 경우에 맞춰 묻는 AI 입구(피그마 하단 바) */}
+          <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
+            <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
+              내 상황에 적용해 보기
+            </Button>
+          </div>
         </>
       )}
     </div>

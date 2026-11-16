@@ -8,6 +8,7 @@ export const HelpRouteCard = ({ route }) => (
     <p className="mt-2 flex flex-wrap items-center gap-2">
       <span className="text-body font-semibold text-accent-strong">→ {route.name}</span>
       <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-chip font-semibold text-accent-strong">{route.badge}</span>
+      {route.region && <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-chip font-semibold text-ink-2">{route.region}</span>}
     </p>
     <dl className="mt-4 flex flex-1 border-t border-line pt-3 flex-col gap-1.5 text-body">
       {route.facts.map(([term, value]) => (

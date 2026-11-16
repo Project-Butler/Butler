@@ -27,6 +27,9 @@ import {
 const DEFAULT_SIZE = 20;
 const MAX_SIZE = 100;
 const MAX_KEYWORD_LENGTH = 100;
+// sourceKeys: 상황 안내 문장의 근거 자료처럼 정해 둔 자료를 한 번에 가져올 때. 시드 키 모양(영문·숫자·.-_)만 받는다.
+const MAX_SOURCE_KEYS = 50;
+const SOURCE_KEY_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 const MAX_QUESTION_LENGTH = 2000;
 
 const parsePositiveInt = (value, field, details) => {
@@ -83,7 +86,7 @@ const parseListQuery = (query) => {
   const details = [];
   const filters = {};
 
-  const { type, category, propertyKind, q, page, size, sort } = query;
+  const { type, category, propertyKind, sourceKeys, q, page, size, sort } = query;
 
   if (type !== undefined) filters.type = parseEnum(type, 'type', DisputeReferenceType, details);
   if (category !== undefined) {
@@ -92,6 +95,14 @@ const parseListQuery = (query) => {
   }
   if (propertyKind !== undefined) {
     filters.propertyKind = parseEnum(propertyKind, 'propertyKind', DisputePropertyKind, details);
+  }
+  if (sourceKeys !== undefined) {
+    const keys = [...new Set(sourceKeys.split(',').map((key) => key.trim()).filter(Boolean))];
+    if (keys.length === 0 || keys.length > MAX_SOURCE_KEYS || !keys.every((key) => SOURCE_KEY_PATTERN.test(key))) {
+      details.push({ field: 'sourceKeys', reason: `쉼표로 나눈 자료 키 1~${MAX_SOURCE_KEYS}개(영문·숫자·.-_)여야 합니다.` });
+    } else {
+      filters.sourceKey = { in: keys };
+    }
   }
 
   const keyword = parseKeyword(q, details);

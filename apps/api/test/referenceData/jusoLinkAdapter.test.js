@@ -30,7 +30,7 @@ const mstLine = ({ roadMgt = ROAD_MGT, road = '섬밭로', apt = '1', main = 285
 
 // K-apt 쪽: 섬밭로 285 → A1, 중계동 500번지 → A2(분양)
 const lookup = buildKaptLookup({
-  roadLinks: [{ roadSigunguCd: '11350', roadNameKey: '섬밭로', roadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A1', saleType: '분양' }],
+  roadLinks: [{ roadSigunguCd: '11350', roadNameKey: '섬밭로', isRoadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A1', saleType: '분양' }],
   lots: [{ legalDongCode: LEGAL, mainLot: 500, subLot: 0, kaptCode: 'A2', saleType: '분양' }],
 });
 
@@ -49,7 +49,7 @@ const existingLink = (n, extra = {}) => ({
   buildingMgtNo: mgt(n),
   roadSigunguCd: '11350',
   roadNameKey: '섬밭로',
-  roadUnderground: false,
+  isRoadUnderground: false,
   roadMainNo: 285,
   roadSubNo: 0,
   roadCode: ROAD_CODE,

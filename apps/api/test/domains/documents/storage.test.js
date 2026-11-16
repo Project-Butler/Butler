@@ -27,9 +27,17 @@ after(async () => {
   for (const dir of tempDirs) await rm(dir, { recursive: true, force: true });
 });
 
-test('저장소 선택: local만, Vercel·비밀값 없음·미설정은 쓸 수 없다', () => {
+test('저장소 선택: local은 Vercel·비밀값 없음이면, supabase는 주소·키가 없으면 쓸 수 없다', () => {
   assert.equal(resolveStorageKind({}), null);
+  assert.equal(resolveStorageKind({ STORAGE_DRIVER: 's3' }), null);
   assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'supabase', STORAGE_SIGNING_SECRET: 'x' }), null);
+  assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'supabase', SUPABASE_URL: 'https://p.supabase.co' }), null);
+  assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'supabase', SUPABASE_SERVICE_ROLE_KEY: 'k' }), null);
+  const supabaseEnv = { STORAGE_DRIVER: 'supabase', SUPABASE_URL: 'https://p.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', VERCEL: '1' };
+  assert.equal(resolveStorageKind(supabaseEnv), 'supabase');
+  const supabase = selectStorage(supabaseEnv);
+  assert.equal(supabase.kind, 'supabase');
+  assert.equal(supabase.servesContent, false);
   assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'local' }), null);
   assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'local', STORAGE_SIGNING_SECRET: 'x' }), 'local');
   assert.equal(resolveStorageKind({ STORAGE_DRIVER: 'local', STORAGE_SIGNING_SECRET: 'x', VERCEL: '1' }), null);

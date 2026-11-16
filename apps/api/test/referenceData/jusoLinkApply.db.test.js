@@ -44,11 +44,11 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
       data: [{ kaptCode: 'DBTL00001', name: 'DB 연계 분양', legalDongCode: LEGAL, syncedAt, saleType: '분양' }],
     });
     await prisma.kaptAddressLink.create({
-      data: { source: 'KAPT_API', roadSigunguCd: '99998', roadNameKey: 'linkro', roadUnderground: false, roadMainNo: 1, roadSubNo: 0, kaptCode: 'DBTL00001' },
+      data: { source: 'KAPT_API', roadSigunguCd: '99998', roadNameKey: 'linkro', isRoadUnderground: false, roadMainNo: 1, roadSubNo: 0, kaptCode: 'DBTL00001' },
     });
     // 표가 비어 있어도 삭제 상한(2%) 계산이 맞게 채움 행
     await prisma.$executeRaw`
-      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, kapt_code, match_rule)
+      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, kapt_code, match_rule)
       SELECT ${`${LEGAL}9`} || lpad(g::text, 14, '0'), '99998', 'filler', false, g, 0, 'DBTL00001', 'ROAD_KEY' FROM generate_series(1, 200) g`;
     complex = await fixture.createComplex({
       buildingMgtNo: mgt(1),
@@ -134,7 +134,7 @@ describe('공식 연계 하루치 적용', { skip: dbTestSkip }, () => {
   test('unresolved가 판단 대상의 1%를 넘고 5건 이상이면 FAILED, 쓰기 0', async () => {
     // 기존 연결 5개를 만들고, 도로명을 모르는 34로 다시 보낸다
     await prisma.$executeRaw`
-      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, road_underground, road_main_no, road_sub_no, road_code, kapt_code, match_rule)
+      INSERT INTO juso_building_links (building_mgt_no, road_sigungu_cd, road_name_key, is_road_underground, road_main_no, road_sub_no, road_code, kapt_code, match_rule)
       SELECT ${`${LEGAL}1`} || lpad((100 + g)::text, 14, '0'), '99998', 'x', false, 1, 0, '999980000088', 'DBTL00001', 'ROAD_KEY'
       FROM generate_series(1, 5) g`;
     const dongs = [1, 2, 3, 4, 5].map((g) => dong({ n: 100 + g, code: '34', roadCode: '999980000099' }));

@@ -1,13 +1,13 @@
 // 파일·문서(계약 6장). 업로드 순서: 업로드 세션 → uploadUrl로 PUT → POST /documents 등록.
-// 저장소는 storage/index.js가 고른다(지금은 임시 로컬 저장소뿐). 못 쓰면 503 STORAGE_UNAVAILABLE.
+// 저장소는 storage/index.js가 고른다(임시 로컬 저장소 또는 Supabase Storage). 못 쓰면 503 STORAGE_UNAVAILABLE.
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
-import { assertDocumentsDeletable, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
+import { assertDocumentsDeletable, CONTRACT_RESOURCE, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { AUDITED_DOWNLOAD_TYPES, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
-import { getResourcePolicy } from './resourcePolicies.js';
+import { getResourcePolicy, visibleDocumentWhere } from './resourcePolicies.js';
 import { removeStoredObjects, selectStorage } from './storage/index.js';
 
 // 결정 Q2: 업로드 15분, 다운로드 5분
@@ -15,8 +15,9 @@ export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
 export const DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
 // 미연결 문서는 24시간 안에 안 붙으면 정리한다(계약 6장)
 export const UNATTACHED_DOCUMENT_TTL_MS = 24 * 60 * 60 * 1000;
-// 만료된 업로드 세션은 1시간 더 두고 지운다(만료 직전에 시작한 업로드·등록이 끝날 여유)
-export const UPLOAD_CLEANUP_GRACE_MS = 60 * 60 * 1000;
+// 만료된 업로드 세션은 2시간 더 두고 지운다. 만료 직전에 시작한 업로드·등록이 끝날 여유이고,
+// Supabase 서명 업로드 URL은 발급 뒤 2시간 유효(바꿀 수 없음)라 그 안에 늦게 올라온 파일도 행과 함께 지우기 위해서다.
+export const UPLOAD_CLEANUP_GRACE_MS = 2 * 60 * 60 * 1000;
 const CLEANUP_BATCH = 200;
 
 export const requireStorage = () => {
@@ -62,7 +63,7 @@ export const createUploadSession = async (user, { fileName, mimeType, sizeBytes,
   await prisma.upload.create({
     data: { id, userId: user.id, fileName, mimeType, sizeBytes: BigInt(sizeBytes), type: documentType, storagePath: toStoragePath(id), expiresAt },
   });
-  const target = storage.createUploadTarget({ uploadId: id, mimeType, expiresAt });
+  const target = await storage.createUploadTarget({ uploadId: id, mimeType, expiresAt });
   return { id, ...target, expiresAt: expiresAt.toISOString() };
 };
 
@@ -152,12 +153,15 @@ export const registerDocument = async (user, { uploadSessionId, resourceType, re
   return toDocumentResponse(document);
 };
 
-// 문서를 볼 수 있는지. 미연결 문서는 올린 사람만, 붙은 문서는 그 리소스를 볼 수 있는 사람만.
+// 문서를 볼 수 있는지. 미연결 문서는 올린 사람만, 붙은 문서는 그 리소스를 볼 수 있고 정책의 documentWhere에 드는 것만.
 const canViewDocument = async (user, document) => {
   if (!document.resourceType) return document.uploaderId === user.id;
   const policy = getResourcePolicy(document.resourceType);
   if (!policy) return document.uploaderId === user.id;
-  return policy.canView(user, document.resourceId);
+  if (!(await policy.canView(user, document.resourceId))) return false;
+  const visibleWhere = await visibleDocumentWhere(policy, user, document.resourceId);
+  if (Object.keys(visibleWhere).length === 0) return true;
+  return (await prisma.document.count({ where: { AND: [{ id: document.id }, visibleWhere] } })) > 0;
 };
 
 const findVisibleDocument = async (user, documentId) => {
@@ -170,7 +174,7 @@ const findVisibleDocument = async (user, documentId) => {
 export const findResourceDocuments = async (user, { resourceType, resourceId, page, size }) => {
   const policy = getResourcePolicy(resourceType);
   if (!(await policy.canView(user, resourceId))) policy.throwNotFound();
-  const where = { resourceType, resourceId, deletedAt: null };
+  const where = { AND: [{ resourceType, resourceId, deletedAt: null }, await visibleDocumentWhere(policy, user, resourceId)] };
   const [total, rows] = await Promise.all([
     prisma.document.count({ where }),
     prisma.document.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (page - 1) * size, take: size }),
@@ -181,15 +185,16 @@ export const findResourceDocuments = async (user, { resourceType, resourceId, pa
 // GET /documents/:documentId
 export const findDocumentForUser = async (user, documentId) => toDocumentResponse(await findVisibleDocument(user, documentId));
 
-// POST /documents/:documentId/download-url — 5분 유효. 계약서·등기부는 감사 로그에 남긴다.
-export const issueDownloadUrl = async (user, documentId, req) => {
-  const document = await findVisibleDocument(user, documentId);
+// 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부는 감사 로그에 남긴다.
+// actor: 요청자({ id, role }) 또는 null(로그인 없는 초대 열람 등 → 감사 로그 actorType SYSTEM). req는 requestId·ip용(선택).
+// 돌려주는 값: { url, expiresAt(ISO 문자열) }. 저장소를 못 쓰면 503 STORAGE_UNAVAILABLE.
+export const createDocumentDownloadUrl = async (document, { actor = null, req } = {}) => {
   const storage = requireStorage();
   const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
-  const url = storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
+  const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
   if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
     await audit.record({
-      actor: user,
+      actor,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',
       resourceType: 'DOCUMENT',
       resourceId: document.id,
@@ -199,6 +204,24 @@ export const issueDownloadUrl = async (user, documentId, req) => {
   }
   return { url, expiresAt: expiresAt.toISOString() };
 };
+
+// POST /documents/:documentId/download-url — 5분 유효.
+export const issueDownloadUrl = async (user, documentId, req) =>
+  createDocumentDownloadUrl(await findVisibleDocument(user, documentId), { actor: user, req });
+
+// 초대 화면(로그인 전 본인 확인 뒤)에서 쓰는 조회: 그 초대에 공유됐고, 숨기지 않았고, 그 계약에 붙은 문서만 돌려준다(없으면 null).
+// 사용자 권한은 보지 않는다 — 초대·확인 세션 검사는 부르는 쪽(tenantInvitations)이 먼저 한다.
+// 다운로드 URL이 필요하면 돌려받은 행을 createDocumentDownloadUrl(document, { actor: null, req })에 넘긴다.
+export const findSharedInvitationDocument = ({ invitationId, contractId, documentId }, client = prisma) =>
+  client.document.findFirst({
+    where: {
+      id: documentId,
+      resourceType: CONTRACT_RESOURCE,
+      resourceId: contractId,
+      deletedAt: null,
+      invitationShares: { some: { invitationId, invitation: { contractId } } },
+    },
+  });
 
 // GET /documents/:documentId/content?token= — 임시 로컬 저장소 전용 서명 다운로드. 문서 행과 파일 스트림을 여는 함수를 돌려준다.
 // 스트림은 응답 헤더를 다 만든 뒤에 연다(그 사이 에러가 나면 열린 파일이 남지 않게).

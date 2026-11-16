@@ -23,13 +23,15 @@ export const CATEGORY_LABELS = {
 
 // 분쟁 해결사 첫 화면 상황 타일이자 목록의 칩. 화면 묶음이라 DB 분쟁 유형(category) 여러 개를 하나로 묶기도 한다.
 // 시안의 '원상복구'는 손해배상, '월세 인상'은 월세·보증금 조정, '중도 해지'는 계약 갱신·종료에 들어간다.
+// 분류 기준(화면에는 적지 않음): 순서와 legal(공식 이름)은 주택임대차분쟁조정위원회 조정 대상(주택임대차보호법 제14조②, 시행령 제22조)을 따른다.
+// label은 한눈에 들어오는 쉬운 이름, hint는 첫 화면 카드의 대표 질문(첫 화면 '자주 묻는 질문'과 겹치지 않는 것).
 export const DISPUTE_TOPICS = [
-  { key: 'deposit', label: '보증금 반환', categories: ['DEPOSIT_RETURN'] },
-  { key: 'restore', label: '원상복구·손해배상', categories: ['DAMAGES'] },
-  { key: 'repair', label: '수리 책임', categories: ['REPAIR_DUTY'] },
-  { key: 'renewal', label: '계약 갱신·종료', categories: ['RENEWAL_TERMINATION', 'LEASE_TERM'] },
-  { key: 'rent', label: '월세·보증금 조정', categories: ['RENT_ADJUSTMENT'] },
-  { key: 'other', label: '기타·제도 안내', categories: ['GENERAL', 'CONTRACT_INTERPRETATION', 'BROKERAGE_FEE', 'PREMIUM'] },
+  { key: 'deposit', label: '보증금 반환', legal: '보증금·주택 반환', hint: '바로 돌려줄 돈이 없다면?', categories: ['DEPOSIT_RETURN'] },
+  { key: 'rent', label: '월세·보증금 조정', legal: '차임·보증금 증감', hint: '전세를 월세로 바꾸려면?', categories: ['RENT_ADJUSTMENT'] },
+  { key: 'repair', label: '수리 책임', legal: '유지·수선 의무', hint: '누수·보일러, 누가 고치나요?', categories: ['REPAIR_DUTY'] },
+  { key: 'renewal', label: '계약 갱신·종료', legal: '기간·갱신·종료', hint: '계약 기간은 꼭 2년인가요?', categories: ['RENEWAL_TERMINATION', 'LEASE_TERM'] },
+  { key: 'restore', label: '원상복구·손해배상', legal: '손해배상', hint: '도배·장판 비용은 누가 내나요?', categories: ['DAMAGES'] },
+  { key: 'other', label: '기타', legal: '계약 해석·그 밖', hint: '중개보수는 누가 내나요?', categories: ['GENERAL', 'CONTRACT_INTERPRETATION', 'BROKERAGE_FEE', 'PREMIUM'] },
 ];
 
 export const findTopic = (key) => DISPUTE_TOPICS.find((topic) => topic.key === key) ?? null;

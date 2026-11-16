@@ -11,6 +11,11 @@ export const queryKey = {
   PROPERTY_DETAIL: 'property',
   PROPERTY_OWNERSHIPS: 'property_ownerships',
   PROPERTY_OWNERSHIP_DETAIL: 'property_ownership',
+  TICKETS: 'tickets',
+  TICKET_DETAIL: 'ticket',
+  THREADS: 'threads',
+  THREAD_DETAIL: 'thread',
+  THREAD_MESSAGES: 'thread_messages',
   DISPUTE_CHATS: 'dispute_chats',
   DISPUTE_CHAT_DETAIL: 'dispute_chat',
   ADMIN_DASHBOARD: 'admin_dashboard',
@@ -31,6 +36,11 @@ export const queryKey = {
   COMMUNITY_POLL_DETAIL: 'community_poll',
   COMMUNITY_NEWS: 'community_news',
   COMMUNITY_COMPLEX_NEWS: 'community_complex_news',
+  TENANT_INVITATIONS: 'tenant_invitations',
+  TENANT_INVITATION_PREVIEW: 'tenant_invitation_preview',
+  TENANT_INVITATION_CONTRACT: 'tenant_invitation_contract',
+  NOTIFICATIONS: 'notifications',
+  NOTIFICATION_UNREAD_COUNT: 'notification_unread_count',
   // 커뮤니티 시세(지금은 화면 쪽 예시 데이터, 플랫폼 시세 API 가 생기면 같은 키로 그 응답을 담는다)
   COMMUNITY_MARKET_PRICES: 'community_market_prices',
 };

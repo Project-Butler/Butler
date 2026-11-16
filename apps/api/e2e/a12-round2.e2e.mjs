@@ -31,7 +31,7 @@ let cookie;
 let available = false;
 let cronCalled = false;
 let baseline = {};
-const log = (scenario, ok, details = {}) => console.log(`${ok ? 'PASS' : 'FAIL'} ${scenario} ${JSON.stringify(details)}`);
+const log = (scenario, ok, details = {}) => console.info(`${ok ? 'PASS' : 'FAIL'} ${scenario} ${JSON.stringify(details)}`);
 const call = async (origin, auth, method, route, body, headers = {}) => {
   let response;
   for(let attempt=0;attempt<3;attempt++) { try { response=await fetch(`${origin}${route}`, { method, headers: { ...(auth ? { Cookie: auth } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(30000) }); break; } catch(e) { if(attempt===2) throw new Error(`fetch ${method} ${route} failed: ${e.cause?.code??e.message}`); await new Promise(r=>setTimeout(r,300)); } }
@@ -106,8 +106,8 @@ after(async () => {
       const testUserKeys=[`complex-search:${userId}`,`general:${userId}`,...fixtureUsers.flatMap(u=>[`complex-search:${u.id}`,`general:${u.id}`])];
       await db.$executeRaw`DELETE FROM rate_limits WHERE key = ANY(${testUserKeys}::text[])`;
       const remaining=await baselineCounts();
-      console.log('CLEANUP_BASELINE',JSON.stringify(baseline),'CLEANUP_REMAINING',JSON.stringify(remaining),'MATCH',JSON.stringify(baseline)===JSON.stringify(remaining));
-      console.log('CHILD_SERVERS',JSON.stringify(children.map(c=>({pid:c.pid,exitCode:c.exitCode,killed:c.exitCode!==null}))));
+      console.info('CLEANUP_BASELINE',JSON.stringify(baseline),'CLEANUP_REMAINING',JSON.stringify(remaining),'MATCH',JSON.stringify(baseline)===JSON.stringify(remaining));
+      console.info('CHILD_SERVERS',JSON.stringify(children.map(c=>({pid:c.pid,exitCode:c.exitCode,killed:c.exitCode!==null}))));
     } catch(e) { console.error('CLEANUP_ERROR',e.message); }
   }
   await db.$disconnect();

@@ -94,7 +94,7 @@ const loadLinkContext = async (prisma, dongLines, renames) => {
   const existingRows = buildingMgtNos.length
     ? await prisma.$queryRaw`
         SELECT building_mgt_no AS "buildingMgtNo", road_sigungu_cd AS "roadSigunguCd", road_name_key AS "roadNameKey",
-               road_underground AS "roadUnderground", road_main_no AS "roadMainNo", road_sub_no AS "roadSubNo",
+               is_road_underground AS "isRoadUnderground", road_main_no AS "roadMainNo", road_sub_no AS "roadSubNo",
                road_code AS "roadCode", kapt_code AS "kaptCode", match_rule AS "matchRule"
         FROM juso_building_links WHERE building_mgt_no = ANY(${buildingMgtNos}::varchar[])`
     : [];

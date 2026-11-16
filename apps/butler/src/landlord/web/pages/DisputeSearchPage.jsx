@@ -6,6 +6,7 @@ import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { ReferenceCard } from '../components/DisputeReference/ReferenceCard';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
+import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
 import { DISPUTE_TOPICS, findTopic, REFERENCE_TYPES } from '../utils/disputeReference';
@@ -19,6 +20,14 @@ const SEARCH_DELAY_MS = 300;
 
 const ALL_TAB = 'ALL';
 const FAQ_TAB = 'FAQ';
+
+// 제안한 검색어 뒤의 목적격 조사: 끝 글자에 받침이 있으면 "을", 없으면 "를"("보증금을", "전세 사기를").
+// 끝이 한글이 아니면(숫자·영문) 읽는 법을 몰라 "을(를)".
+const objectParticle = (text) => {
+  const code = text.trim().codePointAt(text.trim().length - 1);
+  if (code === undefined || code < 0xac00 || code > 0xd7a3) return '을(를)';
+  return (code - 0xac00) % 28 === 0 ? '를' : '을';
+};
 const REFERENCE_TYPE_VALUES = REFERENCE_TYPES.map(({ value }) => value);
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
@@ -27,7 +36,7 @@ const sum = (values) => values.reduce((total, value) => total + value, 0);
 // 조건이 없으면 전체 자료를 보여 준다(상황 고르기는 첫 화면 몫이라 여기에는 타일을 두지 않는다).
 // 조건(topic·q·tab)은 주소에 둬서 사례 상세에서 돌아와도 그대로 남는다.
 export const DisputeSearchPage = () => {
-  const { askAi, setAiSuggestions, openReference, goBack, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onUnauthorized } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const topic = findTopic(searchParams.get('topic'));
   const q = searchParams.get('q') ?? '';
@@ -75,11 +84,6 @@ export const DisputeSearchPage = () => {
     setKeyword((current) => (current.trim() === q ? current : q));
   }, [q]);
 
-  // 오른쪽 AI: 검색어가 있으면 그 말로 물어볼 질문, 없으면 기본 질문
-  useEffect(() => {
-    setAiSuggestions?.(q ? [`'${q}' 관련해서 제 상황을 물어보고 싶어요`, `'${q}'이(가) 무슨 뜻인지 쉽게 설명해 주세요`] : null);
-  }, [q, setAiSuggestions]);
-
   const category = topic ? topic.categories.join(',') : undefined;
   const faqs = useGetDisputeFaqList({ category, q: q || undefined });
   const list = useGetDisputeReferenceList({
@@ -112,6 +116,16 @@ export const DisputeSearchPage = () => {
   const showReferences = tab !== FAQ_TAB;
   const totalPages = meta ? Math.ceil(meta.total / PAGE_SIZE) : 0;
   const hasNoResult = !isCounting && faqItems.length + referenceTotal === 0;
+  // 띄어 쓴 단어가 모두 들어간 자료가 없으면 서버가 일부 단어만 든 자료를 단어 많은 순으로 보내고 partialMatch로 알린다.
+  const partialMatch = meta?.partialMatch;
+  // 질문도 같은 규칙으로 완화한다(질문 목록은 배열이라 질문마다 같은 partialMatch가 붙어 온다).
+  const faqPartialMatch = faqItems[0]?.partialMatch;
+  // 오타로 보이는 단어가 있으면 서버가 고친 검색어를 제안한다(결과는 입력한 검색어 그대로). 누르면 그 말로 다시 찾는다.
+  const suggestion = meta?.suggestion;
+  const searchSuggestion = () => {
+    setKeyword(suggestion.query);
+    search(suggestion.query);
+  };
 
   // 고른 칩을 다시 누르면 상황을 풀고 전체에서 본다.
   const selectTopic = (key) => updateParams({ topic: topic?.key === key ? null : key, tab: null });
@@ -170,6 +184,20 @@ export const DisputeSearchPage = () => {
         </div>
       )}
 
+      {suggestion && (
+        <p className="text-body text-ink-2">
+          혹시{' '}
+          <button
+            type="button"
+            onClick={searchSuggestion}
+            className="min-h-11 font-semibold text-accent underline hover:text-accent-strong"
+          >
+            {suggestion.query}
+          </button>
+          {objectParticle(suggestion.query)} 찾으셨나요?
+        </p>
+      )}
+
       {isCounting && !list.error && !faqs.error && (
         <p className="py-6 text-center text-body text-ink-3">찾는 중…</p>
       )}
@@ -199,6 +227,12 @@ export const DisputeSearchPage = () => {
               )}
             </div>
           )}
+          {faqPartialMatch && (
+            <p role="status" className="rounded-card border border-line bg-surface-2 px-4 py-3 text-body text-ink-2">
+              모든 단어가 들어간 질문이 없어서, 일부 단어만 들어간 질문을 보여 드려요. 단어가 많이 들어간 질문(
+              {faqPartialMatch.termCount}개 중 최대 {faqPartialMatch.matchedTermCount}개)이 위에 있어요.
+            </p>
+          )}
           <FaqList key={`${topic?.key}-${q}-${tab}`} faqs={shownFaqs} onOpenReference={openReference} />
         </section>
       )}
@@ -206,6 +240,13 @@ export const DisputeSearchPage = () => {
       {tab === FAQ_TAB && !isCounting && faqItems.length === 0 && !hasNoResult && (
         <p className="rounded-card border border-line bg-surface px-5 py-6 text-center text-body text-ink-2">
           맞는 질문이 없어요. 사례·판례 탭을 확인해 보세요.
+        </p>
+      )}
+
+      {showReferences && references.length > 0 && partialMatch && (
+        <p role="status" className="rounded-card border border-line bg-surface-2 px-4 py-3 text-body text-ink-2">
+          모든 단어가 들어간 자료가 없어서, 일부 단어만 들어간 자료를 보여 드려요. 단어가 많이 들어간 자료(
+          {partialMatch.termCount}개 중 최대 {partialMatch.matchedTermCount}개)가 위에 있어요.
         </p>
       )}
 
@@ -235,12 +276,14 @@ export const DisputeSearchPage = () => {
       )}
 
       <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
-        <p className="text-card font-semibold text-ink">찾는 내용이 없나요?</p>
+        <p className="text-card font-semibold text-ink">답을 찾지 못하셨나요?</p>
         <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 비슷한 사례를 찾아 정리해 드려요.</p>
         <Button onClick={() => askAi(q)} className="mt-4 min-h-11 px-5">
           AI에게 물어보기
         </Button>
       </div>
+
+      <SourceFooter showContacts />
 
       <LegalNotice />
     </div>
