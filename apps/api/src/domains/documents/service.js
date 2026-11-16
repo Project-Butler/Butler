@@ -115,7 +115,7 @@ const ensureUploadCompleted = async (storage, upload, now) => {
 const lockResourceForAttach = async (tx, user, policy, resourceId, addCount, documentType) => {
   await policy.lockForWrite(tx, user, resourceId);
   if (policy.allowedDocumentTypes && !policy.allowedDocumentTypes.includes(documentType)) {
-    throw new AppError('DOCUMENT_TYPE_NOT_ALLOWED', 422, '이 곳에는 올릴 수 없는 서류 종류입니다.');
+    throw new AppError('DOCUMENT_TYPE_NOT_ALLOWED', 422, '이 곳에는 올릴 수 없는 문서 종류입니다.');
   }
   const attached = await tx.document.count({ where: { resourceType: policy.resourceType, resourceId, deletedAt: null } });
   if (attached + addCount > policy.maxAttachments) {

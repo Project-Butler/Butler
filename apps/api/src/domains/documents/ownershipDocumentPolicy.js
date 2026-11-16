@@ -36,9 +36,9 @@ export const ownershipDocumentPolicy = {
   documentWhere,
   lockForWrite: async (tx, user, ownershipId) => {
     const ownership = await lockOwnOwnership(tx, user, ownershipId);
-    if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '끝난 소유 관계라 서류를 올릴 수 없습니다.');
+    if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '끝난 소유 관계라 문서를 올릴 수 없습니다.');
     if (computeOwnershipVerificationStatus(ownership, getNow()) !== 'VERIFIED') {
-      throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증을 마친 호실만 내 소유 서류를 올릴 수 있습니다.');
+      throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증을 마친 호실만 내 소유 문서를 올릴 수 있습니다.');
     }
     return ownership;
   },

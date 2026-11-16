@@ -46,7 +46,7 @@ const lockOwnContract = async (tx, user, contractId) => {
     if (contract.tenantId === user.id) throw new AppError('FORBIDDEN_ROLE', 403, '계약 문서는 임대인만 올리거나 지울 수 있습니다.');
     throwContractNotFound();
   }
-  if (ownership.endedAt) throw new AppError('CONTRACT_READ_ONLY', 422, '소유가 끝난 계약이라 서류를 올리거나 지울 수 없습니다.');
+  if (ownership.endedAt) throw new AppError('CONTRACT_READ_ONLY', 422, '소유가 끝난 계약이라 문서를 올리거나 지울 수 없습니다.');
   return contract;
 };
 
@@ -66,7 +66,7 @@ export const contractDocumentPolicy = {
     const sharedCount = await tx.tenantInvitationDocument.count({
       where: { documentId: document.id, invitation: { contractId, status: 'ACCEPTED' } },
     });
-    if (sharedCount > 0) throw new AppError('DOCUMENT_NOT_DELETABLE', 422, '임차인에게 공유한 서류는 계약이 끝난 뒤 지울 수 없습니다.');
+    if (sharedCount > 0) throw new AppError('DOCUMENT_NOT_DELETABLE', 422, '임차인에게 공유한 문서는 계약이 끝난 뒤 지울 수 없습니다.');
     return contract;
   },
   // 서류함·목록 수용 배치 where. 임대인으로서 볼 수 있는 계약(내 소유 관계의 계약)만 남긴다. 단건 documentWhere의 LANDLORD 값({})과 같다.

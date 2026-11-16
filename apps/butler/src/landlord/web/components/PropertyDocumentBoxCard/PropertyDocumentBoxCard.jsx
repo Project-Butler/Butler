@@ -6,7 +6,7 @@ import { getUploadTargets, hasUploadTarget, splitContracts, summarizeDocuments }
 import { DocumentUploadModal } from '../DocumentUploadModal/DocumentUploadModal';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
-// 카드 안 한 칸: 제목 + 개수 + 최근 파일 2개(+ 외 n건). 파일 이름만 보이고 열기는 서류함 화면에서 한다.
+// 카드 안 한 칸: 제목 + 개수 + 최근 파일 2개(+ 외 n건). 파일 이름만 보이고 열기는 문서함 화면에서 한다.
 const SummaryColumn = ({ icon: Icon, title, summary, hint }) => (
   <div className="min-w-0 rounded-input border border-line p-3">
     <p className="flex items-center gap-1.5 text-sub font-semibold text-ink">
@@ -15,7 +15,7 @@ const SummaryColumn = ({ icon: Icon, title, summary, hint }) => (
       {hint && <span className="font-normal text-ink-3">· {hint}</span>}
     </p>
     {summary.count === 0 ? (
-      <p className="mt-1.5 text-body text-ink-3">아직 올린 서류가 없어요</p>
+      <p className="mt-1.5 text-body text-ink-3">아직 올린 문서가 없어요</p>
     ) : (
       <ul className="mt-1.5 space-y-0.5">
         {summary.recent.map((doc) => (
@@ -33,8 +33,8 @@ const SummaryColumn = ({ icon: Icon, title, summary, hint }) => (
   </div>
 );
 
-// 호실 상세의 서류함 카드(관리 로그 아래). 제목 "서류함 n건" + [서류 올리기] + [서류함 열기], 내 소유 서류·계약 서류 두 칸.
-// [서류 올리기]는 올릴 곳(isUploadable인 소유 관계 또는 계약)이 있을 때만 보인다. 끝난 소유 호실은 숨기고, 미인증이고 계약도 없으면 인증 안내 한 줄.
+// 호실 상세의 문서함 카드(관리 로그 아래). 제목 "문서함 n건" + [문서 올리기] + [문서함 열기], 내 소유 문서·계약 문서 두 칸.
+// [문서 올리기]는 올릴 곳(isUploadable인 소유 관계 또는 계약)이 있을 때만 보인다. 끝난 소유 호실은 숨기고, 미인증이고 계약도 없으면 인증 안내 한 줄.
 export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized }) => {
   const { data: box, error, isLoading, refetch } = useGetPropertyDocumentBox(propertyId, { onUnauthorized });
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -69,8 +69,8 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
       {needsVerification && <p className="text-sub text-ink-3">권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요</p>}
       {box && (
         <div className="grid grid-cols-2 gap-3">
-          <SummaryColumn icon={ShieldCheck} title="내 소유 서류" summary={ownershipSummary} />
-          <SummaryColumn icon={FileSignature} title="계약 서류" summary={contractSummary} hint={hasCurrentContract ? '진행 중 계약 있음' : null} />
+          <SummaryColumn icon={ShieldCheck} title="내 소유 문서" summary={ownershipSummary} />
+          <SummaryColumn icon={FileSignature} title="계약 문서" summary={contractSummary} hint={hasCurrentContract ? '진행 중 계약 있음' : null} />
         </div>
       )}
       {isUploadOpen && box && (

@@ -26,7 +26,7 @@ import { formatDateKST } from '../utils/format';
 
 const Count = ({ children }) => <span className="font-num tabular-nums">{children}</span>;
 
-// 왼쪽 호실 줄: 호실 이름 + "서류 n · 계약 중/공실" (미인증 호실은 인증 안내 문구)
+// 왼쪽 호실 줄: 호실 이름 + "문서 n · 계약 중/공실" (미인증 호실은 인증 안내 문구)
 const PropertyRow = ({ property, isFormer = false, isSelected, onSelect }) => {
   const { count, text } = describePropertyRow(property, { isFormer });
   return (
@@ -44,7 +44,7 @@ const PropertyRow = ({ property, isFormer = false, isSelected, onSelect }) => {
         <span className="text-sub text-ink-3">
           {count !== null && (
             <>
-              서류 <Count>{count}</Count> ·{' '}
+              문서 <Count>{count}</Count> ·{' '}
             </>
           )}
           {text}
@@ -90,7 +90,7 @@ const CardHeader = ({ icon, title, count, description, action }) => (
   </div>
 );
 
-// 내 소유 서류 카드. 올리기 조건·안내는 서버가 준 ownership.isUploadable·isActive를 그대로 따른다(D-A·D-C).
+// 내 소유 문서 카드. 올리기 조건·안내는 서버가 준 ownership.isUploadable·isActive를 그대로 따른다(D-A·D-C).
 const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, onUpload, onNavigate }) => {
   const { primary, past } = splitOwnerships(box.ownerships);
   const [isPastOpen, setIsPastOpen] = useState(false);
@@ -102,9 +102,9 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
     <section className="rounded-card border border-line bg-surface">
       <CardHeader
         icon={ShieldCheck}
-        title="내 소유 서류"
+        title="내 소유 문서"
         count={primary.documents.length}
-        description="등기부·매매계약서·보험처럼 호실 자체에 대한 서류"
+        description="등기부·매매계약서·보험처럼 호실 자체에 대한 문서"
         action={primary.isUploadable && onUpload ? <UploadButton onClick={() => onUpload({ target: 'OWNERSHIP' })} /> : null}
       />
       {primary.isActive && !primary.isUploadable && (
@@ -119,7 +119,7 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
       {primary.documents.length > 0 ? (
         <DocumentBoxTable documents={primary.documents} {...tableProps} showHead />
       ) : (
-        <p className="px-5 py-6 text-body text-ink-3">아직 올린 내 소유 서류가 없어요</p>
+        <p className="px-5 py-6 text-body text-ink-3">아직 올린 내 소유 문서가 없어요</p>
       )}
       {past.length > 0 && (
         <>
@@ -128,7 +128,7 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
               지난 소유 기간 <Count>{past.length}</Count>
             </span>
             <span className="text-ink-3">
-              · 서류 <Count>{pastDocumentCount}</Count>
+              · 문서 <Count>{pastDocumentCount}</Count>
             </span>
           </CollapseHeader>
           {isPastOpen &&
@@ -139,13 +139,13 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
                     {formatDateKST(ownership.startedAt)} ~ {formatDateKST(ownership.endedAt)}
                   </span>
                   <span className="ml-2 text-ink-3">
-                    서류 <Count>{ownership.documents.length}</Count>
+                    문서 <Count>{ownership.documents.length}</Count>
                   </span>
                 </p>
                 {ownership.documents.length > 0 ? (
                   <DocumentBoxTable documents={ownership.documents} {...tableProps} />
                 ) : (
-                  <p className="px-5 py-4 text-body text-ink-3">올린 서류가 없어요</p>
+                  <p className="px-5 py-4 text-body text-ink-3">올린 문서가 없어요</p>
                 )}
               </div>
             ))}
@@ -155,7 +155,7 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
   );
 };
 
-// 계약 하나의 묶음: 머리(임차인 · 기간 · 상태 · 서류 수 · [올리기] · [계약 보기]) + 서류 표
+// 계약 하나의 묶음: 머리(임차인 · 기간 · 상태 · 문서 수 · [올리기] · [계약 보기]) + 문서 표
 const ContractGroup = ({ contract, userId, urlEntries, onOpen, onDelete, onUpload, onNavigate, showUpload }) => {
   const badge = getContractGroupBadge(contract);
   return (
@@ -165,7 +165,7 @@ const ContractGroup = ({ contract, userId, urlEntries, onOpen, onDelete, onUploa
         <span className="font-num tabular-nums text-ink-2">{formatContractPeriod(contract.startDate, contract.endDate)}</span>
         <Badge tone={badge.tone}>{badge.label}</Badge>
         <span className="text-ink-3">
-          서류 <Count>{contract.documents.length}</Count>
+          문서 <Count>{contract.documents.length}</Count>
         </span>
         <span className="ml-auto flex items-center gap-2">
           {showUpload && contract.isUploadable && onUpload && (
@@ -179,13 +179,13 @@ const ContractGroup = ({ contract, userId, urlEntries, onOpen, onDelete, onUploa
       {contract.documents.length > 0 ? (
         <DocumentBoxTable documents={contract.documents} contract={contract} userId={userId} urlEntries={urlEntries} onOpen={onOpen} onDelete={onDelete} />
       ) : (
-        <p className="px-5 py-4 text-body text-ink-3">이 계약에 올린 서류가 없어요</p>
+        <p className="px-5 py-4 text-body text-ink-3">이 계약에 올린 문서가 없어요</p>
       )}
     </div>
   );
 };
 
-// 계약 서류 카드. 진행 중 계약 먼저, 지난 계약은 접힘(지난 계약도 소유 관계가 활성이면 올리기, D-B)
+// 계약 문서 카드. 진행 중 계약 먼저, 지난 계약은 접힘(지난 계약도 소유 관계가 활성이면 올리기, D-B)
 const ContractCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, onUpload, onNavigate }) => {
   const { current, past } = splitContracts(box.contracts);
   const [isPastOpen, setIsPastOpen] = useState(false);
@@ -198,7 +198,7 @@ const ContractCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, o
     <section className="rounded-card border border-line bg-surface">
       <CardHeader
         icon={FileSignature}
-        title="계약 서류"
+        title="계약 문서"
         count={total}
         description="계약서·특약, 신고필증·확정일자, 영수증, 입주·퇴거 사진"
         action={canUploadAny && onUpload ? <UploadButton onClick={() => onUpload({ target: 'CONTRACT' })} /> : null}
@@ -235,7 +235,7 @@ const ContractCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, o
   );
 };
 
-// 지울 서류 확인 팝업. 서버가 거절하면(422·403) 그 message를 그대로 보여 준다(design.md 7-2).
+// 지울 문서 확인 팝업. 서버가 거절하면(422·403) 그 message를 그대로 보여 준다(design.md 7-2).
 const DeleteDocumentModal = ({ doc, onClose, onDeleted, onUnauthorized }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
@@ -258,7 +258,7 @@ const DeleteDocumentModal = ({ doc, onClose, onDeleted, onUnauthorized }) => {
 
   return (
     <Modal
-      title="서류를 삭제할까요?"
+      title="문서를 삭제할까요?"
       onClose={isDeleting ? () => {} : onClose}
       footer={
         <>
@@ -278,7 +278,7 @@ const DeleteDocumentModal = ({ doc, onClose, onDeleted, onUnauthorized }) => {
   );
 };
 
-// 임대인 서류함(/landlord/documents). 왼쪽 호실 목록 3 : 오른쪽 선택한 호실의 서류 7.
+// 임대인 문서함(/landlord/documents). 왼쪽 호실 목록 3 : 오른쪽 선택한 호실의 문서 7.
 // propertyId(주소의 ?propertyId)가 없거나 내 호실이 아니면 첫 호실을 골라 주소를 바꾼다. 예전 호실(FORMER_OWNER)도 같은 화면에서 연다.
 // 열기: PDF·사진은 미리보기 팝업(DocumentPreviewModal), 그 밖은 useDocumentUrls의 open(새 탭).
 // 어느 쪽이든 누를 때마다 새 주소를 받아 감사 줄이 사람이 연 횟수만큼 남는다. 화면을 열 때 썸네일 주소는 받지 않는다.
@@ -303,7 +303,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   const [notice, setNotice] = useState(null);
   const [isFormerOpen, setIsFormerOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
-  // 서류 올리기 팝업: null이면 닫힘, 아니면 칸의 [올리기]가 미리 고른 값({ target?, contractId? })
+  // 문서 올리기 팝업: null이면 닫힘, 아니면 칸의 [올리기]가 미리 고른 값({ target?, contractId? })
   const [uploadRequest, setUploadRequest] = useState(null);
 
   // 주소의 호실이 없거나 내 호실이 아니면 첫 호실로 바꾼다. 주소에 호실이 있었는데 내 호실이 아니면 안내를 남긴다.
@@ -325,7 +325,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   };
 
   const handleUploaded = (count) => {
-    setNotice(`서류 ${count}개를 올렸어요.`);
+    setNotice(`문서 ${count}개를 올렸어요.`);
     reloadAll();
   };
 
@@ -351,7 +351,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
         <EmptyState
           icon={Building2}
           title="등록한 부동산이 없어요"
-          description="부동산을 등록하면 호실마다 서류를 보관할 수 있어요."
+          description="부동산을 등록하면 호실마다 문서를 보관할 수 있어요."
           action={<Button onClick={() => onNavigate('propertyRegister')}>부동산 등록</Button>}
         />
       </div>
@@ -375,7 +375,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
     <div className="w-full space-y-5 pb-10">
       <PageHeader
         title="문서함"
-        description="호실마다 내 소유 서류와 계약 서류를 보관해요. 계약이 끝나도 서류는 남아요."
+        description="호실마다 내 소유 문서와 계약 문서를 보관해요. 계약이 끝나도 문서는 남아요."
         actions={
           box &&
           hasUploadTarget(box) && (
@@ -418,7 +418,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
           )}
           <div className="flex items-start gap-2 rounded-input bg-surface-2 p-3 text-sub text-ink-3">
             <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>서류는 나만 봐요. 초대에서 고른 계약 서류만 임차인이 봐요. 호실을 팔아도 다음 소유자에게 넘어가지 않고, 열 때마다 기록이 남아요.</span>
+            <span>문서는 나만 봐요. 초대에서 고른 계약 문서만 임차인이 봐요. 호실을 팔아도 다음 소유자에게 넘어가지 않고, 열 때마다 기록이 남아요.</span>
           </div>
         </nav>
 

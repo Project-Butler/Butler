@@ -67,7 +67,7 @@ const RowMenu = ({ doc, canDelete, isSharedLocked, onDelete }) => {
                   삭제
                 </button>
               )}
-              {isSharedLocked && <p className="px-3 py-2.5 text-sub text-ink-3">임차인에게 공유한 서류라 지울 수 없어요</p>}
+              {isSharedLocked && <p className="px-3 py-2.5 text-sub text-ink-3">임차인에게 공유한 문서라 지울 수 없어요</p>}
             </>
           ) : (
             <dl className="space-y-2 px-3 py-2.5 text-body">
@@ -93,8 +93,8 @@ const RowMenu = ({ doc, canDelete, isSharedLocked, onDelete }) => {
   );
 };
 
-// 서류 표(design.md 표 규칙): 파일(형식 아이콘 + 이름 말줄임) · 종류 칩 · 올린 날 · 크기 · 더 보기. 줄을 누르면 연다(따로 [열기] 버튼 없음).
-// contract: 계약 서류 표면 그 계약(삭제 조건 판단용), 내 소유 서류 표면 생략. urlEntries: useDocumentUrls의 entries(열기 상태).
+// 문서 표(design.md 표 규칙): 파일(형식 아이콘 + 이름 말줄임) · 종류 칩 · 올린 날 · 크기 · 더 보기. 줄을 누르면 연다(따로 [열기] 버튼 없음).
+// contract: 계약 문서 표면 그 계약(삭제 조건 판단용), 내 소유 문서 표면 생략. urlEntries: useDocumentUrls의 entries(열기 상태).
 export const DocumentBoxTable = ({ documents, contract, userId, urlEntries, onOpen, onDelete, showHead = false }) => (
   <table className="w-full text-body">
     {showHead && (

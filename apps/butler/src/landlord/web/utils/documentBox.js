@@ -1,4 +1,4 @@
-// 서류함(임대인 웹) 표기·판단 도우미. docs/10. 유지보수 요청·문서 개발/서류함 개발 계획.md 3-1·4-2·4-3.
+// 문서함(임대인 웹) 표기·판단 도우미. docs/10. 유지보수 요청·문서 개발/문서함 개발 계획.md 3-1·4-2·4-3.
 // 숫자·날짜는 쓰는 쪽에서 font-num tabular-nums로 감싼다.
 import { MAX_ATTACHMENT_BYTES } from './attachment';
 
@@ -32,8 +32,8 @@ export const DOCUMENT_TYPES_BY_TARGET = {
 };
 
 export const TARGET_LABELS = {
-  [OWNERSHIP_TARGET]: '내 소유 서류',
-  [CONTRACT_TARGET]: '계약 서류',
+  [OWNERSHIP_TARGET]: '내 소유 문서',
+  [CONTRACT_TARGET]: '계약 문서',
 };
 
 // 남은 자리(30 − 지금 수). 한 번에 고를 수 있는 파일 수는 남은 자리와 한 번에 최대(10) 중 작은 쪽이다.
@@ -55,7 +55,7 @@ export const splitContracts = (contracts) => ({
   past: contracts.filter((contract) => !isCurrentContract(contract)),
 });
 
-// 내 소유 관계: 첫 번째(활성 또는 가장 최근)가 '내 소유 서류', 나머지는 접힌 '지난 소유 기간'
+// 내 소유 관계: 첫 번째(활성 또는 가장 최근)가 '내 소유 문서', 나머지는 접힌 '지난 소유 기간'
 export const splitOwnerships = (ownerships) => ({ primary: ownerships[0] ?? null, past: ownerships.slice(1) });
 
 const CONTRACT_STATUS_BADGE = {
@@ -81,14 +81,14 @@ export const formatContractOption = (contract) => {
   return `${contract.tenantName} · ${formatContractPeriod(contract.startDate, contract.endDate)}${suffix}`;
 };
 
-// 올리기 팝업에서 계약 서류를 올릴 수 있는 계약(소유 관계가 활성인 것). 기본은 진행 중 계약, 없으면 가장 최근(서버 정렬 첫 번째).
+// 올리기 팝업에서 계약 문서를 올릴 수 있는 계약(소유 관계가 활성인 것). 기본은 진행 중 계약, 없으면 가장 최근(서버 정렬 첫 번째).
 export const getUploadableContracts = (contracts) => contracts.filter((contract) => contract.isUploadable);
 export const pickDefaultContract = (contracts) => {
   const uploadable = getUploadableContracts(contracts);
   return uploadable.find(isCurrentContract) ?? uploadable[0] ?? null;
 };
 
-// 올리기 팝업·호실 상세에서 보여 줄 올릴 곳 요약. 내 소유 서류는 인증이 유효한 활성 소유 관계만, 계약 서류는 활성 소유 관계의 계약만 된다.
+// 올리기 팝업·호실 상세에서 보여 줄 올릴 곳 요약. 내 소유 문서는 인증이 유효한 활성 소유 관계만, 계약 문서는 활성 소유 관계의 계약만 된다.
 export const getUploadTargets = (box) => {
   const { primary } = splitOwnerships(box?.ownerships ?? []);
   return {
@@ -104,7 +104,7 @@ export const hasUploadTarget = (box) => {
   return Boolean(targets.ownership) || targets.contracts.length > 0;
 };
 
-// 문서를 지울 수 있는지(올린 본인, 잠기지 않음). 계약 서류는 그 계약(contract)이 필요하다.
+// 문서를 지울 수 있는지(올린 본인, 잠기지 않음). 계약 문서는 그 계약(contract)이 필요하다.
 //  - OWNERSHIP: 끝난 소유 관계·인증 만료 뒤에도 본인이면 항상(D-A)
 //  - CONTRACT: 그 계약의 소유 관계가 활성이고(isUploadable), 끝난 계약이면 임차인에게 공유되지 않은 문서만(D-B·D-E)
 export const canDeleteDocument = (document, { userId, contract } = {}) => {
@@ -114,7 +114,7 @@ export const canDeleteDocument = (document, { userId, contract } = {}) => {
   return !(isEndedContractStatus(contract.status) && document.isSharedWithTenant);
 };
 
-// 끝난 계약에서 임차인에게 공유한 내 서류: 더 보기 메뉴에 삭제 대신 이유를 보여 준다.
+// 끝난 계약에서 임차인에게 공유한 내 문서: 더 보기 메뉴에 삭제 대신 이유를 보여 준다.
 export const isSharedLockedDocument = (document, { userId, contract } = {}) =>
   document.resourceType === CONTRACT_TARGET &&
   document.uploaderId === userId &&
@@ -123,21 +123,21 @@ export const isSharedLockedDocument = (document, { userId, contract } = {}) =>
   isEndedContractStatus(contract.status) &&
   Boolean(document.isSharedWithTenant);
 
-// 왼쪽 호실 줄 보조 문구: { count(숫자 글꼴로 그릴 서류 수, 없으면 null), text }
-//  - 예전 호실: 서류 n · 소유 종료
-//  - 서류가 있으면: 서류 n · 계약 중/계약 대기/공실
-//  - 서류가 없으면: 인증된 호실은 올리기 안내, 미인증·만료 호실은 인증 안내(D-C)
+// 왼쪽 호실 줄 보조 문구: { count(숫자 글꼴로 그릴 문서 수, 없으면 null), text }
+//  - 예전 호실: 문서 n · 소유 종료
+//  - 문서가 있으면: 문서 n · 계약 중/계약 대기/공실
+//  - 문서가 없으면: 인증된 호실은 올리기 안내, 미인증·만료 호실은 인증 안내(D-C)
 const PROPERTY_STATE_TEXT = { LEASED: '계약 중', CONTRACT_PENDING: '계약 대기', VACANT: '공실' };
 
 export const describePropertyRow = (property, { isFormer = false } = {}) => {
   const count = property.documentCount ?? 0;
   if (isFormer) return { count, text: '소유 종료' };
   if (count > 0) return { count, text: PROPERTY_STATE_TEXT[property.status] ?? PROPERTY_STATE_TEXT.VACANT };
-  if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 서류를 올릴 수 있어요' };
-  return { count: null, text: '서류 없음 · 계약서를 올려 두세요' };
+  if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 문서를 올릴 수 있어요' };
+  return { count: null, text: '문서 없음 · 계약서를 올려 두세요' };
 };
 
-// 호실 상세 서류함 카드 한 칸 요약: { count, recent(최근 올린 순 limit개), rest(나머지 수) }
+// 호실 상세 문서함 카드 한 칸 요약: { count, recent(최근 올린 순 limit개), rest(나머지 수) }
 // groups: 소유 관계들 또는 계약들(각각 documents를 가짐). 서버가 묶음 안을 최근 순으로 주지만 묶음이 여럿일 수 있어 다시 정렬한다.
 export const summarizeDocuments = (groups, limit = 2) => {
   const all = groups.flatMap((group) => group.documents ?? []).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));

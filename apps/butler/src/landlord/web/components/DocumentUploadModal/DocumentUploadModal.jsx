@@ -21,8 +21,8 @@ import { Modal } from '../Modal/Modal';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
 const TARGET_CARDS = [
-  { target: OWNERSHIP_TARGET, icon: ShieldCheck, title: '내 소유 서류', description: '등기부·매매계약서·보험' },
-  { target: CONTRACT_TARGET, icon: FileSignature, title: '계약 서류', description: '계약서·신고필증·영수증·입주 사진' },
+  { target: OWNERSHIP_TARGET, icon: ShieldCheck, title: '내 소유 문서', description: '등기부·매매계약서·보험' },
+  { target: CONTRACT_TARGET, icon: FileSignature, title: '계약 문서', description: '계약서·신고필증·영수증·입주 사진' },
 ];
 
 const SECTION_LABEL = 'text-label font-semibold text-ink';
@@ -63,10 +63,10 @@ const FileRow = ({ item, isSaving, onRemove }) => {
   );
 };
 
-// 서류 올리기 팝업. 보관할 곳(내 소유 서류 / 계약 서류) → 계약 → 종류 → 파일 순서로 고르고 [저장]을 누를 때 올린다(Q4).
-//  - box: 서류함 응답(GET /properties/:id/documents). 올릴 수 있는 곳(isUploadable)·남은 자리(30 − 지금 수)를 여기서 읽는다.
+// 문서 올리기 팝업. 보관할 곳(내 소유 문서 / 계약 문서) → 계약 → 종류 → 파일 순서로 고르고 [저장]을 누를 때 올린다(Q4).
+//  - box: 문서함 응답(GET /properties/:id/documents). 올릴 수 있는 곳(isUploadable)·남은 자리(30 − 지금 수)를 여기서 읽는다.
 //  - initialTarget / initialContractId: 칸의 [올리기]로 열면 미리 골라 둔다.
-//  - onUploaded(count): 한 번이라도 올라가면 부른다(서류함·목록 수 다시 불러오기). 모두 올라가면 팝업이 onClose를 부른다. 일부 실패면 닫지 않고 실패한 파일만 남긴다.
+//  - onUploaded(count): 한 번이라도 올라가면 부른다(문서함·목록 수 다시 불러오기). 모두 올라가면 팝업이 onClose를 부른다. 일부 실패면 닫지 않고 실패한 파일만 남긴다.
 export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialContractId, onClose, onUploaded, onUnauthorized }) => {
   const targets = getUploadTargets(box);
   const [chosenTarget, setChosenTarget] = useState(initialTarget);
@@ -87,7 +87,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
   const types = target ? DOCUMENT_TYPES_BY_TARGET[target] : [];
   const documentType = types.includes(chosenType) ? chosenType : types[0];
 
-  // 남은 자리는 고른 곳에 이미 있는 문서 수로 센다. 서버 상한(30)은 서류함·올리기 모두 리소스(소유 관계·계약)마다다.
+  // 남은 자리는 고른 곳에 이미 있는 문서 수로 센다. 서버 상한(30)은 문서함·올리기 모두 리소스(소유 관계·계약)마다다.
   const remaining = resource ? getRemainingSlots(resource.documents.length) : 0;
   const capacity = resource ? getSelectableFileCount(resource.documents.length, items.length) : 0;
 
@@ -130,7 +130,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
       }
     >
       {!target ? (
-        <NoticeBox tone="info">지금은 서류를 올릴 수 있는 곳이 없어요. 권리자 인증을 마치거나 계약을 등록하면 올릴 수 있어요.</NoticeBox>
+        <NoticeBox tone="info">지금은 문서를 올릴 수 있는 곳이 없어요. 권리자 인증을 마치거나 계약을 등록하면 올릴 수 있어요.</NoticeBox>
       ) : (
         <div className="space-y-5">
           <div className="space-y-2">
@@ -205,7 +205,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
                 </FilterChip>
               ))}
             </div>
-            <p className="text-sub text-ink-3">‘내 소유 서류’는 등기부·매매계약서·보험·기타, ‘계약 서류’는 계약서·신고필증·영수증·입주 사진·기타가 나와요.</p>
+            <p className="text-sub text-ink-3">‘내 소유 문서’는 등기부·매매계약서·보험·기타, ‘계약 문서’는 계약서·신고필증·영수증·입주 사진·기타가 나와요.</p>
           </div>
 
           <div className="space-y-2">
@@ -251,7 +251,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
               </label>
             ) : (
               <p className="rounded-input border border-dashed border-dash px-3 py-4 text-center text-sub text-ink-3">
-                {remaining === 0 ? '이 곳에는 서류를 30개까지 보관할 수 있어요. 다른 서류를 지우면 더 올릴 수 있어요.' : '한 번에 올릴 수 있는 파일을 모두 골랐어요.'}
+                {remaining === 0 ? '이 곳에는 문서를 30개까지 보관할 수 있어요. 다른 문서를 지우면 더 올릴 수 있어요.' : '한 번에 올릴 수 있는 파일을 모두 골랐어요.'}
               </p>
             )}
           </div>
@@ -259,7 +259,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
           {notice && <NoticeBox tone={hasFailed ? 'error' : 'warn'}>{notice}</NoticeBox>}
           {savedCount > 0 && hasFailed && (
             <NoticeBox tone="info">
-              이미 올린 서류 <span className="font-num tabular-nums">{savedCount}</span>개는 문서함에 남아 있어요. 올리지 못한 파일만 남겼어요. 취소하면 이 파일들은 올라가지 않아요.
+              이미 올린 문서 <span className="font-num tabular-nums">{savedCount}</span>개는 문서함에 남아 있어요. 올리지 못한 파일만 남겼어요. 취소하면 이 파일들은 올라가지 않아요.
             </NoticeBox>
           )}
         </div>

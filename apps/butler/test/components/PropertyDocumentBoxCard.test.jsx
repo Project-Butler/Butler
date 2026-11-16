@@ -37,7 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('PropertyDocumentBoxCard (호실 상세 서류함 카드)', () => {
+describe('PropertyDocumentBoxCard (호실 상세 문서함 카드)', () => {
   it('제목에 건수, 두 칸에 개수와 최근 파일 2개 + 외 n건, [문서함 열기]로 이동한다', async () => {
     api.getPropertyDocumentBox.mockResolvedValue(
       box({

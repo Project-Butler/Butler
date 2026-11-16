@@ -153,7 +153,7 @@ const DocumentsStep = ({ documentList, uploads, documents, selectedIds, imageUrl
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body font-semibold text-ink">{document.fileName}</span>
-                  <span className="block text-sub text-ink-3">문서함 · 계약 서류</span>
+                  <span className="block text-sub text-ink-3">문서함 · 계약 문서</span>
                 </span>
                 <button
                   type="button"

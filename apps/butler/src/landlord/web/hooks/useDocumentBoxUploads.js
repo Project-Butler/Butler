@@ -12,7 +12,7 @@ const newKey = () => {
 
 const STORAGE_UNAVAILABLE_MESSAGE = '지금은 파일을 올릴 수 없어요. 잠시 뒤에 다시 시도해 주세요.';
 
-// 서류 올리기 팝업의 업로드. 고른 직후는 '대기'(status pending)이고, [저장]을 누를 때 파일마다 순서대로
+// 문서 올리기 팝업의 업로드. 고른 직후는 '대기'(status pending)이고, [저장]을 누를 때 파일마다 순서대로
 // 업로드 세션(documentType) → PUT → POST /documents(resourceType·resourceId)를 한다. 올린 파일은 목록에서 빠지고 실패한 파일만 남는다.
 // useContractDocumentUploads의 오류 처리(toApiError·isUnauthorizedError·STORAGE_UNAVAILABLE 안내)를 따르되 올릴 곳은 저장할 때 받는다.
 // items: { key, file, fileName, sizeBytes, mimeType, status: 'pending' | 'uploading' | 'error', progress, error }

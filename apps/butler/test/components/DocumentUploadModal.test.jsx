@@ -50,20 +50,20 @@ beforeEach(() => {
 describe('DocumentUploadModal (문서 업로드 팝업)', () => {
   it('미리 고른 곳과 종류 칩을 보여 준다. 보관할 곳을 바꾸면 첫 종류로 돌아간다', async () => {
     renderModal({ initialTarget: 'CONTRACT' });
-    expect(screen.getByRole('button', { name: /계약 서류/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /계약 문서/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '계약서·특약' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(screen.getByRole('button', { name: '영수증' }));
     expect(screen.getByRole('button', { name: '영수증' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(screen.getByRole('button', { name: /내 소유 서류/ }));
+    await userEvent.click(screen.getByRole('button', { name: /내 소유 문서/ }));
     expect(screen.getByRole('button', { name: '등기부' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('button', { name: '영수증' })).not.toBeInTheDocument();
   });
 
-  it('미인증 호실은 내 소유 서류를 고를 수 없고 인증 안내가 보인다', () => {
+  it('미인증 호실은 내 소유 문서를 고를 수 없고 인증 안내가 보인다', () => {
     renderModal({ box: makeBox({ ownership: { isUploadable: false, verificationStatus: 'UNVERIFIED' } }) });
-    expect(screen.getByRole('button', { name: /내 소유 서류/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /내 소유 문서/ })).toBeDisabled();
     expect(screen.getByText('권리자 인증 후 올릴 수 있어요')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /계약 서류/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /계약 문서/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('고른 직후는 대기이고 서버를 부르지 않는다. 20MB를 넘는 파일은 안내만 한다', async () => {
@@ -77,7 +77,7 @@ describe('DocumentUploadModal (문서 업로드 팝업)', () => {
 
   it('한 번에 10개까지만 담는다', async () => {
     const { fileInput } = renderModal({ initialTarget: 'OWNERSHIP' });
-    await userEvent.upload(fileInput(), Array.from({ length: 11 }, (_, index) => pdf(`서류${index + 1}.pdf`)));
+    await userEvent.upload(fileInput(), Array.from({ length: 11 }, (_, index) => pdf(`문서${index + 1}.pdf`)));
     expect(screen.getAllByText('대기')).toHaveLength(10);
     expect(screen.getByText(/10개만 담았어요/)).toBeInTheDocument();
   });
@@ -101,11 +101,11 @@ describe('DocumentUploadModal (문서 업로드 팝업)', () => {
   });
 
   it('일부 실패하면 닫지 않고 실패한 파일만 남긴다', async () => {
-    api.postDocument.mockResolvedValueOnce({ id: 'doc-1' }).mockRejectedValueOnce(apiError(422, 'ATTACHMENT_LIMIT_EXCEEDED', '서류는 30개까지 올릴 수 있어요.'));
+    api.postDocument.mockResolvedValueOnce({ id: 'doc-1' }).mockRejectedValueOnce(apiError(422, 'ATTACHMENT_LIMIT_EXCEEDED', '문서는 30개까지 올릴 수 있어요.'));
     const { fileInput, onClose, onUploaded } = renderModal({ initialTarget: 'OWNERSHIP' });
     await userEvent.upload(fileInput(), [pdf('첫째.pdf'), pdf('둘째.pdf')]);
     await userEvent.click(screen.getByRole('button', { name: '저장' }));
-    expect(await screen.findByText('서류는 30개까지 올릴 수 있어요.')).toBeInTheDocument();
+    expect(await screen.findByText('문서는 30개까지 올릴 수 있어요.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     expect(onUploaded).toHaveBeenCalledWith(1);
     expect(screen.queryByText('첫째.pdf')).not.toBeInTheDocument();
