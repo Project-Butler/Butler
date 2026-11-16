@@ -216,15 +216,26 @@ describe('DocumentBoxPage (서류함)', () => {
     await waitFor(() => expect(api.getPropertyDocumentBox.mock.calls.length).toBeGreaterThan(callsBefore));
   });
 
-  it('[열기]는 화면을 열 때가 아니라 누를 때마다 새 주소를 받는다', async () => {
+  it('줄을 누르면 열고, 화면을 열 때가 아니라 누를 때마다 새 주소를 받는다', async () => {
     vi.spyOn(window, 'open').mockReturnValue({ closed: false, location: {}, opener: null, close: vi.fn() });
     renderPage();
     await screen.findByText('등기부.pdf');
     expect(api.postDocumentDownloadUrl).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: '열기' }));
+    await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
     await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(1));
-    await userEvent.click(screen.getByRole('button', { name: '열기' }));
+    await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
     await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(2));
+  });
+
+  it('줄의 다른 칸을 눌러도 열고, 더 보기를 누르면 열지 않는다', async () => {
+    vi.spyOn(window, 'open').mockReturnValue({ closed: false, location: {}, opener: null, close: vi.fn() });
+    renderPage();
+    await screen.findByText('등기부.pdf');
+    await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 더 보기' }));
+    expect(api.postDocumentDownloadUrl).not.toHaveBeenCalled();
+    const row = screen.getByRole('button', { name: '등기부.pdf 열기' }).closest('tr');
+    await userEvent.click(row.querySelectorAll('td')[2]);
+    await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(1));
   });
 
   it('주소를 받지 못하면 "파일을 열지 못했어요"를 보여 준다', async () => {
@@ -232,7 +243,7 @@ describe('DocumentBoxPage (서류함)', () => {
     api.postDocumentDownloadUrl.mockRejectedValue(apiError(503, 'STORAGE_UNAVAILABLE', '저장소 오류'));
     renderPage();
     await screen.findByText('등기부.pdf');
-    await userEvent.click(screen.getByRole('button', { name: '열기' }));
+    await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
     expect(await screen.findByText('파일을 열지 못했어요')).toBeInTheDocument();
   });
 });
