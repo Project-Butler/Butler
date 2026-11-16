@@ -227,12 +227,12 @@ describe('DocumentBoxPage (서류함)', () => {
     await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(2));
   });
 
-  it('주소를 받지 못하면 "파일 보기 준비 중"을 보여 준다', async () => {
+  it('주소를 받지 못하면 "파일을 열지 못했어요"를 보여 준다', async () => {
     vi.spyOn(window, 'open').mockReturnValue({ closed: false, location: {}, opener: null, close: vi.fn() });
     api.postDocumentDownloadUrl.mockRejectedValue(apiError(503, 'STORAGE_UNAVAILABLE', '저장소 오류'));
     renderPage();
     await screen.findByText('등기부.pdf');
     await userEvent.click(screen.getByRole('button', { name: '열기' }));
-    expect(await screen.findByText('파일 보기 준비 중')).toBeInTheDocument();
+    expect(await screen.findByText('파일을 열지 못했어요')).toBeInTheDocument();
   });
 });

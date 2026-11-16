@@ -129,7 +129,7 @@ export const DocumentBoxTable = ({ documents, contract, userId, urlEntries, onOp
             <td className="whitespace-nowrap px-5 py-4 font-num text-sub tabular-nums text-ink-3">{formatDateKST(doc.createdAt)}</td>
             <td className="whitespace-nowrap px-5 py-4 text-right font-num text-sub tabular-nums text-ink-3">{formatFileSize(doc.sizeBytes)}</td>
             <td className="whitespace-nowrap px-5 py-2 text-right">
-              {status === 'error' && <span className="mr-2 text-sub text-ink-3">파일 보기 준비 중</span>}
+              {status === 'error' && <span className="mr-2 text-sub text-ink-3">파일을 열지 못했어요</span>}
               <Button variant="secondary" size="sm" onClick={() => onOpen(doc)} disabled={status === 'loading'}>
                 {status === 'loading' ? '여는 중' : '열기'}
               </Button>

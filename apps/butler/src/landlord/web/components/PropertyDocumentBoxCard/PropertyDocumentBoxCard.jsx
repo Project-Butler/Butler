@@ -70,7 +70,7 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
       {box && (
         <div className="grid grid-cols-2 gap-3">
           <SummaryColumn icon={ShieldCheck} title="내 소유 서류" summary={ownershipSummary} />
-          <SummaryColumn icon={FileSignature} title="계약 서류" summary={contractSummary} hint={hasCurrentContract ? '진행 중 계약' : null} />
+          <SummaryColumn icon={FileSignature} title="계약 서류" summary={contractSummary} hint={hasCurrentContract ? '진행 중 계약 있음' : null} />
         </div>
       )}
       {isUploadOpen && box && (

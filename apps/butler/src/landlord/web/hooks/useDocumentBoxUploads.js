@@ -23,12 +23,13 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const isUnmountedRef = useRef(false);
-  useEffect(
-    () => () => {
+  // StrictMode(개발)는 effect를 mount → cleanup → mount로 돌리므로 mount 때 다시 false로 둔다.
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => {
       isUnmountedRef.current = true;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const patchItem = useCallback((key, patch) => {
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
@@ -91,6 +92,7 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
           const apiError = toApiError(error);
           failedCount += 1;
           if (isUnauthorizedError(error)) {
+            patchItem(item.key, { status: 'error', error: apiError.message });
             onUnauthorized?.();
             break;
           }

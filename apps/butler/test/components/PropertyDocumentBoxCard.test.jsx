@@ -54,7 +54,7 @@ describe('PropertyDocumentBoxCard (호실 상세 서류함 카드)', () => {
     expect(screen.getByText('매매계약서.pdf')).toBeInTheDocument();
     expect(screen.getByText('계약서.pdf')).toBeInTheDocument();
     expect(screen.queryByText('입주사진.pdf')).not.toBeInTheDocument();
-    expect(screen.getByText('진행 중 계약', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('진행 중 계약 있음', { exact: false })).toBeInTheDocument();
     expect(screen.getByText(/외/)).toHaveTextContent('외 1건');
     await userEvent.click(screen.getByRole('button', { name: '서류함 열기' }));
     expect(onNavigate).toHaveBeenCalledWith('documents', { propertyId: 'p-1' });

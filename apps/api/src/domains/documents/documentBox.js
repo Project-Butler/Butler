@@ -76,7 +76,7 @@ export const findPropertyDocumentBox = async (user, propertyId) => {
   const contracts = ownerships.flatMap((ownership) => ownership.contracts);
   const documents = await prisma.document.findMany({
     where: await documentBoxWhere(user, { ownershipIds: ownerships.map((ownership) => ownership.id), contractIds: contracts.map((contract) => contract.id) }),
-    include: { invitationShares: { where: { invitation: { status: 'ACCEPTED' } }, select: { invitationId: true } } },
+    include: { invitationShares: { where: { invitation: { status: 'ACCEPTED' } }, select: { invitation: { select: { contractId: true } } } } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
 
@@ -122,7 +122,11 @@ export const findPropertyDocumentBox = async (user, propertyId) => {
     isUploadable: activeOwnershipIds.has(contract.ownershipId),
     documents: documents
       .filter((document) => document.resourceType === 'CONTRACT' && document.resourceId === contract.id)
-      .map((document) => ({ ...toDocumentResponse(document), isSharedWithTenant: document.invitationShares.length > 0 })),
+      // 삭제 검사(contractDocumentPolicy.lockForDelete)와 같게 그 계약의 수락한 초대만 센다.
+      .map((document) => ({
+        ...toDocumentResponse(document),
+        isSharedWithTenant: document.invitationShares.some((share) => share.invitation.contractId === contract.id),
+      })),
   }));
 
   return {

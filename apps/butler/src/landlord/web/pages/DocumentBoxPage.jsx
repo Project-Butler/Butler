@@ -397,8 +397,10 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
               <button
                 type="button"
                 aria-expanded={isFormerShown}
+                // 예전 호실을 고른 동안에는 접지 않는다(고른 줄이 사라지지 않게).
+                disabled={isSelectedFormer}
                 onClick={() => setIsFormerOpen((prev) => !prev)}
-                className="flex min-h-11 w-full items-center gap-2 rounded-input px-2 text-left text-body font-semibold text-ink-2 transition-colors hover:bg-surface-2"
+                className="flex min-h-11 w-full items-center gap-2 rounded-input px-2 text-left text-body font-semibold text-ink-2 transition-colors hover:bg-surface-2 disabled:cursor-default disabled:hover:bg-transparent"
               >
                 {isFormerShown ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
                 <span>
