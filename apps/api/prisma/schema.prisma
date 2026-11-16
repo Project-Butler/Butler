@@ -1335,4 +1335,86 @@ model CommunityProfile {
 
   @@map("community_profiles")
 }
+
+// ===== 시세(실거래가) — B팀, docs-b/MARKET_PRICE_PLAN.md(11/16) =====
+// 국토교통부 실거래가를 정기 실행으로 미리 모아 두고, 요청 경로에서는 이 표만 읽는다. 규칙은 domains/marketPrices/marketPriceRules.js.
+// Complex 와 relation 을 걸지 않는다(Core 블록 그대로 — 스칼라 id).
+
+enum MarketDealType {
+  SALE
+  JEONSE
+  MONTHLY
+
+  @@map("market_deal_type")
+}
+
+// 수집 묶음 종류 = 원천 API 하나(매매 · 전월세). 전세 · 월세는 전월세 묶음 안에서 갈린다
+enum MarketDealKind {
+  TRADE
+  RENT
+
+  @@map("market_deal_kind")
+}
+
+enum MarketCollectionStatus {
+  SUCCEEDED
+  FAILED
+
+  @@map("market_collection_status")
+}
+
+// 거래 한 건 한 줄. 해제된 거래는 넣지 않는다. 같은 (시군구, 계약월, 종류)를 다시 모으면 그 묶음을 지우고 새로 넣는다(한 트랜잭션)
+model MarketDeal {
+  id                String         @id @default(uuid()) @db.Uuid
+  dealKind          MarketDealKind @map("deal_kind")
+  dealType          MarketDealType @map("deal_type")
+  sigunguCode       String         @map("sigungu_code") @db.VarChar(5)
+  // 묶음 키('YYYY-MM'). contractDate 의 달과 같다 — 묶음 지우기 · 모은 달 세기를 날짜 계산 없이
+  contractYearMonth String         @map("contract_year_month") @db.Char(7)
+  // 법정동 10자리. 못 찾으면 null(동 시세에 안 나옴)
+  legalDongCode     String?        @map("legal_dong_code") @db.VarChar(10)
+  // 우리 단지. 못 이으면 null(단지 시세에 안 나옴). 잇기 방법은 ROAD · JIBUN · APT_SEQ
+  complexId         String?        @map("complex_id") @db.Uuid
+  linkMethod        String?        @map("link_method") @db.VarChar(10)
+  // 잇기 키 — 나중에 등록된 단지를 원천을 다시 부르지 않고 이어 주려고 둔다
+  roadKey           String?        @map("road_key") @db.VarChar(40)
+  lotKey            String?        @map("lot_key") @db.VarChar(40)
+  aptSeq            String?        @map("apt_seq") @db.VarChar(20)
+  aptName           String?        @map("apt_name") @db.VarChar(100)
+  jibun             String?        @db.VarChar(20)
+  exclusiveArea     Float?         @map("exclusive_area")
+  floor             Int?
+  contractDate      DateTime       @map("contract_date") @db.Date
+  // 금액은 원. 해당 없으면 null(매매는 price, 전세는 deposit, 월세는 deposit · monthlyRent)
+  price             BigInt?
+  deposit           BigInt?
+  monthlyRent       BigInt?        @map("monthly_rent")
+  // 신규 · 갱신(전월세만, 원천이 비우기도 함)
+  contractType      String?        @map("contract_type") @db.VarChar(4)
+  collectedAt       DateTime       @map("collected_at") @db.Timestamptz(3)
+
+  @@index([complexId, dealType, contractDate])
+  @@index([legalDongCode, dealType, contractDate])
+  @@index([sigunguCode, contractYearMonth, dealKind])
+  @@map("market_deals")
+}
+
+// (시군구, 계약월, 종류) 묶음마다 한 줄 — 마지막으로 모은 시각 · 건수 · 상태. coveredFromYearMonth · asOf · 수집 순번이 여기서 나온다
+model MarketCollection {
+  id            String                 @id @default(uuid()) @db.Uuid
+  sigunguCode   String                 @map("sigungu_code") @db.VarChar(5)
+  yearMonth     String                 @map("year_month") @db.Char(7)
+  dealKind      MarketDealKind         @map("deal_kind")
+  status        MarketCollectionStatus
+  dealCount     Int                    @default(0) @map("deal_count")
+  // 마지막으로 성공한 시각(성공한 적 없으면 null) · 마지막으로 시도한 시각(순번 — 오래 안 모은 묶음부터)
+  collectedAt   DateTime?              @map("collected_at") @db.Timestamptz(3)
+  attemptedAt   DateTime               @map("attempted_at") @db.Timestamptz(3)
+  // 실패 코드만(원천 결과 코드 · NETWORK 등). 요청 주소 · 키는 담지 않는다
+  lastErrorCode String?                @map("last_error_code") @db.VarChar(30)
+
+  @@unique([sigunguCode, yearMonth, dealKind])
+  @@index([attemptedAt])
+  @@map("market_collections")
+}
 // ===== B팀 끝 =====
