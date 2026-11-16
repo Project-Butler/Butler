@@ -1084,6 +1084,7 @@ enum CommunityNewsScope {
   NATIONWIDE // 전국 정책 — scopeCode 는 null
   SIGUNGU // 시·군·구 — scopeCode 는 법정동코드 앞 5자리
   SIDO // 시·도 — scopeCode 는 법정동코드 앞 2자리. 시·군·구 기사가 모자랄 때 채우는 묶음
+  COMPLEX // 우리 단지 — scopeCode 는 complexId(uuid). 단지 이름이 제목에 들어간 기사(11/05)
 
   @@map("community_news_scope")
 }
@@ -1283,8 +1284,8 @@ model CommunityNewsItem {
   id     String              @id @default(uuid()) @db.Uuid
   source CommunityNewsSource
   scope  CommunityNewsScope
-  // SIGUNGU 면 법정동코드 앞 5자리, SIDO 면 앞 2자리, NATIONWIDE 면 null
-  scopeCode String? @map("scope_code") @db.VarChar(5)
+  // SIGUNGU 면 법정동코드 앞 5자리, SIDO 면 앞 2자리, COMPLEX 면 complexId(uuid 36자), NATIONWIDE 면 null
+  scopeCode String? @map("scope_code") @db.VarChar(36)
 
   title     String
   url       String
@@ -1304,5 +1305,18 @@ model CommunityNewsItem {
   @@unique([scopeCode, urlHash])
   @@index([scope, scopeCode, publishedAt(sort: Desc)])
   @@map("community_news_items")
+}
+
+// 뉴스 수집 순번 — 범위마다 마지막으로 수집을 시도한 시각(11/05, 단지 뉴스).
+// 한 번 수집에 단지를 다 돌지 못하면 오래 안 모은(또는 한 번도 안 모은) 단지부터 돈다. 시도하면 저장 건수와 관계없이 시각을 적어
+// 차례가 돌아가게 한다 — 굶는 단지가 없다. 지금은 COMPLEX 만 쓴다.
+model CommunityNewsCursor {
+  scope           CommunityNewsScope
+  scopeCode       String             @map("scope_code") @db.VarChar(36)
+  lastCollectedAt DateTime           @map("last_collected_at") @db.Timestamptz(3)
+
+  @@id([scope, scopeCode])
+  @@index([scope, lastCollectedAt])
+  @@map("community_news_cursors")
 }
 // ===== B팀 끝 =====

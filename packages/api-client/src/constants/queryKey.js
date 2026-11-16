@@ -35,6 +35,7 @@ export const queryKey = {
   COMMUNITY_POLLS: 'community_polls',
   COMMUNITY_POLL_DETAIL: 'community_poll',
   COMMUNITY_NEWS: 'community_news',
+  COMMUNITY_COMPLEX_NEWS: 'community_complex_news',
   TENANT_INVITATIONS: 'tenant_invitations',
   TENANT_INVITATION_PREVIEW: 'tenant_invitation_preview',
   TENANT_INVITATION_CONTRACT: 'tenant_invitation_contract',

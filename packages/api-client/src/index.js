@@ -114,6 +114,7 @@ export { postCommunityPoll } from './apis/community/postCommunityPoll';
 export { postCommunityVote } from './apis/community/postCommunityVote';
 export { deleteCommunityPoll } from './apis/community/deleteCommunityPoll';
 export { getCommunityNewsList } from './apis/community/getCommunityNewsList';
+export { getCommunityComplexNewsList } from './apis/community/getCommunityComplexNewsList';
 
 export { postTenantInvitation } from './apis/tenantInvitations/postTenantInvitation';
 export { getTenantInvitationList } from './apis/tenantInvitations/getTenantInvitationList';
