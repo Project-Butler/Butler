@@ -1,11 +1,15 @@
 // 시세 추이 차트(시세 화면 디자인 모양 — 가는 가로선 + 꺾은선 + 점 + 축 글자). 색은 토큰 클래스로.
 // series: [{ label, strokeClass, fillClass, values }] — values 는 months 와 같은 길이, 거래 없는 달은 null.
 // 거래가 있는 달에는 점, 이웃한 달끼리는 실선, 거래 없는 달을 건너 앞뒤 거래 달을 이을 때는 점선(빈 달에는 점을 찍지 않는다).
-// 세로축: 눈금 2~3개(억 단위 — 월세 금액처럼 1억보다 작으면 만 단위)를 가로선 왼쪽 위에. 가로축: 마지막 달에서 거꾸로 3개월마다.
+// 세로축: 눈금 2~3개(억 단위 — 월세 금액처럼 1억보다 작으면 만 단위)를 그래프 영역 바깥 왼쪽 여백에(선 · 점과 겹치지 않게).
+// 가로축: 마지막 달에서 거꾸로 3개월마다.
 // 세로 범위는 모든 선의 최소~최대에 위아래 여유를 둔다.
 // width·height 는 viewBox 크기 — PC 는 넓게(640×240, 칸 폭에 맞춰 늘어남), 모바일을 다시 붙이면 모바일 디자인 크기(316×96)로.
 
 const EOK = 100000000;
+// 세로축 글자 자리(viewBox 단위) — "10.5억" · "300만" 이 들어가는 폭. 그래프 영역은 이 오른쪽부터
+const AXIS_GUTTER = 44;
+const AXIS_GAP = 6;
 const MAN = 10000;
 
 // 세로축 눈금 값: lo~hi 안에 2~3개가 들어가는 가장 촘촘한 "보기 좋은" 간격(1 · 2 · 2.5 · 3 · 4 · 5 × 10^k).
@@ -34,10 +38,12 @@ const xLabelIndexes = (count) => {
 };
 
 export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
-  const left = 4 * (width / 316);
+  const edge = 4 * (width / 316);
+  const left = AXIS_GUTTER;
+  const right = width - edge;
   const top = height * 0.12;
   const bottom = height - height * 0.2;
-  const step = (width - 2 * left) / Math.max(months.length - 1, 1);
+  const step = (right - left) / Math.max(months.length - 1, 1);
   const all = series.flatMap((line) => line.values).filter((value) => value !== null);
   const min = all.length ? Math.min(...all) : 0;
   const max = all.length ? Math.max(...all) : 1;
@@ -66,7 +72,7 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${months.length}개월 ${series.map((line) => line.label).join('·')} 추이`} className="block h-auto w-full">
       {ticks.map((value) => (
-        <line key={value} x1={left} y1={toY(value)} x2={width - left} y2={toY(value)} className="stroke-line" strokeWidth="1" />
+        <line key={value} x1={left} y1={toY(value)} x2={right} y2={toY(value)} className="stroke-line" strokeWidth="1" />
       ))}
       {[...series].reverse().map((line, lineIndex) => {
         const points = pointsOf(line.values);
@@ -113,19 +119,9 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
         );
       })}
       {last && <circle cx={last.x} cy={last.y} r="4" className={first.fillClass} />}
-      {/* 세로축 글자는 선 위에 — 바탕색 테두리(paint-order stroke)로 선 · 점에 가려도 읽히게 */}
+      {/* 세로축 글자는 그래프 영역 바깥 왼쪽 여백에, 가로선 높이에 맞춰 오른쪽 정렬 */}
       {ticks.map((value) => (
-        <text
-          key={value}
-          data-tick="y"
-          x={left}
-          y={toY(value) - 4}
-          fontSize="11"
-          className="fill-ink-3 stroke-surface font-num"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          paintOrder="stroke"
-        >
+        <text key={value} data-tick="y" x={left - AXIS_GAP} y={toY(value) + 4} fontSize="11" textAnchor="end" className="fill-ink-3 font-num">
           {formatTick(value)}
         </text>
       ))}

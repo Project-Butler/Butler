@@ -25,4 +25,19 @@ describe('시세 차트 축', () => {
     expect(container.querySelectorAll('[data-segment="gap"]')).toHaveLength(2);
     expect(container.querySelectorAll('circle[data-month]')).toHaveLength(9);
   });
+
+  it('세로축 글자는 그래프 영역 바깥 왼쪽 여백에(오른쪽 정렬) — 첫 점 · 가로선보다 왼쪽이라 겹치지 않는다', () => {
+    const months = ['2026-08', '2026-09', '2026-10'];
+    const { container } = render(<PriceChart months={months} series={[{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', values: [10 * EOK, 20 * EOK, 30 * EOK] }]} />);
+    const firstDotX = Math.min(...[...container.querySelectorAll('circle[data-month]')].map((dot) => Number(dot.getAttribute('cx'))));
+    const gridStartX = Math.min(...[...container.querySelectorAll('line.stroke-line')].map((line) => Number(line.getAttribute('x1'))));
+    const labels = [...container.querySelectorAll('[data-tick="y"]')];
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+    for (const label of labels) {
+      expect(label).toHaveAttribute('text-anchor', 'end');
+      expect(Number(label.getAttribute('x'))).toBeLessThan(gridStartX);
+      expect(Number(label.getAttribute('x'))).toBeLessThan(firstDotX);
+      expect(label.getAttribute('class')).not.toContain('stroke-surface');
+    }
+  });
 });
