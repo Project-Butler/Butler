@@ -147,12 +147,12 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
   const listContractDocuments = (user, contract) => getJson(user, `/documents?resourceType=CONTRACT&resourceId=${contract.id}`);
 
   // 올리고 계약에 붙인다. 등록 응답(status·body)을 그대로 돌려준다.
-  const uploadToContract = async (user, contract) => {
+  const uploadToContract = async (user, contract, documentType = 'CONTRACT_DOCUMENT') => {
     const session = await postJson(user, '/files/upload-sessions', {
       fileName: '계약서.pdf',
       mimeType: 'application/pdf',
       sizeBytes: PDF.length,
-      documentType: 'CONTRACT_DOCUMENT',
+      documentType,
     });
     assert.equal(session.status, 201);
     const put = await fetch(`${origin}${session.body.data.uploadUrl}`, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: PDF });
@@ -202,6 +202,23 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     const deleted = await json(await api(landlord, `/documents/${document.id}`, { method: 'DELETE' }));
     assert.equal(deleted.status, 422);
     assert.equal(deleted.body.error.code, 'CONTRACT_READ_ONLY');
+  });
+
+  test('계약에는 허용된 서류 종류만 올린다(권한 검사가 먼저)', async () => {
+    const landlord = await createUser();
+    const { contract } = await createContract(landlord);
+    for (const type of ['CONTRACT_DOCUMENT', 'MOVE_PHOTO', 'LEASE_REPORT', 'RECEIPT', 'OTHER']) {
+      assert.equal((await uploadToContract(landlord, contract, type)).status, 201, type);
+    }
+    const rejected = await uploadToContract(landlord, contract, 'SALE_CONTRACT');
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.body.error.code, 'DOCUMENT_TYPE_NOT_ALLOWED');
+
+    // 남의 계약에는 허용되지 않은 종류여도 종류 422가 아니라 404다.
+    const stranger = await createUser();
+    const hidden = await uploadToContract(stranger, contract, 'SALE_CONTRACT');
+    assert.equal(hidden.status, 404);
+    assert.equal(hidden.body.error.code, 'CONTRACT_NOT_FOUND');
   });
 
   test('만료된 계약에는 올릴 수 없다(422 CONTRACT_READ_ONLY)', async () => {

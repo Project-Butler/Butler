@@ -110,9 +110,13 @@ const ensureUploadCompleted = async (storage, upload, now) => {
   await prisma.upload.update({ where: { id: upload.id }, data: { completedAt: now } });
 };
 
-// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 상한을 넘지 않는지 본다.
-const lockResourceForAttach = async (tx, user, policy, resourceId, addCount) => {
+// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 종류가 허용되는지, 상한을 넘지 않는지 본다.
+// 권한 없는 사람이 종류 422로 리소스 존재를 알 수 없게 권한(lockForWrite)을 먼저 본다.
+const lockResourceForAttach = async (tx, user, policy, resourceId, addCount, documentType) => {
   await policy.lockForWrite(tx, user, resourceId);
+  if (policy.allowedDocumentTypes && !policy.allowedDocumentTypes.includes(documentType)) {
+    throw new AppError('DOCUMENT_TYPE_NOT_ALLOWED', 422, '이 곳에는 올릴 수 없는 서류 종류입니다.');
+  }
   const attached = await tx.document.count({ where: { resourceType: policy.resourceType, resourceId, deletedAt: null } });
   if (attached + addCount > policy.maxAttachments) {
     throw new AppError('ATTACHMENT_LIMIT_EXCEEDED', 422, `문서는 ${policy.maxAttachments}개까지 붙일 수 있습니다.`);
@@ -130,7 +134,7 @@ export const registerDocument = async (user, { uploadSessionId, resourceType, re
 
   const policy = resourceType ? { ...getResourcePolicy(resourceType), resourceType } : null;
   const document = await prisma.$transaction(async (tx) => {
-    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1);
+    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1, upload.type);
     return tx.document.create({
       data: {
         uploadId: upload.id,

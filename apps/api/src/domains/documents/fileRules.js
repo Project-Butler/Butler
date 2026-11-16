@@ -6,7 +6,20 @@ export const MAX_LOG_ATTACHMENTS = 10;
 // 티켓 첨부 최대 10개(계약 5장)
 export const MAX_TICKET_ATTACHMENTS = 10;
 
-export const DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE', 'PHOTO', 'OTHER'];
+export const DOCUMENT_TYPES = [
+  'CONTRACT_DOCUMENT',
+  'REGISTRY_CERTIFICATE',
+  'PHOTO',
+  'OTHER',
+  'SALE_CONTRACT',
+  'INSURANCE',
+  'LEASE_REPORT',
+  'RECEIPT',
+  'MOVE_PHOTO',
+];
+// 서류함에서 보관할 곳별 허용 종류(화면 칩과 1:1). 둘 다 DOCUMENT_TYPES의 부분집합.
+export const OWNERSHIP_DOCUMENT_TYPES = ['REGISTRY_CERTIFICATE', 'SALE_CONTRACT', 'INSURANCE', 'OTHER'];
+export const CONTRACT_DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'LEASE_REPORT', 'RECEIPT', 'MOVE_PHOTO', 'OTHER'];
 // 다운로드 URL 발급을 감사 로그에 남기는 문서 유형(계약 10장 DOCUMENT_DOWNLOAD_URL_ISSUED)
 export const AUDITED_DOWNLOAD_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE'];
 // 계약 6장의 resourceType 목록. 권한 확인은 resourcePolicies.js에 구현된 것만 받는다.

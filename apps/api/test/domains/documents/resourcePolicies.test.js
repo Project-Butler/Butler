@@ -1,7 +1,7 @@
 // 문서를 붙이는 리소스별 권한 확인 목록 단위 테스트. DB를 쓰지 않는다.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_LOG_ATTACHMENTS } from '../../../src/domains/documents/fileRules.js';
+import { CONTRACT_DOCUMENT_TYPES, MAX_LOG_ATTACHMENTS } from '../../../src/domains/documents/fileRules.js';
 import { getResourcePolicy, SUPPORTED_RESOURCE_TYPES, visibleDocumentWhere } from '../../../src/domains/documents/resourcePolicies.js';
 
 test('지금은 MANAGEMENT_LOG·TICKET·THREAD_MESSAGE·CONTRACT만 붙일 수 있고, 모르는 resourceType은 null', () => {
@@ -40,6 +40,7 @@ test('CONTRACT 정책: 조회·문서 조건·잠금 함수, 상한 30, 없으�
   assert.equal(typeof policy.documentWhere, 'function');
   assert.equal(typeof policy.lockForWrite, 'function');
   assert.equal(policy.maxAttachments, 30);
+  assert.deepEqual(policy.allowedDocumentTypes, CONTRACT_DOCUMENT_TYPES);
   assert.throws(() => policy.throwNotFound(), (error) => error.code === 'CONTRACT_NOT_FOUND' && error.httpStatus === 404);
 });
 

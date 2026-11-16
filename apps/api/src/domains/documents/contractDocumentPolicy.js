@@ -7,6 +7,7 @@ import { computeContractStatus } from '../../platform/contractStatus.js';
 import { getTodayKST } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { CONTRACT_DOCUMENT_TYPES } from './fileRules.js';
 
 // 계약 하나에 붙일 수 있는 문서 수(임대인만 올린다)
 export const MAX_CONTRACT_ATTACHMENTS = 30;
@@ -57,4 +58,5 @@ export const contractDocumentPolicy = {
   },
   throwNotFound: throwContractNotFound,
   maxAttachments: MAX_CONTRACT_ATTACHMENTS,
+  allowedDocumentTypes: CONTRACT_DOCUMENT_TYPES,
 };

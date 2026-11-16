@@ -5,6 +5,7 @@
 //   throwNotFound()                    연결할 리소스가 없을 때의 404
 //   maxAttachments                     리소스 하나에 붙일 수 있는 문서 수
 //   documentWhere(user, resourceId)    (선택) 리소스는 보여도 문서 일부만 보여 줄 때의 Prisma where 조각. 없으면 붙은 문서 전부
+//   allowedDocumentTypes               (선택) 붙일 수 있는 documentType 목록. 없으면 아무 종류(안 맞으면 422 DOCUMENT_TYPE_NOT_ALLOWED)
 import { AppError } from '../../platform/AppError.js';
 import { CONTRACT_RESOURCE, MANAGEMENT_LOG_RESOURCE, THREAD_MESSAGE_RESOURCE, TICKET_RESOURCE } from '../../platform/documentAttachments.js';
 import { MAX_MESSAGE_ATTACHMENTS } from '../../platform/threadRules.js';
