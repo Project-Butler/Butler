@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
 
 const api = vi.hoisted(() => ({
@@ -127,5 +127,56 @@ describe('시세 탭(국토교통부 실거래가)', () => {
     expect(await screen.findByText('60–85㎡에는 최근 매매 거래가 없습니다.', {}, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.queryByText('이 단지의 실거래를 모으는 중이에요')).not.toBeInTheDocument();
     expect(await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17')).toBeInTheDocument();
+  });
+});
+
+describe('차트 · 대표 숫자 — 빈 달은 점선, 이번 달은 빼고 지난달까지', () => {
+  // 한국 시간 2026-11-17: 이번 달 2026-11 은 차트 · 큰 숫자 · 증감에서 빠지고 "최근 거래" 표에만
+  const row = (yearMonth, dealCount, values) => ({ yearMonth, dealCount, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null, ...values });
+  const deal = (contractDate, values) => ({ contractDate, dealType: 'SALE', complexName: '파크리오', exclusiveArea: 84.79, floor: 9, price: null, deposit: null, monthlyRent: null, ...values });
+  const sale = {
+    ...ready({ dealType: 'SALE' }),
+    asOf: '2026-11-16',
+    // 6월 · 9월은 거래 없음, 11월(이번 달)은 반쪽
+    monthly: [row('2026-05', 2, { avgPrice: 2000000000 }), row('2026-07', 1, { avgPrice: 2100000000 }), row('2026-08', 1, { avgPrice: 2200000000 }), row('2026-10', 2, { avgPrice: 2400000000 }), row('2026-11', 1, { avgPrice: 3000000000 })],
+    recentDeals: [deal('2026-11-05', { price: 3000000000 }), deal('2026-10-28', { price: 2400000000 })],
+  };
+  const jeonse = {
+    ...ready({ dealType: 'JEONSE' }),
+    asOf: '2026-11-16',
+    monthly: [row('2026-09', 2, { avgDeposit: 1100000000 }), row('2026-10', 2, { avgDeposit: 1200000000 }), row('2026-11', 5, { avgDeposit: 2000000000 })],
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T03:00:00Z'));
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonse : sale));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('거래 있는 달에만 점, 이웃한 달은 실선, 빈 달을 건너면 점선 — 이번 달(11월)은 그리지 않는다', async () => {
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    const chart = screen.getByRole('img', { name: /추이/ });
+    const saleLine = chart.querySelector('[data-series="매매"]');
+    expect([...saleLine.querySelectorAll('circle[data-month]')].map((dot) => dot.getAttribute('data-month'))).toEqual(['2026-05', '2026-07', '2026-08', '2026-10']);
+    expect(saleLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(2); // 5→7월, 8→10월
+    expect(saleLine.querySelectorAll('[data-segment="gap"]')[0]).toHaveAttribute('stroke-dasharray', '4 4');
+    expect(saleLine.querySelectorAll('[data-segment="solid"]')).toHaveLength(1); // 7–8월
+    // 차트 달은 모은 첫 달(2025-12)부터 지난달(2026-10)까지
+    expect(chart).toHaveAttribute('aria-label', '최근 11개월 매매·전세 추이');
+    expect(chart.querySelectorAll('circle[data-month="2026-11"]')).toHaveLength(0);
+  });
+
+  it('큰 숫자는 최근 3개월(8~10월) 평균, 오른쪽 위는 지난달, 설명 한 줄에 몇 개월 평균 · 면적대 · 매매 · 전세', async () => {
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    expect(screen.getByText('매매 시세')).toBeInTheDocument();
+    expect(screen.getByText('2026-10')).toBeInTheDocument();
+    expect(screen.getByText('23억 3,333만')).toBeInTheDocument(); // (22억 + 24억 × 2) ÷ 3 — 이번 달 30억은 넣지 않음
+    expect(screen.getByText('최근 3개월 평균 · 60–85㎡ · 매매 23억 3,333만 · 전세 11억 5,000만')).toBeInTheDocument();
+    expect(screen.getByText('+14.3%')).toBeInTheDocument(); // 증감: 지난달까지 마지막 거래 달(10월 24억) ÷ 3개월 전(7월 21억) — 이번 달 30억은 넣지 않음
+    // 이번 달 거래는 "최근 거래" 표에는 그대로
+    expect(within(screen.getByRole('table')).getAllByRole('row')[1]).toHaveTextContent('2026-11-05');
   });
 });

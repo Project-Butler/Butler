@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
 
 const api = vi.hoisted(() => ({
@@ -192,3 +192,29 @@ describe('브리핑', () => {
     expect(await within(await section('최근 투표')).findByText('아직 올라온 투표가 없습니다')).toBeInTheDocument();
   });
 });
+
+describe('브리핑 시세 — 시세 탭과 같은 규칙(지난달까지 최근 3개월 평균 · 빈 달 점선)', () => {
+  const row = (yearMonth, dealCount, avgPrice) => ({ yearMonth, dealCount, avgPrice, minPrice: avgPrice, maxPrice: avgPrice, avgDeposit: null, avgMonthlyRent: null });
+  beforeEach(() => {
+    // 한국 시간 2026-11-17 — 이번 달(11월)은 빼고 8~10월로
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T03:00:00Z'));
+    api.getComplexMarketPrices.mockResolvedValue({
+      ...marketReady('SALE'),
+      monthly: [row('2026-05', 2, 2000000000), row('2026-07', 1, 2100000000), row('2026-08', 1, 2200000000), row('2026-10', 2, 2400000000), row('2026-11', 1, 3000000000)],
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('큰 숫자 · 설명 한 줄(최근 3개월 평균 · 면적대 · 매매), 차트는 빈 달을 점선으로', async () => {
+    renderAt('/community/briefing');
+    const market = await section('시세');
+    expect(await within(market).findByText('23억 3,333만')).toBeInTheDocument();
+    expect(within(market).getByText('최근 3개월 평균 · 60–85㎡ · 매매 23억 3,333만')).toBeInTheDocument();
+    const chart = within(market).getByRole('img');
+    expect(chart).toHaveAttribute('aria-label', '최근 11개월 매매 추이');
+    expect(chart.querySelectorAll('[data-segment="gap"]')).toHaveLength(2);
+    expect(chart.querySelectorAll('circle[data-month="2026-11"]')).toHaveLength(0);
+  });
+});
+
