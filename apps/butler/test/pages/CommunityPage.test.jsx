@@ -32,7 +32,7 @@ vi.mock('@butler/api-client', () => ({
     COMMUNITY_POLLS: 'community_polls',
     COMMUNITY_POLL_DETAIL: 'community_poll',
     COMMUNITY_NEWS: 'community_news',
-    COMMUNITY_MARKET_PRICES: 'community_market_prices',
+    MARKET_PRICES: 'market_prices',
   },
 }));
 
