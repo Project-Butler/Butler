@@ -13,10 +13,10 @@ import { Segment } from '../components/CommunitySegment/Segment';
 import {
   AREA_BANDS,
   chartMonths,
+  chartValue,
   DEAL_TYPES,
   formatWon,
   getDealTypeLabel,
-  monthlyValue,
   pickAreaBands,
   recentSummary,
 } from '../utils/communityMarketSummary';
@@ -64,12 +64,11 @@ const AreaChips = ({ owned, value, onChange }) => (
 // 매매는 디자인대로 전세 선과 전세 평균을 함께(전세 조회를 하나 더 한다), 전세 · 월세는 그 유형만.
 const PriceCard = ({ prices, jeonse, dealType, band }) => {
   const summary = recentSummary({ prices, jeonse, dealType, band });
-  const { rate } = summary;
   const months = chartMonths(prices.coveredFromYearMonth);
   const valuesOf = (data, type) =>
     months.map((month) => {
       const row = data.monthly.find((item) => item.yearMonth === month);
-      return row ? monthlyValue(row, type) : null;
+      return row ? chartValue(row, type) : null;
     });
 
   const series = [
@@ -86,7 +85,7 @@ const PriceCard = ({ prices, jeonse, dealType, band }) => {
   }
 
   return (
-    <Card className="flex flex-col gap-1 p-6 lg:col-span-2">
+    <Card className="flex flex-col gap-1 p-6">
       <div className="flex items-center justify-between gap-3">
         <span className="text-label font-semibold text-ink-2">{getDealTypeLabel(dealType)} 시세</span>
         {/* 계산에 쓴 마지막 달(지난달) */}
@@ -94,17 +93,8 @@ const PriceCard = ({ prices, jeonse, dealType, band }) => {
       </div>
       {summary.headline && <div className="font-num text-kpi font-bold tabular-nums leading-tight text-ink">{summary.headline}</div>}
       <div className="flex items-baseline gap-2">
-        {rate !== null && (
-          // 소수 첫째 자리에서 0 이면 부호 · 색 없이 "0.0%"
-          <span
-            className={`font-num text-body font-medium tabular-nums ${
-              Math.abs(rate) < 0.05 ? 'text-ink-3' : rate > 0 ? 'text-ok' : 'text-crit'
-            }`}
-          >
-            {rate >= 0.05 ? '+' : ''}
-            {Math.abs(rate) < 0.05 ? '0.0' : rate.toFixed(1)}%
-          </span>
-        )}
+        {/* 증감은 색이 아니라 ▲▼ 와 비교 대상으로(utils/communityMarketSummary formatChange) */}
+        {summary.changeText && <span className="font-num text-body font-medium tabular-nums text-ink-2">{summary.changeText}</span>}
         <span className="font-num text-sub leading-tight tabular-nums text-ink-3">{summary.caption}</span>
       </div>
       <div className="mt-4">
@@ -172,6 +162,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
   const data = prices.data;
   const isCollecting = data?.collectionStatus === 'COLLECTING';
   const isEmpty = Boolean(data) && !isCollecting && data.recentDeals.length === 0 && data.monthly.length === 0;
+  const source = data?.source && data.asOf ? <MarketSource source={data.source} asOf={data.asOf} /> : null;
 
   return (
     <>
@@ -189,16 +180,18 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
       {/* 아직 모으지 못한 시군구(처음 보는 단지). 정기 실행이 하루 한 번 채운다 — 빈 상태(거래 없음)와 다른 문구 */}
       {isCollecting && <EmptyState title="이 단지의 실거래를 모으는 중이에요" description="하루 안에 채워집니다. 그때 다시 열어 주세요." />}
       {isEmpty && <EmptyState title={`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`} />}
+      {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다. 차트 카드 바로 아래(스크롤 없이 보이게) */}
+      {isEmpty && source}
 
       {data && !isCollecting && !isEmpty && (
         <div className="grid items-start gap-6 lg:grid-cols-3">
-          <PriceCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} band={band} />
+          <div className="space-y-2 lg:col-span-2">
+            <PriceCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} band={band} />
+            {source}
+          </div>
           <DealTable deals={data.recentDeals} dealType={dealType} />
         </div>
       )}
-
-      {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다 */}
-      {data?.source && data.asOf && <MarketSource source={data.source} asOf={data.asOf} />}
     </>
   );
 };

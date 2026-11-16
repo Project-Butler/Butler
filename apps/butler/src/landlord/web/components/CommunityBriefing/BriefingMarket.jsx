@@ -1,5 +1,5 @@
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
-import { chartMonths, monthlyValue, recentSummary } from '../../utils/communityMarketSummary';
+import { chartMonths, chartValue, recentSummary } from '../../utils/communityMarketSummary';
 import { MarketSource } from '../CommunityMarket/MarketSource';
 import { PriceChart } from '../CommunityMarket/PriceChart';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
@@ -13,12 +13,11 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   const prices = useGetMarketPrices({ complexId: building.complexId, dealType: 'SALE', areaMin: band.areaMin, areaMax: band.areaMax });
   const data = prices.data;
   const summary = data ? recentSummary({ prices: data, dealType: 'SALE', band }) : null;
-  const rate = summary?.rate ?? null;
   // 아직 수집 안 된 단지(COLLECTING)는 asOf 가 없다 — 그때는 차트를 그리지 않는다
   const months = data?.asOf ? chartMonths(data.coveredFromYearMonth) : [];
   const values = months.map((month) => {
     const row = data.monthly.find((item) => item.yearMonth === month);
-    return row ? monthlyValue(row, 'SALE') : null;
+    return row ? chartValue(row, 'SALE') : null;
   });
 
   let body;
@@ -31,16 +30,7 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
       <div className="space-y-1 px-5 py-4">
         {summary.headline && <div className="font-num text-kpi font-bold tabular-nums leading-tight text-ink">{summary.headline}</div>}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          {rate !== null && (
-            <span
-              className={`font-num text-body font-medium tabular-nums ${
-                Math.abs(rate) < 0.05 ? 'text-ink-3' : rate > 0 ? 'text-ok' : 'text-crit'
-              }`}
-            >
-              {rate >= 0.05 ? '+' : ''}
-              {Math.abs(rate) < 0.05 ? '0.0' : rate.toFixed(1)}%
-            </span>
-          )}
+          {summary.changeText && <span className="font-num text-body font-medium tabular-nums text-ink-2">{summary.changeText}</span>}
           <span className="font-num text-sub leading-tight tabular-nums text-ink-3">{summary.caption}</span>
         </div>
         <div className="pt-2">

@@ -35,6 +35,13 @@ export const pickAreaBands = (myAreas) => {
 const MONTHLY_FIELD = { SALE: 'avgPrice', JEONSE: 'avgDeposit', MONTHLY: 'avgMonthlyRent' };
 export const monthlyValue = (row, dealType) => row[MONTHLY_FIELD[dealType]];
 
+// 평균 금액 반올림 — 왜: 평균은 원 단위까지 맞을 필요가 없고 "10억 5,967만" 보다 "10억 6,000만" 이 읽기 쉽다.
+// 매매가 · 보증금 평균은 백만 원 단위로(큰 숫자 · 전세 평균 · 차트 점). 월세 금액은 백만 원이면 250만 → 300만 처럼 너무 거칠어 만 원 그대로.
+// "최근 거래" 표의 개별 거래 금액은 반올림하지 않는다
+export const roundAverage = (won, field) => (won === null || won === undefined ? won : field === 'avgMonthlyRent' ? won : Math.round(won / 1000000) * 1000000);
+// 차트 점의 값(반올림한 평균)
+export const chartValue = (row, dealType) => roundAverage(monthlyValue(row, dealType), MONTHLY_FIELD[dealType]);
+
 const shiftMonth = (yearMonth, delta) => {
   const [year, month] = yearMonth.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1 + delta, 1));
@@ -50,7 +57,7 @@ export const lastCompleteMonth = (now = new Date()) => shiftMonth(kstYearMonth(n
 export const completedMonthly = (monthly, now = new Date()) => monthly.filter((row) => row.yearMonth <= lastCompleteMonth(now));
 
 // 차트에 그릴 달: 지난달까지 최근 12개월. 모은 기간(coveredFromYearMonth)보다 앞 달은 빼서 늘 비는 칸이 없게
-// (서버는 이번 달 포함 12개월을 모으므로 지금은 지난달까지 11개월이 된다)
+// (서버가 이번 달 포함 13개월을 모아 지난달까지 12개월이 다 찬다 — 처음 모으는 중인 시군구만 짧다)
 export const chartMonths = (coveredFromYearMonth, now = new Date(), count = 12) => {
   const end = lastCompleteMonth(now);
   let start = shiftMonth(end, -(count - 1));
@@ -60,16 +67,8 @@ export const chartMonths = (coveredFromYearMonth, now = new Date(), count = 12) 
   return months;
 };
 
-// 증감률(%): 거래가 있는 마지막 달 평균 ÷ 그 3개월 전 달 평균 − 1. 둘 중 하나라도 없으면 null. 지난달까지로 거른 monthly 를 넘긴다(recentSummary).
-export const changeRate = (monthly, dealType) => {
-  const last = monthly[monthly.length - 1];
-  if (!last) return null;
-  const base = monthly.find((row) => row.yearMonth === shiftMonth(last.yearMonth, -3));
-  const [now, before] = [monthlyValue(last, dealType), base && monthlyValue(base, dealType)];
-  return now && before ? ((now - before) / before) * 100 : null;
-};
 
-// 최근 3개월(endMonth 까지, 그 달 포함) 평균 — 건수 가중. 거래가 없으면 null.
+// 최근 3개월(endMonth 까지, 그 달 포함) 평균 — 건수 가중, 반올림 전. 거래가 없으면 null.
 export const recentAverage = (monthly, endMonth, field) => {
   const from = shiftMonth(endMonth, -(RECENT_MONTHS - 1));
   const rows = monthly.filter((row) => row.yearMonth >= from && row.yearMonth <= endMonth && row[field] !== null && row[field] !== undefined);
@@ -77,37 +76,45 @@ export const recentAverage = (monthly, endMonth, field) => {
   return count === 0 ? null : rows.reduce((sum, row) => sum + row[field] * row.dealCount, 0) / count;
 };
 
-// 대표 숫자 · 설명 한 줄 · 증감(시세 탭 · 브리핑이 같이 쓴다). 모두 지난달까지.
-// headline: 매매 · 전세는 최근 3개월 평균 금액, 월세는 "보증금 X / 월 Y". caption: "최근 3개월 평균 · 60–85㎡ · 매매 11억 · 전세 4억"
-// jeonse: 매매 화면에서 전세 평균도 함께 보일 때만(없으면 매매만)
+// 증감(%) — 최근 3개월 평균 ÷ 직전 3개월(그 앞 3개월) 평균 − 1. 둘 중 하나라도 거래가 없으면 null. 반올림 전 값으로
+export const periodChange = (monthly, endMonth, field) => {
+  const recent = recentAverage(monthly, endMonth, field);
+  const before = recentAverage(monthly, shiftMonth(endMonth, -RECENT_MONTHS), field);
+  return recent !== null && before ? ((recent - before) / before) * 100 : null;
+};
+// 증감 문구 — 왜 색이 아니라 ▲▼: 한국 관행은 빨강 = 오름 · 파랑 = 내림이라 빨강 "-" 가 헷갈린다. 글자색은 기본(ink-2), 비교 대상을 붙인다
+export const formatChange = (rate) => {
+  if (rate === null || rate === undefined) return null;
+  if (Math.abs(rate) < 0.05) return `직전 ${RECENT_MONTHS}개월과 같음`;
+  return `직전 ${RECENT_MONTHS}개월보다 ${rate > 0 ? '▲' : '▼'}${Math.abs(rate).toFixed(1)}%`;
+};
+
+// 대표 숫자 · 설명 한 줄 · 증감(시세 탭 · 브리핑이 같이 쓴다). 모두 지난달까지, 평균은 반올림(roundAverage).
+// headline: 매매 · 전세는 최근 3개월 평균 금액, 월세는 "보증금 X / 월 Y". caption: "최근 3개월 평균 · 60–85㎡ · 전세 4억 6,000만"
+// — 큰 숫자에 나온 금액은 되풀이하지 않고, 매매 화면에서만 전세 평균을 덧붙인다(jeonse 가 있을 때)
 export const recentSummary = ({ prices, jeonse = null, dealType, band, now = new Date() }) => {
   const endMonth = lastCompleteMonth(now);
-  const average = (data, field) => (data ? recentAverage(data.monthly, endMonth, field) : null);
-  const parts = [];
+  const average = (data, field) => (data ? roundAverage(recentAverage(data.monthly, endMonth, field), field) : null);
+  const extras = [];
   let headline = null;
   if (dealType === 'SALE') {
     const sale = average(prices, 'avgPrice');
     const deposit = average(jeonse, 'avgDeposit');
     if (sale !== null) headline = formatWon(sale);
-    if (sale !== null) parts.push(`매매 ${formatWon(sale)}`);
-    if (deposit !== null) parts.push(`전세 ${formatWon(deposit)}`);
+    if (deposit !== null) extras.push(`전세 ${formatWon(deposit)}`);
   } else if (dealType === 'JEONSE') {
     const deposit = average(prices, 'avgDeposit');
-    if (deposit !== null) {
-      headline = formatWon(deposit);
-      parts.push(`전세 ${formatWon(deposit)}`);
-    }
+    if (deposit !== null) headline = formatWon(deposit);
   } else {
     const deposit = average(prices, 'avgDeposit');
     const rent = average(prices, 'avgMonthlyRent');
     if (deposit !== null && rent !== null) headline = `보증금 ${formatWon(deposit)} / 월 ${formatWon(rent)}`;
-    if (deposit !== null) parts.push(`보증금 ${formatWon(deposit)}`);
-    if (rent !== null) parts.push(`월세 ${formatWon(rent)}`);
   }
-  const caption = parts.length
-    ? `최근 ${RECENT_MONTHS}개월 평균 · ${band.label} · ${parts.join(' · ')}`
+  const caption = headline
+    ? [`최근 ${RECENT_MONTHS}개월 평균`, band.label, ...extras].join(' · ')
     : `최근 ${RECENT_MONTHS}개월 ${getDealTypeLabel(dealType)} 거래 없음 · ${band.label}`;
-  return { endMonth, headline, caption, rate: changeRate(completedMonthly(prices.monthly, now), dealType) };
+  const rate = periodChange(prices.monthly, endMonth, MONTHLY_FIELD[dealType]);
+  return { endMonth, headline, caption, rate, changeText: formatChange(rate) };
 };
 
 // 원 → "12억 3,000만" / "12억 500만" / "9억" / "8,000만" / "280만" (만원 아래는 반올림)
