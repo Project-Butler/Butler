@@ -12,14 +12,13 @@ import { ChartLegend, PriceChart } from '../components/CommunityMarket/PriceChar
 import { Segment } from '../components/CommunitySegment/Segment';
 import {
   AREA_BANDS,
-  changeRate,
+  chartMonths,
   DEAL_TYPES,
   formatWon,
   getDealTypeLabel,
   monthlyValue,
-  monthsEnding,
   pickAreaBands,
-  recentAverage,
+  recentSummary,
 } from '../utils/communityMarketSummary';
 
 // 시세 화면.
@@ -60,12 +59,13 @@ const AreaChips = ({ owned, value, onChange }) => (
   </div>
 );
 
-// 대표 숫자 카드: 최근 실거래 1건 + 증감률 + 최근 3개월 줄 + 차트.
-// 매매는 디자인대로 전세 선과 "최근 3개월 · 전세" 를 함께(전세 조회를 하나 더 한다), 전세 · 월세는 그 유형만.
-const PriceCard = ({ prices, jeonse, dealType }) => {
-  const latest = prices.recentDeals[0];
-  const rate = changeRate(prices.monthly, dealType);
-  const months = monthsEnding(prices.asOf);
+// 대표 숫자 카드: 최근 3개월 평균(지난달까지) + 증감률 + 무엇의 평균인지 한 줄 + 차트(지난달까지).
+// 이번 달은 신고가 덜 들어와 빼고, 이번 달 거래는 오른쪽 "최근 거래" 표에만 보인다(utils/communityMarketSummary "이번 달 빼기").
+// 매매는 디자인대로 전세 선과 전세 평균을 함께(전세 조회를 하나 더 한다), 전세 · 월세는 그 유형만.
+const PriceCard = ({ prices, jeonse, dealType, band }) => {
+  const summary = recentSummary({ prices, jeonse, dealType, band });
+  const { rate } = summary;
+  const months = chartMonths(prices.coveredFromYearMonth);
   const valuesOf = (data, type) =>
     months.map((month) => {
       const row = data.monthly.find((item) => item.yearMonth === month);
@@ -85,22 +85,14 @@ const PriceCard = ({ prices, jeonse, dealType }) => {
     series.push({ label: '전세', strokeClass: 'stroke-ink-3', fillClass: 'fill-ink-3', dotClass: 'bg-ink-3', values: valuesOf(jeonse, 'JEONSE') });
   }
 
-  let recentLine = null;
-  if (dealType === 'SALE') {
-    const average = jeonse && recentAverage(jeonse.monthly, jeonse.asOf, 'avgDeposit');
-    if (average) recentLine = `최근 3개월 · 전세 ${formatWon(average)}`;
-  } else {
-    const average = recentAverage(prices.monthly, prices.asOf, dealType === 'JEONSE' ? 'avgDeposit' : 'avgMonthlyRent');
-    if (average) recentLine = `최근 3개월 평균 · ${dealType === 'JEONSE' ? '' : '월 '}${formatWon(average)}`;
-  }
-
   return (
     <Card className="flex flex-col gap-1 p-6 lg:col-span-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-label font-semibold text-ink-2">최근 실거래가 · {getDealTypeLabel(dealType)}</span>
-        {latest && <span className="font-num text-sub font-medium tabular-nums text-ink-3">{latest.contractDate.slice(0, 7)}</span>}
+        <span className="text-label font-semibold text-ink-2">{getDealTypeLabel(dealType)} 시세</span>
+        {/* 계산에 쓴 마지막 달(지난달) */}
+        <span className="font-num text-sub font-medium tabular-nums text-ink-3">{summary.endMonth}</span>
       </div>
-      {latest && <div className="font-num text-kpi font-bold tabular-nums leading-tight text-ink">{formatDealAmount(latest, dealType)}</div>}
+      {summary.headline && <div className="font-num text-kpi font-bold tabular-nums leading-tight text-ink">{summary.headline}</div>}
       <div className="flex items-baseline gap-2">
         {rate !== null && (
           // 소수 첫째 자리에서 0 이면 부호 · 색 없이 "0.0%"
@@ -113,7 +105,7 @@ const PriceCard = ({ prices, jeonse, dealType }) => {
             {Math.abs(rate) < 0.05 ? '0.0' : rate.toFixed(1)}%
           </span>
         )}
-        {recentLine && <span className="font-num text-sub leading-tight tabular-nums text-ink-3">{recentLine}</span>}
+        <span className="font-num text-sub leading-tight tabular-nums text-ink-3">{summary.caption}</span>
       </div>
       <div className="mt-4">
         <PriceChart months={months} series={series} />
@@ -200,7 +192,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 
       {data && !isCollecting && !isEmpty && (
         <div className="grid items-start gap-6 lg:grid-cols-3">
-          <PriceCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} />
+          <PriceCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} band={band} />
           <DealTable deals={data.recentDeals} dealType={dealType} />
         </div>
       )}
