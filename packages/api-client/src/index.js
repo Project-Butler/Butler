@@ -117,6 +117,8 @@ export { getCommunityNewsList } from './apis/community/getCommunityNewsList';
 export { getCommunityComplexNewsList } from './apis/community/getCommunityComplexNewsList';
 export { getCommunityProfile } from './apis/community/getCommunityProfile';
 export { putCommunityProfile } from './apis/community/putCommunityProfile';
+export { getComplexMarketPrices } from './apis/marketPrices/getComplexMarketPrices';
+export { getRegionMarketPrices } from './apis/marketPrices/getRegionMarketPrices';
 
 export { postTenantInvitation } from './apis/tenantInvitations/postTenantInvitation';
 export { getTenantInvitationList } from './apis/tenantInvitations/getTenantInvitationList';
