@@ -114,7 +114,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
 
   return (
     <Modal
-      title="서류 올리기"
+      title="문서 업로드"
       subtitle={propertyName}
       size="lg"
       onClose={isSaving ? () => {} : onClose}
@@ -259,7 +259,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
           {notice && <NoticeBox tone={hasFailed ? 'error' : 'warn'}>{notice}</NoticeBox>}
           {savedCount > 0 && hasFailed && (
             <NoticeBox tone="info">
-              이미 올린 서류 <span className="font-num tabular-nums">{savedCount}</span>개는 서류함에 남아 있어요. 올리지 못한 파일만 남겼어요. 취소하면 이 파일들은 올라가지 않아요.
+              이미 올린 서류 <span className="font-num tabular-nums">{savedCount}</span>개는 문서함에 남아 있어요. 올리지 못한 파일만 남겼어요. 취소하면 이 파일들은 올라가지 않아요.
             </NoticeBox>
           )}
         </div>

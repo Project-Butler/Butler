@@ -86,11 +86,11 @@ beforeEach(() => {
 });
 
 describe('DocumentBoxPage (서류함)', () => {
-  it('호실 목록과 내 소유 서류 표를 보여 주고 올릴 수 있으면 [서류 올리기]가 있다', async () => {
+  it('호실 목록과 내 소유 서류 표를 보여 주고 올릴 수 있으면 [문서 업로드]가 있다', async () => {
     renderPage();
     expect(await screen.findByText('등기부.pdf')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('잠실엘스 101동 1203호');
-    expect(screen.getByRole('button', { name: '서류 올리기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '문서 업로드' })).toBeInTheDocument();
   });
 
   it('호실이 하나도 없으면 빈 상태와 [부동산 등록]', async () => {
@@ -153,7 +153,7 @@ describe('DocumentBoxPage (서류함)', () => {
     renderPage({ propertyId: 'p2' });
     expect(await screen.findByText('끝난 소유 관계라 읽기·삭제만 할 수 있어요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /예전 호실/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.queryByRole('button', { name: '서류 올리기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '올리기' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '매매계약서.pdf 더 보기' }));
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('DocumentBoxPage (서류함)', () => {
     const { onNavigate } = renderPage();
     expect(await screen.findByText('권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('권리자 인증 후 서류를 올릴 수 있어요');
-    expect(screen.queryByRole('button', { name: '서류 올리기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '인증하기' }));
     expect(onNavigate).toHaveBeenCalledWith('propertyVerify', { propertyId: 'p1', fromDetail: true });
   });

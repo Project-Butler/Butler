@@ -47,7 +47,7 @@ beforeEach(() => {
   api.postDocument.mockResolvedValue({ id: 'doc-1' });
 });
 
-describe('DocumentUploadModal (서류 올리기 팝업)', () => {
+describe('DocumentUploadModal (문서 업로드 팝업)', () => {
   it('미리 고른 곳과 종류 칩을 보여 준다. 보관할 곳을 바꾸면 첫 종류로 돌아간다', async () => {
     renderModal({ initialTarget: 'CONTRACT' });
     expect(screen.getByRole('button', { name: /계약 서류/ })).toHaveAttribute('aria-pressed', 'true');

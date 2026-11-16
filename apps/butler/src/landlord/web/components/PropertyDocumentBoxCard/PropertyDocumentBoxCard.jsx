@@ -50,17 +50,17 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
       <div className="flex items-center justify-between gap-3">
         <h2 id="document-box-title" className="flex items-center gap-2 text-section font-semibold text-ink">
           <FolderOpen size={20} className="text-ink-3" aria-hidden="true" />
-          서류함
+          문서함
           {box && <span className="font-num text-sub font-normal tabular-nums text-ink-3">{box.documentCount}건</span>}
         </h2>
         <span className="flex gap-2">
           {canUpload && (
             <Button variant="secondary" size="h44" onClick={() => setIsUploadOpen(true)}>
-              서류 올리기
+              문서 업로드
             </Button>
           )}
           <Button variant="secondary" size="h44" onClick={() => onNavigate('documents', { propertyId })}>
-            서류함 열기
+            문서함 열기
           </Button>
         </span>
       </div>

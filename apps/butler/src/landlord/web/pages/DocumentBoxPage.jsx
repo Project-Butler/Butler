@@ -338,7 +338,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
     const error = ownerQuery.error ?? formerQuery.error;
     return (
       <div className="w-full space-y-6">
-        <PageHeader title="서류함" />
+        <PageHeader title="문서함" />
         {error ? <NoticeBox>{error.message}</NoticeBox> : <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
       </div>
     );
@@ -347,7 +347,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   if (!fallback) {
     return (
       <div className="w-full space-y-6">
-        <PageHeader title="서류함" />
+        <PageHeader title="문서함" />
         <EmptyState
           icon={Building2}
           title="등록한 부동산이 없어요"
@@ -374,14 +374,14 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   return (
     <div className="w-full space-y-5 pb-10">
       <PageHeader
-        title="서류함"
+        title="문서함"
         description="호실마다 내 소유 서류와 계약 서류를 보관해요. 계약이 끝나도 서류는 남아요."
         actions={
           box &&
           hasUploadTarget(box) && (
             <Button size="h44" onClick={() => setUploadRequest({})}>
               <Upload size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
-              서류 올리기
+              문서 업로드
             </Button>
           )
         }
