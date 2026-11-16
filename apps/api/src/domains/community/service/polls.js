@@ -5,6 +5,7 @@ import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { countMyVerifiedUnitsInScope, isComplexMember, isRegionMember } from '../platformBridge.js';
 import { buildAuthorLabel, findRegion, getWriteAccess, isUniqueViolation, VISIBLE } from '../service.js';
+import { assertHasNickname, loadNicknames, nicknameOf } from './nicknames.js';
 
 export const throwPollNotFound = () => {
   throw new AppError('COMMUNITY_POLL_NOT_FOUND', 404, '투표를 찾을 수 없습니다.');
@@ -110,13 +111,14 @@ export const findPollDetail = async (user, pollId) => {
       createdAt: poll.createdAt.toISOString(),
     };
   }
-  const [options, myVote, region, complex, isEligible, myUnitCount] = await Promise.all([
+  const [options, myVote, region, complex, isEligible, myUnitCount, nicknames] = await Promise.all([
     prisma.communityPollOption.findMany({ where: { pollId }, orderBy: { position: 'asc' } }),
     prisma.communityPollVote.findUnique({ where: { pollId_voterId: { pollId, voterId: user.id } } }),
     findRegion(poll.legalDongCode),
     poll.complexId ? prisma.complex.findUnique({ where: { id: poll.complexId }, select: { name: true } }) : null,
     isEligibleVoter(user, poll),
     countMyVerifiedUnitsInScope(user.id, scopeOf(poll)),
+    loadNicknames([poll.authorId]),
   ]);
 
   return {
@@ -127,6 +129,8 @@ export const findPollDetail = async (user, pollId) => {
     region,
     title: poll.title,
     description: poll.description,
+    // 작성자: 지금 닉네임(없으면 null) + 만들 때 굳힌 표기
+    authorNickname: nicknameOf(nicknames, poll.authorId),
     authorLabel: poll.authorLabel,
     isMine: poll.authorId === user.id,
     closesAt: poll.closesAt.toISOString(),
@@ -159,7 +163,9 @@ export const findPollDetail = async (user, pollId) => {
 
 // POST /community/regions/:legalDongCode/polls — 범위는 여기서 정하면 바꿀 수 없다(수정 경로 없음).
 // complexId 는 화면의 현재 건물: 작성자 표기에 쓰고, COMPLEX 투표면 그 단지가 투표 대상이다.
+// 닉네임이 없으면 403 COMMUNITY_NICKNAME_REQUIRED.
 export const createPoll = async (user, legalDongCode, { scope, complexId, title, description, options, closesAt }) => {
+  await assertHasNickname(user.id);
   const authorLabel = await buildAuthorLabel(user, legalDongCode, complexId);
   const poll = await prisma.communityPoll.create({
     data: {

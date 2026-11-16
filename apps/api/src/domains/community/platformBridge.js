@@ -100,6 +100,26 @@ export const requireRegionOwner = (getLegalDongCode) => async (req, res, next) =
   }
 };
 
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 내 닉네임(GET · PUT /community/me/profile) 자격.
+// 어느 동네든 활성 소유 관계(endedAt null, 인증 취소 아님)가 하나라도 있는가 — 커뮤니티 어딘가를 읽을 수 있는 임대인(인증 전 포함).
+export const hasAnyActiveOwnership = async (userId) => {
+  if (!isUuid(userId)) return false;
+  return (await prisma.ownership.count({ where: { userId, endedAt: null, ...NOT_REVOKED } })) > 0;
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 미들웨어. 내 닉네임 경로에 authGuard 뒤에 건다.
+// 호실을 등록한 곳이 한 군데도 없으면 403 COMMUNITY_REGION_OWNER_REQUIRED(읽기 자격과 같은 에러).
+export const requireAnyRegionOwner = async (req, res, next) => {
+  try {
+    if (!(await hasAnyActiveOwnership(req.user?.id))) {
+      throw new AppError('COMMUNITY_REGION_OWNER_REQUIRED', 403, '호실을 등록한 임대인만 닉네임을 정할 수 있습니다.');
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 건물 인증 상태의 우선순위: 유효한 인증이 하나라도 있으면 VERIFIED, 없고 만료가 있으면 EXPIRED, 그 밖(미인증)은 UNVERIFIED.
 const BUILDING_STATUS_RANK = { VERIFIED: 0, EXPIRED: 1, UNVERIFIED: 2 };
 
@@ -183,6 +203,25 @@ export const findAuthorUnit = async (userId, legalDongCode, complexId) => {
     (a, b) => time(a.verifiedAt) - time(b.verifiedAt) || compareNatural(a.buildingNo, b.buildingNo),
   );
   return first ? { complexName: first.complexName, buildingNo: first.buildingNo } : null;
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 닉네임 대화상자의 미리보기 줄 "{닉네임} (잠실한빛아파트 103동 임대인)".
+// 이 단지에서 글을 쓰면 붙을 표기의 재료 { complexName, buildingNo }. 인증 호실이 있으면 findAuthorUnit 과 같은 호실,
+// 없으면(인증 전 · 만료 — 미리보기) 활성 호실(인증 취소 제외) 중 동 자연순 첫 호실. 그 단지에 활성 호실이 없으면 null.
+export const findPreviewAuthorUnit = async (userId, complexId) => {
+  if (!isUuid(userId) || !isUuid(complexId)) return null;
+  const complex = await prisma.complex.findUnique({ where: { id: complexId }, select: { regionId: true } });
+  if (!complex) return null;
+  const verified = await findAuthorUnit(userId, complex.regionId, complexId);
+  if (verified) return verified;
+  const rows = await prisma.ownership.findMany({
+    where: { userId, endedAt: null, ...NOT_REVOKED, property: { complexId } },
+    select: { property: { select: { buildingNo: true, complex: { select: { name: true } } } } },
+  });
+  const [first] = rows
+    .map((row) => ({ complexName: row.property.complex.name, buildingNo: row.property.buildingNo }))
+    .sort((a, b) => compareNatural(a.buildingNo ?? '', b.buildingNo ?? ''));
+  return first ?? null;
 };
 
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 게시판 목록·상세가 글쓰기 버튼과 안내 띠를 고르는 데 쓴다.

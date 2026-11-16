@@ -26,6 +26,7 @@ import {
 import { castVote, closeExpiredPolls, createPoll, deletePoll, findPollDetail, findPolls, findVisiblePoll, throwPollNotFound } from './service/polls.js';
 import { findReports, setCommentHidden, setPollHidden, setPostHidden, updateReportStatus } from './service/admin.js';
 import { collectAllNews, findComplexNews, findNews, findNewsComplex } from './service/news.js';
+import { findMyProfile, setMyNickname } from './service/profiles.js';
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const MAX_TITLE_LENGTH = 100; // CommunityPost.title VarChar(100)
@@ -43,6 +44,39 @@ export const listMyBuildings = async (req, res, next) => {
   try {
     const items = await findMyBuildings(req.user);
     sendList(res, items, { page: 1, size: items.length, total: items.length, hasNext: false });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===== 내 닉네임 =====
+// complexId: 지금 고른 건물(미리보기 줄의 괄호 속 표기). 없으면 previewLabel 이 null.
+const PROFILE_FIELDS = ['nickname', 'complexId'];
+
+const parseOptionalComplexId = (value, details) => (value === undefined ? undefined : parseComplexId(value, details));
+
+// GET /community/me/profile?complexId=
+export const getMyProfile = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const details = [];
+    const complexId = parseOptionalComplexId(req.query.complexId, details);
+    throwIfInvalid(details);
+    sendData(res, await findMyProfile(req.user, { complexId }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /community/me/profile { nickname, complexId? } — 길이 · 글자 · 금지 낱말 · 30일은 서비스(nicknameRules.js)가 본다.
+export const putMyProfile = async (req, res, next) => {
+  try {
+    assertAllowedBody(req.body, PROFILE_FIELDS);
+    const details = [];
+    if (typeof req.body.nickname !== 'string') details.push({ field: 'nickname', reason: '문자열이어야 합니다.' });
+    const complexId = parseOptionalComplexId(req.body.complexId, details);
+    throwIfInvalid(details);
+    sendData(res, await setMyNickname(req.user, { nickname: req.body.nickname, complexId }));
   } catch (error) {
     next(error);
   }
