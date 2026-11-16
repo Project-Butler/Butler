@@ -17,6 +17,7 @@ import {
   MAX_FILE_BYTES,
   MAX_FILE_NAME_LENGTH,
 } from './fileRules.js';
+import { findPropertyDocumentBox } from './documentBox.js';
 import { SUPPORTED_RESOURCE_TYPES } from './resourcePolicies.js';
 import {
   createUploadSession,
@@ -167,6 +168,19 @@ export const listDocuments = async (req, res, next) => {
   try {
     const { items, meta } = await findResourceDocuments(req.user, parseListQuery(req.query));
     sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /properties/:propertyId/documents — 라우터는 properties에 있다. 내 소유 관계가 없으면 404.
+export const listPropertyDocuments = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const { propertyId } = req.params;
+    const box = isUuid(propertyId) ? await findPropertyDocumentBox(req.user, propertyId) : null;
+    if (!box) throw new AppError('PROPERTY_NOT_FOUND', 404, '호실을 찾을 수 없습니다.');
+    sendData(res, box);
   } catch (error) {
     next(error);
   }

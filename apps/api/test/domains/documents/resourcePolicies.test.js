@@ -62,3 +62,8 @@ test('documentWhere가 없는 정책(관리 로그·티켓·메시지)은 붙은
     assert.deepEqual(await visibleDocumentWhere(policy, { id: 'u' }, 'r'), {});
   }
 });
+
+test('서류함에 들어가는 OWNERSHIP·CONTRACT 정책만 landlordScopeWhere를 가진다', () => {
+  for (const type of ['OWNERSHIP', 'CONTRACT']) assert.equal(typeof getResourcePolicy(type).landlordScopeWhere, 'function', type);
+  for (const type of ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE']) assert.equal(getResourcePolicy(type).landlordScopeWhere, undefined, type);
+});

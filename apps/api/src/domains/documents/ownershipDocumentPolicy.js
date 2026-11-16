@@ -5,6 +5,7 @@
 //   권리자 인증 증빙(evidenceDocumentId로 연결된 문서)은 보이지 않는다.
 import { AppError } from '../../platform/AppError.js';
 import { getNow } from '../../platform/dateUtils.js';
+import { OWNERSHIP_RESOURCE } from '../../platform/documentAttachments.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
@@ -24,13 +25,15 @@ const lockOwnOwnership = async (tx, user, ownershipId) => {
   return ownership;
 };
 
+// 인증 증빙 문서는 단건·목록·서류함 모두에서 숨긴다.
+const documentWhere = async () => ({ evidenceFor: { none: {} } });
+
 export const ownershipDocumentPolicy = {
   canView: async (user, ownershipId) => {
     const ownership = await prisma.ownership.findUnique({ where: { id: ownershipId }, select: { userId: true } });
     return ownership?.userId === user.id;
   },
-  // 인증 증빙 문서는 단건·목록에서도 숨긴다(서류함과 같은 결과).
-  documentWhere: async () => ({ evidenceFor: { none: {} } }),
+  documentWhere,
   lockForWrite: async (tx, user, ownershipId) => {
     const ownership = await lockOwnOwnership(tx, user, ownershipId);
     if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '끝난 소유 관계라 서류를 올릴 수 없습니다.');
@@ -41,6 +44,11 @@ export const ownershipDocumentPolicy = {
   },
   // 지우기는 종료·인증 상태를 보지 않는다. 올린 본인인지는 deleteDocument(assertDocumentsDeletable)가 본다.
   lockForDelete: async (tx, user, ownershipId) => lockOwnOwnership(tx, user, ownershipId),
+  // 서류함·목록 수용 배치 where. 넘겨받은 id를 믿지 않고 내 소유 관계로 다시 거른다.
+  landlordScopeWhere: async (user, ownershipIds) => {
+    const owned = await prisma.ownership.findMany({ where: { id: { in: ownershipIds }, userId: user.id }, select: { id: true } });
+    return { resourceType: OWNERSHIP_RESOURCE, resourceId: { in: owned.map((ownership) => ownership.id) }, ...(await documentWhere()) };
+  },
   throwNotFound: throwOwnershipNotFound,
   maxAttachments: MAX_OWNERSHIP_ATTACHMENTS,
   allowedDocumentTypes: OWNERSHIP_DOCUMENT_TYPES,

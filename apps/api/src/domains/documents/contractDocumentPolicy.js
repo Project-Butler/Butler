@@ -4,6 +4,7 @@
 //   삭제: 올리기와 같되, 만료·해지된 계약에서는 수락한 초대로 임차인에게 공유된 문서를 지울 수 없다(422 DOCUMENT_NOT_DELETABLE).
 //   연결된 임차인의 올리기·삭제는 403, 그 밖은 404.
 import { AppError } from '../../platform/AppError.js';
+import { CONTRACT_RESOURCE } from '../../platform/documentAttachments.js';
 import { computeContractStatus } from '../../platform/contractStatus.js';
 import { getTodayKST } from '../../platform/dateUtils.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
@@ -67,6 +68,11 @@ export const contractDocumentPolicy = {
     });
     if (sharedCount > 0) throw new AppError('DOCUMENT_NOT_DELETABLE', 422, '임차인에게 공유한 서류는 계약이 끝난 뒤 지울 수 없습니다.');
     return contract;
+  },
+  // 서류함·목록 수용 배치 where. 임대인으로서 볼 수 있는 계약(내 소유 관계의 계약)만 남긴다. 단건 documentWhere의 LANDLORD 값({})과 같다.
+  landlordScopeWhere: async (user, contractIds) => {
+    const owned = await prisma.contract.findMany({ where: { id: { in: contractIds }, ownership: { userId: user.id } }, select: { id: true } });
+    return { resourceType: CONTRACT_RESOURCE, resourceId: { in: owned.map((contract) => contract.id) } };
   },
   throwNotFound: throwContractNotFound,
   maxAttachments: MAX_CONTRACT_ATTACHMENTS,
