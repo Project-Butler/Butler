@@ -136,3 +136,10 @@ export const describePropertyRow = (property, { isFormer = false } = {}) => {
   if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 서류를 올릴 수 있어요' };
   return { count: null, text: '서류 없음 · 계약서를 올려 두세요' };
 };
+
+// 호실 상세 서류함 카드 한 칸 요약: { count, recent(최근 올린 순 limit개), rest(나머지 수) }
+// groups: 소유 관계들 또는 계약들(각각 documents를 가짐). 서버가 묶음 안을 최근 순으로 주지만 묶음이 여럿일 수 있어 다시 정렬한다.
+export const summarizeDocuments = (groups, limit = 2) => {
+  const all = groups.flatMap((group) => group.documents ?? []).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return { count: all.length, recent: all.slice(0, limit), rest: Math.max(0, all.length - limit) };
+};

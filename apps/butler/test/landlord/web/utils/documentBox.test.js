@@ -16,6 +16,7 @@ import {
   pickDefaultContract,
   splitContracts,
   splitOwnerships,
+  summarizeDocuments,
 } from '../../../../src/landlord/web/utils/documentBox';
 
 // 서버 DOCUMENT_TYPES(fileRules.js) 전체. 새 종류가 생기면 이 목록과 라벨을 함께 고친다.
@@ -197,5 +198,25 @@ describe('올릴 곳', () => {
     expect(pickDefaultContract([contract({ id: 'old', status: 'EXPIRED' }), contract({ id: 'now' })]).id).toBe('now');
     expect(pickDefaultContract([contract({ id: 'recent', status: 'EXPIRED' }), contract({ id: 'older', status: 'TERMINATED' })]).id).toBe('recent');
     expect(pickDefaultContract([contract({ isUploadable: false })])).toBeNull();
+  });
+});
+
+describe('호실 상세 카드 요약', () => {
+  const doc = (id, createdAt) => ({ id, fileName: `${id}.pdf`, createdAt });
+
+  it('개수·최근 2개·나머지 수를 준다(묶음이 여럿이어도 최근 순)', () => {
+    const groups = [
+      { documents: [doc('a', '2026-01-03T00:00:00Z'), doc('b', '2026-01-01T00:00:00Z')] },
+      { documents: [doc('c', '2026-01-04T00:00:00Z'), doc('d', '2026-01-02T00:00:00Z')] },
+    ];
+    const summary = summarizeDocuments(groups);
+    expect(summary.count).toBe(4);
+    expect(summary.recent.map((item) => item.id)).toEqual(['c', 'a']);
+    expect(summary.rest).toBe(2);
+  });
+
+  it('서류가 없으면 0', () => {
+    expect(summarizeDocuments([{ documents: [] }])).toEqual({ count: 0, recent: [], rest: 0 });
+    expect(summarizeDocuments([])).toEqual({ count: 0, recent: [], rest: 0 });
   });
 });

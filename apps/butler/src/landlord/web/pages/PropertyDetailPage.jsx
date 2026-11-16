@@ -7,6 +7,7 @@ import { ManagementLogBadges } from '../components/ManagementLogBadges/Managemen
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
+import { PropertyDocumentBoxCard } from '../components/PropertyDocumentBoxCard/PropertyDocumentBoxCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { VerifyModal } from '../components/VerifyModal/VerifyModal';
 import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
@@ -655,6 +656,9 @@ export const PropertyDetailPage = ({
               onNavigate={onNavigate}
               onUnauthorized={onUnauthorized}
             />
+          )}
+          {property.myRelation?.ownershipId && (
+            <PropertyDocumentBoxCard propertyId={property.id} onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
           )}
         </div>
 
