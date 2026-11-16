@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button } from '@butler/ui';
-import { Building2, ChevronDown, ChevronRight, FileSignature, Lock, Plus, ShieldCheck } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, FileSignature, Lock, Plus, ShieldCheck, Upload } from 'lucide-react';
 import { deleteDocument, postDocumentDownloadUrl } from '@butler/api-client';
 import { DocumentBoxTable } from '../components/DocumentBoxTable/DocumentBoxTable';
+import { DocumentUploadModal } from '../components/DocumentUploadModal/DocumentUploadModal';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { IconTile } from '../components/IconTile/IconTile';
 import { Modal } from '../components/Modal/Modal';
@@ -12,7 +13,14 @@ import { useGetAllPropertyList } from '../hooks/useGetAllPropertyList';
 import { useGetPropertyDocumentBox } from '../hooks/useGetPropertyDocumentBox';
 import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 import { useDocumentUrls } from '../../../shared/documentViewer/useDocumentUrls';
-import { describePropertyRow, formatContractPeriod, getContractGroupBadge, splitContracts, splitOwnerships } from '../utils/documentBox';
+import {
+  describePropertyRow,
+  formatContractPeriod,
+  getContractGroupBadge,
+  hasUploadTarget,
+  splitContracts,
+  splitOwnerships,
+} from '../utils/documentBox';
 import { formatDateKST } from '../utils/format';
 
 const Count = ({ children }) => <span className="font-num tabular-nums">{children}</span>;
@@ -292,6 +300,8 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   const [notice, setNotice] = useState(null);
   const [isFormerOpen, setIsFormerOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  // 서류 올리기 팝업: null이면 닫힘, 아니면 칸의 [올리기]가 미리 고른 값({ target?, contractId? })
+  const [uploadRequest, setUploadRequest] = useState(null);
 
   // 주소의 호실이 없거나 내 호실이 아니면 첫 호실로 바꾼다. 주소에 호실이 있었는데 내 호실이 아니면 안내를 남긴다.
   useEffect(() => {
@@ -309,6 +319,11 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   const handleSelect = (nextId) => {
     setNotice(null);
     onNavigate('documents', { propertyId: nextId });
+  };
+
+  const handleUploaded = (count) => {
+    setNotice(`서류 ${count}개를 올렸어요.`);
+    reloadAll();
   };
 
   const handleDeleted = () => {
@@ -342,11 +357,32 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
 
   const box = boxQuery.data;
   const isFormerShown = isFormerOpen || isSelectedFormer;
-  const cardProps = { box, propertyId: selected?.id, userId, urlEntries: urls.entries, onOpen: urls.open, onDelete: setDeleting, onNavigate };
+  const cardProps = {
+    box,
+    propertyId: selected?.id,
+    userId,
+    urlEntries: urls.entries,
+    onOpen: urls.open,
+    onDelete: setDeleting,
+    onUpload: setUploadRequest,
+    onNavigate,
+  };
 
   return (
     <div className="w-full space-y-5 pb-10">
-      <PageHeader title="서류함" description="호실마다 내 소유 서류와 계약 서류를 보관해요. 계약이 끝나도 서류는 남아요." />
+      <PageHeader
+        title="서류함"
+        description="호실마다 내 소유 서류와 계약 서류를 보관해요. 계약이 끝나도 서류는 남아요."
+        actions={
+          box &&
+          hasUploadTarget(box) && (
+            <Button size="h44" onClick={() => setUploadRequest({})}>
+              <Upload size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+              서류 올리기
+            </Button>
+          )
+        }
+      />
       {notice && <NoticeBox tone="info">{notice}</NoticeBox>}
       {ownerQuery.error && <NoticeBox>{ownerQuery.error.message}</NoticeBox>}
       {formerQuery.error && <NoticeBox>{formerQuery.error.message}</NoticeBox>}
@@ -394,6 +430,17 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
         </div>
       </div>
 
+      {uploadRequest && box && (
+        <DocumentUploadModal
+          box={box}
+          propertyName={box.property.displayName}
+          initialTarget={uploadRequest.target}
+          initialContractId={uploadRequest.contractId}
+          onClose={() => setUploadRequest(null)}
+          onUploaded={handleUploaded}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
       {deleting && <DeleteDocumentModal doc={deleting} onClose={() => setDeleting(null)} onDeleted={handleDeleted} onUnauthorized={onUnauthorized} />}
     </div>
   );

@@ -136,6 +136,3 @@ export const describePropertyRow = (property, { isFormer = false } = {}) => {
   if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 서류를 올릴 수 있어요' };
   return { count: null, text: '서류 없음 · 계약서를 올려 두세요' };
 };
-
-// 보관할 곳 묶음 머리의 개수(서류 수). 문서가 없으면 0.
-export const countDocuments = (groups) => groups.reduce((sum, group) => sum + (group.documents?.length ?? 0), 0);
