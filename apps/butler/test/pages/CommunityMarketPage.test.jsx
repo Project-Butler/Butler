@@ -1,0 +1,131 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommunityPage } from '../../src/landlord/web/pages/CommunityPage';
+
+const api = vi.hoisted(() => ({
+  getMyBuildings: vi.fn(),
+  getCommunityProfile: vi.fn(),
+  getCommunityPostList: vi.fn(),
+  getCommunityPollList: vi.fn(),
+  getCommunityNewsList: vi.fn(),
+  getComplexMarketPrices: vi.fn(),
+}));
+
+vi.mock('@butler/api-client', () => ({
+  ...api,
+  queryKey: {
+    COMMUNITY_MY_BUILDINGS: 'community_my_buildings',
+    COMMUNITY_PROFILE: 'community_profile',
+    MARKET_PRICES: 'market_prices',
+  },
+}));
+
+const REGION = { legalDongCode: '1171010200', dongName: '신천동', fullName: '서울특별시 송파구 신천동' };
+const BUILDING = {
+  complexId: 'complex-park',
+  name: '파크리오',
+  legalDongCode: REGION.legalDongCode,
+  regionName: REGION.fullName,
+  unitCount: 1,
+  unitAreas: [84.79],
+  memberCount: 3,
+  verificationStatus: 'VERIFIED',
+  verifyPropertyId: null,
+};
+// 시세 API 응답(연동 규격 2장 시세 모양, 금액은 원) — 숫자는 11/17 실제 수집한 신천동 거래 규모로 지었다
+const ready = ({ dealType, areaMin = 60, areaMax = 85 }) => {
+  const sale = dealType === 'SALE';
+  const monthlyRent = dealType === 'MONTHLY';
+  return {
+    scope: 'COMPLEX', complexId: BUILDING.complexId, legalDongCode: REGION.legalDongCode, dealType, areaMin, areaMax,
+    coveredFromYearMonth: '2025-12', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
+    monthly: [
+      { yearMonth: '2026-08', dealCount: 5, avgPrice: sale ? 2310000000 : null, minPrice: sale ? 2250000000 : null, maxPrice: sale ? 2380000000 : null, avgDeposit: sale ? null : 1100000000, avgMonthlyRent: monthlyRent ? 2500000 : null },
+      { yearMonth: '2026-10', dealCount: 7, avgPrice: sale ? 2405000000 : null, minPrice: sale ? 2330000000 : null, maxPrice: sale ? 2470000000 : null, avgDeposit: sale ? null : 1150000000, avgMonthlyRent: monthlyRent ? 2600000 : null },
+    ],
+    recentDeals: [
+      { contractDate: '2026-10-28', dealType, complexName: '파크리오', exclusiveArea: 84.79, floor: 15, price: sale ? 2470000000 : null, deposit: sale ? null : 1200000000, monthlyRent: monthlyRent ? 2800000 : null },
+      { contractDate: '2026-10-12', dealType, complexName: '파크리오', exclusiveArea: 84.9, floor: 7, price: sale ? 2330000000 : null, deposit: sale ? null : 1100000000, monthlyRent: monthlyRent ? 2400000 : null },
+    ],
+  };
+};
+const collecting = { ...ready({ dealType: 'SALE' }), coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [] };
+const empty = { ...ready({ dealType: 'SALE' }), monthly: [], recentDeals: [] };
+
+const renderMarket = (path = '/community/market') => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/landlord${path}`]}>
+        <Routes>
+          <Route path="/landlord/community/*" element={<CommunityPage onNavigate={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+};
+// 파일의 첫 렌더는 화면 코드를 처음 불러와 전체 실행 때 1초를 넘기기도 한다 — 첫 대기만 여유를 둔다
+const FIRST_RENDER = { timeout: 3000 };
+const sourceLine = (text) => screen.findByText((_, el) => el?.tagName === 'P' && el.textContent === text, {}, FIRST_RENDER);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.localStorage.clear();
+  api.getMyBuildings.mockResolvedValue([BUILDING]);
+  api.getCommunityProfile.mockResolvedValue({ nickname: '석촌호수뷰', nextChangeAt: null, previewLabel: '파크리오 201동 임대인' });
+  api.getComplexMarketPrices.mockImplementation(async (params) => ready(params));
+});
+
+describe('시세 탭(국토교통부 실거래가)', () => {
+  it('출처 줄 "출처: 국토교통부 실거래가 · 기준 {asOf}", 예시 배지 없음, 최근 거래 표와 매매 · 전세 두 번 부르기', async () => {
+    renderMarket();
+    expect(await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17')).toBeInTheDocument();
+    expect(screen.queryByText(/예시 데이터/)).not.toBeInTheDocument();
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    expect(rows).toHaveLength(3); // 머리 + 거래 2
+    expect(rows[1]).toHaveTextContent('24억 7,000만');
+    // 내 호실 면적대(84.79㎡ → 60–85㎡)로, 매매 화면은 전세 선도 함께
+    expect(api.getComplexMarketPrices).toHaveBeenCalledWith({ complexId: 'complex-park', dealType: 'SALE', areaMin: 60, areaMax: 85 });
+    expect(api.getComplexMarketPrices).toHaveBeenCalledWith({ complexId: 'complex-park', dealType: 'JEONSE', areaMin: 60, areaMax: 85 });
+  });
+
+  it('월세로 바꾸면 dealType MONTHLY 로 다시 부르고 표에 보증금 · 월세', async () => {
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: '거래 유형' })).getByRole('radio', { name: '월세' }));
+    expect(await screen.findByText('보증금 / 월세')).toBeInTheDocument();
+    expect(api.getComplexMarketPrices).toHaveBeenCalledWith({ complexId: 'complex-park', dealType: 'MONTHLY', areaMin: 60, areaMax: 85 });
+    const row = within(screen.getByRole('table')).getAllByRole('row')[1];
+    expect(row).toHaveTextContent('보증금 12억');
+    expect(row).toHaveTextContent('월 280만');
+  });
+
+  it('면적대를 바꾸면 그 구간으로 다시 부른다(105㎡ 초과는 areaMax 없음)', async () => {
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: '면적대' })).getByRole('radio', { name: '105㎡ 초과' }));
+    await screen.findAllByRole('row');
+    expect(api.getComplexMarketPrices).toHaveBeenCalledWith({ complexId: 'complex-park', dealType: 'SALE', areaMin: 105, areaMax: undefined });
+  });
+
+  it('아직 모으는 단지(COLLECTING)는 모으는 중 안내 — 빈 상태 문구 · 출처 줄 · 표 없음', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collecting);
+    renderMarket();
+    expect(await screen.findByText('이 단지의 실거래를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('하루 안에 채워집니다. 그때 다시 열어 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText(/거래가 없습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/출처:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('모은 단지인데 그 면적대에 거래가 없으면 빈 상태(모으는 중과 다른 문구) + 출처 줄', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(empty);
+    renderMarket();
+    expect(await screen.findByText('60–85㎡에는 최근 매매 거래가 없습니다.', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.queryByText('이 단지의 실거래를 모으는 중이에요')).not.toBeInTheDocument();
+    expect(await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17')).toBeInTheDocument();
+  });
+});

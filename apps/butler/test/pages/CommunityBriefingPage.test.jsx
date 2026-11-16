@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   postCommunityPoll: vi.fn(),
   postCommunityVote: vi.fn(),
   deleteCommunityPoll: vi.fn(),
+  getComplexMarketPrices: vi.fn(),
 }));
 
 vi.mock('@butler/api-client', () => ({
@@ -32,12 +33,11 @@ vi.mock('@butler/api-client', () => ({
     COMMUNITY_POLLS: 'community_polls',
     COMMUNITY_POLL_DETAIL: 'community_poll',
     COMMUNITY_NEWS: 'community_news',
-    COMMUNITY_MARKET_PRICES: 'community_market_prices',
+    MARKET_PRICES: 'market_prices',
   },
 }));
 
 const REGION = { legalDongCode: '1171010100', dongName: '잠실동', fullName: '서울특별시 송파구 잠실동', sigunguName: '송파구' };
-// 시세는 화면 쪽 예시 데이터(utils/communityMarketPriceStub) — 데모 단지 id 라야 숫자가 나온다
 const BUILDING = {
   complexId: '0c000000-0000-4000-8000-000000000001',
   name: '잠실한빛아파트',
@@ -56,6 +56,21 @@ const page = (items, meta = {}) => ({
 const post = (i) => ({ id: `post-${i}`, category: 'FREE', title: `게시글 ${i}`, authorLabel: '잠실한빛아파트 103동 임대인', commentCount: i, isMine: false, createdAt: '2026-10-22T01:00:00.000Z' });
 const news = (i, scope) => ({ id: `${scope}-${i}`, scope, title: `${scope} 기사 ${i}`, url: `https://news.example/${scope}/${i}`, publisher: '한빛일보', publishedAt: '2026-10-24T01:00:00.000Z' });
 const poll = (i, isClosed) => ({ id: `poll-${i}`, scope: 'REGION', complexId: null, title: `투표 ${i}`, closesAt: '2099-01-01T00:00:00.000Z', isClosed, voteCount: i, hasVoted: false });
+
+// 시세 API 응답(연동 규격 2장 시세 모양, 금액은 원). 거래 있는 달만 monthly 에 온다
+const marketReady = (dealType) => ({
+  scope: 'COMPLEX', complexId: BUILDING.complexId, legalDongCode: REGION.legalDongCode, dealType, areaMin: 60, areaMax: 85,
+  coveredFromYearMonth: '2025-12', asOf: '2026-11-17', source: '국토교통부 실거래가', collectionStatus: 'READY', jobId: null,
+  monthly: [
+    { yearMonth: '2026-08', dealCount: 4, avgPrice: 2310000000, minPrice: 2250000000, maxPrice: 2380000000, avgDeposit: null, avgMonthlyRent: null },
+    { yearMonth: '2026-10', dealCount: 6, avgPrice: 2405000000, minPrice: 2330000000, maxPrice: 2470000000, avgDeposit: null, avgMonthlyRent: null },
+  ],
+  recentDeals: [
+    { contractDate: '2026-10-28', dealType, complexName: '잠실한빛아파트', exclusiveArea: 84.79, floor: 15, price: 2470000000, deposit: null, monthlyRent: null },
+    { contractDate: '2026-10-12', dealType, complexName: '잠실한빛아파트', exclusiveArea: 84.9, floor: 7, price: 2330000000, deposit: null, monthlyRent: null },
+  ],
+});
+const marketCollecting = { ...marketReady('SALE'), coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [] };
 
 const LocationProbe = () => <output data-testid="location">{useLocation().pathname}</output>;
 
@@ -82,6 +97,7 @@ beforeEach(() => {
     scope === 'SIDO' ? page([1, 2, 3].map((i) => news(i, 'SIDO'))) : page([1, 2].map((i) => news(i, 'SIGUNGU')), { sidoFallback: true }),
   );
   api.getCommunityPollList.mockImplementation(async ({ status }) => (status === 'OPEN' ? page([poll(1, false)]) : page([poll(2, true), poll(3, true)])));
+  api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => marketReady(dealType));
 });
 
 const section = (name) => screen.findByRole('region', { name });
@@ -114,8 +130,12 @@ describe('브리핑', () => {
     const polls = await section('최근 투표');
     const cards = await within(polls).findAllByRole('button', { name: /투표 \d/ });
     expect(cards.map((card) => within(card).getByRole('heading').textContent)).toEqual(['투표 1', '투표 2', '투표 3']);
-    expect(within(await section('시세')).getByText('예시 데이터')).toBeInTheDocument();
-    expect(await within(await section('최근 거래')).findAllByRole('listitem')).not.toHaveLength(0);
+    // 시세: 예시 배지 대신 출처 줄, 매매 · 내 호실 면적대로 시세 API 를 부른다
+    const market = await section('시세');
+    expect(await within(market).findByText((_, el) => el?.tagName === 'P' && el.textContent === '출처: 국토교통부 실거래가 · 기준 2026-11-17')).toBeInTheDocument();
+    expect(within(market).queryByText(/예시 데이터/)).not.toBeInTheDocument();
+    expect(api.getComplexMarketPrices).toHaveBeenCalledWith(expect.objectContaining({ complexId: BUILDING.complexId, dealType: 'SALE' }));
+    expect(await within(await section('최근 거래')).findAllByRole('listitem')).toHaveLength(2);
 
     // 브리핑은 적게 부른다(size)
     expect(api.getCommunityPostList).toHaveBeenCalledWith(expect.objectContaining({ size: 5 }));
@@ -155,9 +175,11 @@ describe('브리핑', () => {
   });
 
   it('시세를 아직 모으는 단지면 시세 · 거래 섹션에 안내 한 줄(나머지 섹션은 그대로)', async () => {
-    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, complexId: 'complex-not-in-example-data' }]);
+    api.getComplexMarketPrices.mockResolvedValue(marketCollecting);
     renderAt('/community/briefing');
-    expect(await within(await section('시세')).findByText('시세를 모으는 중입니다')).toBeInTheDocument();
+    const market = await section('시세');
+    expect(await within(market).findByText('실거래를 모으는 중이에요. 하루 안에 채워집니다')).toBeInTheDocument();
+    expect(within(market).queryByText(/출처:/)).not.toBeInTheDocument();
     expect(await within(await section('최근 거래')).findByText('최근 거래가 없습니다')).toBeInTheDocument();
     expect(await within(await section('최근 게시글')).findAllByRole('button', { name: /게시글 \d/ })).toHaveLength(5);
   });
