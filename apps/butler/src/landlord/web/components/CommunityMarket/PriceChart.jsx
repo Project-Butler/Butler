@@ -66,12 +66,7 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${months.length}개월 ${series.map((line) => line.label).join('·')} 추이`} className="block h-auto w-full">
       {ticks.map((value) => (
-        <g key={value}>
-          <line x1={left} y1={toY(value)} x2={width - left} y2={toY(value)} className="stroke-line" strokeWidth="1" />
-          <text data-tick="y" x={left} y={toY(value) - 4} fontSize="11" className="fill-ink-3 font-num">
-            {formatTick(value)}
-          </text>
-        </g>
+        <line key={value} x1={left} y1={toY(value)} x2={width - left} y2={toY(value)} className="stroke-line" strokeWidth="1" />
       ))}
       {[...series].reverse().map((line, lineIndex) => {
         const points = pointsOf(line.values);
@@ -118,6 +113,22 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
         );
       })}
       {last && <circle cx={last.x} cy={last.y} r="4" className={first.fillClass} />}
+      {/* 세로축 글자는 선 위에 — 바탕색 테두리(paint-order stroke)로 선 · 점에 가려도 읽히게 */}
+      {ticks.map((value) => (
+        <text
+          key={value}
+          data-tick="y"
+          x={left}
+          y={toY(value) - 4}
+          fontSize="11"
+          className="fill-ink-3 stroke-surface font-num"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          paintOrder="stroke"
+        >
+          {formatTick(value)}
+        </text>
+      ))}
       {labels.map((index, position) => (
         <text
           key={months[index]}
