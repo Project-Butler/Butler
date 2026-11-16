@@ -88,7 +88,7 @@ export const toBuildingLotKeyIds = (row) => {
   return [...ids];
 };
 
-// K-apt 쪽 조회 묶음. roadLinks: [{ roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo, kaptCode, saleType }]
+// K-apt 쪽 조회 묶음. roadLinks: [{ roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo, kaptCode, saleType }]
 // (kapt_address_links ⨝ 활성 kapt_complexes), lots: [{ legalDongCode, mainLot, subLot, kaptCode, saleType }].
 // 결과 lookup.road(id)·lookup.lot(id)는 후보 배열([{ kaptCode, saleType }], 없으면 []).
 export const buildKaptLookup = ({ roadLinks, lots }) => {
@@ -103,7 +103,7 @@ export const buildKaptLookup = ({ roadLinks, lots }) => {
     const id = roadKeyId({
       sigunguCd: link.roadSigunguCd,
       roadNameKey: link.roadNameKey,
-      underground: link.roadUnderground,
+      underground: link.isRoadUnderground,
       mainNo: link.roadMainNo,
       subNo: link.roadSubNo,
     });
@@ -146,7 +146,7 @@ export const matchBuilding = (row, lookup) => {
     buildingMgtNo: row.buildingMgtNo,
     roadSigunguCd: key.sigunguCd,
     roadNameKey: key.roadNameKey,
-    roadUnderground: key.underground,
+    isRoadUnderground: key.underground,
     roadMainNo: key.mainNo,
     roadSubNo: key.subNo,
     roadCode: row.roadCode,

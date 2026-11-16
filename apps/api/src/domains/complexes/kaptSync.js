@@ -7,6 +7,7 @@
 //
 // 실행 결과는 jobs 테이블에 KAPT_COMPLEX_SYNC로 남긴다. result·error에 URL·키는 넣지 않는다.
 import { Prisma } from '@prisma/client';
+import { getNow } from '../../platform/dateUtils.js';
 import { ExternalServiceError } from './provider/ExternalServiceError.js';
 import { fetchJson, readDataGoKrBody, toItemArray } from './provider/publicApi.js';
 
@@ -218,7 +219,7 @@ const acquireSyncLock = async (prisma, now) => {
   return true;
 };
 
-export const syncKaptComplexes = async ({ prisma, now = new Date() }) => {
+export const syncKaptComplexes = async ({ prisma, now = getNow() }) => {
   const startedAt = Date.now();
   if (!(await acquireSyncLock(prisma, now))) return { skipped: true, reason: 'already-running' };
 

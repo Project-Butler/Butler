@@ -30,7 +30,7 @@ async function* iterate(lines) {
 
 const toSortedRows = (map) =>
   [...map.values()]
-    .map((link) => [link.buildingMgtNo, link.roadSigunguCd, link.roadNameKey, link.roadUnderground, link.roadMainNo, link.roadSubNo, link.kaptCode, link.matchRule].join('|'))
+    .map((link) => [link.buildingMgtNo, link.roadSigunguCd, link.roadNameKey, link.isRoadUnderground, link.roadMainNo, link.roadSubNo, link.kaptCode, link.matchRule].join('|'))
     .sort();
 
 test('같음 테스트: 전체분(t0) + 합성 변동분 = 전체분(t1)', async () => {

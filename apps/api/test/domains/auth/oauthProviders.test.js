@@ -172,6 +172,12 @@ describe('parseOAuthSignupBody', () => {
     });
   });
 
+  test('초대 쿠키로 온 가입(invited)만 서버가 role을 TENANT로 정한다', () => {
+    assert.equal(parseOAuthSignupBody(valid, '홍길동', { invited: true }).role, 'TENANT');
+    assert.equal(parseOAuthSignupBody(valid, '홍길동', { invited: false }).role, 'LANDLORD');
+    assert.throws(() => parseOAuthSignupBody({ ...valid, role: 'TENANT' }, '홍길동'), { code: 'VALIDATION_ERROR' });
+  });
+
   test('보낸 이름이 제공자 이름보다 우선한다', () => {
     assert.equal(parseOAuthSignupBody({ ...valid, name: '김철수' }, '홍길동').name, '김철수');
   });

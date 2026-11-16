@@ -5,6 +5,8 @@ import { AppError } from '../../platform/AppError.js';
 import { decryptField, encryptField } from '../../platform/fieldCrypto.js';
 import { OWNERSHIP_REGION_SELECT, pickVerifiedLegalDongCodes } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { acceptInvitationInTx, findInvitationByToken } from '../tenantInvitations/service.js';
+import { clearVerificationCookie, requireVerification, throwInvitationUnusable } from '../tenantInvitations/verificationSession.js';
 import { consumeVerificationToken } from './emailVerificationService.js';
 import { normalizeEmail } from './registerValidation.js';
 
@@ -156,9 +158,25 @@ const isEmailUniqueViolation = (error) =>
 
 const emailTakenError = () => new AppError('EMAIL_ALREADY_EXISTS', 409, '이미 가입된 이메일입니다.');
 
+// 초대 가입: 초대가 쓸 수 있는지와 확인 세션(bt_iv)이 그 초대 것인지 트랜잭션 전에 먼저 본다(빠른 실패).
+// 수락 트랜잭션(acceptInvitationInTx)이 잠근 뒤 한 번 더 확인한다. 초대 id를 돌려준다.
+export const assertInvitationReady = async (req, token) => {
+  const invitation = await findInvitationByToken(prisma, token);
+  if (!invitation) throwInvitationUnusable('INVITATION_INVALID');
+  await requireVerification(prisma, req, invitation);
+  return invitation.id;
+};
+
 // 사용자·약관 동의·첫 세션을 한 트랜잭션으로 만들고, 성공하면 쿠키를 내려준다.
 // 입력은 parseRegisterBody를 통과한 값이다. 이메일 중복은 사전 조회 + 유니크 제약(동시 가입) 둘 다 409로 처리한다.
-export const registerUser = async (req, res, { email, password, name, phone, birthDate, role, emailVerificationToken }) => {
+// invitationToken이 있으면(role은 TENANT) 같은 트랜잭션에서 초대를 수락한다. 수락이 실패하면 가입 전체가 롤백되고
+// (이메일 인증 토큰 소비도 되돌아간다) 성공하면 확인 세션 쿠키(bt_iv)를 지운다.
+export const registerUser = async (
+  req,
+  res,
+  { email, password, name, phone, birthDate, role, emailVerificationToken, invitationToken = null },
+) => {
+  const invitationId = invitationToken ? await assertInvitationReady(req, invitationToken) : null;
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) throw emailTakenError();
 
   // 비용이 큰 해시·암호화는 트랜잭션 밖에서 끝낸다.
@@ -183,6 +201,7 @@ export const registerUser = async (req, res, { email, password, name, phone, bir
           { userId: user.id, type: 'PRIVACY_REQUIRED', version: PRIVACY_VERSION, agreed: true, agreedAt, ip },
         ],
       });
+      if (invitationId) await acceptInvitationInTx(tx, { invitationId, userId: user.id, req });
       return { created: user, refreshToken: await createSessionRecord(tx, req, user) };
     }));
   } catch (error) {
@@ -194,6 +213,10 @@ export const registerUser = async (req, res, { email, password, name, phone, bir
   const previousToken = req.cookies?.refresh_token;
   if (previousToken) await revokeSessionByToken(previousToken).catch(() => {});
 
+  if (invitationId) {
+    clearVerificationCookie(res);
+    console.info(`[invite] accepted invitationId=${invitationId} via=register`);
+  }
   setCookies(res, created, refreshToken);
   return created;
 };

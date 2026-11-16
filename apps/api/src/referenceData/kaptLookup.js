@@ -11,13 +11,13 @@ export const loadKaptLookup = async (client, filter = null) => {
   const roadLinks = sigunguCodes
     ? await client.$queryRaw`
         SELECT l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey",
-               l.road_underground AS "roadUnderground", l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo",
+               l.is_road_underground AS "isRoadUnderground", l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo",
                l.kapt_code AS "kaptCode", kc.sale_type AS "saleType"
         FROM kapt_address_links l JOIN kapt_complexes kc ON kc.kapt_code = l.kapt_code AND kc.is_active
         WHERE l.road_sigungu_cd = ANY(${sigunguCodes}::text[])`
     : await client.$queryRaw`
         SELECT l.road_sigungu_cd AS "roadSigunguCd", l.road_name_key AS "roadNameKey",
-               l.road_underground AS "roadUnderground", l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo",
+               l.is_road_underground AS "isRoadUnderground", l.road_main_no AS "roadMainNo", l.road_sub_no AS "roadSubNo",
                l.kapt_code AS "kaptCode", kc.sale_type AS "saleType"
         FROM kapt_address_links l JOIN kapt_complexes kc ON kc.kapt_code = l.kapt_code AND kc.is_active`;
 

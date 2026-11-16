@@ -72,7 +72,8 @@ const chooseAddress = async (complex = COMPLEX) => {
 };
 // '동이 없는 건물이에요' 체크박스와 구분한다. 동 목록이 있으면 '동*'(필수), 없으면 '동 (선택)'.
 const DONG_LABEL = /^동( \(선택\))?\*?$/;
-const submitButton = () => screen.getByRole('button', { name: '등록' });
+// 웹은 [등록]이 머리와 폼 아래 두 곳에 있다(같은 상태). 폼 아래(제출 버튼)를 쓴다. 앱은 하나뿐이다.
+const submitButton = () => screen.getAllByRole('button', { name: '등록' }).at(-1);
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -127,8 +127,14 @@ model User {
   uploads           Upload[]
   uploadedDocuments Document[]    @relation("UploadedDocuments")
   authoredLogs      PropertyLog[] @relation("AuthoredPropertyLogs")
+  threadParticipations ThreadParticipant[]
+  sentThreadMessages   ThreadMessage[] @relation("SentThreadMessages")
 
   ownershipVerificationAttempts OwnershipVerificationAttempt[]
+
+  createdTenantInvitations  TenantInvitation[] @relation("CreatedTenantInvitations")
+  acceptedTenantInvitations TenantInvitation[] @relation("AcceptedTenantInvitations")
+  notifications             Notification[]
 
   @@map("users")
 }
@@ -363,18 +369,18 @@ model KaptComplex {
 // K-apt 쪽이 알려 준 도로명주소(엑셀·기본정보 API). 키는 kaptAddress.js의
 // parseRoadAddress()·toRoadNameKey() 규칙. 소스별로 mark-and-sweep(import_run_id).
 model KaptAddressLink {
-  source          String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
-  roadSigunguCd   String   @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String   @map("road_name_key")
-  roadUnderground Boolean  @map("road_underground")
-  roadMainNo      Int      @map("road_main_no")
-  roadSubNo       Int      @map("road_sub_no")
-  kaptCode        String   @map("kapt_code") @db.VarChar(20)
-  importRunId     String?  @map("import_run_id") @db.Uuid
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  source            String   @db.VarChar(20) // KAPT_EXCEL / KAPT_API
+  roadSigunguCd     String   @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String   @map("road_name_key")
+  isRoadUnderground Boolean  @map("is_road_underground")
+  roadMainNo        Int      @map("road_main_no")
+  roadSubNo         Int      @map("road_sub_no")
+  kaptCode          String   @map("kapt_code") @db.VarChar(20)
+  importRunId       String?  @map("import_run_id") @db.Uuid
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@id([source, roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo, kaptCode])
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@id([source, roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo, kaptCode])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("kapt_address_links")
 }
@@ -383,20 +389,20 @@ model KaptAddressLink {
 // K-apt 단지와 맞은 건물만 저장한다. 같은 필지 형제 조회용 식 인덱스
 // (substr(building_mgt_no, 1, 19))는 마이그레이션 SQL에 있다.
 model JusoBuildingLink {
-  buildingMgtNo   String    @id @map("building_mgt_no") @db.VarChar(25)
-  roadSigunguCd   String    @map("road_sigungu_cd") @db.VarChar(5)
-  roadNameKey     String    @map("road_name_key")
-  roadUnderground Boolean   @map("road_underground")
-  roadMainNo      Int       @map("road_main_no")
-  roadSubNo       Int       @map("road_sub_no")
-  roadCode        String?   @map("road_code") @db.VarChar(12)
-  kaptCode        String    @map("kapt_code") @db.VarChar(20)
-  matchRule       String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
-  importRunId     String?   @map("import_run_id") @db.Uuid
-  appliedFileDate DateTime? @map("applied_file_date") @db.Date
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buildingMgtNo     String    @id @map("building_mgt_no") @db.VarChar(25)
+  roadSigunguCd     String    @map("road_sigungu_cd") @db.VarChar(5)
+  roadNameKey       String    @map("road_name_key")
+  isRoadUnderground Boolean   @map("is_road_underground")
+  roadMainNo        Int       @map("road_main_no")
+  roadSubNo         Int       @map("road_sub_no")
+  roadCode          String?   @map("road_code") @db.VarChar(12)
+  kaptCode          String    @map("kapt_code") @db.VarChar(20)
+  matchRule         String    @map("match_rule") @db.VarChar(20) // ROAD_KEY / LOT / NON_APT_FLAG
+  importRunId       String?   @map("import_run_id") @db.Uuid
+  appliedFileDate   DateTime? @map("applied_file_date") @db.Date
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@index([roadSigunguCd, roadNameKey, roadUnderground, roadMainNo, roadSubNo])
+  @@index([roadSigunguCd, roadNameKey, isRoadUnderground, roadMainNo, roadSubNo])
   @@index([kaptCode])
   @@map("juso_building_links")
 }
@@ -528,7 +534,8 @@ model Contract {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tickets Ticket[]
+  tickets           Ticket[]
+  tenantInvitations TenantInvitation[]
 
   // 같은 소유 관계 안에서 해지 안 된 계약끼리 기간 겹침 금지 — ex_contract_period (마이그레이션 SQL)
   @@index([ownershipId])
@@ -614,6 +621,62 @@ model Ticket {
   @@map("tickets")
 }
 
+// 임대인·임차인 소통 스레드(계약 6장). 계약·티켓 하나에 스레드 하나.
+// 붙는 곳은 contextType + contextId 다형 참조라 FK가 없다(Document와 같은 방식).
+// contextType은 등록형 문자열(CONTRACT, TICKET, 피처가 추가)이라 enum이 아니다.
+model Thread {
+  id          String @id @default(uuid()) @db.Uuid
+  contextType String @map("context_type") @db.VarChar(40)
+  contextId   String @map("context_id") @db.Uuid
+
+  // 마지막 메시지 시각(목록의 "최근 메시지 순"). 메시지가 없으면 null.
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  participants ThreadParticipant[]
+  messages     ThreadMessage[]
+
+  @@unique([contextType, contextId])
+  @@map("threads")
+}
+
+// 스레드 참여자(임대인·임차인 2명). 참여자는 서버가 정하고, 읽은 위치를 사람마다 둔다.
+model ThreadParticipant {
+  id       String @id @default(uuid()) @db.Uuid
+  threadId String @map("thread_id") @db.Uuid
+  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId   String @map("user_id") @db.Uuid
+  user     User   @relation(fields: [userId], references: [id])
+
+  // 마지막으로 읽은 메시지. 안 읽은 수는 이 메시지 다음의 상대 메시지 수다.
+  lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
+  lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+  @@map("thread_participants")
+}
+
+// 메시지. 수정·삭제하지 않는다. 운영자가 숨기면 isHidden(응답 body는 null).
+model ThreadMessage {
+  id       String @id @default(uuid()) @db.Uuid
+  threadId String @map("thread_id") @db.Uuid
+  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId String @map("sender_id") @db.Uuid
+  sender   User   @relation("SentThreadMessages", fields: [senderId], references: [id])
+
+  body     String
+  isHidden Boolean   @default(false) @map("is_hidden")
+  hiddenAt DateTime? @map("hidden_at") @db.Timestamptz(3)
+
+  // 응답의 sentAt. 커서(createdAt desc, id desc)에 쓴다.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([threadId, createdAt])
+  @@map("thread_messages")
+}
+
 // 업로드 세션 (노션 6번 12장, 계약 6장 POST /files/upload-sessions).
 // 세션 발급 → 브라우저가 Storage 서명 URL로 직접 업로드 → POST /documents로 문서 등록.
 model Upload {
@@ -658,7 +721,8 @@ model Document {
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  evidenceFor Ownership[]
+  evidenceFor      Ownership[]
+  invitationShares TenantInvitationDocument[]
 
   @@index([resourceType, resourceId])
   @@index([uploaderId])
@@ -760,6 +824,94 @@ model OwnershipVerificationAttempt {
   @@index([ownershipId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@map("ownership_verification_attempts")
+}
+
+// 임차인 초대(docs/11 개발 계획 2-1, 명세 4-1). 토큰 원문은 저장하지 않고 sha256 hex만 둔다.
+// 만료(EXPIRED)는 저장하지 않고 expiresAt으로 조회 때 계산한다.
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELED
+
+  @@map("invitation_status")
+}
+
+// 계약당 PENDING 하나, ACCEPTED 하나 — 부분 유니크 uq_tenant_invitation_pending·uq_tenant_invitation_accepted (마이그레이션 SQL)
+model TenantInvitation {
+  id           String           @id @default(uuid()) @db.Uuid
+  contractId   String           @map("contract_id") @db.Uuid
+  contract     Contract         @relation(fields: [contractId], references: [id])
+  tokenHash    String           @unique @map("token_hash") @db.VarChar(64)
+  status       InvitationStatus @default(PENDING)
+  expiresAt    DateTime         @map("expires_at") @db.Timestamptz(3)
+  acceptedAt   DateTime?        @map("accepted_at") @db.Timestamptz(3)
+  acceptedById String?          @map("accepted_by_id") @db.Uuid
+  acceptor     User?            @relation("AcceptedTenantInvitations", fields: [acceptedById], references: [id])
+  canceledAt   DateTime?        @map("canceled_at") @db.Timestamptz(3)
+  createdById  String           @map("created_by_id") @db.Uuid
+  creator      User             @relation("CreatedTenantInvitations", fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // 본인 확인 대입 방지(V-04). 초대 행을 FOR UPDATE로 잠그고 갱신한다.
+  verifyFailCount       Int       @default(0) @map("verify_fail_count")
+  verifyFailWindowStart DateTime? @map("verify_fail_window_start") @db.Timestamptz(3)
+  nextVerifyAt          DateTime? @map("next_verify_at") @db.Timestamptz(3)
+  // 하루 한도 알림을 임대인에게 보낸 시각(하루 한 번).
+  landlordAlertedAt     DateTime? @map("landlord_alerted_at") @db.Timestamptz(3)
+
+  documents     TenantInvitationDocument[]
+  verifications TenantInvitationVerification[]
+
+  @@index([contractId, createdAt(sort: Desc)])
+  @@map("tenant_invitations")
+}
+
+// 초대와 함께 공유한 계약 서류. 수락 뒤 임차인이 볼 수 있는 범위다.
+model TenantInvitationDocument {
+  invitationId String           @map("invitation_id") @db.Uuid
+  invitation   TenantInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  documentId   String           @map("document_id") @db.Uuid
+  document     Document         @relation(fields: [documentId], references: [id])
+
+  @@id([invitationId, documentId])
+  @@index([documentId])
+  @@map("tenant_invitation_documents")
+}
+
+// 본인 확인 세션(V-01 결과). 쿠키 값의 sha256만 저장한다. 만료 행은 V-01 때 그 초대 것을 함께 지운다.
+model TenantInvitationVerification {
+  id               String           @id @default(uuid()) @db.Uuid
+  idHash           String           @unique @map("id_hash") @db.VarChar(64)
+  invitationId     String           @map("invitation_id") @db.Uuid
+  invitation       TenantInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  // sha256(contractId + tenantPhone). 계약 번호가 바뀌면 세션이 무효가 된다.
+  phoneFingerprint String           @map("phone_fingerprint") @db.VarChar(64)
+  expiresAt        DateTime         @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([invitationId])
+  @@map("tenant_invitation_verifications")
+}
+
+// 인앱 알림(api-contract.md 7장). type은 등록형 문자열(platform/notify.js의 NOTIFICATION_TYPES)이라 enum이 아니다.
+// TODO: 90일 보관 정리.
+model Notification {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  user         User      @relation(fields: [userId], references: [id])
+  type         String    @db.VarChar(60)
+  title        String
+  body         String
+  link         String?
+  // 다형 참조(컨벤션: resourceType + resourceId, FK 없음). 응답에서는 related: { resourceType, resourceId }.
+  resourceType String?   @map("resource_type") @db.VarChar(40)
+  resourceId   String?   @map("resource_id") @db.Uuid
+  readAt       DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====

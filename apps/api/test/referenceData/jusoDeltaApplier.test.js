@@ -6,8 +6,8 @@ import { applyOpsToMap, planDeltaLine } from '../helpers/jusoLines.js';
 
 const LOOKUP = buildKaptLookup({
   roadLinks: [
-    { roadSigunguCd: '11350', roadNameKey: '섬밭로', roadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
-    { roadSigunguCd: '11350', roadNameKey: '동일로207길', roadUnderground: false, roadMainNo: 17, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
+    { roadSigunguCd: '11350', roadNameKey: '섬밭로', isRoadUnderground: false, roadMainNo: 285, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
+    { roadSigunguCd: '11350', roadNameKey: '동일로207길', isRoadUnderground: false, roadMainNo: 17, roadSubNo: 0, kaptCode: 'A13986306', saleType: '분양' },
   ],
   lots: [],
 });
