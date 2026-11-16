@@ -245,7 +245,9 @@ export const deleteDocument = async (user, documentId, req) => {
   const policy = found.resourceType ? getResourcePolicy(found.resourceType) : null;
 
   const storagePaths = await prisma.$transaction(async (tx) => {
-    if (policy) await policy.lockForWrite(tx, user, found.resourceId);
+    if (policy) {
+      await (policy.lockForDelete ? policy.lockForDelete(tx, user, found.resourceId, found) : policy.lockForWrite(tx, user, found.resourceId));
+    }
     // 리소스를 잠그는 사이 소유가 끝나 잠겼거나 다른 요청이 지웠을 수 있다.
     const document = await tx.document.findFirst({ where: { id: documentId, deletedAt: null } });
     if (!document) throwDocumentNotFound();
