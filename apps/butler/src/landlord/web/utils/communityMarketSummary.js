@@ -1,5 +1,5 @@
 // 시세 화면 계산 — 시세 응답(api-contract "시세" 모양)에서 대표 숫자 · 증감률 · 차트 값을 뽑는다. 순수 함수.
-// 데이터 출처(지금 예시 스텁 → 나중에 플랫폼 API)가 바뀌어도 그대로 쓴다.
+// 데이터는 시세 API(국토교통부 실거래가, GET /market-prices/complexes/:complexId)의 응답이다.
 
 export const DEAL_TYPES = [
   { value: 'SALE', label: '매매' },
@@ -8,7 +8,8 @@ export const DEAL_TYPES = [
 ];
 export const getDealTypeLabel = (dealType) => DEAL_TYPES.find((type) => type.value === dealType)?.label ?? dealType;
 
-// 전용면적 구간(칩 문구). 면적이 경계값이면 아래 구간(60㎡ 는 "60㎡ 이하"). areaMin · areaMax 는 규격 쿼리 값.
+// 전용면적 구간(칩 문구). 면적이 경계값이면 아래 구간(60㎡ 는 "60㎡ 이하") — 내 호실 표시용. areaMin · areaMax 는 규격 쿼리 값.
+// 서버는 areaMin · areaMax 를 양끝 포함으로 거른다(시세 계획서 6절) — 정확히 60 · 85 · 105㎡ 인 거래는 이웃한 두 칸에 다 나온다.
 export const AREA_BANDS = [
   { key: 'le60', label: '60㎡ 이하', areaMax: 60, contains: (area) => area <= 60 },
   { key: '60to85', label: '60–85㎡', areaMin: 60, areaMax: 85, contains: (area) => area > 60 && area <= 85 },

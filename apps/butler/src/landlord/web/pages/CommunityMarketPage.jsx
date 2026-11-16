@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Card } from '@butler/ui';
+import { Card } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetMarketPrices } from '../hooks/useGetMarketPrices';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { MarketSource } from '../components/CommunityMarket/MarketSource';
 import { ChartLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
 import { Segment } from '../components/CommunitySegment/Segment';
 import {
@@ -22,7 +23,7 @@ import {
 } from '../utils/communityMarketSummary';
 
 // 시세 화면.
-// 데이터는 useGetMarketPrices(연동 규격 모양 — 지금은 예시 스텁). 거래 유형 · 면적대를 바꾸면 그 조합으로 다시 가져온다.
+// 데이터는 useGetMarketPrices(시세 API — 국토교통부 실거래가, 연동 규격 2장 모양). 거래 유형 · 면적대를 바꾸면 그 조합으로 다시 가져온다.
 // 거래 유형은 주소(?dealType=JEONSE|MONTHLY, 매매는 안 씀)에 두어 새로고침 · 건물 바꾸기에도 남고,
 // 면적대는 건물마다 "내 호실 면적대"로 다시 시작한다(건물마다 내 면적대가 다르다).
 
@@ -182,23 +183,19 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 
   return (
     <>
-      {/* 도구 줄: 거래 유형 · 면적 칩 · 안내 · 예시 배지(넘치면 줄바꿈) */}
+      {/* 도구 줄: 거래 유형 · 면적 칩 · 안내(넘치면 줄바꿈) */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="w-56 flex-none">
           <Segment label="거래 유형" options={DEAL_TYPES} value={dealType} onChange={onDealTypeChange} />
         </div>
         <AreaChips owned={owned} value={bandKey} onChange={setBandKey} />
         {owned.size > 0 && <span className="text-sub text-ink-3">내 호실이 있는 면적대입니다</span>}
-        {/* 시세 예시 데이터라는 표시(예시 숫자가 실제 시세처럼 보이지 않게). 플랫폼 시세 API 로 바꾸면 이 배지도 지운다. */}
-        <Badge tone="warning" className="ml-auto">
-          예시 데이터 · 시세 연동 전
-        </Badge>
       </div>
 
       {prices.isPending && <LoadingStatus />}
       {prices.isError && <NoticeBox>{getErrorMessage(prices.error)}</NoticeBox>}
-      {/* 아직 수집 안 된 단지. 작업 조회 API 가 없어 다시 묻지 않는다(임시) */}
-      {isCollecting && <EmptyState title="시세를 모으는 중입니다" />}
+      {/* 아직 모으지 못한 시군구(처음 보는 단지). 정기 실행이 하루 한 번 채운다 — 빈 상태(거래 없음)와 다른 문구 */}
+      {isCollecting && <EmptyState title="이 단지의 실거래를 모으는 중이에요" description="하루 안에 채워집니다. 그때 다시 열어 주세요." />}
       {isEmpty && <EmptyState title={`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`} />}
 
       {data && !isCollecting && !isEmpty && (
@@ -208,12 +205,8 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
         </div>
       )}
 
-      {/* 출처 줄은 응답에 출처가 있을 때만(예시 데이터에는 없다) */}
-      {data?.source && (
-        <p className="text-sub leading-tight text-ink-3">
-          출처: {data.source} · <span className="font-num font-medium tabular-nums">{data.asOf}</span> 기준
-        </p>
-      )}
+      {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다 */}
+      {data?.source && data.asOf && <MarketSource source={data.source} asOf={data.asOf} />}
     </>
   );
 };

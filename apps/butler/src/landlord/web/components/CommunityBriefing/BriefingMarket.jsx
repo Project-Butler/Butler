@@ -1,12 +1,12 @@
-import { Badge } from '@butler/ui';
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
 import { changeRate, formatWon, monthlyValue, monthsEnding } from '../../utils/communityMarketSummary';
+import { MarketSource } from '../CommunityMarket/MarketSource';
 import { PriceChart } from '../CommunityMarket/PriceChart';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
 import { BriefingSection } from './BriefingSection';
 
 // 브리핑 — 시세: 내 호실 면적대 · 매매 기준 대표 숫자(가장 최근 거래) + 증감률 + 작은 차트(매매 선 하나).
-// 전환 칩은 두지 않는다(시세 탭에서). 데이터는 시세 탭과 같은 훅(지금은 예시 데이터 — 예시 배지도 같이).
+// 전환 칩은 두지 않는다(시세 탭에서). 데이터는 시세 탭과 같은 훅(국토교통부 실거래가 — 출처 줄도 같이).
 // band: AREA_BANDS 한 칸(내 호실 면적대) · onMore: 시세 탭으로
 export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   const prices = useGetMarketPrices({ complexId: building.complexId, dealType: 'SALE', areaMin: band.areaMin, areaMax: band.areaMax });
@@ -23,7 +23,7 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (data.collectionStatus === 'COLLECTING') body = <BriefingNote>시세를 모으는 중입니다</BriefingNote>;
+  else if (data.collectionStatus === 'COLLECTING') body = <BriefingNote>실거래를 모으는 중이에요. 하루 안에 채워집니다</BriefingNote>;
   else if (!latest && data.monthly.length === 0) body = <BriefingNote>{band.label}에는 최근 매매 거래가 없습니다</BriefingNote>;
   else {
     body = (
@@ -46,6 +46,7 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
             series={[{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values }]}
           />
         </div>
+        {data.asOf && <MarketSource source={data.source} asOf={data.asOf} className="pt-1" />}
       </div>
     );
   }
@@ -56,8 +57,6 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
       scope={`${building.name} · 매매 · ${band.label}`}
       onMore={onMore}
       className={className}
-      // 예시 숫자가 실제 시세처럼 보이지 않게(시세 탭과 같은 배지). 플랫폼 시세 API 로 바꾸면 함께 지운다.
-      aside={<Badge tone="warning">예시 데이터</Badge>}
     >
       {body}
     </BriefingSection>
