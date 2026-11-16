@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentBoxPage } from '../../src/landlord/web/pages/DocumentBoxPage';
+import { isPreviewableDocument } from '../../src/landlord/web/components/DocumentPreviewModal/DocumentPreviewModal';
 
 const api = vi.hoisted(() => ({
   getPropertyList: vi.fn(),
@@ -223,8 +224,30 @@ describe('DocumentBoxPage (서류함)', () => {
     expect(api.postDocumentDownloadUrl).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
     await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(1));
+    // PDF는 팝업 안 미리보기(iframe)로 열리고 새 탭은 열지 않는다.
+    expect(await screen.findByTitle('등기부.pdf 미리보기')).toHaveAttribute('src', 'https://files.test/x');
+    expect(window.open).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
+    // 4분 안에 다시 열어도 새 주소를 받는다(열 때마다 감사).
     await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
     await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(2));
+  });
+
+  it('미리보기 팝업의 [새 탭에서 열기]는 받은 주소를 그대로 쓴다', async () => {
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    renderPage();
+    await screen.findByText('등기부.pdf');
+    await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
+    await screen.findByTitle('등기부.pdf 미리보기');
+    await userEvent.click(screen.getByRole('button', { name: '새 탭에서 열기' }));
+    expect(window.open).toHaveBeenCalledWith('https://files.test/x', '_blank', 'noopener,noreferrer');
+    expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('미리보기는 PDF와 브라우저가 그리는 사진만, HEIC 등은 새 탭으로 연다', () => {
+    expect(isPreviewableDocument({ mimeType: 'image/heic' })).toBe(false);
+    expect(isPreviewableDocument({ mimeType: 'image/jpeg' })).toBe(true);
+    expect(isPreviewableDocument({ mimeType: 'application/pdf' })).toBe(true);
   });
 
   it('줄의 다른 칸을 눌러도 열고, 더 보기를 누르면 열지 않는다', async () => {
@@ -244,6 +267,7 @@ describe('DocumentBoxPage (서류함)', () => {
     renderPage();
     await screen.findByText('등기부.pdf');
     await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 열기' }));
-    expect(await screen.findByText('파일을 열지 못했어요')).toBeInTheDocument();
+    // 표 줄과 미리보기 팝업 양쪽에 안내가 나온다.
+    expect((await screen.findAllByText('파일을 열지 못했어요')).length).toBeGreaterThan(0);
   });
 });
