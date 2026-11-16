@@ -17,6 +17,8 @@ import disputesRouter from './domains/disputes/router.js';
 import documentsRouter, { filesRouter, storageContentRouter } from './domains/documents/router.js';
 import jobsRouter from './domains/jobs/router.js';
 import landlordBuildingsRouter from './domains/landlordBuildings/router.js';
+import marketPricesRouter from './domains/marketPrices/router.js';
+import marketPriceCronRouter from './domains/marketPrices/cronRouter.js';
 import notificationsRouter from './domains/notifications/router.js';
 import ownershipVerificationsRouter, { ownershipVerificationResultRouter } from './domains/ownershipVerifications/router.js';
 import propertiesRouter from './domains/properties/router.js';
@@ -67,10 +69,12 @@ app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/community', communityRouter);
+app.use('/api/v1/market-prices', marketPricesRouter);
 
 // Vercel Cron 전용(/api/cron/*). 계약 API가 아니라서 /api/v1 밖이고, 경로는 라우터 안에 있다.
 app.use(cronRouter);
 app.use(communityCronRouter);
+app.use(marketPriceCronRouter);
 
 app.use(errorHandler);
 
