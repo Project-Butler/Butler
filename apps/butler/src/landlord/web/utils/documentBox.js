@@ -1,6 +1,7 @@
 // 문서함(임대인 웹) 표기·판단 도우미. docs/10. 유지보수 요청·문서 개발/문서함 개발 계획.md 3-1·4-2·4-3.
 // 숫자·날짜는 쓰는 쪽에서 font-num tabular-nums로 감싼다.
 import { MAX_ATTACHMENT_BYTES } from './attachment';
+import { formatUnitLabel } from './unitAddress';
 
 export const OWNERSHIP_TARGET = 'OWNERSHIP';
 export const CONTRACT_TARGET = 'CONTRACT';
@@ -128,6 +129,13 @@ export const isSharedLockedDocument = (document, { userId, contract } = {}) =>
 //  - 문서가 있으면: 문서 n · 계약 중/계약 대기/공실
 //  - 문서가 없으면: 인증된 호실은 올리기 안내, 미인증·만료 호실은 인증 안내(D-C)
 const PROPERTY_STATE_TEXT = { LEASED: '계약 중', CONTRACT_PENDING: '계약 대기', VACANT: '공실' };
+
+// 좁은 목록의 호실 이름: 동·호(구별 정보, 자르지 않음)와 단지명(말줄임)을 나눈다.
+// 같은 단지의 호실이 여럿이면 '단지명 101동 100…'처럼 잘려 서로 같아 보이기 때문. 동·호가 없으면 displayName 그대로.
+export const splitPropertyName = (property) => {
+  if (!property?.unitNo) return { unitLabel: property?.displayName ?? '', complexName: null };
+  return { unitLabel: formatUnitLabel(property.buildingNo ?? '', property.unitNo), complexName: property.complex?.name ?? null };
+};
 
 export const describePropertyRow = (property, { isFormer = false } = {}) => {
   const count = property.documentCount ?? 0;

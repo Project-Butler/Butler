@@ -13,6 +13,7 @@ import {
   getUploadTargets,
   hasUploadTarget,
   isSharedLockedDocument,
+  splitPropertyName,
   pickDefaultContract,
   splitContracts,
   splitOwnerships,
@@ -218,5 +219,20 @@ describe('호실 상세 카드 요약', () => {
   it('문서가 없으면 0', () => {
     expect(summarizeDocuments([{ documents: [] }])).toEqual({ count: 0, recent: [], rest: 0 });
     expect(summarizeDocuments([])).toEqual({ count: 0, recent: [], rest: 0 });
+  });
+});
+
+describe('splitPropertyName (좁은 목록의 호실 이름)', () => {
+  it('동·호와 단지명을 나눈다', () => {
+    expect(splitPropertyName({ displayName: '잠실엘스 101동 1203호', buildingNo: '101', unitNo: '1203', complex: { name: '잠실엘스' } })).toEqual({
+      unitLabel: '101동 1203호',
+      complexName: '잠실엘스',
+    });
+  });
+  it('동이 없는 건물은 호만', () => {
+    expect(splitPropertyName({ buildingNo: '', unitNo: '410', complex: { name: '역삼오피스텔' } }).unitLabel).toBe('410호');
+  });
+  it('동·호가 없으면 displayName 그대로', () => {
+    expect(splitPropertyName({ displayName: '잠실엘스 101동 1203호' })).toEqual({ unitLabel: '잠실엘스 101동 1203호', complexName: null });
   });
 });

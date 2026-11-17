@@ -93,6 +93,18 @@ describe('DocumentBoxPage (문서함)', () => {
     expect(screen.getByRole('button', { name: '문서 업로드' })).toBeInTheDocument();
   });
 
+  it('같은 단지 호실이 여럿이어도 동·호를 첫 줄에 따로 보여 서로 구별된다', async () => {
+    const unit = (id, unitNo) =>
+      property(id, `E2E 서류함 단지 101동 ${unitNo}호`, { buildingNo: '101', unitNo, complex: { name: 'E2E 서류함 단지' } });
+    setupLists({ owners: [unit('p1', '1001'), unit('p2', '1002')] });
+    renderPage();
+    const nav = await screen.findByRole('navigation', { name: '호실' });
+    expect(within(nav).getByText('101동 1001호')).toBeInTheDocument();
+    expect(within(nav).getByText('101동 1002호')).toBeInTheDocument();
+    expect(within(nav).getAllByText('E2E 서류함 단지')).toHaveLength(2);
+    expect(within(nav).getByText('101동 1001호').closest('button')).toHaveAttribute('title', 'E2E 서류함 단지 101동 1001호');
+  });
+
   it('호실이 하나도 없으면 빈 상태와 [부동산 등록]', async () => {
     setupLists({ owners: [], formers: [] });
     const { onNavigate } = renderPage({ propertyId: undefined });

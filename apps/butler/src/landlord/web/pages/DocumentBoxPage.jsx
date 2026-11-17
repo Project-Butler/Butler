@@ -20,19 +20,22 @@ import {
   getContractGroupBadge,
   hasUploadTarget,
   splitContracts,
+  splitPropertyName,
   splitOwnerships,
 } from '../utils/documentBox';
 import { formatDateKST } from '../utils/format';
 
 const Count = ({ children }) => <span className="font-num tabular-nums">{children}</span>;
 
-// 왼쪽 호실 줄: 호실 이름 + "문서 n · 계약 중/공실" (미인증 호실은 인증 안내 문구)
+// 왼쪽 호실 줄: 동·호(자르지 않음) / 단지명 · "문서 n · 계약 중/공실" (미인증 호실은 인증 안내 문구)
 const PropertyRow = ({ property, isFormer = false, isSelected, onSelect }) => {
   const { count, text } = describePropertyRow(property, { isFormer });
+  const { unitLabel, complexName } = splitPropertyName(property);
   return (
     <button
       type="button"
       aria-current={isSelected ? 'true' : undefined}
+      title={property.displayName}
       onClick={() => onSelect(property.id)}
       className={`flex w-full items-center gap-3 rounded-card border-2 bg-surface p-4 text-left transition-colors hover:bg-surface-2 ${
         isSelected ? 'border-accent' : 'border-line'
@@ -40,8 +43,9 @@ const PropertyRow = ({ property, isFormer = false, isSelected, onSelect }) => {
     >
       <IconTile icon={Building2} tone={isSelected ? 'accent' : 'mute'} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-card font-semibold text-ink">{property.displayName}</span>
-        <span className="text-sub text-ink-3">
+        <span className="block whitespace-nowrap text-card font-semibold text-ink">{unitLabel}</span>
+        {complexName && <span className="block truncate text-sub text-ink-2">{complexName}</span>}
+        <span className="block text-sub text-ink-3">
           {count !== null && (
             <>
               문서 <Count>{count}</Count> ·{' '}
