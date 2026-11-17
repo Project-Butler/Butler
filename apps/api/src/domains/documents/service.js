@@ -191,12 +191,13 @@ export const findDocumentForUser = async (user, documentId) => toDocumentRespons
 
 // 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부, 그리고 OWNERSHIP·CONTRACT에 붙은 문서는 종류와 상관없이 감사 로그에 남긴다.
 // actor: 요청자({ id, role }) 또는 null(로그인 없는 초대 열람 등 → 감사 로그 actorType SYSTEM). req는 requestId·ip용(선택).
+// purpose: VIEW(기본) | THUMBNAIL(사진 썸네일은 감사하지 않음, fileRules.isAuditedDownload).
 // 돌려주는 값: { url, expiresAt(ISO 문자열) }. 저장소를 못 쓰면 503 STORAGE_UNAVAILABLE.
-export const createDocumentDownloadUrl = async (document, { actor = null, req } = {}) => {
+export const createDocumentDownloadUrl = async (document, { actor = null, req, purpose = 'VIEW' } = {}) => {
   const storage = requireStorage();
   const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
-  if (isAuditedDownload(document)) {
+  if (isAuditedDownload(document, { purpose })) {
     await audit.record({
       actor,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',
@@ -210,8 +211,8 @@ export const createDocumentDownloadUrl = async (document, { actor = null, req } 
 };
 
 // POST /documents/:documentId/download-url — 5분 유효.
-export const issueDownloadUrl = async (user, documentId, req) =>
-  createDocumentDownloadUrl(await findVisibleDocument(user, documentId), { actor: user, req });
+export const issueDownloadUrl = async (user, documentId, req, { purpose = 'VIEW' } = {}) =>
+  createDocumentDownloadUrl(await findVisibleDocument(user, documentId), { actor: user, req, purpose });
 
 // 초대 화면(로그인 전 본인 확인 뒤)에서 쓰는 조회: 그 초대에 공유됐고, 숨기지 않았고, 그 계약에 붙은 문서만 돌려준다(없으면 null).
 // 사용자 권한은 보지 않는다 — 초대·확인 세션 검사는 부르는 쪽(tenantInvitations)이 먼저 한다.

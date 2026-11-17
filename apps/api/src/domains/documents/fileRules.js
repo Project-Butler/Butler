@@ -1,4 +1,6 @@
 // 파일·문서 규칙(DB 의존 없음). 계약 6장 "파일 · 문서".
+import { assertAllowedBody, throwIfInvalid } from '../../platform/requestValidation.js';
+
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_FILE_NAME_LENGTH = 255;
 // 관리 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
@@ -24,9 +26,22 @@ export const CONTRACT_DOCUMENT_TYPES = ['CONTRACT_DOCUMENT', 'LEASE_REPORT', 'RE
 export const AUDITED_DOWNLOAD_TYPES = ['CONTRACT_DOCUMENT', 'REGISTRY_CERTIFICATE'];
 // 서류함에 들어가는 리소스에 붙은 문서는 종류와 상관없이 감사한다.
 export const AUDITED_DOWNLOAD_RESOURCE_TYPES = ['OWNERSHIP', 'CONTRACT'];
-// document: { type, resourceType }(Prisma Document 행 또는 같은 모양)
-export const isAuditedDownload = ({ type, resourceType }) =>
-  AUDITED_DOWNLOAD_TYPES.includes(type) || AUDITED_DOWNLOAD_RESOURCE_TYPES.includes(resourceType);
+// 다운로드 주소를 받는 목적. VIEW(기본): 문서를 열기·크게 보기·저장. THUMBNAIL: 목록의 사진 썸네일.
+export const DOWNLOAD_PURPOSES = ['VIEW', 'THUMBNAIL'];
+// document: { type, resourceType, mimeType }(Prisma Document 행 또는 같은 모양)
+// 사진의 썸네일 주소는 감사하지 않는다(문서를 연 것이 아니라 목록을 본 것). 사진이 아닌 문서는 썸네일이라 해도 감사한다.
+export const isAuditedDownload = ({ type, resourceType, mimeType }, { purpose = 'VIEW' } = {}) => {
+  if (purpose === 'THUMBNAIL' && typeof mimeType === 'string' && mimeType.startsWith('image/')) return false;
+  return AUDITED_DOWNLOAD_TYPES.includes(type) || AUDITED_DOWNLOAD_RESOURCE_TYPES.includes(resourceType);
+};
+// POST …/download-url 바디: 없거나 {}면 VIEW, { purpose }만 받는다.
+export const parseDownloadUrlBody = (body) => {
+  const value = body ?? {};
+  assertAllowedBody(value, ['purpose']);
+  if (value.purpose === undefined) return { purpose: 'VIEW' };
+  throwIfInvalid(DOWNLOAD_PURPOSES.includes(value.purpose) ? [] : [{ field: 'purpose', reason: 'VIEW 또는 THUMBNAIL이어야 합니다.' }]);
+  return { purpose: value.purpose };
+};
 // 계약 6장의 resourceType 목록. 권한 확인은 resourcePolicies.js에 구현된 것만 받는다.
 export const DOCUMENT_RESOURCE_TYPES = ['PROPERTY', 'OWNERSHIP', 'CONTRACT', 'TICKET', 'MANAGEMENT_LOG', 'THREAD_MESSAGE'];
 

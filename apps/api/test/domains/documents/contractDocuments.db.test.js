@@ -184,6 +184,27 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal((await listContractDocuments(landlord, contract)).body.data.length, 0);
   });
 
+  test('사진 썸네일 주소(purpose THUMBNAIL)는 감사하지 않고, 열기(VIEW)와 PDF는 감사한다. 잘못된 purpose는 400', async () => {
+    const landlord = await createUser();
+    const { contract } = await createContract(landlord);
+    const photo = await insertAttachedDocument(landlord, contract);
+    await prisma.document.update({ where: { id: photo.id }, data: { mimeType: 'image/jpeg', type: 'MOVE_PHOTO' } });
+    const pdf = await insertAttachedDocument(landlord, contract);
+    const auditCount = (documentId) => prisma.auditLog.count({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: documentId } });
+
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'THUMBNAIL' })).status, 200);
+    assert.equal(await auditCount(photo.id), 0);
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'VIEW' })).status, 200);
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, {})).status, 200);
+    assert.equal(await auditCount(photo.id), 2);
+    assert.equal((await postJson(landlord, `/documents/${pdf.id}/download-url`, { purpose: 'THUMBNAIL' })).status, 200);
+    assert.equal(await auditCount(pdf.id), 1);
+
+    const invalid = await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'PREVIEW' });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error.code, 'VALIDATION_ERROR');
+  });
+
   test('이전 소유자는 보기만 한다(올리기 422 CONTRACT_READ_ONLY)', async () => {
     const landlord = await createUser();
     const { contract } = await createContract(landlord);

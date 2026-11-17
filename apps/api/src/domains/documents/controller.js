@@ -16,6 +16,7 @@ import {
   isAllowedMimeType,
   MAX_FILE_BYTES,
   MAX_FILE_NAME_LENGTH,
+  parseDownloadUrlBody,
 } from './fileRules.js';
 import { findPropertyDocumentBox } from './documentBox.js';
 import { SUPPORTED_RESOURCE_TYPES } from './resourcePolicies.js';
@@ -200,7 +201,8 @@ export const postDownloadUrl = async (req, res, next) => {
   try {
     const { documentId } = req.params;
     if (!isUuid(documentId)) throwDocumentNotFound();
-    sendData(res, await issueDownloadUrl(req.user, documentId, req));
+    const { purpose } = parseDownloadUrlBody(req.body);
+    sendData(res, await issueDownloadUrl(req.user, documentId, req, { purpose }));
   } catch (error) {
     next(error);
   }

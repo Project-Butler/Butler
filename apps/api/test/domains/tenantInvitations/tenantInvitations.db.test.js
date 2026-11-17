@@ -428,6 +428,19 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal(tenant.role, 'TENANT');
   });
 
+  test('V-03: 공유 사진의 썸네일 주소(purpose THUMBNAIL)는 감사하지 않고, 크게 보기(VIEW)는 감사한다', async () => {
+    const { token, iv, docs } = await issueAndVerify({ documents: 1 });
+    await prisma.document.update({ where: { id: docs[0].id }, data: { mimeType: 'image/jpeg', type: 'MOVE_PHOTO' } });
+    const cookies = [`bt_iv=${iv}`];
+    const path = `/tenant-invitations/${token}/documents/${docs[0].id}/download-url`;
+    const auditCount = () => prisma.auditLog.count({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: docs[0].id } });
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'THUMBNAIL' } })).status, 200);
+    assert.equal(await auditCount(), 0);
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'VIEW' } })).status, 200);
+    assert.equal(await auditCount(), 1);
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'ALL' } })).status, 400);
+  });
+
   test('V-03: 공유한 문서만 5분 주소, 감사 actor 없음·invitationId 기록', async () => {
     const { landlord, contract, token, iv, invitationId, docs } = await issueAndVerify({ documents: 1 });
     const notShared = await createDocument(landlord, contract.id);

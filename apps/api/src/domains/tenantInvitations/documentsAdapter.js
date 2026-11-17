@@ -30,13 +30,14 @@ export const toSharedDocumentResponse = (document) => ({
 });
 
 // 5분 서명 주소. 계약서·등기부·계약에 붙은 문서는 actor 없이(로그인 전 열람) invitationId를 summary에 남긴다.
-export const issueSharedDocumentDownloadUrl = async (client, { invitation, document, req }) => {
+// purpose THUMBNAIL(사진 격자 썸네일)은 감사하지 않는다(fileRules.isAuditedDownload).
+export const issueSharedDocumentDownloadUrl = async (client, { invitation, document, req, purpose = 'VIEW' }) => {
   const storage = selectStorage();
   if (!storage) throw new AppError('STORAGE_UNAVAILABLE', 503, '사진·문서 첨부를 준비 중입니다. 잠시 후 다시 시도해 주세요.');
   const expiresAt = new Date(getNow().getTime() + INVITATION_DOWNLOAD_URL_TTL_MS);
   // Supabase 드라이버는 비동기라 기다린다(local은 바로 값을 준다).
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
-  if (isAuditedDownload(document)) {
+  if (isAuditedDownload(document, { purpose })) {
     await audit.record({
       actor: null,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',

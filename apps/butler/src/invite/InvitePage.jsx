@@ -123,7 +123,7 @@ export const InvitePage = ({ token }) => {
     };
   }, [token, role, reloadCount, flags.joined, loadContract]);
 
-  const fetchDocumentUrl = useCallback((documentId) => postTenantInvitationDocumentDownloadUrl(token, documentId), [token]);
+  const fetchDocumentUrl = useCallback((documentId, options) => postTenantInvitationDocumentDownloadUrl(token, documentId, options), [token]);
 
   // B1 [계약서 확인하기]: 확인 세션이 아직 살아 있으면(30분) B2 를 건너뛴다.
   const handleContinue = async () => {

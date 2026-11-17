@@ -26,6 +26,7 @@ import {
 const INVITE_VALID_DAYS = 7;
 
 // 사진 썸네일 주소(5분 유효). 방금 올린 사진은 내 컴퓨터 주소(localUrls)를 쓰고, 나머지만 서버에서 받는다.
+// 썸네일이라 purpose THUMBNAIL로 받아 감사 로그를 남기지 않는다([크게 보기]는 감사).
 const useDocumentImageUrls = (documents, localUrls, onUnauthorized) => {
   const [fetched, setFetched] = useState({});
   const requested = useRef(new Set());
@@ -34,7 +35,7 @@ const useDocumentImageUrls = (documents, localUrls, onUnauthorized) => {
     for (const document of documents) {
       if (!isContractPhoto(document.mimeType) || localUrls[document.id] || requested.current.has(document.id)) continue;
       requested.current.add(document.id);
-      postDocumentDownloadUrl(document.id)
+      postDocumentDownloadUrl(document.id, { purpose: 'THUMBNAIL' })
         .then((issued) => setFetched((prev) => ({ ...prev, [document.id]: issued.url })))
         .catch((error) => {
           if (isUnauthorizedError(error)) onUnauthorized?.();
