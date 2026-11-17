@@ -186,7 +186,7 @@ describe('DocumentBoxPage (문서함)', () => {
     });
     const { onNavigate } = renderPage();
     expect(await screen.findByText('권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('권리자 인증 후 문서를 올릴 수 있어요');
+    expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('권리자 인증 후 내 소유 문서를 올릴 수 있어요');
     expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '인증하기' }));
     expect(onNavigate).toHaveBeenCalledWith('propertyVerify', { propertyId: 'p1', fromDetail: true });

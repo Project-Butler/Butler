@@ -161,9 +161,9 @@ describe('표기', () => {
     expect(describePropertyRow(verified)).toEqual({ count: null, text: '문서 없음 · 계약서를 올려 두세요' });
     expect(describePropertyRow({ ...verified, myRelation: { verificationStatus: 'UNVERIFIED' } })).toEqual({
       count: null,
-      text: '권리자 인증 후 문서를 올릴 수 있어요',
+      text: '권리자 인증 후 내 소유 문서를 올릴 수 있어요',
     });
-    expect(describePropertyRow({ ...verified, myRelation: { verificationStatus: 'EXPIRED' } }).text).toBe('권리자 인증 후 문서를 올릴 수 있어요');
+    expect(describePropertyRow({ ...verified, myRelation: { verificationStatus: 'EXPIRED' } }).text).toBe('권리자 인증 후 내 소유 문서를 올릴 수 있어요');
     expect(describePropertyRow({ ...verified, documentCount: 2 }, { isFormer: true })).toEqual({ count: 2, text: '소유 종료' });
   });
 });

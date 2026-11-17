@@ -127,7 +127,7 @@ export const isSharedLockedDocument = (document, { userId, contract } = {}) =>
 // 왼쪽 호실 줄 보조 문구: { count(숫자 글꼴로 그릴 문서 수, 없으면 null), text }
 //  - 예전 호실: 문서 n · 소유 종료
 //  - 문서가 있으면: 문서 n · 계약 중/계약 대기/공실
-//  - 문서가 없으면: 인증된 호실은 올리기 안내, 미인증·만료 호실은 인증 안내(D-C)
+//  - 문서가 없으면: 인증된 호실은 올리기 안내, 미인증·만료 호실은 인증 안내(D-C). 계약 문서는 인증 없이도 올릴 수 있어 "내 소유 문서"로 범위를 밝힌다
 const PROPERTY_STATE_TEXT = { LEASED: '계약 중', CONTRACT_PENDING: '계약 대기', VACANT: '공실' };
 
 // 좁은 목록의 호실 이름: 동·호(구별 정보, 자르지 않음)와 단지명(말줄임)을 나눈다.
@@ -141,7 +141,7 @@ export const describePropertyRow = (property, { isFormer = false } = {}) => {
   const count = property.documentCount ?? 0;
   if (isFormer) return { count, text: '소유 종료' };
   if (count > 0) return { count, text: PROPERTY_STATE_TEXT[property.status] ?? PROPERTY_STATE_TEXT.VACANT };
-  if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 문서를 올릴 수 있어요' };
+  if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 내 소유 문서를 올릴 수 있어요' };
   return { count: null, text: '문서 없음 · 계약서를 올려 두세요' };
 };
 
