@@ -29,6 +29,7 @@ export const ROUTE_TABLE = [
   { key: 'logEdit', path: '/logs/:logId/edit' },
   { key: 'logDetail', path: '/logs/:logId' },
   { key: 'propertyLogRegister', path: '/properties/:propertyId/logs/new' },
+  { key: 'documents', path: '/documents' },
   { key: 'setup', path: '/setup' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
@@ -104,6 +105,8 @@ const BUILDERS = {
     pathname: `/properties/${propertyId}/logs/new`,
     state: fromPage ? { fromPage } : undefined,
   }),
+  // 서류함. 고른 호실(propertyId)은 주소에 남긴다. 없으면 화면이 첫 호실을 골라 주소를 바꾼다.
+  documents: ({ propertyId } = {}) => ({ pathname: '/documents', search: propertyId ? `?propertyId=${propertyId}` : '' }),
   setup: () => ({ pathname: '/setup' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),

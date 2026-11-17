@@ -63,6 +63,21 @@ describe('TenantInviteModal (임차인 초대 팝업)', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
+  it('사진 썸네일 주소는 THUMBNAIL로 받는다(감사 로그를 남기지 않음)', async () => {
+    api.getDocumentList.mockResolvedValue({ data: [{ id: 'photo-1', fileName: '입주사진.jpg', mimeType: 'image/jpeg' }], meta: {} });
+    render(<TenantInviteModal contract={contract} onClose={vi.fn()} />);
+    await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledWith('photo-1', { purpose: 'THUMBNAIL' }));
+  });
+
+  it('사진을 [크게 보기]로 열면 VIEW 주소를 새로 받는다(감사 대상)', async () => {
+    api.getDocumentList.mockResolvedValue({ data: [{ id: 'photo-1', fileName: '입주사진.jpg', mimeType: 'image/jpeg' }], meta: {} });
+    render(<TenantInviteModal contract={contract} onClose={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('checkbox', { name: '입주사진.jpg' }));
+    const bigButtons = screen.getAllByRole('button', { name: '크게 보기' });
+    await userEvent.click(bigButtons[bigButtons.length - 1]);
+    await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledWith('photo-1'));
+  });
+
   it('[링크 만들기] → A3 링크 복사 안내', async () => {
     api.getDocumentList.mockResolvedValue({ data: pdfs(2), meta: {} });
     api.postTenantInvitation.mockResolvedValue({

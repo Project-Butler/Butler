@@ -28,9 +28,9 @@ export const SharedDocuments = ({ documents, fetchUrl, variant = 'inline', title
   const [openError, setOpenError] = useState('');
   const { load } = urls;
 
-  // 격자 썸네일 주소. 뷰어를 열면 그때 다시 새 주소를 확인한다.
+  // 격자 썸네일 주소(THUMBNAIL — 감사하지 않음). 뷰어로 크게 볼 때 VIEW 주소를 새로 받아 감사한다.
   useEffect(() => {
-    photos.forEach((photo) => load(photo.id));
+    photos.forEach((photo) => load(photo.id, { purpose: 'THUMBNAIL' }));
   }, [photos, load]);
 
   const openFile = async (document) => {

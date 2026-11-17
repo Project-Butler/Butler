@@ -36,6 +36,23 @@ export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, 
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [total]);
 
+  // 크게 본 사진은 VIEW 주소를 새로 받는다(감사 1줄). 받기 전에는 썸네일 주소로 먼저 보여 준다.
+  // 방금 올린 사진(내 컴퓨터 blob: 주소)은 서버에 묻지 않는다.
+  const [viewUrls, setViewUrls] = useState({});
+  const requestedViews = useRef(new Set());
+  const currentId = current?.id;
+  const currentIsPhoto = current ? isContractPhoto(current.mimeType) : false;
+  const currentIsLocal = currentId ? String(imageUrls[currentId] ?? '').startsWith('blob:') : false;
+  useEffect(() => {
+    if (!currentId || !currentIsPhoto || currentIsLocal || requestedViews.current.has(currentId)) return;
+    requestedViews.current.add(currentId);
+    postDocumentDownloadUrl(currentId)
+      .then((issued) => setViewUrls((prev) => ({ ...prev, [currentId]: issued.url })))
+      .catch((error) => {
+        if (isUnauthorizedError(error)) onUnauthorized?.();
+      });
+  }, [currentId, currentIsPhoto, currentIsLocal, onUnauthorized]);
+
   // 응답을 기다린 뒤 창을 열면 팝업 차단에 걸려서 빈 창을 먼저 열고 주소를 넣는다(DocumentThumbnail과 같다).
   const openOriginal = async () => {
     const opened = window.open('', '_blank');
@@ -52,7 +69,7 @@ export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, 
 
   if (!current) return null;
   const isPhoto = isContractPhoto(current.mimeType);
-  const imageUrl = imageUrls[current.id];
+  const imageUrl = viewUrls[current.id] ?? imageUrls[current.id];
 
   return (
     <div

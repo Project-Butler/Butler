@@ -8,6 +8,7 @@ import { prisma } from '../../platform/prismaClient.js';
 import { resolveMyRelation, toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
 import { computePropertyStatus } from '../../platform/propertyStatus.js';
 import { LISTING_FIELDS, toListing } from '../../platform/unitListing.js';
+import { countDocumentBoxDocuments } from '../documents/documentBox.js';
 import { countActiveUnitsInComplex, lockLandlordBuilding } from '../landlordBuildings/unitCounts.js';
 
 // 호실 상태 계산(computePropertyStatus)에 필요한 계약 칸.
@@ -342,10 +343,21 @@ const findTenantProperties = async (user, { page, size, complexId }) => {
   return { items, meta: toPageMeta(page, size, total) };
 };
 
+// 서류함 문서 수. 그 호실의 내 소유 관계 전부(종료 포함)와 그 계약 기준이라 재등록한 호실도 서류함과 같다.
+const withDocumentCounts = async (user, result) => {
+  if (result.items.length === 0) return result;
+  const ownerships = await prisma.ownership.findMany({
+    where: { userId: user.id, propertyId: { in: result.items.map((item) => item.id) } },
+    select: { id: true, propertyId: true, contracts: { select: { id: true } } },
+  });
+  const counts = await countDocumentBoxDocuments(user, ownerships);
+  return { ...result, items: result.items.map((item) => ({ ...item, documentCount: counts.get(item.id) ?? 0 })) };
+};
+
 export const findMyProperties = async (user, { relation, ...query }) => {
-  if (relation === 'FORMER_OWNER') return findFormerOwnerProperties(user, query);
+  if (relation === 'FORMER_OWNER') return withDocumentCounts(user, await findFormerOwnerProperties(user, query));
   if (relation === 'TENANT') return findTenantProperties(user, query);
-  return findOwnerProperties(user, query);
+  return withDocumentCounts(user, await findOwnerProperties(user, query));
 };
 
 // 없거나 관계가 없으면 null → controller가 404 PROPERTY_NOT_FOUND.

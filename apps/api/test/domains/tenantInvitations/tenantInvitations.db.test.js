@@ -428,6 +428,19 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     assert.equal(tenant.role, 'TENANT');
   });
 
+  test('V-03: 공유 사진의 썸네일 주소(purpose THUMBNAIL)는 감사하지 않고, 크게 보기(VIEW)는 감사한다', async () => {
+    const { token, iv, docs } = await issueAndVerify({ documents: 1 });
+    await prisma.document.update({ where: { id: docs[0].id }, data: { mimeType: 'image/jpeg', type: 'MOVE_PHOTO' } });
+    const cookies = [`bt_iv=${iv}`];
+    const path = `/tenant-invitations/${token}/documents/${docs[0].id}/download-url`;
+    const auditCount = () => prisma.auditLog.count({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: docs[0].id } });
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'THUMBNAIL' } })).status, 200);
+    assert.equal(await auditCount(), 0);
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'VIEW' } })).status, 200);
+    assert.equal(await auditCount(), 1);
+    assert.equal((await api(path, { method: 'POST', cookies, body: { purpose: 'ALL' } })).status, 400);
+  });
+
   test('V-03: 공유한 문서만 5분 주소, 감사 actor 없음·invitationId 기록', async () => {
     const { landlord, contract, token, iv, invitationId, docs } = await issueAndVerify({ documents: 1 });
     const notShared = await createDocument(landlord, contract.id);
@@ -449,6 +462,17 @@ describe('임차인 초대 API', { skip: dbTestSkip }, () => {
     }
     await prisma.document.update({ where: { id: docs[0].id }, data: { deletedAt: new Date() } });
     assert.equal((await api(`/tenant-invitations/${token}/documents/${docs[0].id}/download-url`, { method: 'POST', cookies })).status, 404);
+  });
+
+  test('C-2 V-03 감사: 종류와 상관없이 계약에 붙은 공유 문서(RECEIPT)도 감사 1줄(SYSTEM, invitationId)', async () => {
+    const { token, iv, invitationId, docs } = await issueAndVerify({ documents: 1 });
+    await prisma.document.update({ where: { id: docs[0].id }, data: { type: 'RECEIPT' } });
+    const issued = await api(`/tenant-invitations/${token}/documents/${docs[0].id}/download-url`, { method: 'POST', cookies: [`bt_iv=${iv}`] });
+    assert.equal(issued.status, 200);
+    const rows = await prisma.auditLog.findMany({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: docs[0].id } });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].actorType, 'SYSTEM');
+    assert.ok(rows[0].summary.includes(`invitationId=${invitationId}`));
   });
 
   test('수락: TENANT만, 계약 연결·ACCEPTED·알림·감사·세션 폐기·쿠키 삭제, 링크 재사용 거절', async () => {

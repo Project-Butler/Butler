@@ -3,6 +3,7 @@ import { AppError } from '../../platform/AppError.js';
 import { assertAllowedBody, throwIfInvalid } from '../../platform/requestValidation.js';
 import { sendData } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
+import { parseDownloadUrlBody } from '../documents/fileRules.js';
 import { MAX_SHARED_DOCUMENTS, isPhoneLast4Format } from './rules.js';
 import {
   acceptInvitation,
@@ -120,7 +121,8 @@ export const getTenantInvitationContract = async (req, res, next) => {
 export const postTenantInvitationDocumentDownloadUrl = async (req, res, next) => {
   try {
     const { token, documentId } = req.params;
-    sendData(res, await issueInvitationDocumentDownloadUrl(token, documentId, req, { isValidDocumentId: isUuid(documentId) }));
+    const { purpose } = parseDownloadUrlBody(req.body);
+    sendData(res, await issueInvitationDocumentDownloadUrl(token, documentId, req, { isValidDocumentId: isUuid(documentId), purpose }));
   } catch (error) {
     next(error);
   }

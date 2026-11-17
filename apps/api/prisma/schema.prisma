@@ -686,7 +686,7 @@ model Upload {
   fileName    String    @map("file_name")
   mimeType    String    @map("mime_type") // JPEG, PNG, WEBP, HEIC, PDF
   sizeBytes   BigInt    @map("size_bytes") // 최대 20MB
-  // documentType(CONTRACT_DOCUMENT, REGISTRY_CERTIFICATE, PHOTO, OTHER). 등록형 문자열.
+  // documentType(CONTRACT_DOCUMENT, REGISTRY_CERTIFICATE, PHOTO, OTHER, SALE_CONTRACT, INSURANCE, LEASE_REPORT, RECEIPT, MOVE_PHOTO). 등록형 문자열.
   type        String    @db.VarChar(40)
   storagePath String    @map("storage_path")
   expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)

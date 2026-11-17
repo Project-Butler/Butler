@@ -147,12 +147,12 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
   const listContractDocuments = (user, contract) => getJson(user, `/documents?resourceType=CONTRACT&resourceId=${contract.id}`);
 
   // 올리고 계약에 붙인다. 등록 응답(status·body)을 그대로 돌려준다.
-  const uploadToContract = async (user, contract) => {
+  const uploadToContract = async (user, contract, documentType = 'CONTRACT_DOCUMENT') => {
     const session = await postJson(user, '/files/upload-sessions', {
       fileName: '계약서.pdf',
       mimeType: 'application/pdf',
       sizeBytes: PDF.length,
-      documentType: 'CONTRACT_DOCUMENT',
+      documentType,
     });
     assert.equal(session.status, 201);
     const put = await fetch(`${origin}${session.body.data.uploadUrl}`, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: PDF });
@@ -184,6 +184,27 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal((await listContractDocuments(landlord, contract)).body.data.length, 0);
   });
 
+  test('사진 썸네일 주소(purpose THUMBNAIL)는 감사하지 않고, 열기(VIEW)와 PDF는 감사한다. 잘못된 purpose는 400', async () => {
+    const landlord = await createUser();
+    const { contract } = await createContract(landlord);
+    const photo = await insertAttachedDocument(landlord, contract);
+    await prisma.document.update({ where: { id: photo.id }, data: { mimeType: 'image/jpeg', type: 'MOVE_PHOTO' } });
+    const pdf = await insertAttachedDocument(landlord, contract);
+    const auditCount = (documentId) => prisma.auditLog.count({ where: { action: 'DOCUMENT_DOWNLOAD_URL_ISSUED', resourceId: documentId } });
+
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'THUMBNAIL' })).status, 200);
+    assert.equal(await auditCount(photo.id), 0);
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'VIEW' })).status, 200);
+    assert.equal((await postJson(landlord, `/documents/${photo.id}/download-url`, {})).status, 200);
+    assert.equal(await auditCount(photo.id), 2);
+    assert.equal((await postJson(landlord, `/documents/${pdf.id}/download-url`, { purpose: 'THUMBNAIL' })).status, 200);
+    assert.equal(await auditCount(pdf.id), 1);
+
+    const invalid = await postJson(landlord, `/documents/${photo.id}/download-url`, { purpose: 'PREVIEW' });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error.code, 'VALIDATION_ERROR');
+  });
+
   test('이전 소유자는 보기만 한다(올리기 422 CONTRACT_READ_ONLY)', async () => {
     const landlord = await createUser();
     const { contract } = await createContract(landlord);
@@ -204,13 +225,91 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal(deleted.body.error.code, 'CONTRACT_READ_ONLY');
   });
 
-  test('만료된 계약에는 올릴 수 없다(422 CONTRACT_READ_ONLY)', async () => {
+  test('계약에는 허용된 서류 종류만 올린다(권한 검사가 먼저)', async () => {
+    const landlord = await createUser();
+    const { contract } = await createContract(landlord);
+    for (const type of ['CONTRACT_DOCUMENT', 'MOVE_PHOTO', 'LEASE_REPORT', 'RECEIPT', 'OTHER']) {
+      assert.equal((await uploadToContract(landlord, contract, type)).status, 201, type);
+    }
+    const rejected = await uploadToContract(landlord, contract, 'SALE_CONTRACT');
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.body.error.code, 'DOCUMENT_TYPE_NOT_ALLOWED');
+
+    // 남의 계약에는 허용되지 않은 종류여도 종류 422가 아니라 404다.
+    const stranger = await createUser();
+    const hidden = await uploadToContract(stranger, contract, 'SALE_CONTRACT');
+    assert.equal(hidden.status, 404);
+    assert.equal(hidden.body.error.code, 'CONTRACT_NOT_FOUND');
+  });
+
+  test('만료된 계약에도 활성 소유자는 올린다(201)', async () => {
     const landlord = await createUser();
     const { contract } = await createContract(landlord, { period: 'EXPIRED' });
-    const rejected = await uploadToContract(landlord, contract);
-    assert.equal(rejected.status, 422);
-    assert.equal(rejected.body.error.code, 'CONTRACT_READ_ONLY');
+    const registered = await uploadToContract(landlord, contract, 'MOVE_PHOTO');
+    assert.equal(registered.status, 201, JSON.stringify(registered.body));
     assert.equal((await listContractDocuments(landlord, contract)).status, 200);
+  });
+
+  test('해지된 계약·인증 만료 소유자도 올리고, 공유 안 된 문서는 지운다(D-B·D-F)', async () => {
+    const landlord = await createUser();
+    const { contract, ownership } = await createContract(landlord);
+    await prisma.contract.update({ where: { id: contract.id }, data: { terminatedOn: dbDate(-1) } });
+    await prisma.ownership.update({
+      where: { id: ownership.id },
+      data: { verificationStatus: 'VERIFIED', verifiedAt: dbDate(-800), verificationExpiresAt: dbDate(-1) },
+    });
+    const registered = await uploadToContract(landlord, contract, 'RECEIPT');
+    assert.equal(registered.status, 201, JSON.stringify(registered.body));
+    const deleted = await json(await api(landlord, `/documents/${registered.body.data.id}`, { method: 'DELETE' }));
+    assert.equal(deleted.status, 204);
+  });
+
+  test('끝난 계약에서 수락한 초대로 공유된 문서는 못 지우고, 그 밖의 문서는 지운다(D-E)', async () => {
+    const landlord = await createUser();
+    const tenant = await createUser('TENANT');
+    for (const ended of ['EXPIRED', 'TERMINATED']) {
+      const { contract } = await createContract(landlord, { period: ended === 'EXPIRED' ? 'EXPIRED' : 'ACTIVE', tenantId: tenant.id });
+      if (ended === 'TERMINATED') await prisma.contract.update({ where: { id: contract.id }, data: { terminatedOn: dbDate(-1) } });
+      const accepted = await insertAttachedDocument(landlord, contract);
+      const pendingOnly = await insertAttachedDocument(landlord, contract);
+      const canceledOnly = await insertAttachedDocument(landlord, contract);
+      const unshared = await insertAttachedDocument(landlord, contract);
+      await shareInvitation(contract, landlord, [accepted.id], { acceptedBy: tenant.id });
+      await shareInvitation(contract, landlord, [pendingOnly.id], { status: 'PENDING' });
+      await shareInvitation(contract, landlord, [canceledOnly.id], { status: 'CANCELED' });
+
+      const rejected = await json(await api(landlord, `/documents/${accepted.id}`, { method: 'DELETE' }));
+      assert.equal(rejected.status, 422, ended);
+      assert.equal(rejected.body.error.code, 'DOCUMENT_NOT_DELETABLE');
+      for (const document of [pendingOnly, canceledOnly, unshared]) {
+        assert.equal((await json(await api(landlord, `/documents/${document.id}`, { method: 'DELETE' }))).status, 204, ended);
+      }
+      // 임차인 열람은 그대로: 공유된 문서만 보인다.
+      assert.deepEqual((await listContractDocuments(tenant, contract)).body.data.map((item) => item.id), [accepted.id]);
+    }
+  });
+
+  test('진행 중 계약의 공유 문서 삭제는 그대로 된다(#110)', async () => {
+    const landlord = await createUser();
+    const tenant = await createUser('TENANT');
+    const { contract } = await createContract(landlord, { tenantId: tenant.id });
+    const shared = await insertAttachedDocument(landlord, contract);
+    await shareInvitation(contract, landlord, [shared.id], { acceptedBy: tenant.id });
+    assert.equal((await json(await api(landlord, `/documents/${shared.id}`, { method: 'DELETE' }))).status, 204);
+  });
+
+  test('만료 계약에 새로 올린 문서는 임차인에게 안 보이고, 임차인은 올리거나 지울 수 없다', async () => {
+    const landlord = await createUser();
+    const tenant = await createUser('TENANT');
+    const { contract } = await createContract(landlord, { period: 'EXPIRED', tenantId: tenant.id });
+    const registered = await uploadToContract(landlord, contract);
+    assert.equal(registered.status, 201);
+    assert.equal((await listContractDocuments(tenant, contract)).body.data.length, 0);
+    const upload = await uploadToContract(tenant, contract);
+    assert.equal(upload.status, 403);
+    assert.equal(upload.body.error.code, 'FORBIDDEN_ROLE');
+    const deleted = await json(await api(tenant, `/documents/${registered.body.data.id}`, { method: 'DELETE' }));
+    assert.equal(deleted.status, 404);
   });
 
   test('연결된 임차인은 수락한 초대로 공유받은 문서만 보고, 올릴 수 없다(403)', async () => {
