@@ -171,14 +171,18 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
 
       <SetupCard setup={setup} onNavigate={onNavigate} />
 
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard
-          label="총 보증금"
-          value={contractTotal != null ? formatNumber(depositSum) : '—'}
-          unit="원"
-          hint={depositHint}
-          hintTone={liveContracts.error ? 'crit' : isContractCapped ? 'warn' : 'neutral'}
-        />
+      {/* KPI 4칸(design.md §6): 총 보증금(넓게) · 보유 부동산 · 계약 중 · 권리자 인증.
+          총 보증금은 억 단위 11~14자리라 1024px에서도 넘치지 않게 2칸을 준다. */}
+      <div className="grid grid-cols-5 gap-4">
+        <div className="col-span-2">
+          <StatCard
+            label="총 보증금"
+            value={contractTotal != null ? formatNumber(depositSum) : '—'}
+            unit="원"
+            hint={depositHint}
+            hintTone={liveContracts.error ? 'crit' : isContractCapped ? 'warn' : 'neutral'}
+          />
+        </div>
         <StatCard
           label="보유 부동산"
           value={propertyTotal ?? '—'}
@@ -198,6 +202,13 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
           unit="건"
           hint={contractTotal != null ? `종료 임박 ${expiringContracts.length}건` : undefined}
           hintTone={expiringContracts.length > 0 ? 'warn' : 'neutral'}
+        />
+        <StatCard
+          label="권리자 인증"
+          value={verification.verified ?? '—'}
+          unit={verification.total != null ? `/ ${verification.total}` : undefined}
+          hint={verificationHint.hint}
+          hintTone={verificationHint.tone}
         />
       </div>
 
@@ -354,16 +365,6 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         </Card>
 
         <RecentLogsCard onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
-      </div>
-
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          label="권리자 인증"
-          value={verification.verified ?? '—'}
-          unit={verification.total != null ? `/ ${verification.total}` : undefined}
-          hint={verificationHint.hint}
-          hintTone={verificationHint.tone}
-        />
       </div>
     </div>
   );
