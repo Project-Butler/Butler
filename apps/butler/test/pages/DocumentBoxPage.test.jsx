@@ -218,12 +218,13 @@ describe('DocumentBoxPage (문서함)', () => {
     await userEvent.click(screen.getByRole('button', { name: '등기부.pdf 더 보기' }));
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
     const dialog = screen.getByRole('dialog', { name: '문서를 삭제할까요?' });
+    expect(within(dialog).getByText('삭제하면 되돌릴 수 없어요.')).toHaveClass('text-crit-ink');
     api.deleteDocument.mockRejectedValueOnce(apiError(422, 'DOCUMENT_NOT_DELETABLE', '지울 수 없는 문서입니다.'));
-    await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '삭제하기' }));
     expect(await within(dialog).findByText('지울 수 없는 문서입니다.')).toBeInTheDocument();
     api.deleteDocument.mockResolvedValueOnce(undefined);
     const callsBefore = api.getPropertyDocumentBox.mock.calls.length;
-    await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '삭제하기' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(api.deleteDocument).toHaveBeenCalledWith('등기부');
     await waitFor(() => expect(api.getPropertyDocumentBox.mock.calls.length).toBeGreaterThan(callsBefore));

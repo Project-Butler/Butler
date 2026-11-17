@@ -270,13 +270,14 @@ const DeleteDocumentModal = ({ doc, onClose, onDeleted, onUnauthorized }) => {
             취소
           </Button>
           <Button onClick={handleDelete} disabled={isDeleting}>
-            {isDeleting ? '삭제 중' : '삭제'}
+            {isDeleting ? '삭제 중' : '삭제하기'}
           </Button>
         </>
       }
     >
-      <p className="break-all text-body text-ink">{doc.fileName}</p>
-      <p className="mt-1 text-body text-ink-3">삭제하면 되돌릴 수 없어요.</p>
+      {/* 되돌릴 수 없는 행동이라 파일 이름을 굵게, 경고 줄을 Crit 글자로 둔다(버튼 색은 design.md 버튼 표 그대로). */}
+      <p className="break-all text-body font-semibold text-ink">{doc.fileName}</p>
+      <p className="mt-1 text-body text-crit-ink">삭제하면 되돌릴 수 없어요.</p>
       {error && <NoticeBox className="mt-4">{error.message}</NoticeBox>}
     </Modal>
   );
