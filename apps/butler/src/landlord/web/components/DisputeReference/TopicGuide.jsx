@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileCheck2, Scale, Search } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileCheck2, Scale } from 'lucide-react';
 import { DOCUMENT_GUIDE } from '../../utils/disputePortal';
 import { TYPE_LABELS } from '../../utils/disputeReference';
-import { Button } from '@butler/ui';
+import { AskAiCard } from './AskAiCard';
 import { HelpRouteCard } from './HelpRouteCard';
 import { ReferenceCard } from './ReferenceCard';
 import { SelfCheckTools } from './SelfCheckTools';
@@ -279,16 +279,7 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, on
         </ol>
       </section>
 
-      {onAsk && (
-        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
-          <Search size={20} className="text-accent" />
-          <p className="mt-2 text-card font-semibold text-ink">답을 찾지 못하셨나요?</p>
-          <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 관련 사례·판례와 도움받을 곳을 찾아 정리해 드려요.</p>
-          <Button onClick={onAsk} className="mt-4 min-h-11 px-5">
-            AI에게 물어보기
-          </Button>
-        </section>
-      )}
+      {onAsk && <AskAiCard onClick={onAsk} />}
     </>
   );
 };
