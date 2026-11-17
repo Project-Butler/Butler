@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { COMMUNITY_PATH } from '../../routes';
 import { PageHeader } from '../PageHeader/PageHeader';
 import { BuildingSwitcher } from '../CommunityBuildingSwitcher/BuildingSwitcher';
+import { NicknameButton } from '../CommunityNickname/NicknameButton';
 import { PreviewNotice } from './PreviewNotice';
 import { SectionTabs } from './SectionTabs';
 import { VerificationBadge } from './VerificationBadge';
@@ -10,7 +11,8 @@ import { VerificationBadge } from './VerificationBadge';
 // 커뮤니티 PC 페이지 틀. LandlordLayout 안의 보통 PC 페이지라
 // 상단 바·알림 종·브레드크럼은 A팀 틀이 하고, 여기는 PageHeader(건물명 · 지역 · 인증 배지 · 건물 바꾸기) + 탭 줄만 그린다.
 //
-// frame: CommunityPage 가 만든 { building, buildings, onSelectBuilding, preview, verify }
+// frame: CommunityPage 가 만든 { building, buildings, onSelectBuilding, preview, verify, nickname }
+//   nickname: 닉네임 대화상자(components/CommunityNickname/useNicknameGate) — 머리 맨 왼쪽 "닉네임 · …" 버튼이 열고, 대화상자는 이 틀이 그린다
 //   preview.reason: 이 동네 미리보기 상태(utils/communityPreview.js) · verify: 권리자 인증 화면으로(갈 호실을 모르면 없음)
 // section: 선택된 탭 · scopeText: 탭 아래 범위 안내 한 줄(목록 화면만)
 // blockedReason: 응답이 알려 준 보는 사람 자격(writeBlockedReason). 응답 전이면 미리보기 상태로 대신한다.
@@ -37,6 +39,7 @@ export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null
           description={building.regionName}
           actions={
             <>
+              {frame.nickname && <NicknameButton nickname={frame.nickname.nickname} onClick={() => frame.nickname.open()} />}
               <VerificationBadge blockedReason={reason} />
               {buildings.length > 1 && (
                 <BuildingSwitcher buildings={buildings} activeComplexId={building.complexId} onChange={selectBuilding} />
@@ -67,6 +70,7 @@ export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null
           {children}
         </>
       )}
+      {frame.nickname?.dialog}
     </div>
   );
 };

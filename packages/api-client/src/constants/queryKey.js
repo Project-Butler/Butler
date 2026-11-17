@@ -35,11 +35,13 @@ export const queryKey = {
   COMMUNITY_POLLS: 'community_polls',
   COMMUNITY_POLL_DETAIL: 'community_poll',
   COMMUNITY_NEWS: 'community_news',
+  COMMUNITY_COMPLEX_NEWS: 'community_complex_news',
+  COMMUNITY_PROFILE: 'community_profile',
   TENANT_INVITATIONS: 'tenant_invitations',
   TENANT_INVITATION_PREVIEW: 'tenant_invitation_preview',
   TENANT_INVITATION_CONTRACT: 'tenant_invitation_contract',
   NOTIFICATIONS: 'notifications',
   NOTIFICATION_UNREAD_COUNT: 'notification_unread_count',
-  // 커뮤니티 시세(지금은 화면 쪽 예시 데이터, 플랫폼 시세 API 가 생기면 같은 키로 그 응답을 담는다)
-  COMMUNITY_MARKET_PRICES: 'community_market_prices',
+  // 시세(국토교통부 실거래가, GET /market-prices/…). 커뮤니티 시세 · 브리핑이 쓴다
+  MARKET_PRICES: 'market_prices',
 };

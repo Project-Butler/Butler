@@ -4,11 +4,14 @@ import { generalRateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
   checkLegalDongCode,
+  getMyProfile,
   getPoll,
   getPost,
+  listComplexNews,
   listMyBuildings,
   listNews,
   listReports,
+  loadNewsComplex,
   listPolls,
   listPosts,
   loadComment,
@@ -24,11 +27,12 @@ import {
   postPost,
   postReport,
   postVote,
+  putMyProfile,
   removeComment,
   removePoll,
   removePost,
 } from './controller.js';
-import { requireRegionMember, requireRegionOwner } from './platformBridge.js';
+import { requireAnyRegionOwner, requireRegionMember, requireRegionOwner } from './platformBridge.js';
 
 const router = Router();
 
@@ -48,6 +52,10 @@ const memberOfPathRegion = requireRegionMember((req) => req.params.legalDongCode
 const memberOfPostRegion = requireRegionMember((req) => req.communityPost.legalDongCode);
 const ownerOfPathRegion = requireRegionOwner((req) => req.params.legalDongCode);
 const ownerOfPostRegion = requireRegionOwner((req) => req.communityPost.legalDongCode);
+
+// 내 닉네임: 커뮤니티를 읽을 수 있는 임대인(어느 동네든 호실 등록, 인증 전 포함). 글 · 댓글 · 투표 만들기는 닉네임이 있어야 한다(서비스)
+router.get('/me/profile', landlordOnly, generalRateLimiter, requireAnyRegionOwner, getMyProfile);
+router.put('/me/profile', landlordOnly, generalRateLimiter, requireAnyRegionOwner, putMyProfile);
 
 router.get('/regions/:legalDongCode/posts', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listPosts);
 router.post(
@@ -82,6 +90,9 @@ router.get('/polls/:pollId', generalRateLimiter, loadPoll, ownerOfPollRegion, ge
 
 // 뉴스: 읽기만. 수집은 cronRouter.js 의 /api/cron/community-news
 router.get('/regions/:legalDongCode/news', generalRateLimiter, checkLegalDongCode, ownerOfPathRegion, listNews);
+// 우리 단지 뉴스: 읽기 자격은 그 단지 법정동의 읽기 자격과 같다(호실을 등록한 임대인, 인증 전 포함)
+const ownerOfComplexRegion = requireRegionOwner((req) => req.communityComplex.regionId);
+router.get('/complexes/:complexId/news', generalRateLimiter, loadNewsComplex, ownerOfComplexRegion, listComplexNews);
 router.post('/polls/:pollId/votes', landlordOnly, generalRateLimiter, loadPoll, memberOfPollRegion, postVote);
 // 삭제는 등록자 본인·참여자 0명일 때만. 자격은 보지 않는다(글 삭제와 같음).
 router.delete('/polls/:pollId', landlordOnly, generalRateLimiter, loadPoll, removePoll);

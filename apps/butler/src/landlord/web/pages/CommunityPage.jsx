@@ -6,6 +6,7 @@ import { useGetMyBuildings } from '../hooks/useGetMyBuildings';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { useNicknameGate } from '../components/CommunityNickname/useNicknameGate';
 import { loadCurrentComplexId, pickCurrentBuilding, saveCurrentComplexId } from '../utils/communityCurrentBuilding';
 import { getRegionPreview } from '../utils/communityPreview';
 import { COMMUNITY_PATH } from '../routes';
@@ -128,6 +129,8 @@ const PostEditRoute = ({ building, frame }) => {
 const CommunityRoutes = ({ onNavigate }) => {
   const { data: buildings, isPending, isError, error } = useGetMyBuildings();
   const [storedComplexId, setStoredComplexId] = useState(loadCurrentComplexId);
+  // 닉네임 대화상자 — 머리 버튼 · 글쓰기 · 투표 만들기 · 댓글 등록이 같이 쓴다(frame.nickname). 미리보기 표기는 지금 고른 건물 기준
+  const nickname = useNicknameGate(buildings ? pickCurrentBuilding(buildings, storedComplexId)?.complexId : undefined);
 
   const selectBuilding = (complexId) => {
     saveCurrentComplexId(complexId);
@@ -154,7 +157,7 @@ const CommunityRoutes = ({ onNavigate }) => {
   const preview = getRegionPreview(buildings, current);
   const verify =
     onNavigate && preview.verifyPropertyId ? () => onNavigate('propertyVerify', { propertyId: preview.verifyPropertyId }) : undefined;
-  const frame = { building: current, buildings, onSelectBuilding: selectBuilding, preview, verify };
+  const frame = { building: current, buildings, onSelectBuilding: selectBuilding, preview, verify, nickname };
   const props = { building: current, frame };
   return (
     <Routes>

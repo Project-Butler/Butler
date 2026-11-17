@@ -17,8 +17,9 @@ import { isUuid } from '../../platform/uuid.js';
 // → { userId, complexId, legalDongCode, complexName, buildingNo, exclusiveArea, verifiedAt }. 호수(unitNo)는 꺼내지 않는다.
 // exclusiveArea 는 Prisma Decimal 을 number 로(없으면 null).
 // 저장값 VERIFIED로 후보를 좁히고, 만료는 computeOwnershipVerificationStatus()로 판정한다.
-const findVerifiedOwnerships = async (where) => {
-  const rows = await prisma.ownership.findMany({
+// db: 트랜잭션 안에서 부를 때 그 클라이언트(tx). 기본은 prisma.
+const findVerifiedOwnerships = async (where, db = prisma) => {
+  const rows = await db.ownership.findMany({
     where: { ...where, endedAt: null, verificationStatus: 'VERIFIED' },
     select: {
       userId: true,
@@ -92,6 +93,26 @@ export const requireRegionOwner = (getLegalDongCode) => async (req, res, next) =
   try {
     if (!(await hasActiveOwnershipInRegion(req.user?.id, getLegalDongCode(req)))) {
       throw new AppError('COMMUNITY_REGION_OWNER_REQUIRED', 403, '이 동네에 호실을 등록한 임대인만 볼 수 있습니다.');
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 내 닉네임(GET · PUT /community/me/profile) 자격.
+// 어느 동네든 활성 소유 관계(endedAt null, 인증 취소 아님)가 하나라도 있는가 — 커뮤니티 어딘가를 읽을 수 있는 임대인(인증 전 포함).
+export const hasAnyActiveOwnership = async (userId) => {
+  if (!isUuid(userId)) return false;
+  return (await prisma.ownership.count({ where: { userId, endedAt: null, ...NOT_REVOKED } })) > 0;
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 미들웨어. 내 닉네임 경로에 authGuard 뒤에 건다.
+// 호실을 등록한 곳이 한 군데도 없으면 403 COMMUNITY_REGION_OWNER_REQUIRED(읽기 자격과 같은 에러).
+export const requireAnyRegionOwner = async (req, res, next) => {
+  try {
+    if (!(await hasAnyActiveOwnership(req.user?.id))) {
+      throw new AppError('COMMUNITY_REGION_OWNER_REQUIRED', 403, '호실을 등록한 임대인만 닉네임을 정할 수 있습니다.');
     }
     next();
   } catch (error) {
@@ -184,6 +205,25 @@ export const findAuthorUnit = async (userId, legalDongCode, complexId) => {
   return first ? { complexName: first.complexName, buildingNo: first.buildingNo } : null;
 };
 
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 닉네임 대화상자의 미리보기 줄 "{닉네임} (잠실한빛아파트 103동 임대인)".
+// 이 단지에서 글을 쓰면 붙을 표기의 재료 { complexName, buildingNo }. 인증 호실이 있으면 findAuthorUnit 과 같은 호실,
+// 없으면(인증 전 · 만료 — 미리보기) 활성 호실(인증 취소 제외) 중 동 자연순 첫 호실. 그 단지에 활성 호실이 없으면 null.
+export const findPreviewAuthorUnit = async (userId, complexId) => {
+  if (!isUuid(userId) || !isUuid(complexId)) return null;
+  const complex = await prisma.complex.findUnique({ where: { id: complexId }, select: { regionId: true } });
+  if (!complex) return null;
+  const verified = await findAuthorUnit(userId, complex.regionId, complexId);
+  if (verified) return verified;
+  const rows = await prisma.ownership.findMany({
+    where: { userId, endedAt: null, ...NOT_REVOKED, property: { complexId } },
+    select: { property: { select: { buildingNo: true, complex: { select: { name: true } } } } },
+  });
+  const [first] = rows
+    .map((row) => ({ complexName: row.property.complex.name, buildingNo: row.property.buildingNo }))
+    .sort((a, b) => compareNatural(a.buildingNo ?? '', b.buildingNo ?? ''));
+  return first ?? null;
+};
+
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 게시판 목록·상세가 글쓰기 버튼과 안내 띠를 고르는 데 쓴다.
 // 이 법정동에서 이 사용자의 쓰기 자격 — 'VERIFIED'(쓸 수 있음) | 'EXPIRED'(인증이 있었지만 만료) | 'UNVERIFIED'.
 // 유효한 인증이 하나라도 있으면 VERIFIED, 없고 만료된 인증만 있으면 EXPIRED, 그 밖(미인증·취소·소유 없음)은 UNVERIFIED.
@@ -207,12 +247,23 @@ export const isComplexMember = async (userId, complexId) => {
   return ownerships.length > 0;
 };
 
-// 플랫폼에 생기면 교체: 계약에 없는 함수. 투표 상세의 "N호실을 보유하고 계시지만 1표만 반영됩니다" 문구용.
-// 범위(단지 또는 법정동) 안에서 이 사용자가 인증을 보유한 호실 수.
-export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDongCode }) => {
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 투표권(표 수) — 11/05 이사님 결정 "보유 수로".
+// 범위(우리 단지 = 그 단지 / 법정동 = 그 동 안 모든 단지) 안에서 이 사용자가 인증이 유효한(만료 · 취소 아님) 활성 소유 호실 수.
+// 판정은 플랫폼 computeOwnershipVerificationStatus(findVerifiedOwnerships). 투표 때는 같은 트랜잭션(db = tx)에서 센다.
+export const countMyVerifiedUnitsInScope = async (userId, { complexId, legalDongCode }, db = prisma) => {
   if (!isUuid(userId)) return 0;
   const property = complexId ? { complexId } : { complex: { regionId: legalDongCode } };
-  return (await findVerifiedOwnerships({ userId, property })).length;
+  return (await findVerifiedOwnerships({ userId, property }, db)).length;
+};
+
+// 플랫폼에 생기면 교체: 계약에 없는 함수. 단지 뉴스(우리 단지) 수집 대상 — 아래와 같은 기준(활성 소유 관계, 인증 취소 제외)의
+// 단지 id 전부(중복 없음, 오름차순). 사용자는 꺼내지 않는다.
+export const listAllOwnedComplexIds = async () => {
+  const ownerships = await prisma.ownership.findMany({
+    where: { endedAt: null, ...NOT_REVOKED },
+    select: { property: { select: { complexId: true } } },
+  });
+  return [...new Set(ownerships.map((o) => o.property.complexId))].sort();
 };
 
 // 플랫폼에 생기면 교체: 계약에 없는 함수. 뉴스 수집 대상(그 뉴스를 볼 수 있는 사람이 한 명이라도 있는 동 — 아무도 없는 곳은 모으지 않는다).

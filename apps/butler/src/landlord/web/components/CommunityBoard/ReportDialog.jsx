@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
@@ -15,6 +16,7 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([
 // 창 틀은 AddressSearchDialog(어두운 덮개 + 가운데 카드 + 닫기, Esc · 바깥 클릭으로 닫기), 사유는 게시판 분류 칩,
 // 상세는 BuildingEditPage 의 설명 칸, 버튼은 @butler/ui Button(취소 secondary · 신고하기 primary), 오류는 NoticeBox.
 // 포커스 가둠: 열리면 창 안 첫 칸으로, Tab 이 창 밖으로 나가지 않고, 닫히면 열기 전 자리(신고 버튼)로 돌려준다.
+// document.body 에 그린다(portal) — 글 상세 틀(CommunityFrame)의 간격 클래스(space-y)가 덮개에 위 여백을 주지 않게.
 export const ReportDialog = ({ postId, onDone, onClose }) => {
   const report = usePostCommunityReport();
   const [reason, setReason] = useState(null);
@@ -59,7 +61,7 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 px-6" onClick={onClose}>
       <div
         ref={dialogRef}
@@ -113,6 +115,7 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

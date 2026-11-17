@@ -1084,6 +1084,7 @@ enum CommunityNewsScope {
   NATIONWIDE // 전국 정책 — scopeCode 는 null
   SIGUNGU // 시·군·구 — scopeCode 는 법정동코드 앞 5자리
   SIDO // 시·도 — scopeCode 는 법정동코드 앞 2자리. 시·군·구 기사가 모자랄 때 채우는 묶음
+  COMPLEX // 우리 단지 — scopeCode 는 complexId(uuid). 단지 이름이 제목에 들어간 기사(11/05)
 
   @@map("community_news_scope")
 }
@@ -1205,8 +1206,10 @@ model CommunityPoll {
   // cron 이 돌기 전까지 결과가 열리지 않는다. 서버 시계 차이는 초 단위라 실익이 작다.
   closedAt DateTime? @map("closed_at") @db.Timestamptz(3)
 
-  // 참여자 수. 투표와 같은 트랜잭션에서 올린다.
+  // 참여자 수(참여 인원). 투표와 같은 트랜잭션에서 올린다.
   voteCount Int @default(0) @map("vote_count")
+  // 총 표 수(참여자마다 그 순간의 표 수 weight 를 더한 값). 투표와 같은 트랜잭션에서 올린다.
+  weightTotal Int @default(0) @map("weight_total")
 
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
   hiddenAt       DateTime? @map("hidden_at") @db.Timestamptz(3)
@@ -1234,7 +1237,10 @@ model CommunityPollOption {
   label    String @db.VarChar(80)
   position Int
 
+  // 이 선택지를 고른 참여자 수
   voteCount Int @default(0) @map("vote_count")
+  // 이 선택지의 표 수 합(득표). 결과 비율은 이것 기준
+  weightTotal Int @default(0) @map("weight_total")
 
   votes CommunityPollVote[]
 
@@ -1250,7 +1256,7 @@ model CommunityPollVote {
 
   // pollId 는 두 가지 일을 한다.
   //   1) 아래 복합 FK 로 "이 선택지가 정말 이 투표의 것인지"를 DB 가 검사하게 하고
-  //   2) 1인 1표 유니크의 한쪽이 된다.
+  //   2) "한 사람 한 번 참여" 유니크의 한쪽이 된다.
   // CommunityPoll 로 가는 별도 relation 은 두지 않는다 — 같은 스칼라를 두 relation 에
   // 쓰면 Prisma 가 거부하고, 집계는 voteCount 로 하므로 필요도 없다.
   pollId   String              @map("poll_id") @db.Uuid
@@ -1259,10 +1265,13 @@ model CommunityPollVote {
 
   voterId String @map("voter_id") @db.Uuid
 
+  // 표 수 — 참여 순간 범위 안 인증 호실 수(11/05 "보유 수로"). 그 뒤 호실을 팔거나 인증이 만료돼도 바뀌지 않는다.
+  // 기존 행은 1. CHECK(weight >= 1)는 마이그레이션 SQL 에 직접.
+  weight Int @default(1)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  // 1인 1표. 같은 범위에 여러 호실을 보유해도 한 표.
-  // 애플리케이션 검사만 믿지 않고 DB 로 강제한다.
+  // 한 사람 한 번 참여(가진 표를 한 선택지에 모두). 애플리케이션 검사만 믿지 않고 DB 로 강제한다.
   @@unique([pollId, voterId])
   @@index([optionId])
   @@map("community_poll_votes")
@@ -1275,8 +1284,8 @@ model CommunityNewsItem {
   id     String              @id @default(uuid()) @db.Uuid
   source CommunityNewsSource
   scope  CommunityNewsScope
-  // SIGUNGU 면 법정동코드 앞 5자리, SIDO 면 앞 2자리, NATIONWIDE 면 null
-  scopeCode String? @map("scope_code") @db.VarChar(5)
+  // SIGUNGU 면 법정동코드 앞 5자리, SIDO 면 앞 2자리, COMPLEX 면 complexId(uuid 36자), NATIONWIDE 면 null
+  scopeCode String? @map("scope_code") @db.VarChar(36)
 
   title     String
   url       String
@@ -1296,5 +1305,116 @@ model CommunityNewsItem {
   @@unique([scopeCode, urlHash])
   @@index([scope, scopeCode, publishedAt(sort: Desc)])
   @@map("community_news_items")
+}
+
+// 뉴스 수집 순번 — 범위마다 마지막으로 수집을 시도한 시각(11/05, 단지 뉴스).
+// 한 번 수집에 단지를 다 돌지 못하면 오래 안 모은(또는 한 번도 안 모은) 단지부터 돈다. 시도하면 저장 건수와 관계없이 시각을 적어
+// 차례가 돌아가게 한다 — 굶는 단지가 없다. 지금은 COMPLEX 만 쓴다.
+model CommunityNewsCursor {
+  scope           CommunityNewsScope
+  scopeCode       String             @map("scope_code") @db.VarChar(36)
+  lastCollectedAt DateTime           @map("last_collected_at") @db.Timestamptz(3)
+
+  @@id([scope, scopeCode])
+  @@index([scope, lastCollectedAt])
+  @@map("community_news_cursors")
+}
+
+// 커뮤니티 닉네임(11/05, 계획서 12-3) — 사용자 한 명에 한 줄. 규칙은 domains/community/nicknameRules.js.
+// User 와 relation 을 걸지 않는다(User 에 back-relation 을 더하면 Core 블록을 고치게 된다 — 스칼라 id).
+// 글 · 댓글 · 투표에는 닉네임을 굳히지 않는다 — 읽을 때 이 표에서 붙인다(바꾸면 옛 글도 새 닉네임).
+model CommunityProfile {
+  userId            String    @id @map("user_id") @db.Uuid
+  nickname          String    @db.VarChar(12)
+  // 비교용 키(영문 소문자 · 띄어쓰기 없음). 전체에서 하나 — 같은 닉네임을 동시에 정해도 DB 가 하나만 받는다
+  nicknameKey       String    @unique @map("nickname_key") @db.VarChar(12)
+  // 마지막으로 "바꾼" 시각. 처음 정할 때는 비운다(처음 정하기는 30일 계산에 넣지 않는다)
+  nicknameChangedAt DateTime? @map("nickname_changed_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("community_profiles")
+}
+
+// ===== 시세(실거래가) — B팀, docs-b/MARKET_PRICE_PLAN.md(11/16) =====
+// 국토교통부 실거래가를 정기 실행으로 미리 모아 두고, 요청 경로에서는 이 표만 읽는다. 규칙은 domains/marketPrices/marketPriceRules.js.
+// Complex 와 relation 을 걸지 않는다(Core 블록 그대로 — 스칼라 id).
+
+enum MarketDealType {
+  SALE
+  JEONSE
+  MONTHLY
+
+  @@map("market_deal_type")
+}
+
+// 수집 묶음 종류 = 원천 API 하나(매매 · 전월세). 전세 · 월세는 전월세 묶음 안에서 갈린다
+enum MarketDealKind {
+  TRADE
+  RENT
+
+  @@map("market_deal_kind")
+}
+
+enum MarketCollectionStatus {
+  SUCCEEDED
+  FAILED
+
+  @@map("market_collection_status")
+}
+
+// 거래 한 건 한 줄. 해제된 거래는 넣지 않는다. 같은 (시군구, 계약월, 종류)를 다시 모으면 그 묶음을 지우고 새로 넣는다(한 트랜잭션)
+model MarketDeal {
+  id                String         @id @default(uuid()) @db.Uuid
+  dealKind          MarketDealKind @map("deal_kind")
+  dealType          MarketDealType @map("deal_type")
+  sigunguCode       String         @map("sigungu_code") @db.VarChar(5)
+  // 묶음 키('YYYY-MM'). contractDate 의 달과 같다 — 묶음 지우기 · 모은 달 세기를 날짜 계산 없이
+  contractYearMonth String         @map("contract_year_month") @db.Char(7)
+  // 법정동 10자리. 못 찾으면 null(동 시세에 안 나옴)
+  legalDongCode     String?        @map("legal_dong_code") @db.VarChar(10)
+  // 우리 단지. 못 이으면 null(단지 시세에 안 나옴). 잇기 방법은 ROAD · JIBUN · APT_SEQ
+  complexId         String?        @map("complex_id") @db.Uuid
+  linkMethod        String?        @map("link_method") @db.VarChar(10)
+  // 잇기 키 — 나중에 등록된 단지를 원천을 다시 부르지 않고 이어 주려고 둔다
+  roadKey           String?        @map("road_key") @db.VarChar(40)
+  lotKey            String?        @map("lot_key") @db.VarChar(40)
+  aptSeq            String?        @map("apt_seq") @db.VarChar(20)
+  aptName           String?        @map("apt_name") @db.VarChar(100)
+  jibun             String?        @db.VarChar(20)
+  exclusiveArea     Float?         @map("exclusive_area")
+  floor             Int?
+  contractDate      DateTime       @map("contract_date") @db.Date
+  // 금액은 원. 해당 없으면 null(매매는 price, 전세는 deposit, 월세는 deposit · monthlyRent)
+  price             BigInt?
+  deposit           BigInt?
+  monthlyRent       BigInt?        @map("monthly_rent")
+  // 신규 · 갱신(전월세만, 원천이 비우기도 함)
+  contractType      String?        @map("contract_type") @db.VarChar(4)
+  collectedAt       DateTime       @map("collected_at") @db.Timestamptz(3)
+
+  @@index([complexId, dealType, contractDate])
+  @@index([legalDongCode, dealType, contractDate])
+  @@index([sigunguCode, contractYearMonth, dealKind])
+  @@map("market_deals")
+}
+
+// (시군구, 계약월, 종류) 묶음마다 한 줄 — 마지막으로 모은 시각 · 건수 · 상태. coveredFromYearMonth · asOf · 수집 순번이 여기서 나온다
+model MarketCollection {
+  id            String                 @id @default(uuid()) @db.Uuid
+  sigunguCode   String                 @map("sigungu_code") @db.VarChar(5)
+  yearMonth     String                 @map("year_month") @db.Char(7)
+  dealKind      MarketDealKind         @map("deal_kind")
+  status        MarketCollectionStatus
+  dealCount     Int                    @default(0) @map("deal_count")
+  // 마지막으로 성공한 시각(성공한 적 없으면 null) · 마지막으로 시도한 시각(순번 — 오래 안 모은 묶음부터)
+  collectedAt   DateTime?              @map("collected_at") @db.Timestamptz(3)
+  attemptedAt   DateTime               @map("attempted_at") @db.Timestamptz(3)
+  // 실패 코드만(원천 결과 코드 · NETWORK 등). 요청 주소 · 키는 담지 않는다
+  lastErrorCode String?                @map("last_error_code") @db.VarChar(30)
+
+  @@unique([sigunguCode, yearMonth, dealKind])
+  @@index([attemptedAt])
+  @@map("market_collections")
 }
 // ===== B팀 끝 =====

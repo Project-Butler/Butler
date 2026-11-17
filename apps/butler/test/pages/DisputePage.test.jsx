@@ -410,24 +410,26 @@ describe('분쟁 해결사', () => {
     expect(await screen.findByRole('button', { name: '원상복구·손해배상' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('결과가 없으면 알려 주고, 아래에 자료 출처·기관 연락처를 두며, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 간다', async () => {
+  it('결과가 없으면 알려 주고, 맨 끝 [AI에게 물어보기]는 검색어를 들고 챗봇 화면으로 가며, 연락처 줄 없이 자료 출처만 둔다', async () => {
     const user = userEvent.setup();
     api.getDisputeReferenceList.mockResolvedValue(listResponse([], { CASE: 0, PRECEDENT: 0, GUIDELINE: 0 }));
     renderAt('/disputes/search?q=%EB%B0%98%EB%A0%A4%EA%B2%AC');
 
     expect(await screen.findByText('맞는 질문이나 사례를 찾지 못했어요')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '자료 출처' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: '기관 연락처' })).getByRole('link', { name: /대한법률구조공단 132/ })).toHaveAttribute('href', 'tel:132');
+    // 전화는 기관 카드 안에만 둔다(기관 카드가 없는 자료 찾기엔 없음)
+    expect(screen.queryByRole('link', { name: /전화 걸기/ })).not.toBeInTheDocument();
+    expect(screen.getByText('답을 찾지 못하셨나요?')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
 
     expect(screen.getByText('챗봇 화면 · 반려견')).toBeInTheDocument();
   });
 
-  it('사례 상세 하단 [내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
+  it('사례 상세 하단 [AI로 내 상황에 적용해 보기]는 사례 제목을 넣은 질문을 들고 챗봇 화면으로 간다', async () => {
     const user = userEvent.setup();
     renderAt('/disputes/references/ref-case');
 
-    await user.click(await screen.findByRole('button', { name: '내 상황에 적용해 보기' }));
+    await user.click(await screen.findByRole('button', { name: 'AI로 내 상황에 적용해 보기' }));
 
     expect(screen.getByText(/챗봇 화면 · "퇴거 후 벽지·장판 손상/)).toBeInTheDocument();
   });
@@ -442,6 +444,8 @@ describe('분쟁 해결사', () => {
 
     await user.click(screen.getByRole('button', { name: /^원상복구·손해배상/ }));
     expect(await screen.findByText('답을 찾지 못하셨나요?')).toBeInTheDocument();
+    // 상황 안내 기관 카드에도 첫 화면 카드와 같은 전화 줄
+    expect(screen.getAllByRole('link', { name: /1644-5599 전화 걸기/ }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: 'AI에게 물어보기' }));
 
     expect(screen.getByText(/챗봇 화면 · 원상복구·손해배상 문제로 상담하고 싶어요/)).toBeInTheDocument();

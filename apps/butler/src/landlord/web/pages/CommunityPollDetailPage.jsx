@@ -12,6 +12,7 @@ import { DdayBadge } from '../components/CommunityPoll/DdayBadge';
 import { ScopeChip } from '../components/CommunityPoll/ScopeChip';
 import { PollDisclaimer } from '../components/CommunityPoll/PollDisclaimer';
 import { PollResults } from '../components/CommunityPoll/PollResults';
+import { AuthorName } from '../components/CommunityNickname/AuthorName';
 import { formatKstDateTime } from '../utils/communityFormat';
 
 // 선택지 한 줄: 원형 라디오 + 문구, 고르면 accent-soft 바탕 + accent 테두리.
@@ -43,9 +44,10 @@ const OptionRadio = ({ option, checked, disabled, onChange }) => (
 );
 
 // 투표 상세 · 참여 화면.
-// 두 칸: 왼쪽(col-span-2)에 질문 · 선택지 · [투표하기] 또는 결과(마감 뒤 득표 · 비율 막대), 오른쪽에 자격 안내 카드
-// (참여 범위 · 1인 1표 · 마감 시각 · 면책 문구)와 그 아래 삭제(본인 · 참여 0명일 때만).
-// 마감 전에는 서버가 득표를 주지 않는다. 참여했으면 내 선택을 보여 주고 버튼은 "참여함"으로 잠근다.
+// 두 칸: 왼쪽(col-span-2)에 질문 · 선택지 · [투표하기] 또는 결과(마감 뒤 표 수 · 비율 막대), 오른쪽에 자격 안내 카드
+// (참여 범위 · 내 표 수 · 마감 시각 · 면책 문구)와 그 아래 삭제(본인 · 참여 0명일 때만).
+// 투표권 = 범위 안 인증 호실 수(PC 명세 v3 6절): 한 사람 한 번, 가진 표를 한 선택지에 모두.
+// 마감 전에는 서버가 득표를 주지 않는다. 참여했으면 내 선택을 보여 주고 버튼은 "참여함 · N표"로 잠근다.
 // 인증 전 미리보기(locked)면 서버가 선택지 · 내 참여 · 결과를 주지 않는다 — 질문 · 범위 · 마감 · 참여 인원 아래에 잠금 카드.
 export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
   const poll = useGetCommunityPoll(pollId);
@@ -91,6 +93,8 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
               <div className="flex flex-wrap items-center gap-2">
                 <DdayBadge closesAt={data.closesAt} isClosed={data.isClosed} />
                 <span className="text-sub text-ink-3">참여 {num(data.voteCount)}명</span>
+                {/* 만든 사람 — 글 작성자와 같은 "닉네임 (괄호 표기)". 미리보기(locked)에는 서버가 주지 않는다 */}
+                {data.authorLabel && <AuthorName nickname={data.authorNickname} label={data.authorLabel} />}
               </div>
             </div>
             {data.description && (
@@ -99,7 +103,13 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
 
             {data.locked ? null : data.isClosed ? (
               <div className="space-y-3">
-                <PollResults options={data.options} />
+                <PollResults
+                  options={data.options}
+                  voteCount={data.voteCount}
+                  weightTotal={data.weightTotal}
+                  myOptionId={data.myOptionId}
+                  myWeight={data.myWeight}
+                />
                 <div className="flex h-11 items-center justify-center rounded-btn border border-line bg-surface-2 text-sub font-semibold text-ink-3">
                   마감된 투표입니다
                 </div>
@@ -119,9 +129,18 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
                   ))}
                 </fieldset>
                 {vote.isError && <NoticeBox>{getErrorMessage(vote.error)}</NoticeBox>}
-                <div className="flex justify-end">
+                <div className="flex flex-col items-end gap-2">
+                  {data.canVote && (
+                    <p className="text-sub text-ink-2">가진 표 {num(data.myWeight)}표를 한 선택지에 모두 반영합니다</p>
+                  )}
                   <Button onClick={submit} disabled={!data.canVote || !selected || vote.isPending}>
-                    {data.hasVoted ? '참여함' : '투표하기'}
+                    {data.hasVoted ? (
+                      <>
+                        참여함 · <span className="font-num tabular-nums">{data.myWeight}</span>표
+                      </>
+                    ) : (
+                      '투표하기'
+                    )}
                   </Button>
                 </div>
               </div>
@@ -136,15 +155,9 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
           <div className="space-y-3 lg:col-start-3 lg:row-start-1">
             <Card className="space-y-3 p-6">
               <p className="break-keep text-body text-ink">{eligibilityTarget} 임대인만 참여할 수 있는 투표입니다.</p>
-              {!data.isClosed && !data.locked && (
+              {!data.isClosed && !data.locked && !data.hasVoted && data.myUnitCount > 0 && (
                 <p className="break-keep text-sub text-ink-2">
-                  {num(1)}인 {num(1)}표입니다. 같은 범위에 여러 호실을 보유하셔도 한 표만 반영됩니다.
-                  {data.myUnitCount >= 2 && (
-                    <>
-                      {' '}
-                      {num(data.myUnitCount)}호실을 보유하고 계시지만 {num(1)}표만 반영됩니다.
-                    </>
-                  )}
+                  인증한 호실 {num(data.myUnitCount)}개 — {num(data.myUnitCount)}표로 반영됩니다.
                 </p>
               )}
               <p className="text-sub text-ink-2">

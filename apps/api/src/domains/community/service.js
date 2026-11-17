@@ -9,6 +9,7 @@ import {
   getRegionVerificationStatus,
   summarizeMyActiveUnitsByComplex,
 } from './platformBridge.js';
+import { assertHasNickname, loadNicknames, nicknameOf } from './service/nicknames.js';
 
 // GET /community/my-buildings — 건물 선택 화면 · 건물 바꾸기의 입력.
 // 내 건물 설정(my_buildings, 숨기지 않은 것) 중 활성 소유 관계가 있는 단지 — 인증 전 · 만료 건물도 넣는다(미리보기).
@@ -93,7 +94,7 @@ export const getWriteAccess = async (user, legalDongCode) => {
 
 // "{Complex.name} {동}동 임대인". 작성 시점에 굳혀 저장한다(호실을 팔아도 과거 글 표기는 그대로).
 // 동이 없는 건물은 "{Complex.name} 임대인", '가동'처럼 이미 '동'으로 끝나는 동 이름에는 '동'을 붙이지 않는다.
-const toAuthorLabel = ({ complexName, buildingNo }) => {
+export const toAuthorLabel = ({ complexName, buildingNo }) => {
   if (!buildingNo) return `${complexName} 임대인`;
   return `${complexName} ${buildingNo.endsWith('동') ? buildingNo : `${buildingNo}동`} 임대인`;
 };
@@ -109,19 +110,23 @@ export const buildAuthorLabel = async (user, legalDongCode, complexId) => {
   return toAuthorLabel(unit);
 };
 
-const toPostListItem = (post, user) => ({
+// authorNickname: 작성자의 지금 닉네임(없으면 null — 닉네임을 정하기 전의 옛 글). 화면은 "닉네임 (authorLabel)".
+// nicknames: loadNicknames 로 목록 전체의 작성자를 한 번에 모은 Map
+const toPostListItem = (post, user, nicknames) => ({
   id: post.id,
   category: post.category,
   title: post.title,
+  authorNickname: nicknameOf(nicknames, post.authorId),
   authorLabel: post.authorLabel,
   commentCount: post.commentCount,
   isMine: post.authorId === user.id,
   createdAt: post.createdAt.toISOString(),
 });
 
-const toComment = (comment, user) => ({
+const toComment = (comment, user, nicknames) => ({
   id: comment.id,
   body: comment.body,
+  authorNickname: nicknameOf(nicknames, comment.authorId),
   authorLabel: comment.authorLabel,
   isMine: comment.authorId === user.id,
   createdAt: comment.createdAt.toISOString(),
@@ -146,9 +151,10 @@ export const findPosts = async (user, legalDongCode, { category, mine, page, siz
     prisma.communityPost.count({ where }),
     getWriteAccess(user, legalDongCode),
   ]);
+  const nicknames = await loadNicknames(posts.map((post) => post.authorId));
 
   return {
-    items: posts.map((post) => toPostListItem(post, user)),
+    items: posts.map((post) => toPostListItem(post, user, nicknames)),
     meta: { page, size, total, hasNext: page * size < total, region, ...access },
   };
 };
@@ -166,24 +172,31 @@ export const findVisiblePost = async (postId) => {
 export const findPostDetail = async (user, postId) => {
   const post = await findVisiblePost(postId);
   const access = await getWriteAccess(user, post.legalDongCode);
-  const summary = { ...toPostListItem(post, user), legalDongCode: post.legalDongCode, ...access };
-  if (!access.canWrite) return { ...summary, locked: true };
+  if (!access.canWrite) {
+    const nicknames = await loadNicknames([post.authorId]);
+    return { ...toPostListItem(post, user, nicknames), legalDongCode: post.legalDongCode, ...access, locked: true };
+  }
 
   const comments = await prisma.communityComment.findMany({
     where: { postId, ...VISIBLE },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
+  // 글 작성자와 댓글 작성자를 한 번에
+  const nicknames = await loadNicknames([post.authorId, ...comments.map((comment) => comment.authorId)]);
   return {
-    ...summary,
+    ...toPostListItem(post, user, nicknames),
+    legalDongCode: post.legalDongCode,
+    ...access,
     locked: false,
     body: post.body,
     updatedAt: post.updatedAt.toISOString(),
-    comments: comments.map((comment) => toComment(comment, user)),
+    comments: comments.map((comment) => toComment(comment, user, nicknames)),
   };
 };
 
-// POST /community/regions/:legalDongCode/posts
+// POST /community/regions/:legalDongCode/posts — 닉네임이 없으면 403 COMMUNITY_NICKNAME_REQUIRED
 export const createPost = async (user, legalDongCode, { complexId, category, title, body }) => {
+  await assertHasNickname(user.id);
   const authorLabel = await buildAuthorLabel(user, legalDongCode, complexId);
   const post = await prisma.communityPost.create({
     data: { legalDongCode, category, title, body, authorId: user.id, authorLabel },
@@ -205,8 +218,9 @@ export const deletePost = async (user, post) => {
   await prisma.communityPost.update({ where: { id: post.id }, data: { deletedAt: new Date() } });
 };
 
-// POST /community/posts/:postId/comments — 글의 commentCount 를 같은 트랜잭션에서 올린다.
+// POST /community/posts/:postId/comments — 글의 commentCount 를 같은 트랜잭션에서 올린다. 닉네임이 없으면 403.
 export const createComment = async (user, post, { complexId, body }) => {
+  await assertHasNickname(user.id);
   const authorLabel = await buildAuthorLabel(user, post.legalDongCode, complexId);
   const comment = await prisma.$transaction(async (tx) => {
     const created = await tx.communityComment.create({
@@ -215,7 +229,7 @@ export const createComment = async (user, post, { complexId, body }) => {
     await tx.communityPost.update({ where: { id: post.id }, data: { commentCount: { increment: 1 } } });
     return created;
   });
-  return toComment(comment, user);
+  return toComment(comment, user, await loadNicknames([user.id]));
 };
 
 // 댓글 삭제가 먼저 찾는다. 댓글이나 그 글이 삭제·숨김이면 없는 것으로 본다.

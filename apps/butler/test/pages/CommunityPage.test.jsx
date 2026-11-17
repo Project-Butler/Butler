@@ -32,7 +32,7 @@ vi.mock('@butler/api-client', () => ({
     COMMUNITY_POLLS: 'community_polls',
     COMMUNITY_POLL_DETAIL: 'community_poll',
     COMMUNITY_NEWS: 'community_news',
-    COMMUNITY_MARKET_PRICES: 'community_market_prices',
+    MARKET_PRICES: 'market_prices',
   },
 }));
 
@@ -106,6 +106,8 @@ const renderAt = (path, onNavigate = vi.fn()) => {
   );
   return onNavigate;
 };
+// 파일의 첫 렌더는 화면 코드를 처음 불러와 전체 실행 때 1초를 넘기기도 한다 — 첫 대기만 여유를 둔다
+const FIRST_RENDER = { timeout: 3000 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -121,7 +123,7 @@ describe('인증 전 미리보기', () => {
     api.getCommunityPost.mockResolvedValue(LOCKED_POST);
     renderAt('/community/posts/post-1');
 
-    expect(await screen.findByRole('heading', { name: LOCKED_POST.title })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: LOCKED_POST.title }, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.getByText(LOCKED_POST.authorLabel)).toBeInTheDocument();
     expect(screen.getByText('인증한 임대인만 볼 수 있어요')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /댓글/ })).not.toBeInTheDocument();

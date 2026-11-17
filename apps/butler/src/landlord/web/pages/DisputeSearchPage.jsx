@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button, FilterChip, Pagination, SegmentedControl } from '@butler/ui';
+import { AskAiCard } from '../components/DisputeReference/AskAiCard';
 import { FaqList } from '../components/DisputeReference/FaqList';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -275,15 +276,9 @@ export const DisputeSearchPage = () => {
         </section>
       )}
 
-      <div className="flex flex-col items-center rounded-card border border-line bg-surface px-5 py-6 text-center">
-        <p className="text-card font-semibold text-ink">답을 찾지 못하셨나요?</p>
-        <p className="mt-1 text-body text-ink-2">상황을 적어 주시면 비슷한 사례를 찾아 정리해 드려요.</p>
-        <Button onClick={() => askAi(q)} className="mt-4 min-h-11 px-5">
-          AI에게 물어보기
-        </Button>
-      </div>
+      <AskAiCard onClick={() => askAi(q)} />
 
-      <SourceFooter showContacts />
+      <SourceFooter />
 
       <LegalNotice />
     </div>

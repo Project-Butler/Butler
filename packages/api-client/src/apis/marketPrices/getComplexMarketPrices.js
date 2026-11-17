@@ -1,0 +1,10 @@
+import axiosInstance from '../../axios/axiosInstance';
+
+// 단지 시세(국토교통부 실거래가). params: { dealType('SALE'|'JEONSE'|'MONTHLY', 필수), areaMin, areaMax(㎡, 양끝 포함), fromYearMonth, toYearMonth }
+export const getComplexMarketPrices = async ({ complexId, ...params }) => {
+  const { data } = await axiosInstance.get(`/market-prices/complexes/${complexId}`, { params });
+  // 연동 규격 2장 시세: { scope: 'COMPLEX', complexId, legalDongCode, dealType, areaMin, areaMax, coveredFromYearMonth, asOf, source,
+  //   collectionStatus: 'READY'|'COLLECTING', jobId, monthly: [{ yearMonth, dealCount, avgPrice, minPrice, maxPrice, avgDeposit, avgMonthlyRent }],
+  //   recentDeals: [{ contractDate, dealType, complexName, exclusiveArea, floor, price, deposit, monthlyRent }] } — 금액은 원
+  return data.data;
+};

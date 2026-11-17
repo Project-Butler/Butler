@@ -25,7 +25,8 @@ import {
 } from './service.js';
 import { castVote, closeExpiredPolls, createPoll, deletePoll, findPollDetail, findPolls, findVisiblePoll, throwPollNotFound } from './service/polls.js';
 import { findReports, setCommentHidden, setPollHidden, setPostHidden, updateReportStatus } from './service/admin.js';
-import { collectNews, findNews } from './service/news.js';
+import { collectAllNews, findComplexNews, findNews, findNewsComplex } from './service/news.js';
+import { findMyProfile, setMyNickname } from './service/profiles.js';
 
 const LEGAL_DONG_CODE_PATTERN = /^\d{10}$/;
 const MAX_TITLE_LENGTH = 100; // CommunityPost.title VarChar(100)
@@ -43,6 +44,39 @@ export const listMyBuildings = async (req, res, next) => {
   try {
     const items = await findMyBuildings(req.user);
     sendList(res, items, { page: 1, size: items.length, total: items.length, hasNext: false });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ===== 내 닉네임 =====
+// complexId: 지금 고른 건물(미리보기 줄의 괄호 속 표기). 없으면 previewLabel 이 null.
+const PROFILE_FIELDS = ['nickname', 'complexId'];
+
+const parseOptionalComplexId = (value, details) => (value === undefined ? undefined : parseComplexId(value, details));
+
+// GET /community/me/profile?complexId=
+export const getMyProfile = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const details = [];
+    const complexId = parseOptionalComplexId(req.query.complexId, details);
+    throwIfInvalid(details);
+    sendData(res, await findMyProfile(req.user, { complexId }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /community/me/profile { nickname, complexId? } — 길이 · 글자 · 금지 낱말 · 30일은 서비스(nicknameRules.js)가 본다.
+export const putMyProfile = async (req, res, next) => {
+  try {
+    assertAllowedBody(req.body, PROFILE_FIELDS);
+    const details = [];
+    if (typeof req.body.nickname !== 'string') details.push({ field: 'nickname', reason: '문자열이어야 합니다.' });
+    const complexId = parseOptionalComplexId(req.body.complexId, details);
+    throwIfInvalid(details);
+    sendData(res, await setMyNickname(req.user, { nickname: req.body.nickname, complexId }));
   } catch (error) {
     next(error);
   }
@@ -500,10 +534,35 @@ export const listNews = async (req, res, next) => {
   }
 };
 
+// 단지 뉴스: 단지를 먼저 찾아 둔다(읽기 자격 판정에 그 단지 법정동을 쓴다)
+export const loadNewsComplex = async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.complexId)) throw new AppError('COMMUNITY_COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
+    req.communityComplex = await findNewsComplex(req.params.complexId);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /community/complexes/:complexId/news?page&size
+export const listComplexNews = async (req, res, next) => {
+  try {
+    assertSingleValues(req.query);
+    const details = [];
+    const { page, size } = parsePagination(req.query, details);
+    throwIfInvalid(details);
+    const { items, meta } = await findComplexNews(req.communityComplex, { page, size });
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/cron/community-news (cronRouter.js)
 export const runNewsCollection = async (req, res, next) => {
   try {
-    sendData(res, await collectNews());
+    sendData(res, await collectAllNews());
   } catch (error) {
     next(error);
   }
