@@ -591,7 +591,6 @@ export const HELP_ROUTES = [
       ['대상', '계약부터 종료까지 임대차 상담, 서울시 분쟁조정'],
       ['지역', '서울 소재 주택'],
       ['방법', '전화·온라인·방문'],
-      ['연락', '02-2133-1200'],
     ],
     actions: [{ label: '상담 방법 보기', href: 'https://housing.seoul.go.kr/site/main/content/sh04_020100', primary: true }],
   },
@@ -602,7 +601,7 @@ export const HELP_ROUTES = [
     when: '소송까지 생각하고 법률 도움이 필요할 때',
     facts: [
       ['대상', '법률상담, 소득 기준에 따라 소송 지원'],
-      ['방법', '전화 132 · 예약 방문'],
+      ['방법', '전화·예약 방문'],
       ['비용', '상담 무료'],
     ],
     actions: [{ label: '상담 안내', href: 'https://www.klac.or.kr/legalstruct/consultationGuidance.do', primary: true }],
@@ -636,11 +635,11 @@ export const DATA_SOURCES = [
   { label: '가이드', title: '서울시 주택임대차보호법 가이드북', detail: '서울특별시 개정 주택임대차보호법 가이드북(2020)', href: 'https://news.seoul.go.kr/citybuild/archives/511154' },
 ];
 
-// 기관 연락처. 첫 화면은 도움받을 곳 카드(HELP_ROUTES와 key가 같음) 안에, 자료 찾기는 맨 아래 한 줄로 보여 준다.
+// 기관 연락처. 기관 카드(첫 화면·상황 안내, HELP_ROUTES와 key가 같음) 안에만 ContactLine으로 보여 준다.
 // 번호는 기관 공식 안내에서 확인한 것만 쓴다(조정위원회 1644-5599는 조정 절차 페이지, 11-10 확인).
 // note(운영시간·요금)도 공식 페이지에 있는 것만: 조정위원회는 절차 페이지, 132는 공단 메인 '통화료 발신자 부담'. 서울시 센터는 안내마다 시간이 달라 비워 둔다(11-12 확인).
 export const CONTACTS = [
-  { key: 'committee', name: '주택임대차분쟁조정위원회(한국부동산원)', short: '조정위원회', value: '1644-5599', href: 'tel:1644-5599', note: '평일 9:00~17:30' },
-  { key: 'seoul', name: '서울시 전월세종합지원센터', short: '서울시 센터(서울만)', value: '02-2133-1200', href: 'tel:02-2133-1200' },
-  { key: 'klac', name: '대한법률구조공단', short: '법률구조공단', value: '132', href: 'tel:132', note: '통화료 발신자 부담' },
+  { key: 'committee', name: '주택임대차분쟁조정위원회(한국부동산원)', value: '1644-5599', href: 'tel:1644-5599', note: '평일 9:00~17:30' },
+  { key: 'seoul', name: '서울시 전월세종합지원센터', value: '02-2133-1200', href: 'tel:02-2133-1200' },
+  { key: 'klac', name: '대한법률구조공단', value: '132', href: 'tel:132', note: '통화료 발신자 부담' },
 ];

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
-import { ChevronRight, ExternalLink, FileText } from 'lucide-react';
+import { Bot, ChevronRight, ExternalLink, FileText } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -147,10 +147,13 @@ export const DisputeReferenceDetailPage = () => {
 
           <LegalNotice />
 
-          {/* 사례를 다 읽은 뒤 내 경우에 맞춰 묻는 AI 입구(피그마 하단 바) */}
+          {/* 사례를 다 읽은 뒤 내 경우에 맞춰 묻는 AI 입구(피그마 하단 바). 문구는 하는 일이 달라 따로 두되 피그마 문구 앞에 "AI로"를 붙여 AI에게 묻는 버튼임을 드러내고, 아이콘은 AskAiCard·챗봇과 같은 Bot */}
           <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
             <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
-              내 상황에 적용해 보기
+              <span className="inline-flex items-center justify-center gap-2">
+                <Bot size={18} />
+                AI로 내 상황에 적용해 보기
+              </span>
             </Button>
           </div>
         </>
