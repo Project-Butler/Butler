@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
   getLatestOwnershipVerification: vi.fn(),
   postThread: vi.fn(),
   getThreadList: vi.fn(),
+  getPropertyDocumentBox: vi.fn(),
+  postDocumentDownloadUrl: vi.fn(),
 }));
 vi.mock('@butler/api-client', () => api);
 
@@ -210,11 +212,24 @@ describe('M06 부동산 상세', () => {
     expect(where()).toBe('/landlord/contracts/c1');
   });
 
-  it('[관리 로그] 전체 보기는 호실 필터로, [문서]는 준비 중', async () => {
+  it('[문서]는 최근 문서와 [문서함 열기]로 그 호실 문서함에 간다', async () => {
+    api.getPropertyDocumentBox.mockResolvedValue({
+      property: { id: 'p1', displayName: '래미안 101동 101호' },
+      documentCount: 1,
+      ownerships: [{ id: 'o1', isActive: true, isUploadable: true, documents: [{ id: 'd1', fileName: '등기부.pdf', documentType: 'REGISTRY_CERTIFICATE', mimeType: 'application/pdf', sizeBytes: 1000, createdAt: '2026-10-01T00:00:00.000Z' }] }],
+      contracts: [],
+    });
     renderAt('/landlord/properties/p1');
     await userEvent.click(await screen.findByRole('tab', { name: '문서' }));
-    expect(screen.getByRole('region', { name: '문서 준비 중' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('tab', { name: '관리 로그' }));
+    const recent = await screen.findByRole('list', { name: '최근 문서' });
+    expect(within(recent).getByText('등기부.pdf')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '문서함 열기 1' }));
+    expect(where()).toBe('/landlord/documents?propertyId=p1');
+  });
+
+  it('[관리 로그] 전체 보기는 호실 필터로 간다', async () => {
+    renderAt('/landlord/properties/p1');
+    await userEvent.click(await screen.findByRole('tab', { name: '관리 로그' }));
     await userEvent.click(await screen.findByRole('button', { name: '전체 보기' }));
     expect(where()).toBe('/landlord/logs?propertyId=p1');
   });

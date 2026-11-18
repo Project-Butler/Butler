@@ -6,6 +6,7 @@ import { AppTabShell } from './components/AppTabShell/AppTabShell';
 import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
+import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { HomePage } from './pages/HomePage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
@@ -15,6 +16,7 @@ import { TicketDetailPage } from './pages/TicketDetailPage';
 import { TicketListPage } from './pages/TicketListPage';
 import { TicketRegisterPage } from './pages/TicketRegisterPage';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
+import { parseCategoryParam } from './utils/documentBoxView';
 
 // 탭이 있는 앱 화면(홈형 상단 바 + 하단 탭). 앱 화면이 아직 없는 주소는 모두 앱 셸 안의 "준비 중"이다.
 // 상단 바 아바타의 이름은 '내 계정'이다(하단 탭 '내 정보'와 같은 이름의 버튼이 둘 생기지 않게).
@@ -90,7 +92,21 @@ const TicketDetailRoute = ({ onUnauthorized }) => {
   return <TicketDetailPage key={ticketId} ticketId={ticketId} openComplete={Boolean(location.state?.complete)} onUnauthorized={onUnauthorized} />;
 };
 
-const ThreadRoute = ({ user, onUnauthorized }) => {
+// 호실(propertyId)과 종류 목록(type)은 주소에 남긴다. 호실이 바뀌면 화면을 새로 시작한다.
+const DocumentBoxRoute = ({ onUnauthorized }) => {
+  const [searchParams] = useSearchParams();
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  return (
+    <DocumentBoxPage
+      key={propertyId}
+      propertyId={propertyId}
+      category={parseCategoryParam(searchParams.get('type'))}
+      onUnauthorized={onUnauthorized}
+    />
+  );
+};
+
+const ThreadRoute =({ user, onUnauthorized }) => {
   const { threadId } = useParams();
   return <ThreadPage key={threadId} threadId={threadId} user={user} onUnauthorized={onUnauthorized} />;
 };
@@ -98,7 +114,7 @@ const ThreadRoute = ({ user, onUnauthorized }) => {
 // 임대인 앱 화면. 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소는 웹과 같고 화면만 다르다).
 // 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·관리 로그(M08)는 화면이 직접 탭 셸을 그리고,
 // 부동산 등록(M04)·계약 관리(M07)·계약 수정처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
-// 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다.
+// 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다. 문서함(M11)도 탭 셸을 직접 그린다.
 // 아래에 없는 하위 주소(/properties/:id/verify, /logs/:id 등)는 탭 화면의 "준비 중"으로 간다.
 // 로그인·세션은 앱 최상위가 하고, 여기는 user·onLogout·onUnauthorized 를 props 로 받는다.
 export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
@@ -123,6 +139,7 @@ export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
     <Route path="/tickets/new" element={<TicketRegisterRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/tickets/:ticketId" element={<TicketDetailRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/threads/:threadId" element={<ThreadRoute user={user} onUnauthorized={onUnauthorized} />} />
+    <Route path="/documents" element={<DocumentBoxRoute onUnauthorized={onUnauthorized} />} />
     <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
   </Routes>
 );
