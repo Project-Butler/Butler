@@ -6,6 +6,7 @@ import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { VerificationFailedNotice } from '../VerificationFailedNotice/VerificationFailedNotice';
 import { usePostOwnershipVerification } from '../../hooks/usePostOwnershipVerification';
 import { formatDateKST } from '../../utils/format';
+import { requestOwnerIdentityVerification } from '../../utils/identityVerification';
 import {
   getVerificationAction,
   RUNNER_UNAVAILABLE_CODE,
@@ -16,9 +17,12 @@ import {
 } from '../../utils/ownershipVerification';
 
 const CONSENT_ROWS = [
-  ['수집 항목', '회원 정보의 이름·생년월일, 건축물대장의 소유자 정보'],
-  ['이용 목적', '회원 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.'],
-  ['보유 기간', '건축물대장의 소유자 정보는 비교가 끝나면 바로 파기해요. 회원 정보는 따로 저장하지 않고 비교에만 써요.'],
+  ['수집 항목', '본인인증 결과(이름·생년월일), 회원 정보의 이름·생년월일, 건축물대장의 소유자 정보'],
+  ['이용 목적', '본인인증 결과와 회원 정보가 같은지 확인하고, 회원 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.'],
+  [
+    '보유 기간',
+    '본인인증 결과와 건축물대장의 소유자 정보는 비교가 끝나면 바로 파기해요. 회원 정보는 따로 저장하지 않고 비교에만 써요. 이번 본인인증을 처리했다는 기록(본인인증 번호·처리 시각)은 부정 사용을 막기 위해 보관하고, 하루가 지나면 파기해요.',
+  ],
   ['거부 권리', '동의하지 않을 수 있지만, 동의하지 않으면 인증을 진행할 수 없어요.'],
 ];
 
@@ -34,24 +38,44 @@ const ConsentNotice = () => (
 );
 
 // 권리자 인증 팝업(호실 상세 위). 개인정보 수집·이용 동의 → [나중에 하기]·[인증 시작]만 둔다.
+// [인증 시작]을 누르면 본인인증 창을 먼저 열고, 본인인증을 마쳐야 권리자 인증을 요청한다.
 // 인증 절차(단계·방식·소요 시간)는 화면에 보여 주지 않는다. 진행·완료·취소 상태는 문구와 버튼만 바뀐다.
 // - ownership: 지금 소유 중인 소유 관계(없으면 isNotOwner), latest: useGetLatestOwnershipVerification 결과
 export const VerifyModal = ({ propertyName, ownership, isNotOwner, latest, notice, onClose, onInquiry, onRegisterAnother, onRevoked, onUnauthorized }) => {
   const start = usePostOwnershipVerification({ onUnauthorized });
   const [isConsented, setIsConsented] = useState(false);
+  // [임시·시연용] 테스트 모드: 본인인증은 하되 본인인증 인적사항과 회원 정보 대조를 건너뛴다. 운영 배포 전 제거.
+  const [isTestMode, setIsTestMode] = useState(false);
+  const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false);
+  const [identityError, setIdentityError] = useState(null);
 
   const action = ownership && getVerificationAction(ownership);
   const isDone = ownership && action === null && ownership.verificationStatus === 'VERIFIED';
   const isRunning = latest.isActive;
-  const isReady = isConsented && !start.isLoading;
+  const isBusy = isVerifyingIdentity || start.isLoading;
+  const isReady = isConsented && !isBusy;
   const startError = start.error;
   const isPreparing = startError?.code === RUNNER_UNAVAILABLE_CODE;
 
-  // 이름·생년월일은 회원 정보를 쓰므로 동의만 받고 바로 시작한다.
+  // 본인인증 → 권리자 인증 요청. 본인인증 인적사항은 서버가 포트원에서 직접 읽어 회원 정보와 비교한다.
   const handleStart = async () => {
     if (!isReady) return;
+    setIdentityError(null);
+    setIsVerifyingIdentity(true);
+    const identity = await requestOwnerIdentityVerification();
+    setIsVerifyingIdentity(false);
+    if (identity.error) {
+      setIdentityError(identity.error);
+      return;
+    }
+
     setIsConsented(false);
-    const { data, error } = await start.startVerification({ ownershipId: ownership.id, consent: true });
+    const { data, error } = await start.startVerification({
+      ownershipId: ownership.id,
+      consent: true,
+      identityVerificationId: identity.identityVerificationId,
+      testMode: isTestMode,
+    });
     if (data) {
       latest.trackAttempt(data);
       return;
@@ -136,7 +160,7 @@ export const VerifyModal = ({ propertyName, ownership, isNotOwner, latest, notic
       title: action === 'RENEW' ? '권리자 재인증' : '권리자 인증',
       body: (
         <div className="space-y-4">
-          {latest.data?.status === 'FAILED' && !startError && <VerificationFailedNotice onInquiry={onInquiry} />}
+          {latest.data?.status === 'FAILED' && !startError && !identityError && <VerificationFailedNotice onInquiry={onInquiry} />}
           <p className="text-label font-semibold text-ink">개인정보 수집·이용 동의</p>
           <ConsentNotice />
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-body text-ink">
@@ -145,21 +169,34 @@ export const VerifyModal = ({ propertyName, ownership, isNotOwner, latest, notic
               className="accent-accent"
               checked={isConsented}
               onChange={(event) => setIsConsented(event.target.checked)}
-              disabled={start.isLoading}
+              disabled={isBusy}
             />
             개인정보 수집·이용에 동의해요
           </label>
+          {/* [임시·시연용] 테스트 모드 토글. 운영 배포 전 제거. */}
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-body text-ink-2">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={isTestMode}
+              onChange={(event) => setIsTestMode(event.target.checked)}
+              disabled={isBusy}
+            />
+            테스트 모드 (본인인증 인적사항 대조 건너뛰기)
+          </label>
+          <p className="text-sub text-ink-3">인증 시작을 누르면 본인인증 창이 열려요. 본인인증을 마쳐야 권리자 인증이 진행돼요.</p>
+          {identityError && <NoticeBox>{identityError.message}</NoticeBox>}
           {isPreparing && <NoticeBox tone="seal">{VERIFICATION_PREPARING_MESSAGE}</NoticeBox>}
-          {startError && !isPreparing && <NoticeBox>{startError.message}</NoticeBox>}
+          {startError && !isPreparing && !identityError && <NoticeBox>{startError.message}</NoticeBox>}
         </div>
       ),
       footer: (
         <>
-          <Button variant="secondary" size="h44" onClick={onClose} disabled={start.isLoading}>
+          <Button variant="secondary" size="h44" onClick={onClose} disabled={isBusy}>
             나중에 하기
           </Button>
           <Button variant="verify" size="h44" onClick={handleStart} disabled={!isReady}>
-            {start.isLoading ? '시작하는 중' : '인증 시작'}
+            {isVerifyingIdentity ? '본인인증 중' : start.isLoading ? '시작하는 중' : '인증 시작'}
           </Button>
         </>
       ),

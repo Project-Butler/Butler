@@ -19,10 +19,12 @@ import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSig
 import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../helpers/fakeLedgerRunner.js';
 import { decryptField } from '../../../src/platform/fieldCrypto.js';
 import { createRemoteRunner } from '../../../src/domains/ownershipVerifications/runners/remote.js';
+import { identityVerificationError, PURGE_SCHEDULE } from '../../../src/domains/ownershipVerifications/identityVerification.js';
 import {
   findAttemptForUser,
   findLatestAttempt,
   findRenewalTargets,
+  purgeExpiredIdentityVerificationUses,
   receiveRunnerResult,
   runAttempt,
   startOwnershipVerification,
@@ -45,11 +47,41 @@ const identityOfAttempt = async (attemptId) => {
   return { name: requester.name, birthDate: decryptField(requester.birthDate) };
 };
 
+// 가짜 본인인증(포트원 조회 대신). verifiedAs(userId)로 만든 ID는 그 회원의 이름·생년월일로 인증된 것으로 본다.
+// 그 밖의 ID는 포트원에 없는 것(null)으로 본다. 만든 ID는 끝날 때 사용 기록을 지우려고 모아 둔다.
+const verifiedPeople = new Map();
+const issuedIdentityVerificationIds = new Set();
+const newIdentityVerificationId = () => {
+  const id = `iv${randomUUID().replaceAll('-', '')}`;
+  issuedIdentityVerificationIds.add(id);
+  return id;
+};
+const verifiedAs = (userId, customer) => {
+  const id = newIdentityVerificationId();
+  verifiedPeople.set(id, { userId, customer });
+  return id;
+};
+const lookupIdentity = async (identityVerificationId) => {
+  const person = verifiedPeople.get(identityVerificationId);
+  if (!person) return null;
+  const user = await prisma.user.findUnique({ where: { id: person.userId }, select: { name: true, birthDate: true } });
+  return {
+    status: 'VERIFIED',
+    id: identityVerificationId,
+    verifiedAt: new Date().toISOString(),
+    verifiedCustomer: { name: user.name, birthDate: decryptField(user.birthDate), ...person.customer },
+  };
+};
+
 // 실행을 직접 기다리는 가짜 러너 설정(테스트 전용, 앱에는 fixture 모드가 없다).
 const inline = () => {
   const pending = [];
   return {
-    deps: { selectRunner: () => createFixtureRunner({ getIdentity: identityOfAttempt }), schedule: (fn) => pending.push(fn) },
+    deps: {
+      selectRunner: () => createFixtureRunner({ getIdentity: identityOfAttempt }),
+      schedule: (fn) => pending.push(fn),
+      lookupIdentityVerification: lookupIdentity,
+    },
     drain: () => Promise.all(pending.splice(0).map((fn) => fn())),
   };
 };
@@ -78,6 +110,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     await prisma.auditLog.deleteMany({
       where: { resourceType: 'OWNERSHIP', resourceId: { in: ownershipIds } },
     });
+    await prisma.identityVerificationUse.deleteMany({ where: { identityVerificationId: { in: [...issuedIdentityVerificationIds] } } });
     await fixture.cleanup();
   });
 
@@ -102,7 +135,8 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     ownershipIds.push(ownership.id);
     return ownership;
   };
-  const input = (ownership) => ({ ownershipId: ownership.id });
+  // 소유 관계의 회원으로 본인인증을 마친 시작 입력.
+  const input = (ownership, extra = {}) => ({ ownershipId: ownership.id, identityVerificationId: verifiedAs(ownership.userId), ...extra });
   const getAttempt = (id) => prisma.ownershipVerificationAttempt.findUnique({ where: { id } });
   const getOwnership = (id) => prisma.ownership.findUnique({ where: { id } });
   const start = async (user, ownership) => {
@@ -156,7 +190,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
     const consent = await prisma.consent.findFirst({ where: { userId: user.id } });
     assert.equal(consent.type, 'OWNERSHIP_VERIFICATION');
-    assert.equal(consent.version, '2026-11-03-member-birth-date');
+    assert.equal(consent.version, '2026-11-18-identity-verification');
     assert.equal((await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_REQUESTED')).length, 1);
     assert.equal((await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_APPLIED')).length, 1);
     assert.equal((await activitiesOf(user, 'OWNERSHIP_VERIFICATION_REQUESTED')).length, 1);
@@ -168,7 +202,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
   test('러너를 쓸 수 없으면 503이고 시도 행이 없다', async () => {
     const user = await createUser();
     const ownership = await own(user, await createProperty());
-    await rejectsWith(startOwnershipVerification(user, input(ownership), null, { selectRunner: () => null }), 'VERIFICATION_RUNNER_UNAVAILABLE');
+    await rejectsWith(startOwnershipVerification(user, input(ownership), null, { selectRunner: () => null, lookupIdentityVerification: lookupIdentity }), 'VERIFICATION_RUNNER_UNAVAILABLE');
     assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: ownership.id } }), 0);
     assert.equal(await prisma.consent.count({ where: { userId: user.id } }), 0);
   });
@@ -201,7 +235,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const { deps } = inline();
     const ownership = await own(user, await createProperty());
     await rejectsWith(startOwnershipVerification(stranger, input(ownership), null, deps), 'OWNERSHIP_NOT_FOUND');
-    await rejectsWith(startOwnershipVerification(user, { ownershipId: randomUUID() }, null, deps), 'OWNERSHIP_NOT_FOUND');
+    await rejectsWith(startOwnershipVerification(user, { ownershipId: randomUUID(), identityVerificationId: verifiedAs(user.id) }, null, deps), 'OWNERSHIP_NOT_FOUND');
 
     const ended = await own(user, await createProperty(), { endedAt: new Date(), endReason: 'SELF_ENDED' });
     await rejectsWith(startOwnershipVerification(user, input(ended), null, deps), 'OWNERSHIP_ENDED');
@@ -258,7 +292,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const ownership = await own(second, property);
 
     const runner = { kind: 'fake', awaitDispatch: true, run: async () => assert.fail('발급하면 안 된다') };
-    const response = await startOwnershipVerification(second, input(ownership), null, { selectRunner: () => runner });
+    const response = await startOwnershipVerification(second, input(ownership), null, { selectRunner: () => runner, lookupIdentityVerification: lookupIdentity });
     assert.equal(response.status, 'FAILED');
     const attempt = await getAttempt(response.id);
     assert.equal(attempt.reasonCode, 'VERIFIED_OWNER_EXISTS');
@@ -453,6 +487,121 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal((await getAttempt(attempt.id)).reasonCode, 'VERIFIED_OWNER_EXISTS');
   });
 
+  const usesOf = (user) => prisma.identityVerificationUse.count({ where: { userId: user.id } });
+
+  test('본인인증 거절: 미완료·불일치·만료·조회 실패는 시도·동의·사용 기록 없이 거절한다', async () => {
+    const user = await createUser();
+    const ownership = await own(user, await createProperty());
+    const { deps } = inline();
+    const startWith = (identityVerificationId, extraDeps = {}) =>
+      startOwnershipVerification(user, { ownershipId: ownership.id, identityVerificationId }, null, { ...deps, ...extraDeps });
+
+    await rejectsWith(startWith(newIdentityVerificationId()), 'IDENTITY_VERIFICATION_NOT_VERIFIED');
+    await rejectsWith(startWith(verifiedAs(user.id, { name: '김다른사람' })), 'IDENTITY_VERIFICATION_MISMATCH');
+    await rejectsWith(startWith(verifiedAs(user.id, { birthDate: '1999-12-31' })), 'IDENTITY_VERIFICATION_MISMATCH');
+    const expired = async (id) => ({ ...(await lookupIdentity(id)), verifiedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString() });
+    await rejectsWith(startWith(verifiedAs(user.id), { lookupIdentityVerification: expired }), 'IDENTITY_VERIFICATION_EXPIRED');
+    const down = async () => {
+      throw identityVerificationError('UNAVAILABLE');
+    };
+    await rejectsWith(startWith(verifiedAs(user.id), { lookupIdentityVerification: down }), 'IDENTITY_VERIFICATION_UNAVAILABLE');
+
+    assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: ownership.id } }), 0);
+    assert.equal(await prisma.consent.count({ where: { userId: user.id } }), 0);
+    assert.equal(await usesOf(user), 0);
+  });
+
+  test('같은 본인인증으로 다시 시작하면 409. 새 시도를 만들 때만 사용 처리한다', async () => {
+    const user = await createUser();
+    const first = await own(user, await createProperty());
+    const second = await own(user, await createProperty());
+    const { deps } = inline();
+    const identityVerificationId = verifiedAs(user.id);
+
+    const started = await startOwnershipVerification(user, { ownershipId: first.id, identityVerificationId }, null, deps);
+    assert.equal(await usesOf(user), 1);
+    // 진행 중 시도를 돌려줄 때는 새 ID를 사용 처리하지 않는다.
+    const again = await startOwnershipVerification(user, input(first), null, deps);
+    assert.equal(again.id, started.id);
+    assert.equal(await usesOf(user), 1);
+
+    await rejectsWith(
+      startOwnershipVerification(user, { ownershipId: second.id, identityVerificationId }, null, deps),
+      'IDENTITY_VERIFICATION_ALREADY_USED',
+    );
+    assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { ownershipId: second.id } }), 0);
+    // 다른 호실은 새로 본인인증하면 시작할 수 있다.
+    await startOwnershipVerification(user, input(second), null, deps);
+    assert.equal(await usesOf(user), 2);
+  });
+
+  test('사용 기록 정리: 하루가 지난 기록만 지우고, 지운 건수만 돌려준다', async () => {
+    const user = await createUser();
+    const now = new Date();
+    const oldId = newIdentityVerificationId();
+    const edgeId = newIdentityVerificationId();
+    const recentId = newIdentityVerificationId();
+    await prisma.identityVerificationUse.createMany({
+      data: [
+        { identityVerificationId: oldId, userId: user.id, usedAt: new Date(now.getTime() - DAY - 1000) },
+        { identityVerificationId: edgeId, userId: user.id, usedAt: new Date(now.getTime() - DAY) },
+        { identityVerificationId: recentId, userId: user.id, usedAt: new Date(now.getTime() - 60 * 1000) },
+      ],
+    });
+
+    const result = await purgeExpiredIdentityVerificationUses({ now });
+    assert.ok(result.deleted >= 1);
+    assert.deepEqual(Object.keys(result), ['deleted']);
+    const left = await prisma.identityVerificationUse.findMany({ where: { userId: user.id }, select: { identityVerificationId: true } });
+    assert.deepEqual(left.map((row) => row.identityVerificationId).sort(), [edgeId, recentId].sort());
+  });
+
+  test('사용 기록 정리 cron 경로: CRON_SECRET 이 없으면 숨기고(404), 있으면 Bearer 가 틀릴 때 401', async () => {
+    const server = app.listen(0);
+    try {
+      await new Promise((resolve) => server.once('listening', resolve));
+      const { port } = server.address();
+      const res = await fetch(`http://127.0.0.1:${port}${PURGE_SCHEDULE.path}`, { headers: { Authorization: 'Bearer wrong' } });
+      assert.equal(res.status, process.env.CRON_SECRET ? 401 : 404);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test('테스트 모드: 인적사항이 달라도 시도를 만들고, 감사에 대조를 건너뛴 사실만 남긴다', async () => {
+    const user = await createUser();
+    const ownership = await own(user, await createProperty());
+    const other = await own(user, await createProperty());
+    const { deps, drain } = inline();
+    const mismatched = verifiedAs(user.id, { name: '김실제팀원', birthDate: '1999-12-31' });
+
+    const response = await startOwnershipVerification(
+      user,
+      { ownershipId: ownership.id, identityVerificationId: mismatched, testMode: true },
+      null,
+      deps,
+    );
+    await drain();
+    assert.equal((await getAttempt(response.id)).status, 'VERIFIED');
+    const [requested] = await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_REQUESTED');
+    assert.equal(requested.after.identityCheckSkipped, true);
+    assert.ok(!JSON.stringify(requested).includes('김실제팀원') && !JSON.stringify(requested).includes('1999-12-31'));
+
+    // 테스트 모드가 아니면 대조하고, 감사에 표시가 없다.
+    const plain = await startOwnershipVerification(user, input(other), null, deps);
+    await drain();
+    assert.equal((await getAttempt(plain.id)).status, 'VERIFIED');
+    const [plainAudit] = await auditsOf(other, 'OWNERSHIP_VERIFICATION_REQUESTED');
+    assert.equal(plainAudit.after.identityCheckSkipped, undefined);
+
+    // 테스트 모드여도 미완료 본인인증은 거절한다.
+    const third = await own(user, await createProperty());
+    await rejectsWith(
+      startOwnershipVerification(user, { ownershipId: third.id, identityVerificationId: newIdentityVerificationId(), testMode: true }, null, deps),
+      'IDENTITY_VERIFICATION_NOT_VERIFIED',
+    );
+  });
+
   test('회원 생년월일이 없으면 422이고 시도·동의를 남기지 않는다', async () => {
     const user = await createUser();
     await prisma.user.update({ where: { id: user.id }, data: { birthDate: null } });
@@ -477,7 +626,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     const user = await createUser();
     const down = await own(user, await createProperty());
     const failing = createRemoteRunner({ url: 'http://runner', secret: 's', fetchImpl: async () => ({ ok: false }) });
-    const failed = await startOwnershipVerification(user, input(down), null, { selectRunner: () => failing });
+    const failed = await startOwnershipVerification(user, input(down), null, { selectRunner: () => failing, lookupIdentityVerification: lookupIdentity });
     assert.equal(failed.status, 'FAILED');
     assert.equal((await getAttempt(failed.id)).reasonCode, 'ISSUE_FAILED');
 
@@ -491,7 +640,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
         return { ok: true };
       },
     });
-    const accepted = await startOwnershipVerification(user, input(up), null, { selectRunner: () => working });
+    const accepted = await startOwnershipVerification(user, input(up), null, { selectRunner: () => working, lookupIdentityVerification: lookupIdentity });
     assert.equal(accepted.status, 'RUNNING');
     assert.ok(!body.includes(BIRTH_DATE) && !body.includes(NAME));
     await receiveRunnerResult(accepted.id, matched);
@@ -564,7 +713,9 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
 
   describe('실제 앱 경로', () => {
     const saved = {};
-    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER_URL', 'OWNERSHIP_VERIFICATION_RUNNER_SECRET', 'ACCESS_TOKEN_SECRET'];
+    const KEYS = ['OWNERSHIP_VERIFICATION_RUNNER_URL', 'OWNERSHIP_VERIFICATION_RUNNER_SECRET', 'ACCESS_TOKEN_SECRET', 'PORTONE_API_SECRET'];
+    const PORTONE_PREFIX = 'https://api.portone.io/identity-verifications/';
+    let realFetch;
     const RUNNER_SECRET = randomUUID();
     let server;
     let runnerServer;
@@ -601,6 +752,15 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     before(async () => {
       for (const key of KEYS) saved[key] = process.env[key];
       process.env.ACCESS_TOKEN_SECRET ||= randomUUID();
+      process.env.PORTONE_API_SECRET = 'test-portone-secret';
+      // 포트원 조회만 가짜로 돌려준다. 나머지 요청(API·가짜 발급 서버)은 실제 fetch로 보낸다.
+      realFetch = globalThis.fetch;
+      globalThis.fetch = async (url, init) => {
+        const text = String(url);
+        if (!text.startsWith(PORTONE_PREFIX)) return realFetch(url, init);
+        const found = await lookupIdentity(decodeURIComponent(text.slice(PORTONE_PREFIX.length)));
+        return found ? Response.json(found) : Response.json({ type: 'IDENTITY_VERIFICATION_NOT_FOUND' }, { status: 404 });
+      };
       server = await new Promise((resolve) => {
         const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
       });
@@ -613,6 +773,7 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       runnerUrl = `http://127.0.0.1:${runnerServer.address().port}`;
     });
     after(async () => {
+      globalThis.fetch = realFetch;
       for (const key of KEYS) {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
