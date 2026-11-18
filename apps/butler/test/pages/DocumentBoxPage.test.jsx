@@ -125,6 +125,44 @@ describe('DocumentBoxPage (문서함)', () => {
     expect(await screen.findByText('찾을 수 없는 호실이라 첫 호실을 열었어요.')).toBeInTheDocument();
   });
 
+  // 목록 응답을 손으로 끝내는 도구. relation별로 resolve를 꺼내 쓴다
+  const deferLists = ({ owners = [property('p1', '잠실엘스 101동 1203호')], deferOwners = false } = {}) => {
+    const pending = {};
+    api.getPropertyList.mockImplementation(({ relation }) => {
+      if (relation === 'OWNER' && !deferOwners) return Promise.resolve({ data: owners, meta: { hasNext: false } });
+      return new Promise((resolve) => {
+        pending[relation] = (data) => resolve({ data, meta: { hasNext: false } });
+      });
+    });
+    return pending;
+  };
+
+  it('예전 호실 목록이 늦어도 내 호실 목록만 오면 호실과 문서를 보여 준다', async () => {
+    deferLists();
+    renderPage();
+    expect(await screen.findByText('등기부.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('잠실엘스 101동 1203호');
+    expect(screen.queryByRole('button', { name: /예전 호실/ })).not.toBeInTheDocument();
+  });
+
+  it('주소에 호실이 있으면 호실 목록을 기다리지 않고 문서함을 함께 부른다', async () => {
+    deferLists({ deferOwners: true });
+    renderPage();
+    await waitFor(() => expect(api.getPropertyDocumentBox).toHaveBeenCalledWith('p1'));
+    expect(screen.getByText('불러오는 중입니다')).toBeInTheDocument();
+  });
+
+  it('예전 호실 주소는 예전 호실 목록이 올 때까지 첫 호실로 바꾸지 않는다', async () => {
+    const pending = deferLists();
+    api.getPropertyDocumentBox.mockResolvedValue(makeBox({ property: { id: 'p2', displayName: '헬리오시티 305동 804호' } }));
+    const { onNavigate } = renderPage({ propertyId: 'p2' });
+    await waitFor(() => expect(api.getPropertyDocumentBox).toHaveBeenCalledWith('p2'));
+    expect(onNavigate).not.toHaveBeenCalled();
+    pending.FORMER_OWNER([former('p2', '헬리오시티 305동 804호')]);
+    expect(await screen.findByRole('button', { name: /예전 호실/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it('예전 호실은 접힌 묶음이고 펼치면 "소유 종료" 줄이 나온다', async () => {
     setupLists({ formers: [former('p2', '헬리오시티 305동 804호')] });
     renderPage();
