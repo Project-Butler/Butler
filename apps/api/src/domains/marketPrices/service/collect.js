@@ -2,6 +2,7 @@
 // 한 번 실행에서(우선순위 순): ① 처음 보는 묶음(한 번도 못 모은 달)의 13개월 채우기 ② 최근 3개월 다시 모으기.
 // 묶음 = (시군구, 계약월, 매매/전월세). 묶음마다 그 행을 지우고 새로 넣는다(한 트랜잭션 — 해제된 거래가 빠지게).
 // 시간이 모자라면 오래 안 시도한 묶음부터 하고 남은 것은 다음 번. 끝에 원천을 다시 부르지 않고 나중에 등록된 단지를 잇는다.
+// 원천은 하나씩 부르고(CONCURRENCY), 시간 초과 · 23 은 실행 한도 안에서 한 번 더 부른다(rtmsProvider.fetchRtmsMonth).
 
 import { prisma } from '../../../platform/prismaClient.js';
 import { listAllOwnedLegalDongCodes } from '../../community/platformBridge.js';
@@ -69,12 +70,15 @@ export const loadLinkIndex = async (sigunguCode) => {
   return buildLinkIndex({ complexes, regions, aptSeqHints: hints.map((row) => [row.aptSeq, row.complexId]) });
 };
 
-// 묶음 하나: 받기 → 해제 빼기 → 잇기 → 지우고 넣기(한 트랜잭션). 받기에 실패하면 묶음은 그대로 두고 실패만 적는다
-const collectOne = async (task, { fetchImpl, getIndex, nowDate }) => {
+// 묶음 하나: 받기 → 해제 빼기 → 잇기 → 지우고 넣기(한 트랜잭션). 받기에 실패하면(다시 시도까지 실패) 묶음은 그대로 두고 실패만 적는다
+const collectOne = async (task, { fetchImpl, getIndex, nowDate, now, deadline, sleep }) => {
   const { sigunguCode, yearMonth, kind } = task;
   const where = { sigunguCode_yearMonth_dealKind: { sigunguCode, yearMonth, dealKind: kind } };
+  let calls = 0;
   try {
-    const { deals, calls } = await fetchRtmsMonth({ kind, sigunguCode, yearMonth }, { fetchImpl });
+    const fetched = await fetchRtmsMonth({ kind, sigunguCode, yearMonth }, { fetchImpl, now, deadline, ...(sleep ? { sleep } : {}) });
+    const { deals } = fetched;
+    calls = fetched.calls;
     const kept = deals.filter((deal) => !deal.cancelled && deal.contractDate);
     const linked = linkDeals(kept, await getIndex(sigunguCode));
     const collectedAt = nowDate();
@@ -118,7 +122,8 @@ const collectOne = async (task, { fetchImpl, getIndex, nowDate }) => {
       create: { sigunguCode, yearMonth, dealKind: kind, status: 'FAILED', attemptedAt, lastErrorCode: code },
       update: { status: 'FAILED', attemptedAt, lastErrorCode: code },
     });
-    return { ok: false, calls: error?.calls ?? 1, code };
+    // 받기 실패면 오류에 실제로 부른 횟수가 붙어 있다. 받은 뒤 저장에서 실패했으면 받을 때 부른 횟수
+    return { ok: false, calls: error?.calls ?? calls, code };
   }
 };
 
@@ -160,8 +165,8 @@ export const rebuildSigunguLinks = async (sigunguCode) => {
   return { unlinked, relinked };
 };
 
-// 정기 실행 한 번. sigunguCodes 를 주면 그곳만(로컬 확인용), budgetMs 로 시간 한도를 바꾼다(테스트).
-export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs = RUN_BUDGET_MS, sigunguCodes } = {}) => {
+// 정기 실행 한 번. sigunguCodes 를 주면 그곳만(로컬 확인용), budgetMs 로 시간 한도를, sleep 으로 다시 시도 전 쉬기를 바꾼다(테스트).
+export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs = RUN_BUDGET_MS, sigunguCodes, sleep } = {}) => {
   const startedAt = now();
   const deadline = startedAt + budgetMs;
   const nowDate = () => new Date(now());
@@ -183,7 +188,7 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
     while (next < tasks.length && now() + REQUEST_TIMEOUT_MS <= deadline) {
       const task = tasks[next];
       next += 1;
-      const result = await collectOne(task, { fetchImpl, getIndex, nowDate });
+      const result = await collectOne(task, { fetchImpl, getIndex, nowDate, now, deadline, sleep });
       summary.calls += result.calls;
       if (result.ok) {
         summary.done += 1;

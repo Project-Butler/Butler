@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { MAX_RESPONSE_BYTES } from '../../../src/domains/marketPrices/marketPriceRules.js';
+import { MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS, RETRY_DELAY_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
 import { fetchRtmsMonth, fetchRtmsPage, normalizeItem, parseRtmsXml, RtmsError, toNumber } from '../../../src/domains/marketPrices/rtmsProvider.js';
 import { EMPTY_XML, KEY_ERROR_XML, RENT_ITEMS, RENT_XML, TRADE_ITEMS, TRADE_XML, wrapResponse } from './fixtures/rtmsResponses.js';
 
@@ -17,6 +17,26 @@ after(() => {
 });
 
 const respond = (xml, { status = 200 } = {}) => ({ ok: status < 400, status, headers: new Headers(), text: async () => xml });
+// AbortSignal.timeout 이 끊을 때 나는 오류(Node: DOMException TimeoutError, 옛 코드 23)
+const timeoutError = () => new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+// 헤더는 왔는데 본문을 읽다 시간 초과
+const bodyTimeout = () => ({ ok: true, status: 200, headers: new Headers(), text: async () => { throw timeoutError(); } });
+// 공공데이터포털 게이트웨이 오류 봉투(KEY_ERROR_XML 과 같은 모양, 코드만 다름)
+const gatewayError = (code, authMsg) =>
+  `<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnAuthMsg>${authMsg}</returnAuthMsg><returnReasonCode>${code}</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>`;
+// 결과 코드 23 — 활용 가이드 오류표에 없는 코드라 문구는 지어내지 않는다
+const CODE_23_XML = gatewayError('23', 'SERVICE ERROR');
+// 응답을 차례로 돌려주는 가짜 fetch(함수면 불러서 던지거나 돌려준다). 부른 횟수를 센다
+const sequence = (...steps) => {
+  const fake = { count: 0 };
+  fake.fetchImpl = async () => {
+    const step = steps[Math.min(fake.count, steps.length - 1)];
+    fake.count += 1;
+    return typeof step === 'function' ? step() : respond(step);
+  };
+  return fake;
+};
+const month = { kind: 'RENT', sigunguCode: '11710', yearMonth: '2026-10' };
 
 describe('실거래가 응답 읽기', () => {
   test('매매: 쉼표 금액을 원으로, 빈 칸(" ")은 null, 위치 칸은 원문 그대로', () => {
@@ -125,6 +145,8 @@ describe('실거래가 받기', () => {
       [async () => respond(KEY_ERROR_XML), '30'],
       [async () => respond('<html>bad gateway</html>', { status: 502 }), 'HTTP_502'],
       [async () => { throw new TypeError(`fetch failed for https://apis.data.go.kr/?serviceKey=${FAKE_KEY}`); }, 'NETWORK'],
+      [async () => { throw timeoutError(); }, 'TIMEOUT'], // 헤더가 8초 안에 안 옴
+      [async () => bodyTimeout(), 'TIMEOUT'], // 본문이 8초 안에 안 끝남 — 11/18 에는 이것이 "23" 으로 새어 나갔다
       [async () => respond('x'.repeat(MAX_RESPONSE_BYTES + 1)), 'TOO_LARGE'],
     ];
     for (const [fetchImpl, code] of cases) {
@@ -146,5 +168,94 @@ describe('실거래가 받기', () => {
     );
     assert.equal(called, false);
     process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
+  });
+});
+
+describe('실거래가 다시 시도(시간 초과 · 23 만 한 번 더)', () => {
+  const sleeper = () => {
+    const slept = [];
+    return { slept, sleep: async (ms) => { slept.push(ms); } };
+  };
+
+  test('23 → 성공: 쉬고 한 번 더 불러 받는다(부른 횟수 2)', async () => {
+    const fake = sequence(CODE_23_XML, RENT_XML);
+    const { slept, sleep } = sleeper();
+    const result = await fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep });
+    assert.equal(result.deals.length, RENT_ITEMS.length);
+    assert.equal(result.calls, 2);
+    assert.equal(fake.count, 2);
+    assert.deepEqual(slept, [RETRY_DELAY_MS]);
+    assert.ok(RETRY_DELAY_MS >= 1000 && RETRY_DELAY_MS <= 2000);
+  });
+
+  test('23 → 23: 한 번만 더 하고 실패(코드 23, 부른 횟수 2)', async () => {
+    const fake = sequence(CODE_23_XML, CODE_23_XML, RENT_XML);
+    const { slept, sleep } = sleeper();
+    await assert.rejects(fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep }), (error) => {
+      assert.ok(error instanceof RtmsError);
+      assert.equal(error.code, '23');
+      assert.equal(error.calls, 2);
+      return true;
+    });
+    assert.equal(fake.count, 2); // 세 번째는 부르지 않는다
+    assert.deepEqual(slept, [RETRY_DELAY_MS]);
+  });
+
+  test('시간 초과 → 성공: 헤더 시간 초과 · 본문 시간 초과 모두 한 번 더', async () => {
+    for (const first of [() => { throw timeoutError(); }, bodyTimeout]) {
+      const fake = sequence(first, RENT_XML);
+      const { slept, sleep } = sleeper();
+      const result = await fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep });
+      assert.equal(result.deals.length, RENT_ITEMS.length);
+      assert.equal(result.calls, 2);
+      assert.deepEqual(slept, [RETRY_DELAY_MS]);
+    }
+  });
+
+  test('시간 초과 → 시간 초과: 실패(코드 TIMEOUT, 부른 횟수 2)', async () => {
+    const fake = sequence(bodyTimeout, bodyTimeout, RENT_XML);
+    const { sleep } = sleeper();
+    await assert.rejects(fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep }), (error) => error.code === 'TIMEOUT' && error.calls === 2);
+    assert.equal(fake.count, 2);
+  });
+
+  test('다른 오류(키 · 파라미터 · 일일 한도 · HTTP · 연결)는 다시 시도하지 않는다', async () => {
+    const cases = [
+      [KEY_ERROR_XML, '30'],
+      [gatewayError('22', 'LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR'), '22'],
+      [gatewayError('10', 'INVALID_REQUEST_PARAMETER_ERROR'), '10'],
+      [() => respond('<html>bad gateway</html>', { status: 502 }), 'HTTP_502'],
+      [() => { throw new TypeError('fetch failed'); }, 'NETWORK'],
+    ];
+    for (const [first, code] of cases) {
+      const fake = sequence(first, RENT_XML);
+      const { slept, sleep } = sleeper();
+      await assert.rejects(fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep }), (error) => {
+        assert.equal(error.code, code);
+        assert.equal(error.calls, 1);
+        return true;
+      });
+      assert.equal(fake.count, 1, code);
+      assert.deepEqual(slept, [], code);
+    }
+  });
+
+  test('실행 시간 한도 안에 "쉬기 + 요청 하나" 가 안 들어가면 다시 하지 않는다', async () => {
+    const fake = sequence(CODE_23_XML, RENT_XML);
+    const { slept, sleep } = sleeper();
+    const deadline = 100_000;
+    const now = () => deadline - (RETRY_DELAY_MS + REQUEST_TIMEOUT_MS) + 1;
+    await assert.rejects(fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep, now, deadline }), (error) => error.code === '23' && error.calls === 1);
+    assert.equal(fake.count, 1);
+    assert.deepEqual(slept, []);
+  });
+
+  test('여러 쪽 묶음: 둘째 쪽에서 23 → 성공이면 부른 횟수 3', async () => {
+    const pages = [wrapResponse(RENT_ITEMS.slice(0, 4), { totalCount: 6, pageNo: 1 }), CODE_23_XML, wrapResponse(RENT_ITEMS.slice(4), { totalCount: 6, pageNo: 2 })];
+    const fake = sequence(...pages);
+    const { sleep } = sleeper();
+    const result = await fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep, pageSize: 4 });
+    assert.equal(result.deals.length, 6);
+    assert.equal(result.calls, 3);
   });
 });

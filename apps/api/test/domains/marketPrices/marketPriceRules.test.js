@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import cronRouter from '../../../src/domains/marketPrices/cronRouter.js';
-import { REFRESH_MONTHS, KEEP_MONTHS, SCHEDULE, areaRange, rentDealType } from '../../../src/domains/marketPrices/marketPriceRules.js';
+import {
+  CONCURRENCY,
+  KEEP_MONTHS,
+  REFRESH_MONTHS,
+  REQUEST_TIMEOUT_MS,
+  RETRY_CODES,
+  RETRY_DELAY_MS,
+  RETRY_LIMIT,
+  RUN_BUDGET_MS,
+  SCHEDULE,
+  areaRange,
+  rentDealType,
+} from '../../../src/domains/marketPrices/marketPriceRules.js';
 
 describe('시세 규칙 파일', () => {
   test('SCHEDULE 경로가 cron 라우터에 걸린 경로와 같고, 일정은 한국 시간 02:00(UTC 17:00)', () => {
@@ -29,5 +41,13 @@ describe('시세 규칙 파일', () => {
     assert.equal(REFRESH_MONTHS, 3);
     assert.equal(rentDealType(0), 'JEONSE');
     assert.equal(rentDealType(1), 'MONTHLY');
+  });
+
+  test('하나씩 부르고, 시간 초과 · 23 만 1 ~ 2초 쉬고 한 번 더 — 다시 시도 한 번이 실행 한도 안에 든다', () => {
+    assert.equal(CONCURRENCY, 1);
+    assert.deepEqual([...RETRY_CODES].sort(), ['23', 'TIMEOUT']);
+    assert.equal(RETRY_LIMIT, 1);
+    assert.ok(RETRY_DELAY_MS >= 1000 && RETRY_DELAY_MS <= 2000);
+    assert.ok(REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS < RUN_BUDGET_MS);
   });
 });
