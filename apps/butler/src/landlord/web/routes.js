@@ -110,7 +110,11 @@ const BUILDERS = {
     state: fromPage ? { fromPage } : undefined,
   }),
   // 서류함. 고른 호실(propertyId)은 주소에 남긴다. 없으면 화면이 첫 호실을 골라 주소를 바꾼다.
-  documents: ({ propertyId } = {}) => ({ pathname: '/documents', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  // type: 앱 문서함(M11)의 종류 목록('all'·'contract' 등). 웹 문서함은 쓰지 않는다.
+  documents: ({ propertyId, type } = {}) => {
+    const search = new URLSearchParams(Object.entries({ propertyId, type }).filter(([, value]) => value)).toString();
+    return { pathname: '/documents', search: search ? `?${search}` : '' };
+  },
   // 수리·점검(M09). 호실 필터(propertyId)는 주소에 남긴다. 등록 화면도 호실에서 오면 그 호실을 미리 고른다.
   tickets: ({ propertyId } = {}) => ({ pathname: '/tickets', search: propertyId ? `?propertyId=${propertyId}` : '' }),
   ticketRegister: ({ propertyId } = {}) => ({ pathname: '/tickets/new', search: propertyId ? `?propertyId=${propertyId}` : '' }),

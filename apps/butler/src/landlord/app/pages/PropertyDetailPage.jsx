@@ -8,6 +8,7 @@ import { useGetContractList } from '../../web/hooks/useGetContractList';
 import { useGetLatestOwnershipVerification } from '../../web/hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../../web/hooks/useGetManagementLogList';
 import { useGetProperty } from '../../web/hooks/useGetProperty';
+import { useGetPropertyDocumentBox } from '../../web/hooks/useGetPropertyDocumentBox';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../../web/utils/contract';
@@ -19,6 +20,7 @@ import { getVerificationBadge } from '../../web/utils/verificationBadge';
 import { AppTabShell } from '../components/AppTabShell/AppTabShell';
 import { MoreMenu } from '../components/MoreMenu/MoreMenu';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
+import { describeDocument, flattenDocuments } from '../utils/documentBoxView';
 import { formatLogDay } from '../utils/logGroups';
 import { useGoBack, useGoTo } from '../utils/navigation';
 import { formatPropertySpec, getMoreMenuTargets, toSummaryStats } from '../utils/propertyView';
@@ -26,6 +28,7 @@ import { formatPropertySpec, getMoreMenuTargets, toSummaryStats } from '../utils
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
 const CONTRACT_LIST_SIZE = 20;
 const LOG_PREVIEW_SIZE = 5;
+const DOCUMENT_PREVIEW_SIZE = 3;
 
 const TAB_OPTIONS = [
   { value: 'info', label: '기본 정보' },
@@ -196,13 +199,42 @@ const LogsTab = ({ propertyId, onOpen, onAll, onUnauthorized }) => {
   );
 };
 
-// [문서] 문서 API가 아직 관리 로그 첨부만 다뤄 호실 문서는 자리만 둔다.
-const DocumentsTab = () => (
-  <section aria-label="문서 준비 중" className={`${CARD_CLASS} px-4 py-8 text-center`}>
-    <p className="text-m-card font-semibold text-ink">준비 중</p>
-    <p className="mt-1 text-body text-ink-2">호실 문서함은 곧 열려요.</p>
-  </section>
-);
+// [문서] 이 호실 문서함의 문서 수·최근 문서 몇 건 + [문서함 열기](M11).
+const DocumentsTab = ({ propertyId, onOpenBox, onUnauthorized }) => {
+  const box = useGetPropertyDocumentBox(propertyId, { onUnauthorized });
+  if (box.error && !box.data) return <NoticeBox>{box.error.message}</NoticeBox>;
+  if (!box.data) return <Loading />;
+  const documents = flattenDocuments(box.data);
+  return (
+    <div className="flex flex-col gap-3">
+      {documents.length === 0 ? (
+        <EmptyText>아직 올린 문서가 없어요</EmptyText>
+      ) : (
+        <ul aria-label="최근 문서" className={`${CARD_CLASS} px-4`}>
+          {documents.slice(0, DOCUMENT_PREVIEW_SIZE).map((document) => {
+            const { typeLabel, date } = describeDocument(document);
+            return (
+              <li key={document.id} className="flex items-center gap-3 border-b border-line py-3 last:border-b-0">
+                <span className="min-w-0 flex-1 truncate text-body text-ink">{document.fileName}</span>
+                <span className="shrink-0 text-m-sub text-ink-3">
+                  {typeLabel} · <span className="font-num tabular-nums">{date}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Button variant="secondary" size="h44" onClick={onOpenBox}>
+        문서함 열기{documents.length > 0 && (
+          <>
+            {' '}
+            <span className="font-num tabular-nums">{documents.length}</span>
+          </>
+        )}
+      </Button>
+    </div>
+  );
+};
 
 // 임대인 앱 부동산 상세 (Figma M06). 웹 호실 상세와 같은 API를 쓰고, 수정·소유 종료처럼 폼이 필요한 동작은 웹 상세에서 한다.
 export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
@@ -298,7 +330,13 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
               onUnauthorized={onUnauthorized}
             />
           )}
-          {tab === 'documents' && <DocumentsTab />}
+          {tab === 'documents' && (
+            <DocumentsTab
+              propertyId={property.id}
+              onOpenBox={() => goTo('documents', { propertyId: property.id })}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
         </div>
       </div>
     );

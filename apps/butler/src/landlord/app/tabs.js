@@ -1,7 +1,7 @@
 import { BASE_PATH, HOME_PATH } from '../web/routes';
 
 // 임대인 앱 하단 탭 4칸 (Figma IA 기준 임시 — 탭 구성은 나중에 다시 정한다). 웹과 같은 주소를 쓴다.
-// subPaths: 탭 주소 말고도 이 탭을 활성으로 볼 주소 접두어. 내 자산에서 들어가는 호실 상세(M06)·관리 로그(M08)·수리·점검(M09)·소통(M10)은 '내 자산'이다.
+// subPaths: 탭 주소 말고도 이 탭을 활성으로 볼 주소 접두어. 내 자산에서 들어가는 호실 상세(M06)·관리 로그(M08)·수리·점검(M09)·소통(M10)·문서함(M11)은 '내 자산'이다.
 // 계약 상세(M07)는 하단 탭이 없는 화면이고, 계약 목록(/landlord/contracts)은 아직 어느 탭에도 속하지 않는다.
 export const TABS = [
   { key: 'home', label: '홈', icon: 'home', path: HOME_PATH },
@@ -10,7 +10,7 @@ export const TABS = [
     label: '내 자산',
     icon: 'building',
     path: `${BASE_PATH}/buildings`,
-    subPaths: [`${BASE_PATH}/properties`, `${BASE_PATH}/logs`, `${BASE_PATH}/tickets`, `${BASE_PATH}/threads`],
+    subPaths: [`${BASE_PATH}/properties`, `${BASE_PATH}/logs`, `${BASE_PATH}/tickets`, `${BASE_PATH}/threads`, `${BASE_PATH}/documents`],
   },
   { key: 'community', label: '커뮤니티', icon: 'users', path: `${BASE_PATH}/community` },
   { key: 'me', label: '내 정보', icon: 'user', path: `${BASE_PATH}/settings` },

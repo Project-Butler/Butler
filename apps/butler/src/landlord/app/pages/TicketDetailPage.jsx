@@ -7,6 +7,7 @@ import { useGetTicket } from '../../web/hooks/useGetTicket';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { usePatchTicket } from '../../web/hooks/usePatchTicket';
 import { formatUnitLabel } from '../../web/utils/unitAddress';
+import { BottomSheet } from '../components/BottomSheet/BottomSheet';
 import { useGoBack, useGoTo } from '../utils/navigation';
 import {
   canCancelTicket,
@@ -21,16 +22,6 @@ const CARD_CLASS = 'rounded-card border border-line bg-surface';
 const TEXTAREA_CLASS =
   'min-h-28 w-full rounded-input border border-line bg-surface px-3 py-2.5 text-body text-ink outline-none focus:border-accent disabled:bg-surface-2';
 const MAX_RESOLUTION_NOTE_LENGTH = 3000;
-
-// 아래에서 올라오는 시트(완료 처리·취소 확인).
-const BottomSheet = ({ label, onClose, children }) => (
-  <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-30 flex items-end justify-center bg-ink/40" onClick={onClose}>
-    <div className="flex max-h-[85vh] w-full max-w-[430px] flex-col gap-4 overflow-y-auto rounded-t-card bg-surface px-5 pb-7 pt-5" onClick={(event) => event.stopPropagation()}>
-      <h2 className="text-m-card font-semibold text-ink">{label}</h2>
-      {children}
-    </div>
-  </div>
-);
 
 // 완료 처리: 처리 내용(선택)·비용(선택)을 적고 DONE 으로 바꾼다. 완료되면 서버가 관리 로그(TICKET_SUMMARY)를 자동으로 남긴다.
 const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
