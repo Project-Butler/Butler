@@ -35,6 +35,7 @@ export const ROUTE_TABLE = [
   { key: 'ticketDetail', path: '/tickets/:ticketId' },
   { key: 'thread', path: '/threads/:threadId' },
   { key: 'setup', path: '/setup' },
+  { key: 'schedules', path: '/schedules' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
   { key: 'disputeSearch', path: '/disputes/search' },
@@ -123,6 +124,8 @@ const BUILDERS = {
   // 소통(M10) 대화방
   thread: ({ threadId }) => ({ pathname: `/threads/${threadId}` }),
   setup: () => ({ pathname: '/setup' }),
+  // 일정·알림(임대인 앱). 알림 탭이면 ?tab=notifications 를 주소에 남긴다(새로고침·뒤로 가기에도 같은 탭).
+  schedules: ({ tab } = {}) => ({ pathname: '/schedules', search: tab === 'notifications' ? '?tab=notifications' : '' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),
   // 자료 찾기: 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.
