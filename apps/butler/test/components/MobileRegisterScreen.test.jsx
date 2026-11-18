@@ -23,9 +23,22 @@ const renderScreen = (overrides = {}) => {
 const password = () => screen.getByLabelText(/^비밀번호\*?$/);
 const next = () => userEvent.click(screen.getByRole('button', { name: '다음 · 본인 확인' }));
 
+// 도메인은 브랜드색 칸을 눌러 목록에서 고른다.
+const pickDomain = async (name) => {
+  await userEvent.click(screen.getByRole('button', { name: '이메일 도메인' }));
+  await userEvent.click(await screen.findByRole('option', { name }));
+};
+
+// 이메일은 @ 앞을 입력하고 @ 뒤는 도메인 목록에서 고른다.
+const typeEmail = async (address) => {
+  const [local, domain] = address.split('@');
+  await userEvent.type(screen.getByLabelText(/^이메일$|^이메일\*/), local);
+  await pickDomain(domain);
+};
+
 const fillAccount = async ({ verify = true } = {}) => {
   await userEvent.type(screen.getByLabelText(/^이름/), '김집주');
-  await userEvent.type(screen.getByLabelText(/^이메일/), 'new@butler.test');
+  await typeEmail('new@gmail.com');
   if (verify) {
     await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
     await userEvent.type(await screen.findByLabelText('인증번호'), '123456');
@@ -38,6 +51,7 @@ const fillAccount = async ({ verify = true } = {}) => {
 
 const fillProfile = async () => {
   await userEvent.type(screen.getByLabelText(/^생년월일/), '1990-01-31');
+  await userEvent.type(screen.getByLabelText(/^휴대폰/), '010-1234-5678');
   await userEvent.click(screen.getByLabelText(/이용약관 동의/));
   await userEvent.click(screen.getByLabelText(/개인정보 수집·이용 동의/));
 };
@@ -72,7 +86,7 @@ describe('MobileRegisterScreen (M02)', () => {
 
     expect(screen.getByText('1 / 2')).toBeInTheDocument();
     expect(screen.getByText('이메일 인증을 완료해주세요.')).toBeInTheDocument();
-    expect(screen.getByLabelText(/^이메일/)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/^이메일\*?$/)).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('1단계를 마치면 2단계(본인 정보)로 가고, 2단계에는 휴대폰 "인증번호 받기"가 없다', async () => {
@@ -97,7 +111,7 @@ describe('MobileRegisterScreen (M02)', () => {
     expect(screen.getByText('이용약관에 동의해야 가입할 수 있습니다.')).toBeInTheDocument();
   });
 
-  it('[가입하기]는 웹과 같은 값(인증 토큰 포함, 빈 휴대폰은 null)을 넘긴다', async () => {
+  it('[가입하기]는 웹과 같은 값(인증 토큰 포함)을 넘긴다', async () => {
     const { onSubmit } = renderScreen();
     await fillAccount();
     await next();
@@ -107,9 +121,9 @@ describe('MobileRegisterScreen (M02)', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit).toHaveBeenCalledWith({
       name: '김집주',
-      email: 'new@butler.test',
+      email: 'new@gmail.com',
       password: 'abcd1234',
-      phone: null,
+      phone: '010-1234-5678',
       birthDate: '1990-01-31',
       termsAgreed: true,
       privacyAgreed: true,
@@ -172,6 +186,6 @@ describe('MobileRegisterScreen (M02)', () => {
 
   it('소셜 가입 링크를 1단계에 보여 준다', () => {
     renderScreen({ socialLoginHref: (provider) => `/oauth/${provider}` });
-    expect(screen.getByRole('link', { name: /카카오로 계속하기/ })).toHaveAttribute('href', '/oauth/kakao');
+    expect(screen.getByRole('link', { name: /카카오로 가입하기/ })).toHaveAttribute('href', '/oauth/kakao');
   });
 });

@@ -6,6 +6,7 @@ const valid = () => ({
   email: 'New.User@Example.com',
   password: 'abcd1234',
   name: '홍길동',
+  phone: '010-1234-5678',
   birthDate: '1990-01-31',
   role: 'LANDLORD',
   termsAgreed: true,
@@ -24,13 +25,13 @@ const failsOn = (body, field) => {
   return false;
 };
 
-test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, 휴대폰은 없으면 null, 생년월일은 그대로', () => {
+test('정상 입력: 이메일은 소문자·트림, 이름은 공백 정리, 휴대폰은 숫자만, 생년월일은 그대로', () => {
   const result = parseRegisterBody({ ...valid(), email: '  New.User@Example.com ', name: '  홍   길동 ' });
   assert.deepEqual(result, {
     email: 'new.user@example.com',
     password: 'abcd1234',
     name: '홍 길동',
-    phone: null,
+    phone: '01012345678',
     birthDate: '1990-01-31',
     role: 'LANDLORD',
     emailVerificationToken: 'verified-token', // secret-guard:allow 테스트용 더미 값
@@ -98,9 +99,9 @@ test('이름: 빈 값·공백뿐·너무 김·제어문자·제로폭 문자 거
   assert.equal(parseRegisterBody({ ...valid(), name: '가'.repeat(50) }).name.length, 50);
 });
 
-test('휴대폰: 생략·null·빈 문자열은 null, 하이픈·공백은 제거해 숫자만', () => {
+test('휴대폰: 필수(생략·null·빈 문자열은 400), 하이픈·공백은 제거해 숫자만', () => {
   for (const phone of [undefined, null, '', '   ']) {
-    assert.equal(parseRegisterBody({ ...valid(), phone }).phone, null);
+    assert.ok(failsOn({ ...valid(), phone }, 'phone'), String(phone));
   }
   assert.equal(parseRegisterBody({ ...valid(), phone: '010-1234-5678' }).phone, '01012345678');
   assert.equal(parseRegisterBody({ ...valid(), phone: ' 010 123 4567 ' }).phone, '0101234567');

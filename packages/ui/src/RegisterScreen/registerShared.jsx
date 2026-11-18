@@ -13,7 +13,7 @@ export const todayString = () => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 };
 
-// 이름·휴대폰(선택)·생년월일·약관 동의의 오류를 { 칸이름: 문구 }로 돌려준다.
+// 이름·휴대폰·생년월일·약관 동의의 오류를 { 칸이름: 문구 }로 돌려준다.
 export const validateProfileFields = ({ name, phone, birthDate, termsAgreed, privacyAgreed }) => {
   const errors = {};
 
@@ -22,7 +22,8 @@ export const validateProfileFields = ({ name, phone, birthDate, termsAgreed, pri
   else if ([...trimmedName].length > NAME_MAX_LENGTH) errors.name = `이름은 ${NAME_MAX_LENGTH}자 이하여야 합니다.`;
 
   const phoneDigits = phone.replace(/[\s-]/g, '');
-  if (phoneDigits && !PHONE_PATTERN.test(phoneDigits)) errors.phone = '휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)';
+  if (!phoneDigits) errors.phone = '휴대폰 번호를 입력해주세요.';
+  else if (!PHONE_PATTERN.test(phoneDigits)) errors.phone = '휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)';
 
   if (!birthDate) errors.birthDate = '생년월일을 입력해주세요.';
   else if (!BIRTH_DATE_PATTERN.test(birthDate) || Number(birthDate.slice(0, 4)) < BIRTH_YEAR_MIN || birthDate > todayString()) {
