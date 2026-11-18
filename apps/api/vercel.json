@@ -4,7 +4,11 @@
     { "path": "/api/cron/kapt-complexes", "schedule": "0 18 * * 0" },
     { "path": "/api/cron/reference-data", "schedule": "0 19 * * *" },
     { "path": "/api/cron/kapt-basis", "schedule": "0 18 * * 5" },
-    { "path": "/api/cron/unverified-ownerships", "schedule": "0 20 * * *" }
+    { "path": "/api/cron/unverified-ownerships", "schedule": "0 20 * * *" },
+    { "path": "/api/cron/market-prices", "schedule": "0 17 * * *" },
+    { "path": "/api/cron/community-news", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/community-polls", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/contract-reminders", "schedule": "0 23 * * *" }
   ],
   "functions": { "api/index.js": { "maxDuration": 60 } }
 }

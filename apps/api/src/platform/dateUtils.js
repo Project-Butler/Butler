@@ -36,6 +36,23 @@ export const toDateOnlyString = (date) => {
 // 'YYYY-MM-DD' 문자열 두 개를 사전식으로 비교한다(같은 포맷이라 문자열 비교로 충분).
 export const compareDateStrings = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
+// 'YYYY-MM-DD'에 days일을 더한 'YYYY-MM-DD'(음수면 뺀다).
+export const addDaysToDateString = (dateString, days) => {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return toDateOnlyString(date);
+};
+
+// 'YYYY-MM-DD'에서 months개월을 뺀 같은 날짜. 그달에 없는 날(31일 등)은 그달 말일로 맞춘다(8-31의 2개월 전 → 6-30).
+export const subtractMonthsFromDateString = (dateString, months) => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const monthIndex = year * 12 + (month - 1) - months;
+  const targetYear = Math.floor(monthIndex / 12);
+  const targetMonth = (monthIndex % 12) + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+};
+
 // dateB - dateA의 일수 차이. 'YYYY-MM-DD' 문자열만 받는다.
 export const daysBetween = (dateA, dateB) => {
   const MS_PER_DAY = 24 * 60 * 60 * 1000;

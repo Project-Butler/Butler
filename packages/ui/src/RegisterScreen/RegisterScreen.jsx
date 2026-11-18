@@ -2,6 +2,7 @@ import { Home } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../Card/Card';
 import { TextField } from '../TextField/TextField';
+import { EmailField } from './EmailField';
 import { AgreementCheckbox, BIRTH_YEAR_MIN, NAME_MAX_LENGTH, todayString } from './registerShared';
 import { useRegisterForm } from './useRegisterForm';
 import { SocialLoginButtons } from '../SocialLoginButtons/SocialLoginButtons';
@@ -51,18 +52,7 @@ export const RegisterScreen = ({
             maxLength={NAME_MAX_LENGTH * 2}
           />
           <div className="flex flex-col gap-2">
-            <TextField
-              label="이메일"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={values.email}
-              onChange={email.onChange}
-              error={fieldErrors.email}
-              disabled={email.step === 'verified'}
-              suffix={email.step === 'verified' ? <span className="font-semibold text-accent-strong">인증 완료</span> : undefined}
-            />
+            <EmailField email={email} error={fieldErrors.email} />
             {email.step === 'verified' ? (
               <Button variant="secondary" size="sm" onClick={email.reset} className="self-start">
                 이메일 변경
@@ -124,7 +114,8 @@ export const RegisterScreen = ({
             error={fieldErrors.birthDate}
           />
           <TextField
-            label="휴대폰 번호 (선택)"
+            label="휴대폰 번호"
+            required
             type="tel"
             autoComplete="tel"
             placeholder="010-1234-5678"
@@ -149,7 +140,7 @@ export const RegisterScreen = ({
               error={fieldErrors.privacyAgreed}
             >
               <span className="font-semibold text-accent-strong">[필수]</span> 개인정보 수집·이용에 동의합니다
-              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 생년월일(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
+              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 생년월일(암호화 저장), 휴대폰 번호(암호화 저장)</span>
             </AgreementCheckbox>
           </div>
 
@@ -164,7 +155,7 @@ export const RegisterScreen = ({
           </Button>
         </form>
 
-        {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 가입" />}
+        {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 가입" action="가입하기" />}
       </Card>
 
       {footer}

@@ -12,6 +12,31 @@ const lastDayOfMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUT
 const paymentDateIn = (year, month, rentPaymentDay) =>
   `${year}-${pad(month)}-${pad(Math.min(rentPaymentDay, lastDayOfMonth(year, month)))}`;
 
+// fromDate~toDate(양끝 포함) 안의 입금일 목록(일정 화면용, #161). 계약 기간(시작일~해지일 ?? 종료일) 밖은 뺀다.
+// 전세·입금일 없음은 빈 목록. 상태(만료·해지)는 호출하는 쪽이 거른다.
+export const listRentPaymentDates = (contract, { fromDate, toDate }) => {
+  if (contract.leaseType !== 'MONTHLY' || !contract.rentPaymentDay) return [];
+  const startDate = toDateOnlyString(contract.startDate);
+  const lastDate = toDateOnlyString(contract.terminatedOn ?? contract.endDate);
+  const from = compareDateStrings(startDate, fromDate) > 0 ? startDate : fromDate;
+  const to = compareDateStrings(lastDate, toDate) < 0 ? lastDate : toDate;
+  if (compareDateStrings(from, to) > 0) return [];
+
+  const dates = [];
+  let [year, month] = from.split('-').map(Number);
+  const [toYear, toMonth] = to.split('-').map(Number);
+  while (year < toYear || (year === toYear && month <= toMonth)) {
+    const date = paymentDateIn(year, month, contract.rentPaymentDay);
+    if (compareDateStrings(date, from) >= 0 && compareDateStrings(date, to) <= 0) dates.push(date);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return dates;
+};
+
 // contract: { leaseType, rentPaymentDay, startDate, endDate, terminatedOn } (Prisma Contract 또는 같은 모양).
 // 오늘(그리고 시작일) 이후 가장 가까운 입금일 하나. 계약 기간(시작일~해지일 ?? 종료일) 밖이면 null.
 // 전세·값 없음·해지·만료·끝난 소유 관계도 null.

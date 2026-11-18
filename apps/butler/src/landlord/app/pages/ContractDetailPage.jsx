@@ -1,8 +1,13 @@
+import { useState } from 'react';
+import { MessageCircle } from 'lucide-react';
 import { Badge, Button, MobileFormLayout } from '@butler/ui';
 import { useGetContract } from '../../../shared/useGetContract';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
+import { useGetContractThread } from '../../web/hooks/useGetContractThread';
 import { getContractDdayBadge } from '../../web/utils/contract';
-import { getContractTitle, toContractRows } from '../utils/contractView';
+import { RenewalNoticeCard } from '../components/RenewalNoticeCard/RenewalNoticeCard';
+import { RenewalNoticeSheet } from '../components/RenewalNoticeSheet/RenewalNoticeSheet';
+import { getContractCardTitle, getContractTitle, isContractEnded, toContractRows } from '../utils/contractView';
 import { useGoBack, useGoTo } from '../utils/navigation';
 
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
@@ -20,10 +25,16 @@ const PlaceholderCard = ({ title, children }) => (
 
 // 임대인 앱 계약 관리 (Figma M07). 하단 탭 대신 하단 고정 버튼 바를 쓴다.
 // 갱신 진행 단계·첨부 문서는 저장할 모델·API가 없어 자리만 두고, [갱신 의사 묻기]는 비활성이다. 삭제 요소는 두지 않는다.
+// 지금 계약의 임차인 대화는 부동산 상세 [기본 정보]에서 열고, 끝난 계약은 이미 있는 대화방만 여기서 연다.
+// 끝난 계약(만료·해지)은 '지난 계약'으로 보여 주고 갱신 진행·[갱신 의사 묻기]·갱신 안내를 두지 않는다.
+// 갱신 거절 통지 카드(#163)는 계약 응답의 renewalNotice 가 있을 때만(소유자·진행 중·시작 전 계약) 보이고, [통지 기록]이 기록 시트를 연다.
 export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
-  const { data: contract, error } = useGetContract(contractId, { onUnauthorized });
+  const { data: contract, error, refetch } = useGetContract(contractId, { onUnauthorized });
+  const [isNoticeSheetOpen, setIsNoticeSheetOpen] = useState(false);
+  const isEnded = Boolean(contract && isContractEnded(contract));
+  const { data: pastThread, error: pastThreadError } = useGetContractThread(isEnded ? contract.id : undefined, { onUnauthorized });
 
   if (!contract) {
     return (
@@ -46,25 +57,39 @@ export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
     <MobileFormLayout
       shell="landlord-app-detail"
       topBar={{ title: getContractTitle(contract), onBack: goBack }}
+      overlay={
+        isNoticeSheetOpen && (
+          <RenewalNoticeSheet
+            contractId={contract.id}
+            readOnly={contract.isReadOnly}
+            onChanged={refetch}
+            onClose={() => setIsNoticeSheetOpen(false)}
+            onUnauthorized={onUnauthorized}
+          />
+        )
+      }
       cta={
         <>
           <Button
             variant="secondary"
             size="h52"
+            className={isEnded ? 'flex-1' : undefined}
             disabled={contract.isReadOnly}
             onClick={() => goTo('contractEdit', { contractId: contract.id })}
           >
             계약 수정
           </Button>
-          <Button size="h52" className="flex-1" disabled>
-            갱신 의사 묻기 (준비 중)
-          </Button>
+          {!isEnded && (
+            <Button size="h52" className="flex-1" disabled>
+              갱신 의사 묻기 (준비 중)
+            </Button>
+          )}
         </>
       }
     >
-      <section aria-label="현재 계약" className={`${CARD_CLASS} flex flex-col px-4 pb-1 pt-4`}>
+      <section aria-label={getContractCardTitle(contract)} className={`${CARD_CLASS} flex flex-col px-4 pb-1 pt-4`}>
         <div className="flex items-center justify-between gap-2 pb-1">
-          <h2 className="text-m-card font-semibold text-ink">현재 계약</h2>
+          <h2 className="text-m-card font-semibold text-ink">{getContractCardTitle(contract)}</h2>
           {dday && (
             <Badge tone={dday.tone} className="rounded-chip font-num tabular-nums">
               {dday.label}
@@ -81,10 +106,24 @@ export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
         </dl>
       </section>
 
-      <PlaceholderCard title="갱신 진행">갱신 의사 확인 · 조건 협의 · 재계약서 서명 단계를 곧 이곳에서 진행할 수 있어요.</PlaceholderCard>
+      {pastThread && (
+        <Button variant="secondary" size="h48" onClick={() => goTo('thread', { threadId: pastThread.id })}>
+          <MessageCircle size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+          {contract.tenant?.name ? `${contract.tenant.name}님과의 대화 보기` : '지난 대화 보기'}
+        </Button>
+      )}
+      {pastThreadError && <NoticeBox>{pastThreadError.message}</NoticeBox>}
+
+      {!isEnded && contract.renewalNotice && (
+        <RenewalNoticeCard summary={contract.renewalNotice} onOpenRecords={() => setIsNoticeSheetOpen(true)} />
+      )}
+
+      {!isEnded && (
+        <PlaceholderCard title="갱신 진행">갱신 의사 확인 · 조건 협의 · 재계약서 서명 단계를 곧 이곳에서 진행할 수 있어요.</PlaceholderCard>
+      )}
       <PlaceholderCard title="첨부 문서">계약서 등 계약 문서는 문서함이 열리면 이곳에서 볼 수 있어요.</PlaceholderCard>
 
-      <p className="text-m-sub text-ink-3">{LEGAL_NOTICE}</p>
+      {!isEnded && <p className="text-m-sub text-ink-3">{LEGAL_NOTICE}</p>}
     </MobileFormLayout>
   );
 };

@@ -95,9 +95,12 @@ const validateName = (value, details) => {
   return name;
 };
 
-// 비어 있으면(생략·null·'') 휴대폰 번호 없이 가입한다. 값이 있으면 숫자만 남겨 돌려준다.
+// 휴대폰 번호는 필수다. 숫자만 남겨 돌려준다.
 const validatePhone = (value, details) => {
-  if (isBlank(value)) return null;
+  if (isBlank(value)) {
+    details.push({ field: 'phone', reason: '휴대폰 번호를 입력해주세요.' });
+    return null;
+  }
   if (typeof value !== 'string') {
     details.push({ field: 'phone', reason: '휴대폰 번호 형식이 올바르지 않습니다.' });
     return null;

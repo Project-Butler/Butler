@@ -6,7 +6,7 @@ import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
 import { assertDocumentsDeletable, CONTRACT_RESOURCE, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
 import { prisma } from '../../platform/prismaClient.js';
-import { AUDITED_DOWNLOAD_TYPES, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
+import { isAuditedDownload, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
 import { getResourcePolicy, visibleDocumentWhere } from './resourcePolicies.js';
 import { removeStoredObjects, selectStorage } from './storage/index.js';
 
@@ -110,9 +110,13 @@ const ensureUploadCompleted = async (storage, upload, now) => {
   await prisma.upload.update({ where: { id: upload.id }, data: { completedAt: now } });
 };
 
-// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 상한을 넘지 않는지 본다.
-const lockResourceForAttach = async (tx, user, policy, resourceId, addCount) => {
+// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 종류가 허용되는지, 상한을 넘지 않는지 본다.
+// 권한 없는 사람이 종류 422로 리소스 존재를 알 수 없게 권한(lockForWrite)을 먼저 본다.
+const lockResourceForAttach = async (tx, user, policy, resourceId, addCount, documentType) => {
   await policy.lockForWrite(tx, user, resourceId);
+  if (policy.allowedDocumentTypes && !policy.allowedDocumentTypes.includes(documentType)) {
+    throw new AppError('DOCUMENT_TYPE_NOT_ALLOWED', 422, '이 곳에는 올릴 수 없는 문서 종류입니다.');
+  }
   const attached = await tx.document.count({ where: { resourceType: policy.resourceType, resourceId, deletedAt: null } });
   if (attached + addCount > policy.maxAttachments) {
     throw new AppError('ATTACHMENT_LIMIT_EXCEEDED', 422, `문서는 ${policy.maxAttachments}개까지 붙일 수 있습니다.`);
@@ -130,7 +134,7 @@ export const registerDocument = async (user, { uploadSessionId, resourceType, re
 
   const policy = resourceType ? { ...getResourcePolicy(resourceType), resourceType } : null;
   const document = await prisma.$transaction(async (tx) => {
-    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1);
+    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1, upload.type);
     return tx.document.create({
       data: {
         uploadId: upload.id,
@@ -185,14 +189,15 @@ export const findResourceDocuments = async (user, { resourceType, resourceId, pa
 // GET /documents/:documentId
 export const findDocumentForUser = async (user, documentId) => toDocumentResponse(await findVisibleDocument(user, documentId));
 
-// 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부는 감사 로그에 남긴다.
+// 권한 확인을 마친 문서(Prisma Document 행)의 5분짜리 다운로드 URL. 계약서·등기부, 그리고 OWNERSHIP·CONTRACT에 붙은 문서는 종류와 상관없이 감사 로그에 남긴다.
 // actor: 요청자({ id, role }) 또는 null(로그인 없는 초대 열람 등 → 감사 로그 actorType SYSTEM). req는 requestId·ip용(선택).
+// purpose: VIEW(기본) | THUMBNAIL(사진 썸네일은 감사하지 않음, fileRules.isAuditedDownload).
 // 돌려주는 값: { url, expiresAt(ISO 문자열) }. 저장소를 못 쓰면 503 STORAGE_UNAVAILABLE.
-export const createDocumentDownloadUrl = async (document, { actor = null, req } = {}) => {
+export const createDocumentDownloadUrl = async (document, { actor = null, req, purpose = 'VIEW' } = {}) => {
   const storage = requireStorage();
   const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
-  if (AUDITED_DOWNLOAD_TYPES.includes(document.type)) {
+  if (isAuditedDownload(document, { purpose })) {
     await audit.record({
       actor,
       action: 'DOCUMENT_DOWNLOAD_URL_ISSUED',
@@ -206,8 +211,8 @@ export const createDocumentDownloadUrl = async (document, { actor = null, req } 
 };
 
 // POST /documents/:documentId/download-url — 5분 유효.
-export const issueDownloadUrl = async (user, documentId, req) =>
-  createDocumentDownloadUrl(await findVisibleDocument(user, documentId), { actor: user, req });
+export const issueDownloadUrl = async (user, documentId, req, { purpose = 'VIEW' } = {}) =>
+  createDocumentDownloadUrl(await findVisibleDocument(user, documentId), { actor: user, req, purpose });
 
 // 초대 화면(로그인 전 본인 확인 뒤)에서 쓰는 조회: 그 초대에 공유됐고, 숨기지 않았고, 그 계약에 붙은 문서만 돌려준다(없으면 null).
 // 사용자 권한은 보지 않는다 — 초대·확인 세션 검사는 부르는 쪽(tenantInvitations)이 먼저 한다.
@@ -241,7 +246,9 @@ export const deleteDocument = async (user, documentId, req) => {
   const policy = found.resourceType ? getResourcePolicy(found.resourceType) : null;
 
   const storagePaths = await prisma.$transaction(async (tx) => {
-    if (policy) await policy.lockForWrite(tx, user, found.resourceId);
+    if (policy) {
+      await (policy.lockForDelete ? policy.lockForDelete(tx, user, found.resourceId, found) : policy.lockForWrite(tx, user, found.resourceId));
+    }
     // 리소스를 잠그는 사이 소유가 끝나 잠겼거나 다른 요청이 지웠을 수 있다.
     const document = await tx.document.findFirst({ where: { id: documentId, deletedAt: null } });
     if (!document) throwDocumentNotFound();

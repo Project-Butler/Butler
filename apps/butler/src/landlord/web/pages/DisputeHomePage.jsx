@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronRight, ExternalLink, Phone } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
+import { ContactLine } from '../components/DisputeReference/ContactLine';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
 import { SourceFooter } from '../components/DisputeReference/SourceFooter';
 import { TopicTile } from '../components/DisputeReference/TopicTile';
 import { DISPUTE_TOPICS } from '../utils/disputeReference';
-import { CONTACTS, HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
+import { HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
 
 const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
 
@@ -76,8 +77,6 @@ export const DisputeHomePage = () => {
         <ul className="grid gap-3 lg:grid-cols-3">
           {HELP_ROUTES.map((route) => {
             const action = route.actions.find((item) => item.primary) ?? route.actions[0];
-            // 연락처는 따로 모으지 않고 그 기관 카드 안에(Citizens Advice처럼 상황별 안내 아래 그 번호).
-            const contact = CONTACTS.find((item) => item.key === route.key);
             return (
               <li
                 key={route.key}
@@ -90,19 +89,8 @@ export const DisputeHomePage = () => {
                     <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-chip font-semibold">{route.badge}</span>
                     {route.region && <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-chip font-semibold text-ink-2">{route.region}</span>}
                   </span>
-                  {contact && (
-                    <span className="mt-1 flex flex-wrap items-center gap-x-2 text-sub">
-                      <a
-                        href={contact.href}
-                        aria-label={`${contact.name} ${contact.value} 전화 걸기`}
-                        className="flex min-h-9 items-center gap-1 font-num font-semibold tabular-nums text-ink-2 hover:text-accent"
-                      >
-                        <Phone size={14} />
-                        {contact.value}
-                      </a>
-                      {contact.note && <span className="text-ink-3">{contact.note}</span>}
-                    </span>
-                  )}
+                  {/* 연락처는 따로 모으지 않고 그 기관 카드 안에(Citizens Advice처럼 상황별 안내 아래 그 번호). */}
+                  <ContactLine routeKey={route.key} className="mt-1" />
                 </span>
                 <a
                   href={action.href}

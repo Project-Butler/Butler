@@ -180,6 +180,7 @@ describe('임차인 초대 가입', { skip: dbTestSkip }, () => {
     email,
     password: 'abcd1234',
     name: '초대 임차인',
+    phone: '010-1234-5678',
     birthDate: '1990-01-31',
     role: 'LANDLORD', // 화면은 그대로 LANDLORD를 보낸다. 초대 가입이면 서버가 무시한다.
     termsAgreed: true,

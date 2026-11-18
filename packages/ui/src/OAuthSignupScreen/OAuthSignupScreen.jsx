@@ -79,7 +79,8 @@ export const OAuthSignupScreen = ({ brand = 'Butler', subtitle, footer, loadInfo
             error={fieldErrors.birthDate}
           />
           <TextField
-            label="휴대폰 번호 (선택)"
+            label="휴대폰 번호"
+            required
             type="tel"
             autoComplete="tel"
             placeholder="010-1234-5678"
@@ -94,7 +95,7 @@ export const OAuthSignupScreen = ({ brand = 'Butler', subtitle, footer, loadInfo
             </AgreementCheckbox>
             <AgreementCheckbox id="oauth-privacy" checked={values.privacyAgreed} onChange={setValue('privacyAgreed')} error={fieldErrors.privacyAgreed}>
               <span className="font-semibold text-accent-strong">[필수]</span> 개인정보 수집·이용에 동의합니다
-              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 생년월일(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
+              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 생년월일(암호화 저장), 휴대폰 번호(암호화 저장)</span>
             </AgreementCheckbox>
           </div>
 

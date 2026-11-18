@@ -57,6 +57,7 @@ export const createDbFixture = () => {
 
     await prisma.activity.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.notificationPreference.deleteMany({ where: { userId: { in: userIds } } });
     // 스레드(참여자·메시지는 함께 지워짐)는 사용자를 가리키므로 사용자보다 먼저 지운다.
     await prisma.thread.deleteMany({ where: { participants: { some: { userId: { in: userIds } } } } });
     // 티켓이 관리 로그·계약을 가리키므로 먼저 지운다.
@@ -64,6 +65,7 @@ export const createDbFixture = () => {
     await prisma.propertyLog.deleteMany({ where: { propertyId: { in: propertyIds } } });
     // 공유 문서·확인 세션은 초대를 지우면 cascade로 지워진다.
     await prisma.tenantInvitation.deleteMany({ where: { contract: { ownership: { propertyId: { in: propertyIds } } } } });
+    await prisma.renewalNotice.deleteMany({ where: { contract: { ownership: { propertyId: { in: propertyIds } } } } });
     await prisma.contract.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.ownershipVerificationAttempt.deleteMany({ where: { ownership: { propertyId: { in: propertyIds } } } });
     await prisma.consent.deleteMany({ where: { userId: { in: userIds } } });

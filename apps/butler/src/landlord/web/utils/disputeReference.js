@@ -63,6 +63,6 @@ export const breakNumberedItems = (text) => text.replace(/\s+(?=\[\d+\])/g, '\n'
 
 export const OUTCOME_TITLE = { CASE: '조정 결과', PRECEDENT: '판결 요지' };
 
-// [내 상황에 적용해 보기]로 챗봇 입력창에 미리 넣는 질문
+// [AI로 내 상황에 적용해 보기]로 챗봇 입력창에 미리 넣는 질문
 export const toApplyQuestion = (reference) =>
   `"${reference.title}" ${TYPE_LABELS[reference.type] ?? '자료'}가 제 상황에도 해당하는지 알고 싶어요.\n제 상황: `;

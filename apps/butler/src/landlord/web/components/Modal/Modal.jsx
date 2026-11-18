@@ -5,8 +5,8 @@ import { IconTile } from '../IconTile/IconTile';
 // 가운데 팝업(권리자 인증·기록 추가·수정). 그림자 없이 선과 Surface로 면을 나눈다(design.md §4).
 // - Esc · 바깥 클릭 · 닫기 버튼으로 onClose. 주소에 팝업이 묶인 화면은 onClose에서 뒤로 가면 뒤로가기로도 닫힌다.
 // - 열리면 패널에 포커스를 옮겨 키보드로 바로 다룰 수 있게 한다.
-// - footer: 오른쪽 아래 버튼 줄. size: md(인증 동의) · lg(기록 입력)
-const SIZE_CLASS = { md: 'max-w-lg', lg: 'max-w-2xl' };
+// - footer: 오른쪽 아래 버튼 줄. size: md(인증 동의) · lg(기록 입력) · xl(서류 미리보기)
+const SIZE_CLASS = { md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' };
 
 export const Modal = ({ title, subtitle, icon, iconTone = 'accent', onClose, footer, size = 'md', children }) => {
   const titleId = useId();

@@ -4,9 +4,16 @@
 //   매일 /api/cron/reference-data: juso 공식 연계 API로 변동 적용 + 새 K-apt 단지 기본정보 + 단지 kaptCode·검색 저장본 정리
 //   주간 /api/cron/kapt-basis: K-apt 최신 기본정보 엑셀 갱신(같은 일을 CLI refresh:kapt-basis로도 한다)
 //   매일 /api/cron/unverified-ownerships: 기간 안에 권리자 인증을 하지 않은 등록 종료
+//   매일 /api/cron/contract-reminders: 계약 만료 임박·갱신 거절 통지 기간·월세 입금일 알림(KST 08:00, #159)
 import { Router } from 'express';
 import { cronGuard } from '../../middlewares/cronGuard.js';
-import { runKaptBasisRefresh, runKaptComplexSync, runReferenceData, runUnverifiedOwnershipSweep } from './controller.js';
+import {
+  runContractReminderSweep,
+  runKaptBasisRefresh,
+  runKaptComplexSync,
+  runReferenceData,
+  runUnverifiedOwnershipSweep,
+} from './controller.js';
 
 const router = Router();
 
@@ -14,5 +21,6 @@ router.get('/api/cron/kapt-complexes', cronGuard, runKaptComplexSync);
 router.get('/api/cron/reference-data', cronGuard, runReferenceData);
 router.get('/api/cron/kapt-basis', cronGuard, runKaptBasisRefresh);
 router.get('/api/cron/unverified-ownerships', cronGuard, runUnverifiedOwnershipSweep);
+router.get('/api/cron/contract-reminders', cronGuard, runContractReminderSweep);
 
 export default router;

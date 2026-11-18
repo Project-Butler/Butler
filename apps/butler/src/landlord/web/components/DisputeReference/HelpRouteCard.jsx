@@ -1,7 +1,8 @@
 import { ExternalLink } from 'lucide-react';
+import { ContactLine } from './ContactLine';
 
 // '어디에 도움을 요청해야 하나요?' 기관 카드. 기관 이름보다 "이럴 때 여기로"를 먼저 보여 주고,
-// 대상·신청·비용·기간을 표로 붙여 신청·안내로 바로 보낸다.
+// 대상·신청·비용·기간을 표로 붙여 신청·안내로 바로 보낸다. 전화는 첫 화면 기관 카드와 같은 ContactLine.
 export const HelpRouteCard = ({ route }) => (
   <section className="flex h-full flex-col rounded-card border border-line bg-surface p-5">
     <p className="break-keep text-card font-semibold text-ink">{route.when}</p>
@@ -10,6 +11,7 @@ export const HelpRouteCard = ({ route }) => (
       <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-chip font-semibold text-accent-strong">{route.badge}</span>
       {route.region && <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-chip font-semibold text-ink-2">{route.region}</span>}
     </p>
+    <ContactLine routeKey={route.key} className="mt-1" />
     <dl className="mt-4 flex flex-1 border-t border-line pt-3 flex-col gap-1.5 text-body">
       {route.facts.map(([term, value]) => (
         <div key={term} className="flex gap-3">

@@ -53,7 +53,7 @@ export const useOAuthSignupForm = ({ loadInfo, onSubmit }) => {
     try {
       await onSubmit({
         name: values.name.trim(),
-        phone: values.phone.trim() || null,
+        phone: values.phone.trim(),
         birthDate: values.birthDate,
         termsAgreed: values.termsAgreed,
         privacyAgreed: values.privacyAgreed,

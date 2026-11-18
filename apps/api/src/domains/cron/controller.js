@@ -2,6 +2,7 @@ import { prisma } from '../../platform/prismaClient.js';
 import { endAbandonedUnverifiedOwnerships } from '../../platform/ownershipVerification.js';
 import { sendData } from '../../platform/respond.js';
 import { refreshKaptBasis } from '../../referenceData/kaptExcelRefresh.js';
+import { runContractReminders } from './contractReminders.js';
 import { runReferenceDataCron } from './referenceData.js';
 import { syncKaptComplexList } from './service.js';
 
@@ -43,6 +44,14 @@ export const runReferenceData = async (req, res, next) => {
 export const runUnverifiedOwnershipSweep = async (req, res, next) => {
   try {
     sendData(res, await endAbandonedUnverifiedOwnerships());
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const runContractReminderSweep = async (req, res, next) => {
+  try {
+    sendData(res, await runContractReminders());
   } catch (error) {
     next(error);
   }

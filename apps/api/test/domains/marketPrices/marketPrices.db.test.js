@@ -307,6 +307,52 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.equal(second.done, first.skipped);
   });
 
+  test('동시 요청은 1개 — 앞 요청이 끝나야 다음 요청(매매 · 전월세 모두)', async () => {
+    await clearSigungu(SGG);
+    const { fetchImpl: base } = fakeFetch();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const kinds = new Set();
+    const fetchImpl = async (url, init) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      kinds.add(url.includes('RTMSDataSvcAptTradeDev') ? 'TRADE' : 'RENT');
+      await new Promise((resolve) => setTimeout(resolve, 5)); // 겹친다면 이 사이에 다음 요청이 들어온다
+      inFlight -= 1;
+      return base(url, init);
+    };
+    const summary = await collectMarketPrices({ sigunguCodes: [SGG], fetchImpl, now: () => NOW });
+    assert.equal(summary.done, 26);
+    assert.equal(summary.calls, 26);
+    assert.equal(maxInFlight, 1);
+    assert.deepEqual([...kinds].sort(), ['RENT', 'TRADE']);
+  });
+
+  test('다시 시도해도 시간 초과면 그 묶음만 FAILED(TIMEOUT) — 예전 데이터는 지우지 않고, 부른 횟수에 다시 시도가 들어간다', async () => {
+    const before = await dealsIn({ dealKind: 'TRADE', contractYearMonth: '2026-10' });
+    const { fetchImpl: base } = fakeFetch();
+    const fetchImpl = async (url, init) => {
+      const params = new URL(url).searchParams;
+      if (url.includes('RTMSDataSvcAptTradeDev') && params.get('DEAL_YMD') === '202610') throw new DOMException('timeout', 'TimeoutError');
+      return base(url, init);
+    };
+    const slept = [];
+    const summary = await collectMarketPrices({ sigunguCodes: [SGG], fetchImpl, now: () => NOW + REFRESH_MIN_AGE_MS, sleep: async (ms) => slept.push(ms) });
+    assert.equal(summary.planned, 6); // 최근 3개월 × 2
+    assert.equal(summary.done, 5);
+    assert.equal(summary.failed, 1);
+    assert.match(summary.failures[0], /2026-10 TRADE TIMEOUT$/);
+    assert.equal(summary.calls, 7); // 5 + 실패한 묶음 2번
+    assert.equal(slept.length, 1);
+    const row = await prisma.marketCollection.findUnique({ where: { sigunguCode_yearMonth_dealKind: { sigunguCode: SGG, yearMonth: '2026-10', dealKind: 'TRADE' } } });
+    assert.equal(row.status, 'FAILED');
+    assert.equal(row.lastErrorCode, 'TIMEOUT');
+    assert.ok(row.collectedAt);
+    const after = await dealsIn({ dealKind: 'TRADE', contractYearMonth: '2026-10' });
+    assert.equal(before.length, 3);
+    assert.deepEqual(after.map((r) => r.id).sort(), before.map((r) => r.id).sort()); // 같은 행 그대로
+  });
+
   test('cron 경로: CRON_SECRET 이 없으면 숨기고(404), 있으면 Bearer 가 틀릴 때 401', async () => {
     const res = await fetch(`${origin}/api/cron/market-prices`, { headers: { Authorization: 'Bearer wrong' } });
     assert.equal(res.status, process.env.CRON_SECRET ? 401 : 404);

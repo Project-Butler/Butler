@@ -92,11 +92,11 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
   const entry = urls.entries[current?.id];
   const { load } = urls;
 
-  // 지금 칸과 양옆 사진의 주소를 받는다(오래된 주소는 새로).
+  // 지금 칸 사진은 VIEW(크게 본 것 — 감사), 양옆은 미리 받기라 THUMBNAIL(감사 안 함). 오래된 주소는 새로.
   useEffect(() => {
     [index - 1, index, index + 1].forEach((position) => {
       const document = documents[position];
-      if (document && isImageDocument(document)) load(document.id);
+      if (document && isImageDocument(document)) load(document.id, { purpose: position === index ? 'VIEW' : 'THUMBNAIL' });
     });
   }, [documents, index, load]);
 

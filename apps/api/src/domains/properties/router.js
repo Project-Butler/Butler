@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authGuard } from '../../middlewares/authGuard.js';
 import { generalRateLimiter } from '../../middlewares/rateLimiter.js';
 import { roleGuard } from '../../middlewares/roleGuard.js';
+import { listPropertyDocuments } from '../documents/controller.js';
 import { listPropertyManagementLogs, postPropertyManagementLog } from '../managementLogs/controller.js';
 import { createProperty, getProperty, listProperties, patchProperty } from './controller.js';
 
@@ -17,5 +18,7 @@ router.patch('/:propertyId', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimite
 // 관리 로그(5장)
 router.post('/:propertyId/management-logs', roleGuard(['LANDLORD']), generalRateLimiter, postPropertyManagementLog);
 router.get('/:propertyId/management-logs', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, listPropertyManagementLogs);
+// 서류함(6장): 내 소유 서류 + 계약 서류. 임대인만.
+router.get('/:propertyId/documents', roleGuard(['LANDLORD']), generalRateLimiter, listPropertyDocuments);
 
 export default router;

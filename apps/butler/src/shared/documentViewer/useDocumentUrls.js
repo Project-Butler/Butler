@@ -24,9 +24,12 @@ const saveFile = (url, fileName) => {
   anchor.remove();
 };
 
-// 공유 문서의 서명 주소를 문서마다 받아 둔다. fetchUrl(documentId) → { url, expiresAt }
-//   - 공개 초대 화면: postTenantInvitationDocumentDownloadUrl(token, id) · 임차인 앱: postDocumentDownloadUrl(id)
-//   - load(id): 없거나 오래된 주소만 다시 받는다(열 때마다 새 주소). force 면 항상 새로.
+// 공유 문서의 서명 주소를 문서마다 받아 둔다. fetchUrl(documentId, { purpose }) → { url, expiresAt }
+//   - 공개 초대 화면: postTenantInvitationDocumentDownloadUrl(token, id, opts) · 임차인 앱: postDocumentDownloadUrl(id, opts)
+//   - load(id, { force, purpose }): 없거나 오래된 주소만 다시 받는다(열 때마다 새 주소). force 면 항상 새로.
+//     purpose 'THUMBNAIL'(격자·미리 받기, 사진은 감사 안 함) | 'VIEW'(기본, 크게 본 것 — 감사).
+//     VIEW로 받은 주소는 썸네일에도 쓰지만, THUMBNAIL로 받은 주소로는 VIEW를 대신하지 않는다(크게 볼 때 VIEW로 다시 받는다).
+//   - open·save는 항상 VIEW로 새 주소를 받는다.
 //   - reportError(id): 사진이 안 뜨면 한 번만 다시 받는다. 두 번째도 실패면 error 로 둔다.
 // 주소는 화면 메모리에만 두고 저장소에 남기지 않는다.
 export const useDocumentUrls = (fetchUrl) => {
@@ -48,31 +51,37 @@ export const useDocumentUrls = (fetchUrl) => {
   }, []);
 
   const fetchFresh = useCallback(
-    (id) => {
-      if (inflight.current.has(id)) return inflight.current.get(id);
+    (id, purpose = 'VIEW') => {
+      const key = `${id}:${purpose}`;
+      if (inflight.current.has(key)) return inflight.current.get(key);
       update(id, { status: 'loading' });
-      const promise = fetchUrl(id)
+      const promise = fetchUrl(id, { purpose })
         .then(({ url }) => {
-          update(id, { url, status: 'ready', fetchedAt: Date.now() });
+          // 늦게 온 썸네일 주소가 이미 받은 VIEW 주소를 덮지 않게 한다.
+          const current = entriesRef.current[id];
+          if (purpose === 'THUMBNAIL' && current?.purpose === 'VIEW' && current.status === 'ready') return current.url;
+          update(id, { url, status: 'ready', fetchedAt: Date.now(), purpose });
           return url;
         })
         .catch((error) => {
           update(id, { status: 'error' });
           throw error;
         })
-        .finally(() => inflight.current.delete(id));
-      inflight.current.set(id, promise);
+        .finally(() => inflight.current.delete(key));
+      inflight.current.set(key, promise);
       return promise;
     },
     [fetchUrl, update],
   );
 
   const load = useCallback(
-    (id, { force = false } = {}) => {
+    (id, { force = false, purpose = 'VIEW' } = {}) => {
       const entry = entriesRef.current[id];
-      const isFresh = entry?.status === 'ready' && Date.now() - entry.fetchedAt < FRESH_MS;
-      if (!force && (isFresh || entry?.status === 'loading')) return Promise.resolve(entry?.url ?? null);
-      return fetchFresh(id).catch(() => null);
+      const isUsable = purpose === 'THUMBNAIL' || entry?.purpose === 'VIEW';
+      const isFresh = entry?.status === 'ready' && Date.now() - entry.fetchedAt < FRESH_MS && isUsable;
+      if (!force && isFresh) return Promise.resolve(entry.url);
+      if (!force && purpose === 'THUMBNAIL' && entry?.status === 'loading') return Promise.resolve(entry?.url ?? null);
+      return fetchFresh(id, purpose).catch(() => null);
     },
     [fetchFresh],
   );
@@ -85,7 +94,7 @@ export const useDocumentUrls = (fetchUrl) => {
         return;
       }
       update(id, { retried: true });
-      fetchFresh(id).catch(() => null);
+      fetchFresh(id, entry?.purpose ?? 'VIEW').catch(() => null);
     },
     [fetchFresh, update],
   );
@@ -93,7 +102,7 @@ export const useDocumentUrls = (fetchUrl) => {
   const retry = useCallback(
     (id) => {
       update(id, { retried: false });
-      fetchFresh(id).catch(() => null);
+      fetchFresh(id, entriesRef.current[id]?.purpose ?? 'VIEW').catch(() => null);
     },
     [fetchFresh, update],
   );

@@ -33,10 +33,12 @@ const UploadingPreview = ({ item }) => (
 
 // 관리 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
 // 형식·크기는 고를 때 미리 검사하고, 업로드 진행·미리보기·빼기를 보여 준다.
-export const AttachmentPicker = ({ uploads, disabled = false, onUnauthorized }) => {
+// label: 칸 이름(기본 '사진 (선택)'). 갱신 거절 통지 증빙처럼 PDF 도 받는 곳은 다른 이름을 준다.
+export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled = false, onUnauthorized }) => {
   const inputRef = useRef(null);
   const { items, addFiles, remove, notice, storageUnavailable } = uploads;
-  const isFull = items.length >= MAX_LOG_ATTACHMENTS;
+  const maxCount = uploads.maxCount ?? MAX_LOG_ATTACHMENTS;
+  const isFull = items.length >= maxCount;
 
   const handleChange = (event) => {
     addFiles(event.target.files);
@@ -48,9 +50,9 @@ export const AttachmentPicker = ({ uploads, disabled = false, onUnauthorized }) 
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <span className="text-label font-semibold text-ink">
-          사진 (선택){' '}
+          {label}{' '}
           <span className="font-num font-normal tabular-nums text-ink-3">
-            {items.length}/{MAX_LOG_ATTACHMENTS}
+            {items.length}/{maxCount}
           </span>
         </span>
         <Button

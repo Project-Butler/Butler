@@ -19,8 +19,21 @@ const renderScreen = (overrides = {}) => {
   return props;
 };
 
-const verifyEmail = async (email = 'new@butler.test') => {
-  await userEvent.type(screen.getByLabelText(/^이메일/), email);
+// 도메인은 브랜드색 칸을 눌러 목록에서 고른다.
+const pickDomain = async (name) => {
+  await userEvent.click(screen.getByRole('button', { name: '이메일 도메인' }));
+  await userEvent.click(await screen.findByRole('option', { name }));
+};
+
+// 이메일은 @ 앞을 입력하고 @ 뒤는 도메인 목록에서 고른다.
+const typeEmail = async (address) => {
+  const [local, domain] = address.split('@');
+  await userEvent.type(screen.getByLabelText(/^이메일$|^이메일\*/), local);
+  await pickDomain(domain);
+};
+
+const verifyEmail = async (email = 'new@gmail.com') => {
+  await typeEmail(email);
   await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
   await userEvent.type(await screen.findByLabelText('인증번호'), '123456');
   await userEvent.click(screen.getByRole('button', { name: '확인' }));
@@ -32,6 +45,7 @@ const fillProfile = async () => {
   await userEvent.type(screen.getByLabelText(/^비밀번호$|^비밀번호\*/), 'abcd1234');
   await userEvent.type(screen.getByLabelText(/^비밀번호 확인/), 'abcd1234');
   await userEvent.type(screen.getByLabelText(/^생년월일/), '1990-01-31');
+  await userEvent.type(screen.getByLabelText(/^휴대폰/), '010-1234-5678');
   await userEvent.click(screen.getByLabelText(/이용약관에 동의/));
   await userEvent.click(screen.getByLabelText(/개인정보 수집·이용에 동의/));
 };
@@ -39,7 +53,7 @@ const fillProfile = async () => {
 describe('RegisterScreen (웹)', () => {
   it('이메일 인증 없이 제출하면 보내지 않고 "이메일 인증을 완료해주세요"를 보여 준다', async () => {
     const { onSubmit } = renderScreen();
-    await userEvent.type(screen.getByLabelText(/^이메일/), 'new@butler.test');
+    await typeEmail('new@gmail.com');
     await fillProfile();
 
     await userEvent.click(screen.getByRole('button', { name: '회원가입' }));
@@ -48,7 +62,7 @@ describe('RegisterScreen (웹)', () => {
     expect(screen.getByText('이메일 인증을 완료해주세요.')).toBeInTheDocument();
   });
 
-  it('인증을 마치고 제출하면 모든 값과 인증 토큰을 넘기고, 휴대폰이 비면 null 이다', async () => {
+  it('인증을 마치고 제출하면 모든 값과 인증 토큰을 넘긴다', async () => {
     const { onSubmit, onRequestEmailCode, onConfirmEmailCode } = renderScreen();
     await verifyEmail();
     await fillProfile();
@@ -56,13 +70,13 @@ describe('RegisterScreen (웹)', () => {
     await userEvent.click(screen.getByRole('button', { name: '회원가입' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onRequestEmailCode).toHaveBeenCalledWith('new@butler.test');
-    expect(onConfirmEmailCode).toHaveBeenCalledWith('new@butler.test', '123456');
+    expect(onRequestEmailCode).toHaveBeenCalledWith('new@gmail.com');
+    expect(onConfirmEmailCode).toHaveBeenCalledWith('new@gmail.com', '123456');
     expect(onSubmit).toHaveBeenCalledWith({
       name: '김집주',
-      email: 'new@butler.test',
+      email: 'new@gmail.com',
       password: 'abcd1234',
-      phone: null,
+      phone: '010-1234-5678',
       birthDate: '1990-01-31',
       termsAgreed: true,
       privacyAgreed: true,
@@ -118,5 +132,52 @@ describe('RegisterScreen (웹)', () => {
     expect(await screen.findByText('이메일 인증이 만료되었습니다.')).toBeInTheDocument();
     expect(screen.queryByText('인증 완료')).toBeNull();
     expect(screen.getByRole('button', { name: '인증번호 받기' })).toBeInTheDocument();
+  });
+
+  it('이메일은 @ 앞만 입력하고 자동완성이 꺼져 있다', () => {
+    renderScreen();
+    const local = screen.getByLabelText(/^이메일\*?$/);
+
+    expect(local).toHaveAttribute('autocomplete', 'off');
+    expect(local).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: '이메일 도메인' })).toBeInTheDocument();
+  });
+
+  it('도메인 목록에 없으면 직접 입력으로 합친 주소를 보낸다', async () => {
+    const props = renderScreen();
+    await userEvent.type(screen.getByLabelText(/^이메일\*?$/), 'owner');
+    await pickDomain('직접 입력');
+    await userEvent.type(screen.getByLabelText('이메일 도메인 직접 입력'), 'butler.test');
+    await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
+
+    expect(props.onRequestEmailCode).toHaveBeenCalledWith('owner@butler.test');
+  });
+
+  it('전체 주소를 붙여 넣으면 @ 뒤를 도메인 칸으로 나눈다', async () => {
+    const props = renderScreen();
+    await userEvent.click(screen.getByLabelText(/^이메일\*?$/));
+    await userEvent.paste('owner@naver.com');
+
+    expect(screen.getByLabelText(/^이메일\*?$/)).toHaveValue('owner');
+    expect(screen.getByRole('button', { name: '이메일 도메인' })).toHaveTextContent('naver.com');
+    await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
+    expect(props.onRequestEmailCode).toHaveBeenCalledWith('owner@naver.com');
+  });
+
+  it('인증번호 요청이 끝나기 전에 입력칸을 먼저 보여 준다', async () => {
+    renderScreen({ onRequestEmailCode: vi.fn(() => new Promise(() => {})) });
+    await typeEmail('new@gmail.com');
+    await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
+
+    expect(screen.getByLabelText('인증번호')).toBeInTheDocument();
+  });
+
+  it('처음 인증번호 요청이 실패하면 입력칸을 다시 숨기고 오류를 보여 준다', async () => {
+    renderScreen({ onRequestEmailCode: vi.fn().mockRejectedValue(apiError(502, 'EMAIL_SEND_FAILED', '인증 메일을 보내지 못했습니다.')) });
+    await typeEmail('new@gmail.com');
+    await userEvent.click(screen.getByRole('button', { name: '인증번호 받기' }));
+
+    expect(await screen.findByText('인증 메일을 보내지 못했습니다.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('인증번호')).toBeNull();
   });
 });

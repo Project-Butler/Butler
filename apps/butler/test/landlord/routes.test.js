@@ -17,6 +17,13 @@ describe('임대인 routes', () => {
     expect(buildLocation('community').pathname).toBe('/landlord/community');
   });
 
+  it('서류함(documents)은 호실을 주소 쿼리에 남기고, 주소로 key를 되찾는다', () => {
+    expect(buildLocation('documents', { propertyId: 'p-1' })).toEqual({ pathname: '/landlord/documents', search: '?propertyId=p-1' });
+    expect(buildLocation('documents', {}).search).toBe('');
+    expect(buildLocation('documents').search).toBe('');
+    expect(resolveViewKey('/landlord/documents')).toBe('documents');
+  });
+
   it('state(안내 문구)와 쿼리는 접두어를 붙여도 그대로 남는다', () => {
     expect(buildLocation('buildingList', { notice: '등록됨' })).toEqual({ pathname: '/landlord/buildings', state: { notice: '등록됨' } });
     expect(buildLocation('properties', { relation: 'FORMER_OWNER' })).toEqual({ pathname: '/landlord/properties', search: '?relation=FORMER_OWNER' });

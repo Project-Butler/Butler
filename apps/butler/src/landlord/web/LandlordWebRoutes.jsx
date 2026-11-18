@@ -6,6 +6,7 @@ import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractEditPage } from './pages/ContractEditPage';
 import { ContractListPage } from './pages/ContractListPage';
 import { ContractRegisterPage } from './pages/ContractRegisterPage';
+import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
 import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
@@ -178,6 +179,12 @@ const ContractDetailRoute = ({ onNavigate, onUnauthorized }) => {
   );
 };
 
+// 서류함: 고른 호실은 주소(?propertyId)에 남는다. 없거나 내 호실이 아니면 화면이 첫 호실로 바꾼다.
+const DocumentBoxRoute = ({ userId, ...pageProps }) => {
+  const [searchParams] = useSearchParams();
+  return <DocumentBoxPage propertyId={searchParams.get('propertyId') ?? undefined} userId={userId} {...pageProps} />;
+};
+
 const ContractEditRoute = (pageProps) => {
   const { contractId } = useParams();
   return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
@@ -264,6 +271,7 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />
         <Route path="/logs/:logId/edit" element={<ManagementLogListRoute modalMode="edit" {...pageProps} />} />
         <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
+        <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
         <Route path="/setup" element={<SetupPage {...pageProps} />} />
         {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
         <Route path="/disputes/chat" element={<DisputeChatPage />} />

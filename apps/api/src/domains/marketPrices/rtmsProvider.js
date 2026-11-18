@@ -11,12 +11,16 @@ import {
   REQUEST_TIMEOUT_MS,
   RESULT_NO_DATA,
   RESULT_OK,
+  RETRY_CODES,
+  RETRY_DELAY_MS,
+  RETRY_LIMIT,
   RTMS_ENDPOINTS,
   isCancelledTrade,
   rentDealType,
 } from './marketPriceRules.js';
 
-// 실패는 이 오류 하나로 — code 는 원천 결과 코드(예: "30" 등록되지 않은 키) 또는 HTTP · NETWORK · TOO_LARGE · NO_KEY.
+// 실패는 이 오류 하나로 — code 는 원천 결과 코드(예: "30" 등록되지 않은 키) 또는 HTTP · TIMEOUT · NETWORK · TOO_LARGE · NO_KEY.
+// fetchRtmsMonth 가 던질 때는 calls(다시 시도까지 실제로 부른 횟수)가 붙는다.
 // 메시지에는 종류 · 시군구 · 계약월 · 코드만 담는다(요청 주소에 키가 있어서 주소는 담지 않는다)
 export class RtmsError extends Error {
   constructor(code, detail, { kind, sigunguCode, yearMonth } = {}) {
@@ -150,7 +154,12 @@ const buildRequestUrl = ({ kind, sigunguCode, yearMonth, pageNo, numOfRows }) =>
   return `${RTMS_ENDPOINTS[kind]}?serviceKey=${encodeURIComponent(key)}&${params}`;
 };
 
-// 한 페이지. 정상이면 { totalCount, items(원천 칸) }, 아니면 RtmsError
+// 받기 · 본문 읽기 오류 → RtmsError. 8초 신호가 끊은 것(헤더든 본문이든)은 TIMEOUT, 그 밖의 연결 오류는 NETWORK.
+// 오류 메시지에 주소가 섞일 수 있어 이름만 남긴다. 11/18: 본문 읽기는 이 처리 밖에 있어서, 본문을 읽다 난 시간 초과가
+// 그대로 새어 나가 DOMException 의 옛 코드 "23" 으로 적혔다(원천 결과 코드처럼 보였다)
+const transportError = (error, where) => new RtmsError(error?.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK', error?.name ?? 'Error', where);
+
+// 한 페이지. 정상이면 { totalCount, items(원천 칸) }, 아니면 RtmsError. 다시 시도는 하지 않는다(fetchRtmsMonth 가 한다)
 export const fetchRtmsPage = async ({ kind, sigunguCode, yearMonth, pageNo = 1, numOfRows = PAGE_SIZE }, { fetchImpl = globalThis.fetch } = {}) => {
   const where = { kind, sigunguCode, yearMonth };
   if (!process.env.DATA_GO_KR_SERVICE_KEY) throw new RtmsError('NO_KEY', 'DATA_GO_KR_SERVICE_KEY 없음', where);
@@ -161,11 +170,15 @@ export const fetchRtmsPage = async ({ kind, sigunguCode, yearMonth, pageNo = 1, 
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
-    // fetch 오류 메시지에 주소가 섞일 수 있어 이름만 남긴다
-    throw new RtmsError('NETWORK', error?.name ?? 'Error', where);
+    throw transportError(error, where);
   }
   if (Number(response.headers?.get?.('content-length')) > MAX_RESPONSE_BYTES) throw new RtmsError('TOO_LARGE', '', where);
-  const xml = await response.text();
+  let xml;
+  try {
+    xml = await response.text();
+  } catch (error) {
+    throw transportError(error, where);
+  }
   if (xml.length > MAX_RESPONSE_BYTES) throw new RtmsError('TOO_LARGE', '', where);
   const page = parseRtmsXml(xml);
   if (!response.ok && page.resultCode === 'UNKNOWN') throw new RtmsError(`HTTP_${response.status}`, '', where);
@@ -174,19 +187,48 @@ export const fetchRtmsPage = async ({ kind, sigunguCode, yearMonth, pageNo = 1, 
   return { totalCount: page.totalCount, items: page.items };
 };
 
-// 한 묶음(시군구 · 계약월 · 종류) 전부. totalCount 를 넘을 때까지 다음 페이지. 거래로 바꿔 돌려준다(해제 표시 포함 — 거르는 것은 부르는 쪽)
-export const fetchRtmsMonth = async ({ kind, sigunguCode, yearMonth }, { fetchImpl, pageSize = PAGE_SIZE } = {}) => {
-  const fields = [];
-  let calls = 0;
-  let totalCount = 0;
-  for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo += 1) {
-    const page = await fetchRtmsPage({ kind, sigunguCode, yearMonth, pageNo, numOfRows: pageSize }, { fetchImpl });
-    calls += 1;
-    totalCount = page.totalCount;
-    fields.push(...page.items);
-    if (page.items.length === 0 || fields.length >= totalCount) {
-      return { deals: fields.map((item) => normalizeItem(kind, item)), calls, totalCount };
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 한 페이지 + 다시 시도. RETRY_CODES(시간 초과 · 23)일 때만 RETRY_DELAY_MS 쉬고 RETRY_LIMIT 번 더 — 그 밖의 오류는 바로 던진다.
+// deadline(밀리초 시각)을 주면 "쉬기 + 요청 하나" 가 그 안에 들어갈 때만 다시 한다(실행 시간 한도를 넘기지 않게)
+const fetchPageWithRetry = async (params, { fetchImpl, sleep, now, deadline }) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchRtmsPage(params, { fetchImpl });
+    } catch (error) {
+      const retryable = error instanceof RtmsError && RETRY_CODES.includes(error.code);
+      if (!retryable || attempt >= RETRY_LIMIT || now() + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS > deadline) throw error;
+      await sleep(RETRY_DELAY_MS);
     }
   }
-  throw new RtmsError('TOO_MANY_PAGES', `${MAX_PAGES}쪽 넘음`, { kind, sigunguCode, yearMonth });
+};
+
+// 한 묶음(시군구 · 계약월 · 종류) 전부. totalCount 를 넘을 때까지 다음 페이지. 거래로 바꿔 돌려준다(해제 표시 포함 — 거르는 것은 부르는 쪽).
+// calls = 원천을 실제로 부른 횟수(다시 시도 포함). 실패하면 그 수를 오류의 calls 에 붙여 던진다.
+// sleep · now · deadline 은 다시 시도용(테스트가 바꾼다). deadline 이 없으면 시간 한도 없이 한 번 더 한다
+export const fetchRtmsMonth = async (
+  { kind, sigunguCode, yearMonth },
+  { fetchImpl = globalThis.fetch, pageSize = PAGE_SIZE, sleep = wait, now = Date.now, deadline = Number.POSITIVE_INFINITY } = {},
+) => {
+  let calls = 0;
+  const countedFetch = (...args) => {
+    calls += 1;
+    return fetchImpl(...args);
+  };
+  const fields = [];
+  let totalCount = 0;
+  try {
+    for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo += 1) {
+      const page = await fetchPageWithRetry({ kind, sigunguCode, yearMonth, pageNo, numOfRows: pageSize }, { fetchImpl: countedFetch, sleep, now, deadline });
+      totalCount = page.totalCount;
+      fields.push(...page.items);
+      if (page.items.length === 0 || fields.length >= totalCount) {
+        return { deals: fields.map((item) => normalizeItem(kind, item)), calls, totalCount };
+      }
+    }
+    throw new RtmsError('TOO_MANY_PAGES', `${MAX_PAGES}쪽 넘음`, { kind, sigunguCode, yearMonth });
+  } catch (error) {
+    if (error instanceof RtmsError) error.calls = calls;
+    throw error;
+  }
 };

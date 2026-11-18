@@ -5,6 +5,7 @@ import { isUuid } from '../../platform/uuid.js';
 import { askCounselor } from './chatbot.js';
 import { listFaqs } from './faqs.js';
 import { rankBySimilarity } from './related.js';
+import { isOffTopic, offTopicAnswer, withoutOffTopicTurns } from './offTopicGuard.js';
 import { retrieveReferences } from './retriever.js';
 import {
   appendChatMessages,
@@ -239,11 +240,15 @@ const parseQuestion = (body) => {
 const chatNotFound = () => new AppError('DISPUTE_CHAT_NOT_FOUND', 404, '상담 대화를 찾을 수 없습니다.');
 
 // RAG: 질문과 비슷한 참고자료를 검색하고(retriever) 그 자료를 근거로 답변을 만든다(chatbot).
+// 임대차와 관계없는 질문이면 답변 모델을 부르지 않고 안내 문구를 저장한다(offTopicGuard).
 // Claude 호출이 실패하면 질문도 저장하지 않는다 — 사용자는 같은 질문을 다시 보내면 된다.
-const ask = async (history, question) => {
+const ask = async (fullHistory, question) => {
   const questionAt = new Date();
+  const history = withoutOffTopicTurns(fullHistory);
   const references = await retrieveReferences({ history, question });
-  const answer = await askCounselor({ references, history, question });
+  const answer = isOffTopic(references)
+    ? offTopicAnswer()
+    : await askCounselor({ references, history, question });
   return { question, questionAt, answer, answerAt: new Date() };
 };
 

@@ -294,12 +294,12 @@ const throwDocumentNotFound = () => {
 };
 
 // V-03 POST /tenant-invitations/:token/documents/:documentId/download-url — 확인 세션 + 그 초대의 공유 문서만.
-export const issueInvitationDocumentDownloadUrl = async (token, documentId, req, { isValidDocumentId }) => {
+export const issueInvitationDocumentDownloadUrl = async (token, documentId, req, { isValidDocumentId, purpose = 'VIEW' }) => {
   const invitation = await findInvitationByToken(prisma, token);
   await requireVerification(prisma, req, invitation);
   const document = isValidDocumentId ? await findSharedInvitationDocument({ invitationId: invitation.id, contractId: invitation.contractId, documentId }) : null;
   if (!document) throwDocumentNotFound();
-  return issueSharedDocumentDownloadUrl(prisma, { invitation, document, req });
+  return issueSharedDocumentDownloadUrl(prisma, { invitation, document, req, purpose });
 };
 
 // 수락 전용 잠금: lockContractForOwner와 같은 순서(계약 읽기 → 소유 관계 FOR UPDATE)에서 소유자 검사만 뺐다.

@@ -29,7 +29,13 @@ export const ROUTE_TABLE = [
   { key: 'logEdit', path: '/logs/:logId/edit' },
   { key: 'logDetail', path: '/logs/:logId' },
   { key: 'propertyLogRegister', path: '/properties/:propertyId/logs/new' },
+  { key: 'documents', path: '/documents' },
+  { key: 'tickets', path: '/tickets' },
+  { key: 'ticketRegister', path: '/tickets/new' },
+  { key: 'ticketDetail', path: '/tickets/:ticketId' },
+  { key: 'thread', path: '/threads/:threadId' },
   { key: 'setup', path: '/setup' },
+  { key: 'schedules', path: '/schedules' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
   { key: 'disputeSearch', path: '/disputes/search' },
@@ -104,7 +110,22 @@ const BUILDERS = {
     pathname: `/properties/${propertyId}/logs/new`,
     state: fromPage ? { fromPage } : undefined,
   }),
+  // 서류함. 고른 호실(propertyId)은 주소에 남긴다. 없으면 화면이 첫 호실을 골라 주소를 바꾼다.
+  // type: 앱 문서함(M11)의 종류 목록('all'·'contract' 등). 웹 문서함은 쓰지 않는다.
+  documents: ({ propertyId, type } = {}) => {
+    const search = new URLSearchParams(Object.entries({ propertyId, type }).filter(([, value]) => value)).toString();
+    return { pathname: '/documents', search: search ? `?${search}` : '' };
+  },
+  // 수리·점검(M09). 호실 필터(propertyId)는 주소에 남긴다. 등록 화면도 호실에서 오면 그 호실을 미리 고른다.
+  tickets: ({ propertyId } = {}) => ({ pathname: '/tickets', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  ticketRegister: ({ propertyId } = {}) => ({ pathname: '/tickets/new', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  // complete: 목록의 [완료 처리]로 들어와 완료 시트를 바로 연다(history state 로만 넘긴다).
+  ticketDetail: ({ ticketId, complete }) => ({ pathname: `/tickets/${ticketId}`, state: complete ? { complete: true } : undefined }),
+  // 소통(M10) 대화방
+  thread: ({ threadId }) => ({ pathname: `/threads/${threadId}` }),
   setup: () => ({ pathname: '/setup' }),
+  // 일정·알림(임대인 앱). 알림 탭이면 ?tab=notifications 를 주소에 남긴다(새로고침·뒤로 가기에도 같은 탭).
+  schedules: ({ tab } = {}) => ({ pathname: '/schedules', search: tab === 'notifications' ? '?tab=notifications' : '' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),
   // 자료 찾기: 상황(topic)·검색어(q)·결과 탭(tab)을 주소에 남겨 사례 상세에서 돌아와도 그대로 보이게 한다.

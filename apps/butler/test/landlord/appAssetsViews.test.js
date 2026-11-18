@@ -2,7 +2,13 @@
 // · 갱신·초대 표기가 계약 응답과 다름 · 전세에 월세 행이 남음 · 월별 묶음 순서가 뒤집힘 · 준공연도 없을 때 빈 칸이 남음.
 import { describe, expect, it } from 'vitest';
 import { countSegments, filterAssets, SEGMENTS, toAssetCards } from '../../src/landlord/app/utils/assets';
-import { getContractTitle, getInvitationLabel, getRenewalRemaining, toContractRows } from '../../src/landlord/app/utils/contractView';
+import {
+  getContractCardTitle,
+  getContractTitle,
+  getInvitationLabel,
+  getRenewalRemaining,
+  toContractRows,
+} from '../../src/landlord/app/utils/contractView';
 import { formatLogDay, getLogSourceLabel, groupLogsByMonth } from '../../src/landlord/app/utils/logGroups';
 import { formatPropertySpec, getMoreMenuTargets, toSummaryStats } from '../../src/landlord/app/utils/propertyView';
 
@@ -105,9 +111,9 @@ describe('부동산 상세 (M06)', () => {
 
   it('⋯ 메뉴는 이동형 동작만, 상태에 맞게', () => {
     const keys = (overrides) => getMoreMenuTargets(property(overrides)).map((item) => item.key);
-    expect(keys({})).toEqual(['log']);
-    expect(keys({ status: 'VACANT' })).toEqual(['contract', 'log']);
-    expect(keys({ myRelation: { type: 'OWNER', verificationStatus: 'UNVERIFIED' } })).toEqual(['verify', 'log']);
+    expect(keys({})).toEqual(['log', 'tickets']);
+    expect(keys({ status: 'VACANT' })).toEqual(['contract', 'log', 'tickets']);
+    expect(keys({ myRelation: { type: 'OWNER', verificationStatus: 'UNVERIFIED' } })).toEqual(['verify', 'log', 'tickets']);
     expect(keys({ myRelation: { type: 'FORMER_OWNER', verificationStatus: 'VERIFIED' } })).toEqual([]);
     expect(getMoreMenuTargets(property({ status: 'VACANT' }))[0].target).toEqual({ key: 'contractRegister', params: { propertyId: 'p1' } });
   });
@@ -136,6 +142,20 @@ describe('계약 관리 (M07)', () => {
     const jeonse = toContractRows(contract({ leaseType: 'JEONSE', monthlyRent: 0, previousContractId: 'c0' }));
     expect(jeonse.map((row) => row.label)).toEqual(['임차인', '계약 기간', '보증금', '형태']);
     expect(jeonse.at(-1).value).toBe('전세 · 갱신 0회 남음');
+  });
+
+  it('끝난 계약은 지난 계약: 갱신 횟수 대신 만료·해지 상태 행', () => {
+    expect(getContractCardTitle(contract())).toBe('현재 계약');
+    expect(getContractCardTitle(contract({ status: 'UPCOMING' }))).toBe('현재 계약');
+    expect(getContractCardTitle(contract({ status: 'EXPIRED' }))).toBe('지난 계약');
+
+    const expired = toContractRows(contract({ status: 'EXPIRED' }));
+    expect(expired.slice(-2)).toEqual([
+      { label: '형태', value: '월세' },
+      { label: '상태', value: '만료', numeric: false },
+    ]);
+    const terminated = toContractRows(contract({ status: 'TERMINATED', terminatedOn: '2026-11-01' }));
+    expect(terminated.at(-1)).toEqual({ label: '상태', value: '해지 · 2026-11-01', numeric: true });
   });
 });
 

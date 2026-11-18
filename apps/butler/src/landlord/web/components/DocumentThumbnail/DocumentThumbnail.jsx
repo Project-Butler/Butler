@@ -14,7 +14,7 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
 
   const load = useCallback(async () => {
     try {
-      const issued = await postDocumentDownloadUrl(document.id);
+      const issued = await postDocumentDownloadUrl(document.id, { purpose: 'THUMBNAIL' });
       setUrl(issued.url);
       setError(null);
     } catch (requestError) {
