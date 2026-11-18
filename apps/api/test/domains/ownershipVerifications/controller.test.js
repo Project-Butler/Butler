@@ -6,7 +6,8 @@ import { parseEndBody } from '../../../src/domains/propertyOwnerships/controller
 import { parseStartBody } from '../../../src/domains/ownershipVerifications/controller.js';
 
 const TODAY = '2026-11-03';
-const VALID = { ownershipId: randomUUID(), consent: true };
+const IDENTITY_VERIFICATION_ID = `iv${randomUUID().replaceAll('-', '')}`;
+const VALID = { ownershipId: randomUUID(), consent: true, identityVerificationId: IDENTITY_VERIFICATION_ID };
 
 const invalidFields = (fn) => {
   try {
@@ -18,8 +19,19 @@ const invalidFields = (fn) => {
   return assert.fail('400이어야 한다');
 };
 
-test('parseStartBody: 정상 입력에서 consent를 뺀 값을 돌려준다', () => {
-  assert.deepEqual(parseStartBody(VALID), { ownershipId: VALID.ownershipId });
+test('parseStartBody: 정상 입력에서 consent를 뺀 값을 돌려준다. testMode는 없으면 false', () => {
+  const parsed = { ownershipId: VALID.ownershipId, identityVerificationId: IDENTITY_VERIFICATION_ID, testMode: false };
+  assert.deepEqual(parseStartBody(VALID), parsed);
+  assert.deepEqual(parseStartBody({ ...VALID, testMode: true }), { ...parsed, testMode: true });
+});
+
+test('parseStartBody: 본인인증 ID가 없거나 형식이 틀리면 400, testMode는 boolean만', () => {
+  for (const identityVerificationId of [undefined, '', 'iv 공백', 'a'.repeat(101), 123]) {
+    assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, identityVerificationId })).fields, ['identityVerificationId']);
+  }
+  for (const testMode of ['true', 1, null]) {
+    assert.deepEqual(invalidFields(() => parseStartBody({ ...VALID, testMode })).fields, ['testMode']);
+  }
 });
 
 test('parseStartBody: 동의 없음·잘못된 id·모르는 칸은 400이고, 생년월일은 받지 않는다', () => {

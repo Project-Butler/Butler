@@ -21,6 +21,7 @@ import marketPricesRouter from './domains/marketPrices/router.js';
 import marketPriceCronRouter from './domains/marketPrices/cronRouter.js';
 import notificationsRouter from './domains/notifications/router.js';
 import ownershipVerificationsRouter, { ownershipVerificationResultRouter } from './domains/ownershipVerifications/router.js';
+import ownershipVerificationCronRouter from './domains/ownershipVerifications/cronRouter.js';
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
 import tenantInvitationsRouter, { contractTenantInvitationsRouter } from './domains/tenantInvitations/router.js';
@@ -75,6 +76,7 @@ app.use('/api/v1/market-prices', marketPricesRouter);
 app.use(cronRouter);
 app.use(communityCronRouter);
 app.use(marketPriceCronRouter);
+app.use(ownershipVerificationCronRouter);
 
 app.use(errorHandler);
 

@@ -16,10 +16,16 @@ import {
 } from '../../platform/ownershipVerificationRules.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
+import {
+  assertIdentityVerified,
+  fetchIdentityVerification,
+  IDENTITY_VERIFICATION_USE_RETENTION_MS,
+  identityVerificationError,
+} from './identityVerification.js';
 import { selectRunner as defaultSelectRunner } from './runners/index.js';
 
 export const CONSENT_TYPE = 'OWNERSHIP_VERIFICATION';
-export const CONSENT_VERSION = '2026-11-03-member-birth-date';
+export const CONSENT_VERSION = '2026-11-18-identity-verification';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -110,7 +116,25 @@ export const runAttempt = async (attemptId, runner, deps = {}) => {
 const findActiveAttempt = (client, ownershipId) =>
   client.ownershipVerificationAttempt.findFirst({ where: { ownershipId, status: { in: [...ACTIVE_ATTEMPT_STATUSES] } } });
 
-const createAttemptInTx = async (tx, user, { ownershipId }, req) => {
+// 본인인증 1건은 권리자 인증 시도 1건에만 쓴다. 같은 ID가 다시 오면 409.
+const markIdentityVerificationUsed = async (tx, user, identityVerificationId, now) => {
+  try {
+    await tx.identityVerificationUse.create({ data: { identityVerificationId, userId: user.id, usedAt: now } });
+  } catch (error) {
+    if (error?.code === 'P2002') throw identityVerificationError('ALREADY_USED');
+    throw error;
+  }
+};
+
+// GET /api/cron/ownership-identity-verifications. 보관 기간(하루)이 지난 본인인증 사용 기록을 지운다.
+// 지운 건수만 돌려준다(본인인증 ID·회원 ID는 응답·로그에 남기지 않는다).
+export const purgeExpiredIdentityVerificationUses = async ({ now = getNow() } = {}) => {
+  const cutoff = new Date(now.getTime() - IDENTITY_VERIFICATION_USE_RETENTION_MS);
+  const { count } = await prisma.identityVerificationUse.deleteMany({ where: { usedAt: { lt: cutoff } } });
+  return { deleted: count };
+};
+
+const createAttemptInTx = async (tx, user, { ownershipId, identityVerificationId, testMode }, req) => {
   // 소유 종료·계약 쓰기와 같은 행 잠금으로 줄을 세운다. 이중 POST도 여기서 줄을 선다.
   const ownership = await lockOwnershipRow(tx, ownershipId);
   if (!ownership || ownership.userId !== user.id) throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
@@ -129,6 +153,8 @@ const createAttemptInTx = async (tx, user, { ownershipId }, req) => {
   });
   const blockReason = getStartBlockReason(rows, ownershipId, now);
 
+  // 진행 중 시도를 돌려줄 때는 쓰지 않고, 새 시도를 만들 때만 사용 처리한다.
+  await markIdentityVerificationUsed(tx, user, identityVerificationId, now);
   await tx.consent.create({
     data: { userId: user.id, type: CONSENT_TYPE, version: CONSENT_VERSION, agreed: true, agreedAt: now, ip: req?.ip ?? null },
   });
@@ -145,7 +171,8 @@ const createAttemptInTx = async (tx, user, { ownershipId }, req) => {
     action: 'OWNERSHIP_VERIFICATION_REQUESTED',
     resourceType: 'OWNERSHIP',
     resourceId: ownershipId,
-    after: { attemptId: attempt.id, propertyId: ownership.propertyId },
+    // [임시·테스트 모드] 본인인증 인적사항 대조를 건너뛴 시도임을 남긴다. 운영 배포 전 테스트 모드와 함께 제거.
+    after: { attemptId: attempt.id, propertyId: ownership.propertyId, ...(testMode ? { identityCheckSkipped: true } : {}) },
     req,
     client: tx,
   });
@@ -162,22 +189,35 @@ const createAttemptInTx = async (tx, user, { ownershipId }, req) => {
   return { attempt, created: !blockReason };
 };
 
-// POST /ownership-verifications. 러너 확인 → 시도 저장 → 실행. 진행 중 시도가 있으면 그 시도를 돌려준다.
+// POST /ownership-verifications. 러너 확인 → 본인인증 확인 → 시도 저장 → 실행. 진행 중 시도가 있으면 그 시도를 돌려준다.
+// 본인인증 실패·인적사항 불일치는 시도·동의를 남기지 않고 거절한다.
+// input.testMode(임시·시연용): 본인인증은 그대로 확인하되 회원 정보와의 인적사항 대조만 건너뛴다.
 export const startOwnershipVerification = async (user, input, req, deps = {}) => {
-  const { selectRunner = defaultSelectRunner, schedule = setImmediate } = deps;
+  const { selectRunner = defaultSelectRunner, schedule = setImmediate, lookupIdentityVerification = fetchIdentityVerification } = deps;
   const runner = selectRunner();
   if (!runner) throw new AppError('VERIFICATION_RUNNER_UNAVAILABLE', 503, '권리자 인증을 준비 중입니다. 잠시 후 다시 시도해 주세요.');
 
   await expireStaleAttempts();
 
   // 회원가입 때 생년월일을 받기 전에 가입한 회원은 비교할 값이 없다.
-  if (!(await loadIdentity(user.id)).birthDate) {
+  const identity = await loadIdentity(user.id);
+  if (!identity.birthDate) {
     throw new AppError('OWNERSHIP_VERIFICATION_BIRTH_DATE_REQUIRED', 422, '회원 정보에 생년월일이 없어 인증할 수 없습니다. 관리자에게 문의해 주세요.');
   }
 
+  const testMode = input.testMode === true;
+  await assertIdentityVerified({
+    identityVerificationId: input.identityVerificationId,
+    identity,
+    testMode,
+    now: getNow(),
+    lookup: lookupIdentityVerification,
+  });
+
+  const attemptInput = { ownershipId: input.ownershipId, identityVerificationId: input.identityVerificationId, testMode };
   let outcome;
   try {
-    outcome = await prisma.$transaction((tx) => createAttemptInTx(tx, user, { ownershipId: input.ownershipId }, req));
+    outcome = await prisma.$transaction((tx) => createAttemptInTx(tx, user, attemptInput, req));
   } catch (error) {
     if (error?.code !== 'P2002') throw error;
     const existing = await findActiveAttempt(prisma, input.ownershipId);

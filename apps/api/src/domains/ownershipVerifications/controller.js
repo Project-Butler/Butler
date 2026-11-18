@@ -4,16 +4,19 @@ import { parseRunnerResult } from '../../platform/ownershipVerificationRules.js'
 import { assertAllowedBody, assertSingleValues, throwIfInvalid } from '../../platform/requestValidation.js';
 import { sendData } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
+import { IDENTITY_VERIFICATION_ID_PATTERN } from './identityVerification.js';
 import { SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from './runnerSignature.js';
 import {
   findAttemptForUser,
   findLatestAttempt,
   findRenewalTargets,
+  purgeExpiredIdentityVerificationUses,
   receiveRunnerResult,
   startOwnershipVerification,
 } from './service.js';
 
-const START_FIELDS = ['ownershipId', 'consent'];
+// testMode: [임시·시연용] 본인인증 인적사항 대조를 건너뛴다. 운영 배포 전 제거.
+const START_FIELDS = ['ownershipId', 'consent', 'identityVerificationId', 'testMode'];
 const RESULT_FIELDS = ['attemptId', 'kind', 'ledgerKind', 'owners'];
 
 // 400 details에 입력값을 담지 않는다.
@@ -22,8 +25,12 @@ export const parseStartBody = (body) => {
   const details = [];
   if (!isUuid(body.ownershipId)) details.push({ field: 'ownershipId', reason: 'UUID여야 합니다.' });
   if (body.consent !== true) details.push({ field: 'consent', reason: 'CONSENT_REQUIRED' });
+  if (typeof body.identityVerificationId !== 'string' || !IDENTITY_VERIFICATION_ID_PATTERN.test(body.identityVerificationId)) {
+    details.push({ field: 'identityVerificationId', reason: '본인인증 ID가 필요합니다.' });
+  }
+  if (body.testMode !== undefined && typeof body.testMode !== 'boolean') details.push({ field: 'testMode', reason: 'true 또는 false여야 합니다.' });
   throwIfInvalid(details);
-  return { ownershipId: body.ownershipId };
+  return { ownershipId: body.ownershipId, identityVerificationId: body.identityVerificationId, testMode: body.testMode === true };
 };
 
 const throwInvalidResult = () => {
@@ -99,6 +106,15 @@ export const postOwnershipVerificationResult = async (req, res, next) => {
     const { attemptId } = req.params;
     const result = parseSignedResult(req, attemptId);
     sendData(res, await receiveRunnerResult(attemptId, result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/cron/ownership-identity-verifications (cronRouter.js) — 하루 한 번. 지운 건수만 돌려준다.
+export const runIdentityVerificationUsePurge = async (req, res, next) => {
+  try {
+    sendData(res, await purgeExpiredIdentityVerificationUses());
   } catch (error) {
     next(error);
   }

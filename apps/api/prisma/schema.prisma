@@ -1417,4 +1417,15 @@ model MarketCollection {
   @@index([attemptedAt])
   @@map("market_collections")
 }
+
+// ===== 권리자 인증 본인인증 — B팀 (domains/ownershipVerifications/identityVerification.js) =====
+// 권리자 인증을 시작할 때 쓴 포트원 본인인증 ID. 같은 본인인증을 두 번 쓰지 못하게 막는 용도만 있다.
+// 인적사항(이름·생년월일·CI)은 저장하지 않는다. User 와 relation 을 걸지 않는다(Core 블록 그대로 — 스칼라 id).
+model IdentityVerificationUse {
+  identityVerificationId String   @id @map("identity_verification_id") @db.VarChar(100)
+  userId                 String   @map("user_id") @db.Uuid
+  usedAt                 DateTime @default(now()) @map("used_at") @db.Timestamptz(3)
+
+  @@map("identity_verification_uses")
+}
 // ===== B팀 끝 =====
