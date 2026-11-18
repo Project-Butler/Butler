@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { Button } from '../Button/Button';
 import { MobileFormLayout } from '../MobileShell/MobileFormLayout';
 import { BIRTH_YEAR_MIN, NAME_MAX_LENGTH, todayString } from '../RegisterScreen/registerShared';
+import { EmailField } from '../RegisterScreen/EmailField';
 import { useRegisterForm } from '../RegisterScreen/useRegisterForm';
 import { SocialLoginButtons } from '../SocialLoginButtons/SocialLoginButtons';
 import { TextField } from '../TextField/TextField';
@@ -19,7 +20,7 @@ const StepHeading = ({ title, description }) => (
 
 // 앱 회원가입 화면 (Figma M02 / 회원가입, 3:49). 웹 RegisterScreen 과 같은 입력 항목·규칙·API(useRegisterForm)를 두 단계로 나눠 보여 준다.
 //  1단계 계정: 이름 · 이메일 + 인증번호 · 비밀번호 · 비밀번호 확인 (+ 소셜 가입)
-//  2단계 본인 정보: 생년월일 · 휴대폰(선택) · 필수 약관 2개
+//  2단계 본인 정보: 생년월일 · 휴대폰 · 필수 약관 2개
 // Figma 에 있지만 API 가 없는 것(휴대폰 "인증번호 받기", [선택] 일정·알림 수신, 약관 상세 >)은 두지 않는다.
 // onBack: 1단계에서 뒤로 가기를 눌렀을 때(로그인 화면으로). 2단계의 뒤로 가기는 1단계로 돌아간다.
 export const MobileRegisterScreen = ({ onSubmit, onRequestEmailCode, onConfirmEmailCode, socialLoginHref, onBack, footer }) => {
@@ -70,20 +71,12 @@ export const MobileRegisterScreen = ({ onSubmit, onRequestEmailCode, onConfirmEm
           />
           <div className="flex flex-col gap-2">
             <div className="flex items-end gap-2">
-              <TextField
+              <EmailField
                 mobile
+                email={email}
                 className="min-w-0 flex-1"
-                label="이메일"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="owner@butler.kr"
-                value={values.email}
-                onChange={email.onChange}
-                disabled={isVerified}
                 aria-invalid={fieldErrors.email ? true : undefined}
                 aria-describedby={fieldErrors.email ? 'register-app-email-error' : undefined}
-                suffix={isVerified ? <span className="font-semibold text-accent-strong">인증 완료</span> : undefined}
               />
               {isVerified ? (
                 <Button variant="secondary" size="h48" onClick={email.reset} className="shrink-0">
@@ -143,7 +136,7 @@ export const MobileRegisterScreen = ({ onSubmit, onRequestEmailCode, onConfirmEm
             onChange={setValue('passwordConfirm')}
             error={fieldErrors.passwordConfirm}
           />
-          {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 가입" />}
+          {socialLoginHref && <SocialLoginButtons hrefFor={socialLoginHref} label="간편 가입" action="가입하기" />}
           {footer}
         </Fragment>
       ) : (
@@ -163,7 +156,8 @@ export const MobileRegisterScreen = ({ onSubmit, onRequestEmailCode, onConfirmEm
           />
           <TextField
             mobile
-            label="휴대폰 (선택)"
+            label="휴대폰"
+            required
             type="tel"
             autoComplete="tel"
             placeholder="010-1234-5678"
@@ -177,7 +171,7 @@ export const MobileRegisterScreen = ({ onSubmit, onRequestEmailCode, onConfirmEm
             </AgreementRow>
             <AgreementRow id="register-app-privacy" checked={values.privacyAgreed} onChange={setValue('privacyAgreed')} error={fieldErrors.privacyAgreed}>
               [필수] 개인정보 수집·이용 동의
-              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 생년월일(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
+              <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 비밀번호(암호화 저장), 생년월일(암호화 저장), 휴대폰 번호(암호화 저장)</span>
             </AgreementRow>
           </div>
           <p className="rounded-btn bg-surface-2 px-3.5 py-3 text-m-sub text-ink-2">주민등록번호는 받지 않습니다. 생년월일과 휴대폰 번호는 암호화해 보관합니다.</p>

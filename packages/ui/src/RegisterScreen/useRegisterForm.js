@@ -7,6 +7,10 @@ const PASSWORD_MAX_BYTES = 72;
 // 서버 details 필드 중 화면 칸과 이름이 같은 것만 칸 아래에 보여 준다.
 const FIELD_NAMES = ['name', 'email', 'password', 'phone', 'birthDate', 'termsAgreed', 'privacyAgreed'];
 const CODE_PATTERN = /^\d{6}$/;
+// 이메일은 @ 앞(local)만 입력하고 @ 뒤는 목록에서 고른다. 목록에 없으면 CUSTOM_DOMAIN 을 골라 직접 입력한다.
+export const EMAIL_DOMAINS = ['gmail.com', 'naver.com', 'daum.net', 'kakao.com', 'hanmail.net', 'outlook.com', 'icloud.com'];
+export const CUSTOM_DOMAIN = 'custom';
+const EMPTY_EMAIL_PARTS = { local: '', domainChoice: '', customDomain: '' };
 
 const EMPTY_VALUES = {
   name: '',
@@ -48,6 +52,7 @@ export const useRegisterForm = ({ onSubmit, onRequestEmailCode, onConfirmEmailCo
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 이메일 인증: idle(번호 요청 전) → sent(번호 입력 중) → verified(가입 가능). 이메일을 고치면 idle로 돌아간다.
   const [emailStep, setEmailStep] = useState('idle');
+  const [emailParts, setEmailParts] = useState(EMPTY_EMAIL_PARTS);
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
   const [code, setCode] = useState('');
@@ -77,11 +82,30 @@ export const useRegisterForm = ({ onSubmit, onRequestEmailCode, onConfirmEmailCo
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   };
 
-  const handleEmailChange = (event) => {
-    setValue('email')(event);
+  // @ 앞·뒤 입력이 바뀔 때마다 합친 주소를 values.email 에 넣는다(검증·제출은 합친 주소로 한다).
+  const applyEmailParts = (next) => {
+    setEmailParts(next);
+    const domain = next.domainChoice === CUSTOM_DOMAIN ? next.customDomain : next.domainChoice;
+    const full = next.local ? `${next.local}@${domain}` : '';
+    setValues((current) => ({ ...current, email: full }));
+    setFieldErrors((current) => (current.email ? { ...current, email: undefined } : current));
     // 인증번호를 보낸 이메일과 달라지면 인증을 처음부터 다시 받는다.
-    if (emailStep !== 'idle' && event.target.value.trim() !== verifiedEmail) resetEmailVerification();
+    if (emailStep !== 'idle' && full !== verifiedEmail) resetEmailVerification();
   };
+
+  // 전체 주소를 붙여 넣으면 @ 뒤를 도메인으로 나눠 담는다. @ 만 친 경우는 @ 를 버린다(@ 는 칸 옆에 이미 있다).
+  const handleLocalChange = (raw) => {
+    const at = raw.indexOf('@');
+    const local = (at < 0 ? raw : raw.slice(0, at)).replace(/\s/g, '');
+    const pasted = at < 0 ? '' : raw.slice(at + 1).replace(/\s/g, '').toLowerCase();
+    if (!pasted) return applyEmailParts({ ...emailParts, local });
+    if (EMAIL_DOMAINS.includes(pasted)) return applyEmailParts({ local, domainChoice: pasted, customDomain: '' });
+    return applyEmailParts({ local, domainChoice: CUSTOM_DOMAIN, customDomain: pasted });
+  };
+
+  const handleDomainChange = (domainChoice) => applyEmailParts({ ...emailParts, domainChoice });
+
+  const handleCustomDomainChange = (raw) => applyEmailParts({ ...emailParts, customDomain: raw.replace(/[\s@]/g, '').toLowerCase() });
 
   const handleCodeChange = (event) => {
     setCode(event.target.value.replace(/\D/g, ''));
@@ -105,13 +129,20 @@ export const useRegisterForm = ({ onSubmit, onRequestEmailCode, onConfirmEmailCo
     setIsEmailBusy(true);
     setFieldErrors((current) => ({ ...current, email: undefined }));
     setCodeError('');
+    // 메일 발송이 끝나길 기다리지 않고 인증번호 입력칸을 바로 보여 준다(메일은 조금 늦게 와도 된다).
+    const previousStep = emailStep;
+    setVerifiedEmail(email);
+    setEmailStep('sent');
+    setCode('');
     try {
       const result = await onRequestEmailCode(email);
-      setVerifiedEmail(email);
-      setEmailStep('sent');
-      setCode('');
       setResendSeconds(result?.resendAfterSeconds ?? 60);
     } catch (requestError) {
+      // 처음 요청이 실패하면 입력칸을 다시 숨긴다. 다시 받기가 실패한 경우는 앞서 받은 번호로 계속 입력할 수 있다.
+      if (previousStep === 'idle') {
+        setEmailStep('idle');
+        setVerifiedEmail('');
+      }
       showEmailError(requestError, '인증번호를 보내지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setIsEmailBusy(false);
@@ -164,7 +195,7 @@ export const useRegisterForm = ({ onSubmit, onRequestEmailCode, onConfirmEmailCo
         name: values.name.trim(),
         email: values.email.trim(),
         password: values.password,
-        phone: values.phone.trim() || null,
+        phone: values.phone.trim(),
         birthDate: values.birthDate,
         termsAgreed: values.termsAgreed,
         privacyAgreed: values.privacyAgreed,
@@ -206,7 +237,12 @@ export const useRegisterForm = ({ onSubmit, onRequestEmailCode, onConfirmEmailCo
       codeError,
       isBusy: isEmailBusy,
       resendSeconds,
-      onChange: handleEmailChange,
+      local: emailParts.local,
+      domainChoice: emailParts.domainChoice,
+      customDomain: emailParts.customDomain,
+      onLocalChange: handleLocalChange,
+      onDomainChange: handleDomainChange,
+      onCustomDomainChange: handleCustomDomainChange,
       onCodeChange: handleCodeChange,
       requestCode: requestEmailCode,
       confirmCode: confirmEmailCode,

@@ -182,6 +182,12 @@ describe('parseOAuthSignupBody', () => {
     assert.equal(parseOAuthSignupBody({ ...valid, name: '김철수' }, '홍길동').name, '김철수');
   });
 
+  test('휴대폰 번호가 없으면 400이다', () => {
+    for (const phone of [undefined, null, '']) {
+      assert.throws(() => parseOAuthSignupBody({ ...valid, phone }, '홍길동'), { code: 'VALIDATION_ERROR' });
+    }
+  });
+
   test('생년월일·약관 동의가 없으면 400이다', () => {
     assert.throws(() => parseOAuthSignupBody({ ...valid, birthDate: undefined, termsAgreed: false }, '홍길동'), {
       code: 'VALIDATION_ERROR',

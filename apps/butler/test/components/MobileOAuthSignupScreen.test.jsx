@@ -37,27 +37,29 @@ describe('MobileOAuthSignupScreen', () => {
     expect(screen.getByRole('status')).toHaveTextContent('불러오는 중입니다');
   });
 
-  it('생년월일과 약관 동의 없이는 제출하지 않고 칸별 오류를 보여 준다', async () => {
+  it('휴대폰·생년월일과 약관 동의 없이는 제출하지 않고 칸별 오류를 보여 준다', async () => {
     const { onSubmit } = renderScreen();
     await ready();
     await userEvent.click(screen.getByRole('button', { name: '가입 완료' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('휴대폰 번호를 입력해주세요.')).toBeInTheDocument();
     expect(screen.getByText('생년월일을 입력해주세요.')).toBeInTheDocument();
     expect(screen.getByText('이용약관에 동의해야 가입할 수 있습니다.')).toBeInTheDocument();
     expect(screen.getByText('개인정보 수집·이용에 동의해야 가입할 수 있습니다.')).toBeInTheDocument();
   });
 
-  it('입력을 마치면 웹과 같은 값(빈 휴대폰은 null)을 넘긴다', async () => {
+  it('입력을 마치면 웹과 같은 값을 넘긴다', async () => {
     const { onSubmit } = renderScreen();
     await ready();
     await userEvent.type(screen.getByLabelText(/^생년월일/), '1990-01-31');
+    await userEvent.type(screen.getByLabelText(/^휴대폰/), '010-1234-5678');
     await userEvent.click(screen.getByLabelText(/이용약관 동의/));
     await userEvent.click(screen.getByLabelText(/개인정보 수집·이용 동의/));
     await userEvent.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith({ name: '카카오닉네임', phone: null, birthDate: '1990-01-31', termsAgreed: true, privacyAgreed: true });
+    expect(onSubmit).toHaveBeenCalledWith({ name: '카카오닉네임', phone: '010-1234-5678', birthDate: '1990-01-31', termsAgreed: true, privacyAgreed: true });
   });
 
   it('서버가 칸 오류(phone)를 주면 그 칸 아래에, 칸에 못 붙이는 오류(429)는 alert 로 보여 준다', async () => {
@@ -68,6 +70,7 @@ describe('MobileOAuthSignupScreen', () => {
     renderScreen({ onSubmit });
     await ready();
     await userEvent.type(screen.getByLabelText(/^생년월일/), '1990-01-31');
+    await userEvent.type(screen.getByLabelText(/^휴대폰/), '010-1234-5678');
     await userEvent.click(screen.getByLabelText(/이용약관 동의/));
     await userEvent.click(screen.getByLabelText(/개인정보 수집·이용 동의/));
 
@@ -84,6 +87,7 @@ describe('MobileOAuthSignupScreen', () => {
     renderScreen({ onSubmit });
     await ready();
     await userEvent.type(screen.getByLabelText(/^생년월일/), '1990-01-31');
+    await userEvent.type(screen.getByLabelText(/^휴대폰/), '010-1234-5678');
     await userEvent.click(screen.getByLabelText(/이용약관 동의/));
     await userEvent.click(screen.getByLabelText(/개인정보 수집·이용 동의/));
     await userEvent.click(screen.getByRole('button', { name: '가입 완료' }));

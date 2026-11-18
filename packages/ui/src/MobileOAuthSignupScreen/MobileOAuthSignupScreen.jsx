@@ -79,7 +79,8 @@ export const MobileOAuthSignupScreen = ({ loadInfo, onSubmit, onBack }) => {
       />
       <TextField
         mobile
-        label="휴대폰 (선택)"
+        label="휴대폰"
+        required
         type="tel"
         autoComplete="tel"
         placeholder="010-1234-5678"
@@ -93,7 +94,7 @@ export const MobileOAuthSignupScreen = ({ loadInfo, onSubmit, onBack }) => {
         </AgreementRow>
         <AgreementRow id="oauth-app-privacy" checked={values.privacyAgreed} onChange={setValue('privacyAgreed')} error={fieldErrors.privacyAgreed}>
           [필수] 개인정보 수집·이용 동의
-          <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 생년월일(암호화 저장), 휴대폰 번호(선택, 암호화 저장)</span>
+          <span className="mt-0.5 block text-chip text-ink-3">수집 항목: 이름, 이메일, 생년월일(암호화 저장), 휴대폰 번호(암호화 저장)</span>
         </AgreementRow>
       </div>
       <p className="rounded-btn bg-surface-2 px-3.5 py-3 text-m-sub text-ink-2">주민등록번호는 받지 않습니다. 생년월일과 휴대폰 번호는 암호화해 보관합니다.</p>

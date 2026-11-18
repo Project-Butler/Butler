@@ -1,5 +1,5 @@
 // 구글·카카오로 시작하는 링크 두 개. 누르면 API가 제공자 로그인 화면으로 보내므로 버튼이 아니라 링크(<a>)다.
-// hrefFor('google' | 'kakao')가 이동할 주소를 돌려준다. label은 구분선 문구("간편 로그인" 등).
+// hrefFor('google' | 'kakao')가 이동할 주소를 돌려준다. label은 구분선 문구("간편 로그인" 등), action은 버튼 끝말("구글로 계속하기" · 가입 화면은 "구글로 가입하기").
 
 import { isInAppBrowser, isKakaoTalkBrowser, kakaoOpenExternalUrl } from './inAppBrowser';
 
@@ -7,7 +7,7 @@ import { isInAppBrowser, isKakaoTalkBrowser, kakaoOpenExternalUrl } from './inAp
 const PROVIDERS = [
   {
     key: 'google',
-    text: '구글로 계속하기',
+    name: '구글',
     className: 'border border-line bg-white text-ink hover:bg-surface-2',
     icon: (
       <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
@@ -20,7 +20,7 @@ const PROVIDERS = [
   },
   {
     key: 'kakao',
-    text: '카카오로 계속하기',
+    name: '카카오',
     className: 'bg-[#FEE500] text-[#191919] hover:brightness-95',
     icon: (
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -37,6 +37,7 @@ const PROVIDERS = [
 export const SocialLoginButtons = ({
   hrefFor,
   label = '간편 로그인',
+  action = '계속하기',
   userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent,
   pageUrl = typeof window === 'undefined' ? '' : window.location.href,
 }) => (
@@ -59,14 +60,14 @@ export const SocialLoginButtons = ({
         )}
       </p>
     )}
-    {PROVIDERS.map(({ key, text, className, icon }) => (
+    {PROVIDERS.map(({ key, name, className, icon }) => (
       <a
         key={key}
         href={hrefFor(key)}
         className={`flex h-11 items-center justify-center gap-2 rounded-btn text-body font-semibold transition ${className}`}
       >
         {icon}
-        {text}
+        {name}로 {action}
       </a>
     ))}
   </div>
