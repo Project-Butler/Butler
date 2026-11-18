@@ -16,6 +16,15 @@ import {
 } from '../../platform/requestValidation.js';
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
+import { RENEWAL_NOTICE_KINDS, RENEWAL_NOTICE_METHODS } from '../../platform/renewalNotice.js';
+import { getTodayKST } from '../../platform/dateUtils.js';
+import {
+  createRenewalNotice,
+  deleteRenewalNotice,
+  findRenewalNotices,
+  MAX_RENEWAL_NOTICE_ATTACHMENTS,
+  throwRenewalNoticeNotFound,
+} from './renewalNoticeService.js';
 import { createContract, findContractForUser, findContracts, terminateContract, updateContract } from './service.js';
 
 const CREATE_FIELDS = ['ownershipId', ...CONTRACT_EDITABLE_FIELDS, 'previousContractId'];
@@ -139,6 +148,49 @@ const parseTerminateBody = (body) => {
   return { terminatedOn, reason };
 };
 
+const RENEWAL_NOTICE_FIELDS = ['kind', 'method', 'sentOn', 'deliveredOn', 'memo', 'attachmentDocumentIds'];
+const MAX_RENEWAL_NOTICE_MEMO_LENGTH = 500;
+
+// 갱신 거절 통지 기록(#157). 보낸 날·도달한 날은 오늘(KST) 이전이고, 도달한 날은 보낸 날 이후다.
+// 구간(만료 6~2개월 전) 밖의 날짜도 그대로 받는다 — 늦게 보낸 통지도 기록으로 남기고, 응답의 timing이 LATE로 알려 준다.
+const parseRenewalNoticeBody = (body) => {
+  const input = body ?? {};
+  assertAllowedBody(input, RENEWAL_NOTICE_FIELDS);
+  const details = [];
+  for (const field of ['kind', 'method', 'sentOn']) {
+    if (input[field] === undefined || input[field] === null) details.push({ field, reason: '필수 값입니다.' });
+  }
+  throwIfInvalid(details);
+
+  if (!RENEWAL_NOTICE_KINDS.includes(input.kind)) details.push({ field: 'kind', reason: `${RENEWAL_NOTICE_KINDS.join(', ')} 중 하나여야 합니다.` });
+  if (!RENEWAL_NOTICE_METHODS.includes(input.method)) {
+    details.push({ field: 'method', reason: `${RENEWAL_NOTICE_METHODS.join(', ')} 중 하나여야 합니다.` });
+  }
+  const todayKST = getTodayKST();
+  const sentOn = parseDate('sentOn', input.sentOn, details);
+  const deliveredOn = input.deliveredOn === undefined || input.deliveredOn === null ? null : parseDate('deliveredOn', input.deliveredOn, details);
+  if (sentOn && sentOn > todayKST) details.push({ field: 'sentOn', reason: '오늘 이후 날짜는 기록할 수 없습니다.' });
+  if (deliveredOn && deliveredOn > todayKST) details.push({ field: 'deliveredOn', reason: '오늘 이후 날짜는 기록할 수 없습니다.' });
+  if (sentOn && deliveredOn && deliveredOn < sentOn) details.push({ field: 'deliveredOn', reason: '보낸 날 이후여야 합니다.' });
+
+  let memo = null;
+  if (input.memo !== undefined && input.memo !== null) {
+    if (typeof input.memo === 'string' && input.memo.length <= MAX_RENEWAL_NOTICE_MEMO_LENGTH) memo = input.memo.trim() || null;
+    else details.push({ field: 'memo', reason: `${MAX_RENEWAL_NOTICE_MEMO_LENGTH}자 이하 문자열이어야 합니다.` });
+  }
+
+  const attachmentDocumentIds = input.attachmentDocumentIds ?? [];
+  if (!Array.isArray(attachmentDocumentIds) || !attachmentDocumentIds.every(isUuid)) {
+    details.push({ field: 'attachmentDocumentIds', reason: 'UUID 배열이어야 합니다.' });
+  } else if (attachmentDocumentIds.length > MAX_RENEWAL_NOTICE_ATTACHMENTS) {
+    details.push({ field: 'attachmentDocumentIds', reason: `${MAX_RENEWAL_NOTICE_ATTACHMENTS}개까지 붙일 수 있습니다.` });
+  } else if (new Set(attachmentDocumentIds).size !== attachmentDocumentIds.length) {
+    details.push({ field: 'attachmentDocumentIds', reason: '같은 문서를 두 번 넣을 수 없습니다.' });
+  }
+  throwIfInvalid(details);
+  return { kind: input.kind, method: input.method, sentOn, deliveredOn, memo, attachmentDocumentIds };
+};
+
 const parseListQuery = (query) => {
   assertSingleValues(query);
   const details = [];
@@ -216,6 +268,41 @@ export const postContractTermination = async (req, res, next) => {
     const { contractId } = req.params;
     if (!isUuid(contractId)) throwContractNotFound();
     sendData(res, await terminateContract(req.user, contractId, parseTerminateBody(req.body), req));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /contracts/:contractId/renewal-notices
+export const listRenewalNotices = async (req, res, next) => {
+  try {
+    const { contractId } = req.params;
+    if (!isUuid(contractId)) throwContractNotFound();
+    sendData(res, await findRenewalNotices(req.user, contractId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /contracts/:contractId/renewal-notices
+export const postRenewalNotice = async (req, res, next) => {
+  try {
+    const { contractId } = req.params;
+    if (!isUuid(contractId)) throwContractNotFound();
+    sendData(res, await createRenewalNotice(req.user, contractId, parseRenewalNoticeBody(req.body), req), { status: 201 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /contracts/:contractId/renewal-notices/:noticeId
+export const removeRenewalNotice = async (req, res, next) => {
+  try {
+    const { contractId, noticeId } = req.params;
+    if (!isUuid(contractId)) throwContractNotFound();
+    if (!isUuid(noticeId)) throwRenewalNoticeNotFound();
+    await deleteRenewalNotice(req.user, contractId, noticeId, req);
+    res.status(204).end();
   } catch (error) {
     next(error);
   }
