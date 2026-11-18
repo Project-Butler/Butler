@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import { CONTRACT_DOCUMENT_TYPES, MAX_LOG_ATTACHMENTS, OWNERSHIP_DOCUMENT_TYPES } from '../../../src/domains/documents/fileRules.js';
 import { getResourcePolicy, SUPPORTED_RESOURCE_TYPES, visibleDocumentWhere } from '../../../src/domains/documents/resourcePolicies.js';
 
-test('지금은 MANAGEMENT_LOG·TICKET·THREAD_MESSAGE·CONTRACT·OWNERSHIP만 붙일 수 있고, 모르는 resourceType은 null', () => {
-  assert.deepEqual(SUPPORTED_RESOURCE_TYPES, ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE', 'CONTRACT', 'OWNERSHIP']);
+test('지금은 MANAGEMENT_LOG·TICKET·THREAD_MESSAGE·CONTRACT·OWNERSHIP·RENEWAL_NOTICE만 붙일 수 있고, 모르는 resourceType은 null', () => {
+  assert.deepEqual(SUPPORTED_RESOURCE_TYPES, ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE', 'CONTRACT', 'OWNERSHIP', 'RENEWAL_NOTICE']);
   assert.equal(getResourcePolicy('PROPERTY'), null);
   assert.equal(getResourcePolicy(undefined), null);
 });
@@ -55,8 +55,16 @@ test('OWNERSHIP 정책: 조회·문서 조건·올리기/지우기 잠금, 상�
   assert.throws(() => policy.throwNotFound(), (error) => error.code === 'OWNERSHIP_NOT_FOUND' && error.httpStatus === 404);
 });
 
-test('documentWhere가 없는 정책(관리 로그·티켓·메시지)은 붙은 문서 전부를 본다', async () => {
-  for (const type of ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE']) {
+test('RENEWAL_NOTICE 정책: 조회·잠금 함수, 상한 5, 없으면 RENEWAL_NOTICE_NOT_FOUND', () => {
+  const policy = getResourcePolicy('RENEWAL_NOTICE');
+  assert.equal(typeof policy.canView, 'function');
+  assert.equal(typeof policy.lockForWrite, 'function');
+  assert.equal(policy.maxAttachments, 5);
+  assert.throws(() => policy.throwNotFound(), (error) => error.code === 'RENEWAL_NOTICE_NOT_FOUND' && error.httpStatus === 404);
+});
+
+test('documentWhere가 없는 정책(관리 로그·티켓·메시지·통지 기록)은 붙은 문서 전부를 본다', async () => {
+  for (const type of ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE', 'RENEWAL_NOTICE']) {
     const policy = getResourcePolicy(type);
     assert.equal(policy.documentWhere, undefined);
     assert.deepEqual(await visibleDocumentWhere(policy, { id: 'u' }, 'r'), {});

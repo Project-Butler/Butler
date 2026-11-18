@@ -6,6 +6,7 @@ import { toMoney } from './money.js';
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 import { toPropertySummary } from './propertySerializer.js';
 import { computeNextRentPaymentDate } from './rentPayment.js';
+import { toRenewalNoticeSummary } from './renewalNotice.js';
 
 // 계약 조회 때 같이 읽을 관계. 응답을 만들려면 이 include가 있어야 한다.
 export const CONTRACT_INCLUDE = {
@@ -18,6 +19,8 @@ export const CONTRACT_INCLUDE = {
   tenant: { select: { id: true, name: true } },
   // 최신 초대 1건(응답의 tenant.invitationStatus 계산용)
   tenantInvitations: { orderBy: { createdAt: 'desc' }, take: 1 },
+  // 갱신 거절 통지 기록(최신순, 응답의 renewalNotice 계산용, #157)
+  renewalNotices: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
 };
 
 // 최신 초대 상태. PENDING인데 만료 시각이 지났으면 EXPIRED(R-14). 초대가 없으면 null.
@@ -78,6 +81,10 @@ export const toContractResponse = (contract, { viewer, todayKST, now = new Date(
     // 메모는 임대인 개인 기록이라 소유자·이전 소유자에게만 보인다(임차인·운영자는 null, 명세 D-19).
     memo: viewer === 'OWNER' || viewer === 'FORMER_OWNER' ? (contract.memo ?? null) : null,
     isReadOnly: isOwner ? isContractReadOnly(status, ownershipEnded) : true,
+    // 갱신 거절 통지 구간(만료 6~2개월 전)과 최근 통지. 임대인 기록이라 소유자에게만 보인다(그 밖은 null, #157).
+    renewalNotice: isOwner
+      ? toRenewalNoticeSummary(contract, { todayKST, ownershipEnded, notices: contract.renewalNotices ?? [] })
+      : null,
     createdAt: contract.createdAt.toISOString(),
     updatedAt: contract.updatedAt.toISOString(),
   };

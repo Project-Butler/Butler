@@ -135,6 +135,7 @@ model User {
   createdTenantInvitations  TenantInvitation[] @relation("CreatedTenantInvitations")
   acceptedTenantInvitations TenantInvitation[] @relation("AcceptedTenantInvitations")
   notifications             Notification[]
+  authoredRenewalNotices    RenewalNotice[] @relation("AuthoredRenewalNotices")
 
   @@map("users")
 }
@@ -536,11 +537,51 @@ model Contract {
 
   tickets           Ticket[]
   tenantInvitations TenantInvitation[]
+  renewalNotices    RenewalNotice[]
 
   // 같은 소유 관계 안에서 해지 안 된 계약끼리 기간 겹침 금지 — ex_contract_period (마이그레이션 SQL)
   @@index([ownershipId])
   @@index([tenantId])
   @@map("contracts")
+}
+
+// 갱신 거절 통지 기록(묵시적 갱신 차단, 주택임대차보호법 제6조, #157). 임대인이 임차인에게 보낸 통지와 도달일을 남긴다.
+// 구간(만료 6~2개월 전)과 도달 시점 판정은 저장하지 않고 platform/renewalNotice.js로 계산한다.
+// 증빙(내용증명·문자 캡처 등)은 documents에 resourceType RENEWAL_NOTICE로 붙인다.
+enum RenewalNoticeKind {
+  REFUSE_RENEWAL // 갱신 거절
+  CHANGE_TERMS // 조건을 바꾸지 않으면 갱신하지 않는다는 통지
+
+  @@map("renewal_notice_kind")
+}
+
+enum RenewalNoticeMethod {
+  CERTIFIED_MAIL // 내용증명
+  TEXT_MESSAGE
+  MESSENGER
+  EMAIL
+  IN_PERSON
+  OTHER
+
+  @@map("renewal_notice_method")
+}
+
+model RenewalNotice {
+  id          String              @id @default(uuid()) @db.Uuid
+  contractId  String              @map("contract_id") @db.Uuid
+  contract    Contract            @relation(fields: [contractId], references: [id])
+  authorId    String              @map("author_id") @db.Uuid
+  author      User                @relation("AuthoredRenewalNotices", fields: [authorId], references: [id])
+  kind        RenewalNoticeKind
+  method      RenewalNoticeMethod
+  sentOn      DateTime            @map("sent_on") @db.Date
+  // 상대방이 알 수 있는 상태가 된 날. 아직 확인 못 했으면 null.
+  deliveredOn DateTime?           @map("delivered_on") @db.Date
+  memo        String?
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([contractId, createdAt(sort: Desc)])
+  @@map("renewal_notices")
 }
 
 // 수리·점검 요청 (노션 6번 10장, 계약 5장).

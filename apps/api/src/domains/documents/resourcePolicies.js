@@ -9,11 +9,24 @@
 //   landlordScopeWhere(user, resourceIds) (선택) 서류함에 들어가는 정책만. 그 사용자가 임대인으로서 볼 수 있는 문서의 Prisma where 조각(async, 넘겨받은 id를 안에서 다시 거른다)
 //   allowedDocumentTypes               (선택) 붙일 수 있는 documentType 목록. 없으면 아무 종류(안 맞으면 422 DOCUMENT_TYPE_NOT_ALLOWED)
 import { AppError } from '../../platform/AppError.js';
-import { CONTRACT_RESOURCE, MANAGEMENT_LOG_RESOURCE, OWNERSHIP_RESOURCE, THREAD_MESSAGE_RESOURCE, TICKET_RESOURCE } from '../../platform/documentAttachments.js';
+import {
+  CONTRACT_RESOURCE,
+  MANAGEMENT_LOG_RESOURCE,
+  OWNERSHIP_RESOURCE,
+  RENEWAL_NOTICE_RESOURCE,
+  THREAD_MESSAGE_RESOURCE,
+  TICKET_RESOURCE,
+} from '../../platform/documentAttachments.js';
 import { MAX_MESSAGE_ATTACHMENTS } from '../../platform/threadRules.js';
 import { MAX_LOG_ATTACHMENTS, MAX_TICKET_ATTACHMENTS } from './fileRules.js';
 import { contractDocumentPolicy } from './contractDocumentPolicy.js';
 import { ownershipDocumentPolicy } from './ownershipDocumentPolicy.js';
+import {
+  canViewRenewalNotice,
+  lockWritableRenewalNotice,
+  MAX_RENEWAL_NOTICE_ATTACHMENTS,
+  throwRenewalNoticeNotFound,
+} from '../contracts/renewalNoticeService.js';
 import { canViewManagementLog, lockWritableLog } from '../managementLogs/service.js';
 import { canViewMessage, lockWritableMessage, throwMessageNotFound } from '../threads/service.js';
 import { canViewTicket, lockWritableTicket, throwTicketNotFound } from '../tickets/service.js';
@@ -44,6 +57,13 @@ const POLICIES = {
   [CONTRACT_RESOURCE]: contractDocumentPolicy,
   // 내 소유 서류: 본인만 본다(ADMIN 불가). 인증 증빙 문서는 보이지 않는다.
   [OWNERSHIP_RESOURCE]: ownershipDocumentPolicy,
+  // 갱신 거절 통지 증빙(#157): 그 계약의 소유자(활성·이전)만 보고, 활성 소유자가 진행 중 계약에서만 붙이거나 지운다.
+  [RENEWAL_NOTICE_RESOURCE]: {
+    canView: canViewRenewalNotice,
+    lockForWrite: lockWritableRenewalNotice,
+    throwNotFound: throwRenewalNoticeNotFound,
+    maxAttachments: MAX_RENEWAL_NOTICE_ATTACHMENTS,
+  },
 };
 
 export const SUPPORTED_RESOURCE_TYPES = Object.keys(POLICIES);
