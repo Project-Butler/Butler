@@ -15,7 +15,7 @@ export const IDENTITY_VERIFICATION_VALID_MS = 10 * 60 * 1000;
 export const IDENTITY_VERIFICATION_USE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 // 사용 기록 정리 주기 실행. 매일 01:00 한국 시간(UTC 16:00).
-// 실제 등록은 apps/api/vercel.json(A팀 파일)의 crons — B팀이 넣지 않는다(팀에 요청).
+// 실제 등록은 apps/api/vercel.json(A팀 파일)의 crons — 경로·일정을 바꾸면 그 줄도 같이 바꾼다.
 export const PURGE_SCHEDULE = { path: '/api/cron/ownership-identity-verifications', cron: '0 16 * * *', kst: '매일 01:00' };
 
 // 포트원 ID 형식(프론트가 만든 영문·숫자). 길이 상한은 넉넉히 둔다.

@@ -8,7 +8,8 @@
     { "path": "/api/cron/market-prices", "schedule": "0 17 * * *" },
     { "path": "/api/cron/community-news", "schedule": "0 21 * * *" },
     { "path": "/api/cron/community-polls", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/contract-reminders", "schedule": "0 23 * * *" }
+    { "path": "/api/cron/contract-reminders", "schedule": "0 23 * * *" },
+    { "path": "/api/cron/ownership-identity-verifications", "schedule": "0 16 * * *" }
   ],
   "functions": { "api/index.js": { "maxDuration": 60 } }
 }
