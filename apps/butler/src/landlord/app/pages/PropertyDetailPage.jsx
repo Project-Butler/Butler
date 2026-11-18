@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, MessageCircle } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
 import { useGetComplex } from '../../web/hooks/useGetComplex';
@@ -8,6 +8,7 @@ import { useGetContractList } from '../../web/hooks/useGetContractList';
 import { useGetLatestOwnershipVerification } from '../../web/hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../../web/hooks/useGetManagementLogList';
 import { useGetProperty } from '../../web/hooks/useGetProperty';
+import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../../web/utils/contract';
 import { formatDateKST } from '../../web/utils/format';
@@ -66,22 +67,32 @@ const SummaryStats = ({ contract }) => {
   );
 };
 
+// 지금 계약(진행·예정 중 만기가 가장 가까운 것)을 불러와 children(조회 결과)로 넘긴다.
 // 지금 소유 중일 때만 그린다. 계약 목록 훅은 조건 없이 부르므로 소유 관계가 없으면 이 컴포넌트를 쓰지 않는다.
-const CurrentContractStats = ({ ownershipId, onUnauthorized }) => {
+const CurrentContractLoader = ({ ownershipId, onUnauthorized, children }) => {
   const current = useGetContractList(
     { ownershipId, status: 'ACTIVE,EXPIRING_SOON,UPCOMING', sort: 'endDate:asc', size: 1 },
     { onUnauthorized },
   );
+  return children(current);
+};
+
+// 지금 계약의 임차인과 대화. 임차인 계정이 연결된 계약만 대화가 열려서(아니면 422) 그때만 그린다.
+const TenantChatButton = ({ contract, isOpening, error, onOpen }) => {
+  if (!contract?.tenant?.userId) return null;
   return (
     <>
-      {current.error && <NoticeBox>{current.error.message}</NoticeBox>}
-      <SummaryStats contract={current.data?.items[0] ?? null} />
+      <Button variant="secondary" size="h48" disabled={isOpening} onClick={() => onOpen(contract.id)}>
+        <MessageCircle size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+        {contract.tenant.name ? `${contract.tenant.name}님과 대화` : '임차인과 대화'}
+      </Button>
+      {error && <NoticeBox>{error.message}</NoticeBox>}
     </>
   );
 };
 
 // [기본 정보] 등기 고유번호는 응답에 없어 두지 않는다. 등기부 대조 카드는 인증 완료일 때 인증 응답의 날짜만 쓴다.
-const InfoTab = ({ property, complex, attempt, onCommunity }) => {
+const InfoTab = ({ property, complex, attempt, chat, onCommunity }) => {
   const isVerified = property.myRelation?.verificationStatus === 'VERIFIED';
   const verifiedOn = attempt?.status === 'VERIFIED' ? formatDateKST(attempt.finishedAt) : null;
   return (
@@ -99,6 +110,7 @@ const InfoTab = ({ property, complex, attempt, onCommunity }) => {
           <p className="mt-1 font-num text-num-sub tabular-nums text-seal-ink">인증 완료 · {verifiedOn}</p>
         </section>
       )}
+      {chat}
       <button
         type="button"
         onClick={onCommunity}
@@ -206,6 +218,12 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   const ownershipId = property?.myRelation?.ownershipId;
   const activeOwnershipId = property?.myRelation?.type === 'OWNER' ? ownershipId : undefined;
   const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, hookOptions);
+  const { openThread, isLoading: isOpeningThread, error: threadError } = useOpenThread(hookOptions);
+
+  const handleOpenThread = async (contractId) => {
+    const result = await openThread('CONTRACT', contractId);
+    if (result.data) goTo('thread', { threadId: result.data.id });
+  };
 
   if (!property) {
     return (
@@ -224,8 +242,11 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
     onSelect: () => goTo(target.key, target.params),
   }));
 
-  return (
-    <AppTabShell backBar={{ title: property.displayName, onBack: goBack, action: <MoreMenu items={menuItems} /> }}>
+  // current: 지금 계약 조회 결과(소유 중이 아니면 null). 요약 숫자와 [기본 정보]의 임차인 대화 버튼이 같이 쓴다.
+  // 조회 래퍼는 AppTabShell 안쪽에 둔다(바깥에 두면 로딩이 끝날 때 상단 바까지 새로 그려진다).
+  const renderContent = (current) => {
+    const currentContract = current?.data?.items[0] ?? null;
+    return (
       <div className="flex flex-col gap-3.5">
         {complexQuery.error && <NoticeBox>{complexQuery.error.message}</NoticeBox>}
 
@@ -241,11 +262,8 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
             </Badge>
           </div>
           {spec && <p className="text-m-sub text-ink-3">{spec}</p>}
-          {activeOwnershipId ? (
-            <CurrentContractStats ownershipId={activeOwnershipId} onUnauthorized={onUnauthorized} />
-          ) : (
-            <SummaryStats contract={null} />
-          )}
+          {current?.error && <NoticeBox>{current.error.message}</NoticeBox>}
+          <SummaryStats contract={currentContract} />
         </section>
 
         <UnderlineTabs ariaLabel="부동산 정보" idPrefix="property" options={TAB_OPTIONS} value={tab} onChange={setTab} />
@@ -256,6 +274,9 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
               property={property}
               complex={complexQuery.data}
               attempt={latestAttempt.data}
+              chat={
+                <TenantChatButton contract={currentContract} isOpening={isOpeningThread} error={threadError} onOpen={handleOpenThread} />
+              }
               onCommunity={() => navigate(COMMUNITY_PATH)}
             />
           )}
@@ -280,6 +301,18 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
           {tab === 'documents' && <DocumentsTab />}
         </div>
       </div>
+    );
+  };
+
+  return (
+    <AppTabShell backBar={{ title: property.displayName, onBack: goBack, action: <MoreMenu items={menuItems} /> }}>
+      {activeOwnershipId ? (
+        <CurrentContractLoader ownershipId={activeOwnershipId} onUnauthorized={onUnauthorized}>
+          {renderContent}
+        </CurrentContractLoader>
+      ) : (
+        renderContent(null)
+      )}
     </AppTabShell>
   );
 };

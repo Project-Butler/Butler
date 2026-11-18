@@ -30,6 +30,10 @@ export const ROUTE_TABLE = [
   { key: 'logDetail', path: '/logs/:logId' },
   { key: 'propertyLogRegister', path: '/properties/:propertyId/logs/new' },
   { key: 'documents', path: '/documents' },
+  { key: 'tickets', path: '/tickets' },
+  { key: 'ticketRegister', path: '/tickets/new' },
+  { key: 'ticketDetail', path: '/tickets/:ticketId' },
+  { key: 'thread', path: '/threads/:threadId' },
   { key: 'setup', path: '/setup' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
@@ -107,6 +111,13 @@ const BUILDERS = {
   }),
   // 서류함. 고른 호실(propertyId)은 주소에 남긴다. 없으면 화면이 첫 호실을 골라 주소를 바꾼다.
   documents: ({ propertyId } = {}) => ({ pathname: '/documents', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  // 수리·점검(M09). 호실 필터(propertyId)는 주소에 남긴다. 등록 화면도 호실에서 오면 그 호실을 미리 고른다.
+  tickets: ({ propertyId } = {}) => ({ pathname: '/tickets', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  ticketRegister: ({ propertyId } = {}) => ({ pathname: '/tickets/new', search: propertyId ? `?propertyId=${propertyId}` : '' }),
+  // complete: 목록의 [완료 처리]로 들어와 완료 시트를 바로 연다(history state 로만 넘긴다).
+  ticketDetail: ({ ticketId, complete }) => ({ pathname: `/tickets/${ticketId}`, state: complete ? { complete: true } : undefined }),
+  // 소통(M10) 대화방
+  thread: ({ threadId }) => ({ pathname: `/threads/${threadId}` }),
   setup: () => ({ pathname: '/setup' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),

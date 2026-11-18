@@ -10,6 +10,10 @@ import { HomePage } from './pages/HomePage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
+import { ThreadPage } from './pages/ThreadPage';
+import { TicketDetailPage } from './pages/TicketDetailPage';
+import { TicketListPage } from './pages/TicketListPage';
+import { TicketRegisterPage } from './pages/TicketRegisterPage';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 
 // 탭이 있는 앱 화면(홈형 상단 바 + 하단 탭). 앱 화면이 아직 없는 주소는 모두 앱 셸 안의 "준비 중"이다.
@@ -63,14 +67,38 @@ const ContractEditRoute = ({ onUnauthorized }) => {
   return <ContractEditPage key={contractId} contractId={contractId} onUnauthorized={onUnauthorized} />;
 };
 
-const ManagementLogListRoute =({ onUnauthorized }) => {
+const ManagementLogListRoute = ({ onUnauthorized }) => {
   const [searchParams] = useSearchParams();
   return <ManagementLogListPage propertyId={searchParams.get('propertyId') ?? undefined} onUnauthorized={onUnauthorized} />;
+};
+
+const TicketListRoute = ({ onUnauthorized }) => {
+  const [searchParams] = useSearchParams();
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  return <TicketListPage key={propertyId} propertyId={propertyId} onUnauthorized={onUnauthorized} />;
+};
+
+const TicketRegisterRoute = ({ onUnauthorized }) => {
+  const [searchParams] = useSearchParams();
+  return <TicketRegisterPage propertyId={searchParams.get('propertyId') ?? undefined} onUnauthorized={onUnauthorized} />;
+};
+
+// 목록의 [완료 처리]로 오면 history state 의 complete 로 완료 시트를 바로 연다.
+const TicketDetailRoute = ({ onUnauthorized }) => {
+  const { ticketId } = useParams();
+  const location = useLocation();
+  return <TicketDetailPage key={ticketId} ticketId={ticketId} openComplete={Boolean(location.state?.complete)} onUnauthorized={onUnauthorized} />;
+};
+
+const ThreadRoute = ({ user, onUnauthorized }) => {
+  const { threadId } = useParams();
+  return <ThreadPage key={threadId} threadId={threadId} user={user} onUnauthorized={onUnauthorized} />;
 };
 
 // 임대인 앱 화면. 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소는 웹과 같고 화면만 다르다).
 // 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·관리 로그(M08)는 화면이 직접 탭 셸을 그리고,
 // 부동산 등록(M04)·계약 관리(M07)·계약 수정처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
+// 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다.
 // 아래에 없는 하위 주소(/properties/:id/verify, /logs/:id 등)는 탭 화면의 "준비 중"으로 간다.
 // 로그인·세션은 앱 최상위가 하고, 여기는 user·onLogout·onUnauthorized 를 props 로 받는다.
 export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
@@ -90,6 +118,11 @@ export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
     <Route path="/contracts/:contractId" element={<ContractDetailRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/contracts/:contractId/edit" element={<ContractEditRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/logs" element={<ManagementLogListRoute onUnauthorized={onUnauthorized} />} />
+    <Route path="/tickets" element={<TicketListRoute onUnauthorized={onUnauthorized} />} />
+    {/* /tickets/:ticketId 가 'new'를 요청 id 로 읽지 않게 앞에 둔다. */}
+    <Route path="/tickets/new" element={<TicketRegisterRoute onUnauthorized={onUnauthorized} />} />
+    <Route path="/tickets/:ticketId" element={<TicketDetailRoute onUnauthorized={onUnauthorized} />} />
+    <Route path="/threads/:threadId" element={<ThreadRoute user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
   </Routes>
 );
