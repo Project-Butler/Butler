@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   getContractList: vi.fn(),
   getPropertyList: vi.fn(),
   getPropertyOwnershipList: vi.fn(),
+  getNotificationUnreadCount: vi.fn(),
 }));
 vi.mock('@butler/api-client', () => api);
 
@@ -74,6 +75,7 @@ const withEmptyAccount = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.getNotificationUnreadCount.mockResolvedValue({ count: 0 });
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-07T03:00:00Z'));
 });
@@ -157,15 +159,33 @@ describe('M03 홈: 데이터', () => {
 });
 
 describe('M03 홈: API 가 없는 Figma 칸은 두지 않는다', () => {
-  it('상단 검색·알림, 수리 요청 항목, 오늘 할 일 [전체 보기]가 없다', async () => {
+  it('상단 검색, 수리 요청 항목, 오늘 할 일 [전체 보기]가 없다', async () => {
     withData();
     renderAt('/landlord/home');
     await screen.findByText('80,000,000원');
 
     const banner = within(screen.getByRole('banner'));
-    expect(banner.queryByRole('button', { name: /검색|알림/ })).toBeNull();
+    expect(banner.queryByRole('button', { name: /검색/ })).toBeNull();
     expect(screen.queryByText('전체 보기')).toBeNull();
     expect(screen.queryByText(/보일러|수리 요청/)).toBeNull();
+  });
+});
+
+describe('M03 홈: 상단 알림(#163)', () => {
+  it('종에 안 읽은 알림 수를 붙이고, 누르면 일정·알림의 알림 탭으로 간다', async () => {
+    withData();
+    api.getNotificationUnreadCount.mockResolvedValue({ count: 3 });
+    renderAt('/landlord/home');
+
+    const bell = await within(screen.getByRole('banner')).findByRole('button', { name: '알림, 안 읽은 알림 3개' });
+    await userEvent.click(bell);
+    expect(screen.getByTestId('location').textContent).toContain('/landlord/schedules');
+  });
+
+  it('안 읽은 알림이 없으면 숫자 없이 "알림"', async () => {
+    withData();
+    renderAt('/landlord/home');
+    expect(await within(screen.getByRole('banner')).findByRole('button', { name: '알림' })).toBeInTheDocument();
   });
 });
 
