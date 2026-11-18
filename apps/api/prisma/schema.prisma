@@ -136,6 +136,7 @@ model User {
   acceptedTenantInvitations TenantInvitation[] @relation("AcceptedTenantInvitations")
   notifications             Notification[]
   authoredRenewalNotices    RenewalNotice[] @relation("AuthoredRenewalNotices")
+  notificationPreference    NotificationPreference?
 
   @@map("users")
 }
@@ -949,10 +950,25 @@ model Notification {
   resourceType String?   @map("resource_type") @db.VarChar(40)
   resourceId   String?   @map("resource_id") @db.Uuid
   readAt       DateTime? @map("read_at") @db.Timestamptz(3)
+  // 정기 작업이 같은 알림을 두 번 만들지 않게 하는 키(예: RENT_PAYMENT_DUE:<contractId>:2026-12-05). 이벤트 알림은 null.
+  dedupeKey    String?   @map("dedupe_key") @db.VarChar(160)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  @@unique([userId, dedupeKey])
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// 알림 설정(api-contract.md 7장 notification-preferences, #159). 행이 없으면 기본값(웹 푸시 켬, 끈 type 없음).
+// mutedTypes에 넣은 type은 인앱·푸시 모두 만들지 않는다(platform/notify.js).
+model NotificationPreference {
+  userId         String   @id @map("user_id") @db.Uuid
+  user           User     @relation(fields: [userId], references: [id])
+  webPushEnabled Boolean  @default(true) @map("web_push_enabled")
+  mutedTypes     String[] @default([]) @map("muted_types") @db.VarChar(60)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("notification_preferences")
 }
 
 // ===== B팀/C팀 전용 모델은 이 아래에 각자 주석 블록으로 추가 (schema.prisma 충돌 방지) =====

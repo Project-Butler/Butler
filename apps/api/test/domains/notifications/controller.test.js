@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseListQuery } from '../../../src/domains/notifications/controller.js';
 import { encodeCreatedAtCursor } from '../../../src/platform/createdAtCursor.js';
-import { NOTIFICATION_TYPES, notify, toNotificationResponse } from '../../../src/platform/notify.js';
+import { NOTIFICATION_TYPES, notify, notifyMany, toNotificationResponse } from '../../../src/platform/notify.js';
 
 const ID = '00000000-0000-4000-8000-000000000001';
 
@@ -54,12 +54,16 @@ test('응답 모양: related는 둘 다 있을 때 객체, 없으면 null', () =
   });
 });
 
-test('notify: 등록한 type만 받는다', () => {
+test('notify: 등록한 type만 받고, 그 type을 끈 사용자에게는 만들지 않는다', async () => {
   assert.equal(NOTIFICATION_TYPES.TENANT_INVITATION_ACCEPTED, 'TENANT_INVITATION_ACCEPTED');
   assert.equal(NOTIFICATION_TYPES.TENANT_INVITATION_VERIFY_FAILED, 'TENANT_INVITATION_VERIFY_FAILED');
-  const fake = { notification: { create: ({ data }) => data } };
-  assert.throws(() => notify(fake, { userId: ID, type: 'UNKNOWN_TYPE', title: 't', body: 'b' }));
-  assert.deepEqual(notify(fake, { userId: ID, type: 'TENANT_INVITATION_ACCEPTED', title: 't', body: 'b', related: { resourceType: 'CONTRACT', resourceId: ID } }), {
+  const fake = (mutedUserIds = []) => ({
+    notification: { create: ({ data }) => data },
+    notificationPreference: { findMany: async ({ where }) => where.userId.in.filter((id) => mutedUserIds.includes(id)).map((userId) => ({ userId })) },
+  });
+  await assert.rejects(notify(fake(), { userId: ID, type: 'UNKNOWN_TYPE', title: 't', body: 'b' }));
+  const input = { userId: ID, type: 'TENANT_INVITATION_ACCEPTED', title: 't', body: 'b', related: { resourceType: 'CONTRACT', resourceId: ID } };
+  assert.deepEqual(await notify(fake(), input), {
     userId: ID,
     type: 'TENANT_INVITATION_ACCEPTED',
     title: 't',
@@ -67,5 +71,27 @@ test('notify: 등록한 type만 받는다', () => {
     link: null,
     resourceType: 'CONTRACT',
     resourceId: ID,
+    dedupeKey: null,
   });
+  assert.equal(await notify(fake([ID]), input), null);
+});
+
+test('notifyMany: dedupeKey가 필요하고, 끈 사용자를 빼고 중복은 건너뛰게 쓴다', async () => {
+  const OTHER = '22222222-2222-4222-8222-222222222222';
+  let written;
+  const fake = {
+    notification: {
+      createMany: async (args) => {
+        written = args;
+        return { count: args.data.length };
+      },
+    },
+    notificationPreference: { findMany: async ({ where }) => where.userId.in.filter((id) => id === OTHER).map((userId) => ({ userId })) },
+  };
+  const item = (userId) => ({ userId, type: 'RENT_PAYMENT_DUE', title: 't', body: 'b', dedupeKey: `K:${userId}` });
+  await assert.rejects(notifyMany(fake, [{ ...item(ID), dedupeKey: null }]));
+  assert.equal(await notifyMany(fake, []), 0);
+  assert.equal(await notifyMany(fake, [item(ID), item(OTHER)]), 1);
+  assert.equal(written.skipDuplicates, true);
+  assert.deepEqual(written.data.map((row) => row.userId), [ID]);
 });
