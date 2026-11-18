@@ -293,12 +293,17 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   const formerQuery = useGetAllPropertyList('FORMER_OWNER', hookOptions);
   const owners = ownerQuery.data;
   const formers = formerQuery.data;
-  const isListReady = Boolean(owners && (formers || formerQuery.error));
+  const isFormerSettled = Boolean(formers || formerQuery.error);
+  // 내 호실 목록만 오면 화면을 그린다. 예전 호실 목록은 내 호실이 하나도 없을 때만 기다린다(첫 호실·빈 화면을 정하려고).
+  const isListReady = Boolean(owners) && (owners.length > 0 || isFormerSettled);
   const selected = [...(owners ?? []), ...(formers ?? [])].find((property) => property.id === propertyId) ?? null;
   const fallback = owners?.[0] ?? formers?.[0] ?? null;
   const isSelectedFormer = Boolean(selected && formers?.some((property) => property.id === selected.id));
 
-  const boxQuery = useGetPropertyDocumentBox(selected?.id, hookOptions);
+  // 주소에 호실이 있으면 목록을 기다리지 않고 문서함을 함께 부른다. 두 목록이 다 왔는데 내 호실이 아니면 부르지 않는다.
+  const isAllListed = Boolean(owners) && isFormerSettled;
+  const boxPropertyId = selected?.id ?? (isAllListed ? null : propertyId) ?? null;
+  const boxQuery = useGetPropertyDocumentBox(boxPropertyId, hookOptions);
   const { refetch: refetchBox } = boxQuery;
   const { refetch: refetchOwners } = ownerQuery;
   const { refetch: refetchFormers } = formerQuery;
@@ -312,11 +317,13 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
   const [uploadRequest, setUploadRequest] = useState(null);
 
   // 주소의 호실이 없거나 내 호실이 아니면 첫 호실로 바꾼다. 주소에 호실이 있었는데 내 호실이 아니면 안내를 남긴다.
+  // 주소의 호실은 예전 호실일 수 있어서, 예전 호실 목록이 올 때까지는 바꾸지 않는다.
   useEffect(() => {
     if (!isListReady || !fallback || selected) return;
+    if (propertyId && !isFormerSettled) return;
     if (propertyId) setNotice('찾을 수 없는 호실이라 첫 호실을 열었어요.');
     onNavigate('documents', { propertyId: fallback.id }, { replace: true });
-  }, [isListReady, fallback, selected, propertyId, onNavigate]);
+  }, [isListReady, isFormerSettled, fallback, selected, propertyId, onNavigate]);
 
   const reloadAll = useCallback(() => {
     refetchBox();
@@ -428,8 +435,11 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
         </nav>
 
         <div className="col-span-7 space-y-5">
-          {boxQuery.error && <NoticeBox>{boxQuery.error.message}</NoticeBox>}
-          {boxQuery.isLoading && !box && <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
+          {/* 아직 내 호실인지 모르는 주소의 호실(예전 호실 목록 대기 중)은 오류를 보이지 않는다 */}
+          {selected && boxQuery.error && <NoticeBox>{boxQuery.error.message}</NoticeBox>}
+          {((boxQuery.isLoading && !box) || (!selected && !isAllListed)) && (
+            <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>
+          )}
           {box && selected && (
             <>
               <OwnershipCard key={`ownership-${selected.id}`} {...cardProps} />
