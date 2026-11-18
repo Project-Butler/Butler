@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   getContract: vi.fn(),
   getManagementLogList: vi.fn(),
   getLatestOwnershipVerification: vi.fn(),
+  postThread: vi.fn(),
+  getThreadList: vi.fn(),
 }));
 vi.mock('@butler/api-client', () => api);
 
@@ -185,6 +187,22 @@ describe('M06 부동산 상세', () => {
     expect(screen.queryByText(/고유번호/)).not.toBeInTheDocument();
   });
 
+  it('[기본 정보]의 임차인 대화 버튼은 지금 계약으로 대화를 연다', async () => {
+    api.postThread.mockResolvedValue({ id: 'th1' });
+    renderAt('/landlord/properties/p1');
+    await userEvent.click(await screen.findByRole('button', { name: '김임차님과 대화' }));
+    expect(api.postThread).toHaveBeenCalledWith({ contextType: 'CONTRACT', contextId: 'c1' });
+    expect(where()).toBe('/landlord/threads/th1');
+  });
+
+  it('[기본 정보] 지금 계약에 임차인 계정이 연결되지 않았으면 대화 버튼이 없다', async () => {
+    api.getContractList.mockResolvedValue(page([{ ...CONTRACT, tenant: { ...CONTRACT.tenant, userId: null } }]));
+    renderAt('/landlord/properties/p1');
+    const summary = await screen.findByRole('region', { name: '요약' });
+    await within(summary).findByText('5,000만');
+    expect(screen.queryByRole('button', { name: /님과 대화/ })).not.toBeInTheDocument();
+  });
+
   it('[계약] 탭의 계약을 누르면 계약 관리로 간다', async () => {
     renderAt('/landlord/properties/p1');
     await userEvent.click(await screen.findByRole('tab', { name: '계약' }));
@@ -205,7 +223,7 @@ describe('M06 부동산 상세', () => {
     renderAt('/landlord/properties/p1');
     await userEvent.click(await within(banner()).findByRole('button', { name: '더보기' }));
     const menu = screen.getByRole('menu', { name: '더보기' });
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['관리 로그 기록 추가']);
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['관리 로그 기록 추가', '수리·점검']);
     await userEvent.click(within(menu).getByRole('menuitem', { name: '관리 로그 기록 추가' }));
     expect(where()).toBe('/landlord/properties/p1/logs/new');
   });
@@ -227,6 +245,8 @@ describe('M07 계약 관리', () => {
     expect(within(card).getByText('50,000,000원')).toBeInTheDocument();
     expect(within(card).getByText('500,000원 · 매월 25일')).toBeInTheDocument();
     expect(within(card).getByText('월세 · 갱신 1회 남음')).toBeInTheDocument();
+    // 임차인 대화는 부동산 상세 [기본 정보]에서만 연다
+    expect(screen.queryByRole('button', { name: /님과 대화/ })).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '갱신 진행' })).getByText('준비 중')).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '첨부 문서' })).getByText('준비 중')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /갱신 의사 묻기/ })).toBeDisabled();
@@ -240,6 +260,45 @@ describe('M07 계약 관리', () => {
     api.getContract.mockResolvedValueOnce({ ...CONTRACT, isReadOnly: true });
     renderAt('/landlord/contracts/c1');
     expect(await screen.findByRole('button', { name: '계약 수정' })).toBeDisabled();
+  });
+
+  it('끝난 계약은 이미 있는 대화방을 [지난 대화 보기]로 연다(새로 만들지 않는다)', async () => {
+    api.getContract.mockResolvedValue({ ...CONTRACT, status: 'EXPIRED', isReadOnly: true });
+    api.getThreadList.mockResolvedValue(page([{ id: 'th-old' }]));
+    renderAt('/landlord/contracts/c1');
+    await userEvent.click(await screen.findByRole('button', { name: '김임차님과의 대화 보기' }));
+    expect(api.getThreadList).toHaveBeenCalledWith({ contextType: 'CONTRACT', contextId: 'c1', size: 1 });
+    expect(api.postThread).not.toHaveBeenCalled();
+    expect(where()).toBe('/landlord/threads/th-old');
+  });
+
+  it('끝난 계약에 대화방이 없으면 버튼이 없다', async () => {
+    api.getContract.mockResolvedValue({ ...CONTRACT, status: 'TERMINATED', isReadOnly: true });
+    api.getThreadList.mockResolvedValue(page([]));
+    renderAt('/landlord/contracts/c1');
+    await screen.findByRole('region', { name: '지난 계약' });
+    await waitFor(() => expect(api.getThreadList).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /대화/ })).not.toBeInTheDocument();
+  });
+
+  it('끝난 계약은 지난 계약: 갱신 진행·[갱신 의사 묻기]·갱신 안내가 없다', async () => {
+    api.getContract.mockResolvedValue({ ...CONTRACT, status: 'EXPIRED', daysUntilEnd: null, isReadOnly: true });
+    api.getThreadList.mockResolvedValue(page([]));
+    renderAt('/landlord/contracts/c1');
+    const card = await screen.findByRole('region', { name: '지난 계약' });
+    expect(within(card).getByText('만료')).toBeInTheDocument();
+    expect(within(card).queryByText(/갱신 \d회 남음/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '현재 계약' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '갱신 진행' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /갱신 의사 묻기/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/계약갱신청구권/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계약 수정' })).toBeDisabled();
+  });
+
+  it('진행 중 계약은 지난 대화방을 찾지 않는다', async () => {
+    renderAt('/landlord/contracts/c1');
+    await screen.findByRole('region', { name: '현재 계약' });
+    expect(api.getThreadList).not.toHaveBeenCalled();
   });
 
   it('401이면 onUnauthorized', async () => {
