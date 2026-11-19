@@ -27,6 +27,7 @@ import ownershipVerificationCronRouter from './domains/ownershipVerifications/cr
 import propertiesRouter from './domains/properties/router.js';
 import propertyOwnershipsRouter from './domains/propertyOwnerships/router.js';
 import schedulesRouter from './domains/schedules/router.js';
+import searchRouter from './domains/search/router.js';
 import tenantInvitationsRouter, { contractTenantInvitationsRouter } from './domains/tenantInvitations/router.js';
 import threadsRouter from './domains/threads/router.js';
 import ticketsRouter from './domains/tickets/router.js';
@@ -74,6 +75,7 @@ app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/notification-preferences', notificationPreferencesRouter);
 app.use('/api/v1/schedules', schedulesRouter);
+app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/community', communityRouter);
 app.use('/api/v1/market-prices', marketPricesRouter);

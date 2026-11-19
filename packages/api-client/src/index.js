@@ -142,3 +142,4 @@ export { postNotificationReadAll } from './apis/notifications/postNotificationRe
 export { getNotificationPreference } from './apis/notificationPreferences/getNotificationPreference';
 export { patchNotificationPreference } from './apis/notificationPreferences/patchNotificationPreference';
 export { getScheduleList } from './apis/schedules/getScheduleList';
+export { getSearch } from './apis/search/getSearch';

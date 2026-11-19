@@ -3,5 +3,7 @@ export const BASE_PATH = '/tenant';
 export const HOME_PATH = `${BASE_PATH}/home`;
 export const TICKETS_PATH = `${BASE_PATH}/tickets`;
 export const SETTINGS_PATH = `${BASE_PATH}/settings`;
+// 통합 검색(M13, #172). 검색어는 화면이 ?q= 로 남긴다.
+export const SEARCH_PATH = `${BASE_PATH}/search`;
 export const CONTRACTS_PATH = `${BASE_PATH}/contracts`;
 export const contractPath = (contractId) => `${CONTRACTS_PATH}/${encodeURIComponent(contractId)}`;
