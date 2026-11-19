@@ -123,6 +123,9 @@ describe('계약 관리 (M07)', () => {
   it('초대 상태는 임차인 계정 연결(tenant.userId) 여부', () => {
     expect(getInvitationLabel(contract())).toBe('초대 수락');
     expect(getInvitationLabel(contract({ tenant: { name: '김', userId: null } }))).toBe('초대 전');
+    expect(getInvitationLabel(contract({ tenant: { name: '김', userId: null, invitationStatus: 'PENDING' } }))).toBe('초대 대기');
+    expect(getInvitationLabel(contract({ tenant: { name: '김', userId: null, invitationStatus: 'EXPIRED' } }))).toBe('링크 만료');
+    expect(getInvitationLabel(contract({ tenant: { name: '김', userId: null, invitationStatus: 'CANCELED' } }))).toBe('초대 전');
   });
 
   it('갱신 남은 횟수: 이전 계약이 없으면 1회, 있으면 0회', () => {
