@@ -3,7 +3,7 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import { Bot, ChevronRight, ExternalLink, FileText } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
-import { PageHeader } from '../components/PageHeader/PageHeader';
+import { DisputeHeader } from '../components/DisputeReference/DisputeHeader';
 import { useGetDisputeReference } from '../hooks/useGetDisputeReference';
 import { useGetDisputeRelatedReferences } from '../hooks/useGetDisputeRelatedReferences';
 import {
@@ -43,7 +43,7 @@ export const DisputeReferenceDetailPage = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="사례 상세" onBack={goBack} />
+      <DisputeHeader title="사례 상세" onBack={goBack} />
 
       {detail.isLoading && <p className="py-6 text-center text-body text-ink-3">자료를 불러오는 중…</p>}
 
@@ -147,8 +147,8 @@ export const DisputeReferenceDetailPage = () => {
 
           <LegalNotice />
 
-          {/* 사례를 다 읽은 뒤 내 경우에 맞춰 묻는 AI 입구(피그마 하단 바). 문구는 하는 일이 달라 따로 두되 피그마 문구 앞에 "AI로"를 붙여 AI에게 묻는 버튼임을 드러내고, 아이콘은 AskAiCard·챗봇과 같은 Bot */}
-          <div className="sticky bottom-0 -mx-1 bg-ground px-1 pb-1 pt-2">
+          {/* 사례를 다 읽은 뒤 내 경우에 맞춰 묻는 AI 입구. 화면을 따라다니지 않게 맨 아래에 둔다. 문구는 하는 일이 달라 따로 두되 피그마 문구 앞에 "AI로"를 붙여 AI에게 묻는 버튼임을 드러내고, 아이콘은 AskAiCard·챗봇과 같은 Bot */}
+          <div className="pt-2">
             <Button size="lg" onClick={() => askAi(toApplyQuestion(reference))} className="w-full">
               <span className="inline-flex items-center justify-center gap-2">
                 <Bot size={18} />

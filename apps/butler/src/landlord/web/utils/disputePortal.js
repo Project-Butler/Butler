@@ -592,7 +592,7 @@ export const HELP_ROUTES = [
       ['지역', '서울 소재 주택'],
       ['방법', '전화·온라인·방문'],
     ],
-    actions: [{ label: '상담 방법 보기', href: 'https://housing.seoul.go.kr/site/main/content/sh04_020100', primary: true }],
+    actions: [{ label: '상담 안내', href: 'https://housing.seoul.go.kr/site/main/content/sh04_020100', primary: true }],
   },
   {
     key: 'klac',
