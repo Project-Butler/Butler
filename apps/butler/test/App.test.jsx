@@ -133,7 +133,7 @@ const open = async (path, { user = null, surface = 'web' } = {}) => {
   if (user) api.getMe.mockResolvedValue({ user, verifiedLegalDongCodes: ['1171010100'] });
   else api.getMe.mockRejectedValue(Object.assign(new Error('401'), { response: { status: 401 } }));
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[path]} useTransitions={false}>
       <App />
       <LocationProbe />
     </MemoryRouter>,
@@ -175,7 +175,7 @@ describe('T1 로그인 전 접근', () => {
     const App = await importApp();
     let finish;
     api.getMe.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-    render(<MemoryRouter initialEntries={['/admin/users']}><App /><LocationProbe /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/admin/users']} useTransitions={false}><App /><LocationProbe /></MemoryRouter>);
     expect(screen.getByText('불러오는 중입니다')).toBeInTheDocument();
     expect(screen.queryByLabelText('로그인 화면')).not.toBeInTheDocument();
     expect(where()).toBe('/admin/users');
@@ -317,7 +317,7 @@ describe('T5 세션', () => {
     };
     const App = await importApp();
     api.getMe.mockResolvedValue({ user: USERS.LANDLORD, verifiedLegalDongCodes: [] });
-    render(<MemoryRouter initialEntries={['/landlord/home']}><App /><LocationProbe /><BackButton /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/landlord/home']} useTransitions={false}><App /><LocationProbe /><BackButton /></MemoryRouter>);
 
     await userEvent.click(await screen.findByRole('button', { name: '다른 화면' }));
     await waitFor(() => expect(where()).toBe('/landlord/contracts'));
