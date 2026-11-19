@@ -8,6 +8,7 @@ import { IDENTITY_VERIFICATION_ID_PATTERN } from './identityVerification.js';
 import { SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from './runnerSignature.js';
 import {
   findAttemptForUser,
+  findInProgressAttempts,
   findLatestAttempt,
   findRenewalTargets,
   purgeExpiredIdentityVerificationUses,
@@ -87,6 +88,14 @@ export const getLatestOwnershipVerification = async (req, res, next) => {
     assertSingleValues(req.query);
     if (!isUuid(req.query.ownershipId)) throwIfInvalid([{ field: 'ownershipId', reason: 'UUID여야 합니다.' }]);
     sendData(res, await findLatestAttempt(req.user, req.query.ownershipId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listInProgressAttempts = async (req, res, next) => {
+  try {
+    sendData(res, await findInProgressAttempts(req.user));
   } catch (error) {
     next(error);
   }

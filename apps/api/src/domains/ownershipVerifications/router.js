@@ -5,6 +5,7 @@ import { roleGuard } from '../../middlewares/roleGuard.js';
 import {
   getLatestOwnershipVerification,
   getOwnershipVerification,
+  listInProgressAttempts,
   listRenewalTargets,
   postOwnershipVerification,
   postOwnershipVerificationResult,
@@ -20,6 +21,8 @@ router.use(authGuard, roleGuard(['LANDLORD']), generalRateLimiter);
 router.post('/', postOwnershipVerification);
 router.get('/', getLatestOwnershipVerification);
 router.get('/renewal-targets', listRenewalTargets);
+// /:attemptId보다 앞에 둔다.
+router.get('/in-progress', listInProgressAttempts);
 router.get('/:attemptId', getOwnershipVerification);
 
 export default router;
