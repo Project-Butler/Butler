@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AccountCard } from '../../shared/AccountCard';
 import { ComingSoon } from '../../shared/ComingSoon';
+import { SearchPage } from '../../shared/search/SearchPage';
 import { buildLocation, HOME_PATH } from '../web/routes';
 import { AppTabShell } from './components/AppTabShell/AppTabShell';
 import { BuildingListPage } from './pages/BuildingListPage';
@@ -20,6 +21,7 @@ import { TicketRegisterPage } from './pages/TicketRegisterPage';
 import { useNotificationUnreadCount } from './hooks/useNotificationUnreadCount';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 import { parseCategoryParam } from './utils/documentBoxView';
+import { useGoBack, useGoTo } from './utils/navigation';
 
 // 탭이 있는 앱 화면(홈형 상단 바 + 하단 탭). 앱 화면이 아직 없는 주소는 모두 앱 셸 안의 "준비 중"이다.
 // 상단 바 아바타의 이름은 '내 계정'이다(하단 탭 '내 정보'와 같은 이름의 버튼이 둘 생기지 않게).
@@ -28,6 +30,7 @@ const useHomeTopBar = (user, onUnauthorized) => {
   const navigate = useNavigate();
   const unreadCount = useNotificationUnreadCount({ onUnauthorized });
   return {
+    search: { onClick: () => navigate(buildLocation('search')) },
     notification: { count: unreadCount, onClick: () => navigate(buildLocation('schedules', { tab: 'notifications' })) },
     avatar: { name: user.name, label: '내 계정', onClick: () => navigate(SETTINGS_PATH) },
   };
@@ -128,6 +131,40 @@ const ScheduleRoute = ({ onUnauthorized }) => {
   return <SchedulePage tab={searchParams.get('tab') === 'notifications' ? 'notifications' : 'schedules'} onUnauthorized={onUnauthorized} />;
 };
 
+// 통합 검색(M13, #172). 결과를 누르면 그 항목의 앱 화면으로 간다(관리 로그·문서는 그 호실로 거른 목록).
+const toLandlordTarget = (sectionKey, item) => {
+  switch (sectionKey) {
+    case 'properties':
+      return ['propertyDetail', { propertyId: item.id }];
+    case 'contracts':
+      return ['contractDetail', { contractId: item.id }];
+    case 'tickets':
+      return ['ticketDetail', { ticketId: item.id }];
+    case 'managementLogs':
+      return ['logs', { propertyId: item.property.id }];
+    case 'documents':
+      return ['documents', { propertyId: item.property?.id }];
+    case 'schedules':
+      return item.related?.resourceType === 'CONTRACT' ? ['contractDetail', { contractId: item.related.resourceId }] : ['schedules', {}];
+    default:
+      return ['home', {}];
+  }
+};
+
+const SearchRoute = ({ user, onUnauthorized }) => {
+  const goBack = useGoBack('home');
+  const goTo = useGoTo();
+  return (
+    <SearchPage
+      userId={user.id}
+      shell="landlord-app"
+      onBack={goBack}
+      onOpen={(sectionKey, item) => goTo(...toLandlordTarget(sectionKey, item))}
+      onUnauthorized={onUnauthorized}
+    />
+  );
+};
+
 const ThreadRoute = ({ user, onUnauthorized }) => {
   const { threadId } = useParams();
   return <ThreadPage key={threadId} threadId={threadId} user={user} onUnauthorized={onUnauthorized} />;
@@ -137,7 +174,7 @@ const ThreadRoute = ({ user, onUnauthorized }) => {
 // 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·관리 로그(M08)는 화면이 직접 탭 셸을 그리고,
 // 부동산 등록(M04)·계약 관리(M07)·계약 수정·임차인 초대(M15)처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
 // 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다. 문서함(M11)도 탭 셸을 직접 그린다.
-// 일정·알림(#163)은 홈형 상단 바의 종에서 들어오고, 하단 탭 없이 뒤로 가기 상단 바를 쓴다.
+// 일정·알림(#163)은 홈형 상단 바의 종에서 들어오고, 하단 탭 없이 뒤로 가기 상단 바를 쓴다. 통합 검색(M13)은 상단 바의 돋보기에서 들어오고 검색창 상단 바만 있다.
 // 아래에 없는 하위 주소(/properties/:id/verify, /logs/:id 등)는 탭 화면의 "준비 중"으로 간다.
 // 로그인·세션은 앱 최상위가 하고, 여기는 user·onLogout·onUnauthorized 를 props 로 받는다.
 export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
@@ -165,6 +202,7 @@ export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
     <Route path="/threads/:threadId" element={<ThreadRoute user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="/documents" element={<DocumentBoxRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/schedules" element={<ScheduleRoute onUnauthorized={onUnauthorized} />} />
+    <Route path="/search" element={<SearchRoute user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
   </Routes>
 );

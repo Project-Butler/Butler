@@ -42,7 +42,7 @@ const respondOne = async (client, ticket, user) => {
 
 // 볼 수 있는 범위: 이 티켓을 처리하는 소유자(소유가 끝난 뒤에도 본인 것), 요청자, 운영자.
 // 다음 소유자에게는 넘어가지 않는다(완료 요약만 관리 로그로 넘어간다).
-const toVisibleTicketWhere = (user) =>
+export const toVisibleTicketWhere = (user) =>
   user.role === 'ADMIN' ? {} : { OR: [{ ownership: { userId: user.id } }, { requesterId: user.id }] };
 
 // 임대인: 이 호실의 내 활성 소유 관계. 임차인: 이 호실의 시작 전·진행 중 계약(소유 관계가 활성인 것).

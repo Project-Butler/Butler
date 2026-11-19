@@ -37,6 +37,7 @@ export const ROUTE_TABLE = [
   { key: 'thread', path: '/threads/:threadId' },
   { key: 'setup', path: '/setup' },
   { key: 'schedules', path: '/schedules' },
+  { key: 'search', path: '/search' },
   { key: 'disputes', path: '/disputes' },
   { key: 'disputeChat', path: '/disputes/chat' },
   { key: 'disputeSearch', path: '/disputes/search' },
@@ -128,6 +129,8 @@ const BUILDERS = {
   thread: ({ threadId }) => ({ pathname: `/threads/${threadId}` }),
   setup: () => ({ pathname: '/setup' }),
   // 일정·알림(임대인 앱). 알림 탭이면 ?tab=notifications 를 주소에 남긴다(새로고침·뒤로 가기에도 같은 탭).
+  // 통합 검색(M13, #172). 검색어는 화면이 ?q= 로 남긴다.
+  search: () => ({ pathname: '/search' }),
   schedules: ({ tab } = {}) => ({ pathname: '/schedules', search: tab === 'notifications' ? '?tab=notifications' : '' }),
   // 임대차 분쟁 센터 첫 화면(포털)
   disputes: () => ({ pathname: '/disputes' }),

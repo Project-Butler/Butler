@@ -159,13 +159,11 @@ describe('M03 홈: 데이터', () => {
 });
 
 describe('M03 홈: API 가 없는 Figma 칸은 두지 않는다', () => {
-  it('상단 검색, 수리 요청 항목, 오늘 할 일 [전체 보기]가 없다', async () => {
+  it('수리 요청 항목, 오늘 할 일 [전체 보기]가 없다', async () => {
     withData();
     renderAt('/landlord/home');
     await screen.findByText('80,000,000원');
 
-    const banner = within(screen.getByRole('banner'));
-    expect(banner.queryByRole('button', { name: /검색/ })).toBeNull();
     expect(screen.queryByText('전체 보기')).toBeNull();
     expect(screen.queryByText(/보일러|수리 요청/)).toBeNull();
   });
@@ -180,6 +178,13 @@ describe('M03 홈: 상단 알림(#163)', () => {
     const bell = await within(screen.getByRole('banner')).findByRole('button', { name: '알림, 안 읽은 알림 3개' });
     await userEvent.click(bell);
     expect(screen.getByTestId('location').textContent).toContain('/landlord/schedules');
+  });
+
+  it('돋보기를 누르면 통합 검색(M13, #172)으로 간다', async () => {
+    withData();
+    renderAt('/landlord/home');
+    await userEvent.click(await within(screen.getByRole('banner')).findByRole('button', { name: '통합 검색' }));
+    expect(screen.getByTestId('location').textContent).toContain('/landlord/search');
   });
 
   it('안 읽은 알림이 없으면 숫자 없이 "알림"', async () => {
