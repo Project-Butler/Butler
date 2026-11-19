@@ -33,7 +33,7 @@ export const HelpRouteCard = ({ route }) => (
           target="_blank"
           rel="noreferrer"
           className={`flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-btn px-4 text-label font-semibold transition-colors ${
-            action.primary ? 'bg-accent text-surface hover:bg-accent-strong' : 'border border-line text-ink hover:bg-surface-2'
+            action.primary ? 'bg-accent text-white hover:bg-accent-hover' : 'border border-line text-ink hover:bg-surface-2'
           }`}
         >
           {action.label}

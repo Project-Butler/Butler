@@ -1,5 +1,6 @@
 import { AppShell } from '@butler/ui';
 import { Building2, ClipboardList, FileSignature, FolderOpen, Home, Scale, Settings, Users, Wrench } from 'lucide-react';
+import { useDisplaySettings } from '../hooks/useDisplaySettings';
 
 const NAV_ITEMS = [
   { key: 'home', label: '홈', icon: Home },
@@ -19,11 +20,13 @@ const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };
 // navBadges: 메뉴 key → 오른쪽 끝 숫자(예: { leases: 만료 임박 계약 수 }). 0이나 값이 없으면 숨긴다.
 // notifications: 종 아이콘 목록({ items, emptyText, footer }, @butler/ui NotificationMenu).
 export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate, subTitle, navBadges = {}, notifications }) => {
+  const { settings } = useDisplaySettings();
   const active = [...NAV_ITEMS, SETTINGS_ITEM].find((item) => item.key === activeKey);
   const breadcrumb = ['버틀러의 자산', active?.label, subTitle].filter(Boolean);
 
   return (
     <AppShell
+      sidebar={settings.sidebar}
       brand="Butler"
       brandSubtitle="버틀러의 자산"
       breadcrumb={breadcrumb}

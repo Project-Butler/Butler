@@ -34,7 +34,7 @@ export const Pagination = ({ page, totalPages, onChange, ariaLabel = '쪽 이동
           onClick={() => onChange(number)}
           aria-current={number === page ? 'page' : undefined}
           aria-label={`${number}쪽`}
-          className={`${buttonClass} ${number === page ? 'bg-ink font-semibold text-white' : 'text-ink-2 hover:bg-surface-2'}`}
+          className={`${buttonClass} ${number === page ? 'bg-ink font-semibold text-surface' : 'text-ink-2 hover:bg-surface-2'}`}
         >
           {number}
         </button>

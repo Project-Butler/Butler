@@ -332,7 +332,7 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
                     aria-checked={isSelected}
                     onClick={() => setEndReason(isSelected ? null : reason)}
                     className={`h-10 flex-1 rounded-input text-body transition-colors ${
-                      isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
+                      isSelected ? 'bg-ink font-semibold text-surface' : 'font-medium text-ink-2 hover:text-ink'
                     }`}
                   >
                     {reason}

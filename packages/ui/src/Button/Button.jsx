@@ -11,9 +11,9 @@ const SIZE_CLASS = {
 
 // verify / verifyOutline(남색)은 권리자 인증 행동에만 쓴다 (design.md §2, §5)
 const VARIANT_CLASS = {
-  primary: 'bg-accent text-white hover:bg-accent-strong',
+  primary: 'bg-accent text-white hover:bg-accent-hover',
   secondary: 'bg-surface text-ink border border-line hover:bg-surface-2',
-  verify: 'bg-seal text-white hover:bg-seal-ink',
+  verify: 'bg-seal text-white hover:bg-seal-hover',
   verifyOutline: 'bg-surface text-seal border border-seal hover:bg-seal-soft',
 };
 

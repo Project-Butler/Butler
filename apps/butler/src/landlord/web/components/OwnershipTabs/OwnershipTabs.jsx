@@ -19,7 +19,7 @@ export const OwnershipTabs = ({ active, counts = {}, onNavigate }) => (
           aria-selected={isSelected}
           onClick={() => !isSelected && onNavigate(key, relation === 'FORMER_OWNER' ? { relation } : {}, { replace: true })}
           className={`flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-input px-4 text-body transition-colors ${
-            isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
+            isSelected ? 'bg-ink font-semibold text-surface' : 'font-medium text-ink-2 hover:text-ink'
           }`}
         >
           <Icon size={15} aria-hidden="true" />

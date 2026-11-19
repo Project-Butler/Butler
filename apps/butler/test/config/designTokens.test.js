@@ -2,8 +2,24 @@
 // 디자인 토큰이 Figma Foundations 와 맞는지 (Figma Foundations와 비교해 없는 토큰만 추가, 기존 값은 덮어쓰지 않음).
 // Figma 쪽 값은 get_variable_defs 로 읽은 정의를 옮긴 스냅샷이다.
 //   파일: Butler 화면 구조 · IA · 와이어프레임 (fileKey ttUBxWD5lrOZJlHXZbxM6D) › 01 Foundations (node 2:164), 2026-11-06 확인
+import { readFileSync } from 'node:fs';
 import tailwindConfig from '@butler/config/tailwind.config.js';
 import { describe, expect, it } from 'vitest';
+
+// 색은 CSS 변수(rgb 채널)로 두고(#176 다크 모드), 라이트 값은 index.css 의 :root, 다크 값은 :root[data-theme='dark'] 에 있다.
+// tailwind 설정은 그 변수를 가리키므로, 값은 CSS 에서 읽어 hex 로 바꿔 Figma 와 비교한다.
+const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8');
+const readVars = (selector) => {
+  const block = css.split(selector)[1]?.split('}')[0] ?? '';
+  return Object.fromEntries(
+    [...block.matchAll(/--color-([\w-]+):\s*(\d+) (\d+) (\d+);/g)].map(([, name, r, g, b]) => [name, [r, g, b].map(Number)]),
+  );
+};
+const toHex = (channels) => `#${channels.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+const LIGHT_VARS = readVars(':root {');
+const DARK_VARS = readVars(":root[data-theme='dark'] {");
+const varName = (path) => path.filter((key) => key !== 'DEFAULT').join('-');
+const scaled = (px) => `calc(${px}px * var(--font-scale, 1))`;
 
 const FIGMA_COLORS = {
   accent: '#0e6b5c', accentStrong: '#0a5246', accentSoft: '#ddefea',
@@ -50,9 +66,10 @@ const ADDED_SIZE_KEYS = {
 
 const extend = tailwindConfig.theme.extend;
 const pick = (object, path) => path.reduce((value, key) => value?.[key], object);
+// 크기는 scaled() 꼴(calc(Npx * var(--font-scale, 1)))이라 px 숫자만 꺼낸다.
 const sizeOf = (key) => {
   const [size, options] = Array.isArray(extend.fontSize[key]) ? extend.fontSize[key] : [extend.fontSize[key], {}];
-  return { size: Number.parseFloat(size), lineHeight: Number.parseFloat(options?.lineHeight), letterSpacing: options?.letterSpacing };
+  return { size: Number.parseFloat(String(size).match(/calc\(([\d.]+)px/)?.[1]), lineHeight: Number.parseFloat(options?.lineHeight), letterSpacing: options?.letterSpacing };
 };
 
 describe('색 토큰이 Figma Foundations 와 같다', () => {
@@ -63,7 +80,27 @@ describe('색 토큰이 Figma Foundations 와 같다', () => {
   it.each(Object.entries(FIGMA_COLORS))('%s = %s', (name, hex) => {
     const actual = pick(extend.colors, COLOR_PATH[name]);
     expect(actual, `theme.extend.colors.${COLOR_PATH[name].join('.')} 가 없다`).toBeDefined();
-    expect(String(actual).toLowerCase()).toBe(hex);
+    const variable = varName(COLOR_PATH[name]);
+    expect(actual, `${name} 은 CSS 변수를 가리킨다`).toBe(`rgb(var(--color-${variable}) / <alpha-value>)`);
+    expect(toHex(LIGHT_VARS[variable] ?? []), `index.css :root --color-${variable}`).toBe(hex);
+  });
+});
+
+describe('#176: 다크 모드 색', () => {
+  it('다크도 라이트와 같은 색 이름을 빠짐없이 정의한다 (한쪽만 늘리고 잊지 않게)', () => {
+    expect(Object.keys(DARK_VARS).sort()).toEqual(Object.keys(LIGHT_VARS).sort());
+  });
+
+  it('tailwind 색마다 라이트 변수가 있다', () => {
+    const used = Object.values(COLOR_PATH).map(varName);
+    // hover 는 Figma 에 없는 채운 버튼용 색이라 따로 확인한다.
+    expect(Object.keys(LIGHT_VARS).sort()).toEqual([...used, 'accent-hover', 'seal-hover'].sort());
+  });
+
+  it('글자색(ink)은 다크에서 배경(surface)보다 밝다', () => {
+    const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    expect(luminance(DARK_VARS.ink)).toBeGreaterThan(luminance(DARK_VARS.surface));
+    expect(luminance(DARK_VARS.surface)).toBeGreaterThan(luminance(DARK_VARS.ground));
   });
 });
 
@@ -87,7 +124,7 @@ describe('글자 크기 토큰이 Figma Foundations 와 같다', () => {
 });
 
 describe('#97: 이미 있던 토큰 값은 덮어쓰지 않는다', () => {
-  it('기존 색 22개 값이 그대로다', () => {
+  it('기존 색 22개 라이트 값이 그대로다', () => {
     const existing = {
       accent: { DEFAULT: '#0E6B5C', strong: '#0A5246', soft: '#DDEFEA' },
       seal: { DEFAULT: '#34479E', ink: '#2B3B85', soft: '#E4E8F7' },
@@ -97,21 +134,22 @@ describe('#97: 이미 있던 토큰 값은 덮어쓰지 않는다', () => {
       crit: { DEFAULT: '#B83A28', ink: '#9C3020', soft: '#F8E0DB' },
       ground: '#EEF1F0', surface: '#FFFFFF', 'surface-2': '#F3F6F5', line: '#DCE3E0',
     };
+    const lightHex = (variable) => toHex(LIGHT_VARS[variable] ?? []).toUpperCase();
     for (const [name, value] of Object.entries(existing)) {
-      if (typeof value === 'string') expect(extend.colors[name], name).toBe(value);
-      else for (const [shade, hex] of Object.entries(value)) expect(extend.colors[name][shade], `${name}.${shade}`).toBe(hex);
+      if (typeof value === 'string') expect(lightHex(name), name).toBe(value);
+      else for (const [shade, hex] of Object.entries(value)) expect(lightHex(shade === 'DEFAULT' ? name : `${name}-${shade}`), `${name}.${shade}`).toBe(hex);
     }
   });
 
-  it('기존 글자 단계의 크기·줄 높이·자간이 그대로다 (Figma 와 줄 높이가 다른 곳도 일부러 두었다)', () => {
+  it('기존 글자 단계의 크기(px)·줄 높이·자간이 그대로다. 크기는 글자 배율(--font-scale)을 곱한다 (Figma 와 줄 높이가 다른 곳도 일부러 두었다)', () => {
     const existing = {
-      display: ['32px', '1.25', '-0.02em'], page: ['28px', '1.3', '-0.02em'], 'page-sm': ['24px', '1.3', '-0.02em'],
-      h1: ['22px', '1.35'], section: ['18px', '1.4'], card: ['16px', '1.4'], body: ['14px', '1.5'], label: ['13px', '1.4'],
-      sub: ['12.5px', '1.4'], chip: ['12px', '1.3'], eyebrow: ['11.5px', '1.3', '0.06em'], kpi: ['28px', '1.1', '-0.01em'],
+      display: [32, '1.25', '-0.02em'], page: [28, '1.3', '-0.02em'], 'page-sm': [24, '1.3', '-0.02em'],
+      h1: [22, '1.35'], section: [18, '1.4'], card: [16, '1.4'], body: [14, '1.5'], label: [13, '1.4'],
+      sub: [12.5, '1.4'], chip: [12, '1.3'], eyebrow: [11.5, '1.3', '0.06em'], kpi: [28, '1.1', '-0.01em'],
     };
     for (const [key, [size, lineHeight, letterSpacing]] of Object.entries(existing)) {
       const [actualSize, options] = extend.fontSize[key];
-      expect(actualSize, `${key} 크기`).toBe(size);
+      expect(actualSize, `${key} 크기`).toBe(scaled(size));
       expect(options.lineHeight, `${key} 줄 높이`).toBe(lineHeight);
       expect(options.letterSpacing, `${key} 자간`).toBe(letterSpacing);
     }

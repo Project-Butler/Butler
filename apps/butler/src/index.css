@@ -2,7 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 색 토큰(rgb 채널). 이름은 packages/config/tailwind.config.js 의 colors 와 같다.
+   다크는 임대인 웹 설정(테마)이 <html data-theme="dark"> 로 켠다. 다른 화면은 이 속성이 없어 라이트 그대로다. */
 @layer base {
+  :root {
+    --color-accent: 14 107 92;
+    --color-accent-strong: 10 82 70;
+    --color-accent-soft: 221 239 234;
+    --color-accent-hover: 10 82 70;
+    --color-seal: 52 71 158;
+    --color-seal-ink: 43 59 133;
+    --color-seal-soft: 228 232 247;
+    --color-seal-box: 246 247 253;
+    --color-seal-hover: 43 59 133;
+    --color-ink: 21 32 28;
+    --color-ink-2: 75 90 85;
+    --color-ink-3: 90 104 99;
+    --color-ok: 30 127 78;
+    --color-ok-ink: 23 100 61;
+    --color-ok-soft: 221 241 229;
+    --color-warn: 160 96 12;
+    --color-warn-ink: 133 80 10;
+    --color-warn-soft: 251 235 210;
+    --color-crit: 184 58 40;
+    --color-crit-ink: 156 48 32;
+    --color-crit-soft: 248 224 219;
+    --color-crit-box: 253 243 241;
+    --color-ground: 238 241 240;
+    --color-surface: 255 255 255;
+    --color-surface-2: 243 246 245;
+    --color-line: 220 227 224;
+    --color-dash: 185 196 192;
+    --color-slot: 154 168 163;
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-accent: 31 143 122;
+    --color-accent-strong: 110 207 187;
+    --color-accent-soft: 24 58 52;
+    --color-accent-hover: 22 118 100;
+    --color-seal: 90 108 214;
+    --color-seal-ink: 150 165 243;
+    --color-seal-soft: 31 38 74;
+    --color-seal-box: 24 29 53;
+    --color-seal-hover: 74 91 190;
+    --color-ink: 232 238 235;
+    --color-ink-2: 176 189 183;
+    --color-ink-3: 144 158 152;
+    --color-ok: 61 184 120;
+    --color-ok-ink: 109 211 156;
+    --color-ok-soft: 22 56 40;
+    --color-warn: 224 160 64;
+    --color-warn-ink: 240 187 106;
+    --color-warn-soft: 62 45 16;
+    --color-crit: 232 106 90;
+    --color-crit-ink: 244 148 134;
+    --color-crit-soft: 66 30 26;
+    --color-crit-box: 46 25 23;
+    --color-ground: 15 20 18;
+    --color-surface: 24 31 28;
+    --color-surface-2: 32 41 37;
+    --color-line: 48 60 55;
+    --color-dash: 74 88 82;
+    --color-slot: 107 122 116;
+  }
+
+  /* 밀도 '컴팩트': 글자는 px 고정이라 그대로이고, rem 으로 잡힌 간격·칸 크기만 줄어든다. */
+  :root[data-density='compact'] {
+    font-size: 13px;
+  }
+
   body {
     @apply bg-ground font-sans text-ink;
   }
