@@ -23,6 +23,7 @@ export const ROUTE_TABLE = [
   { key: 'contracts', path: '/contracts' },
   { key: 'contractRegister', path: '/contracts/new' },
   { key: 'contractEdit', path: '/contracts/:contractId/edit' },
+  { key: 'contractInvite', path: '/contracts/:contractId/invite' },
   { key: 'contractDetail', path: '/contracts/:contractId' },
   { key: 'logs', path: '/logs' },
   { key: 'logRegister', path: '/logs/new' },
@@ -91,6 +92,8 @@ const BUILDERS = {
   },
   contractDetail: ({ contractId }) => ({ pathname: `/contracts/${contractId}` }),
   contractEdit: ({ contractId }) => ({ pathname: `/contracts/${contractId}/edit` }),
+  // 임차인 초대(앱 M15). 웹은 이 주소로 오면 그 계약의 호실 상세로 보내 초대 팝업을 띄운다.
+  contractInvite: ({ contractId }) => ({ pathname: `/contracts/${contractId}/invite` }),
   // 호실 필터(propertyId)는 주소에 남긴다. 사이드바 '관리 로그' 메뉴 key(log)도 목록으로 보낸다.
   logs: ({ propertyId } = {}) => ({ pathname: '/logs', search: propertyId ? `?propertyId=${propertyId}` : '' }),
   log: () => ({ pathname: '/logs' }),

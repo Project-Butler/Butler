@@ -5,8 +5,11 @@ import { formatPeriod, formatRentPaymentDay, formatWon, getLeaseTypeLabel } from
 // 계약갱신청구권은 1회 기준이다. 이전 계약(previousContractId)에서 이어진 계약이면 이미 갱신한 것으로 본다.
 const RENEWAL_LIMIT = 1;
 
-// 임차인이 초대를 받아 가입·연결됐으면(tenant.userId) '초대 수락', 아니면 '초대 전'.
-export const getInvitationLabel = (contract) => (contract.tenant?.userId ? '초대 수락' : '초대 전');
+// 임차인이 초대를 받아 가입·연결됐으면(tenant.userId) '초대 수락'. 아니면 최신 초대 상태(#169):
+// 대기 중이면 '초대 대기', 링크가 만료됐으면 '링크 만료', 초대 전·취소면 '초대 전'.
+const INVITATION_LABEL = { ACCEPTED: '초대 수락', PENDING: '초대 대기', EXPIRED: '링크 만료' };
+export const getInvitationLabel = (contract) =>
+  contract.tenant?.userId ? '초대 수락' : (INVITATION_LABEL[contract.tenant?.invitationStatus] ?? '초대 전');
 
 // 끝난 계약(만료·해지). 지난 계약은 갱신 안내·동작 없이 기록으로만 보여 준다.
 const ENDED_STATUSES = ['EXPIRED', 'TERMINATED'];
