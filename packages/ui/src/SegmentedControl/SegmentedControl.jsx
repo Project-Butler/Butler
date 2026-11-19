@@ -16,7 +16,7 @@ export const SegmentedControl = ({ options, value, onChange, ariaLabel, classNam
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
           className={`flex min-h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-input px-2 text-body lg:px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-            isSelected ? 'bg-ink font-semibold text-white' : 'font-medium text-ink-2 hover:text-ink'
+            isSelected ? 'bg-ink font-semibold text-surface' : 'font-medium text-ink-2 hover:text-ink'
           }`}
         >
           {option.label}

@@ -12,6 +12,7 @@ import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { SetupPage } from './pages/SetupPage';
 import { SupportInquiryPage } from './pages/SupportInquiryPage';
 import { DisputeChatPage } from './pages/DisputeChatPage';
@@ -25,6 +26,7 @@ import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialo
 import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
+import { useApplyDisplaySettings } from './hooks/useDisplaySettings';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
 
@@ -253,6 +255,8 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
   const routerNavigate = useNavigate();
   const locationRef = useRef(location);
   locationRef.current = location;
+  // 화면 설정(테마·밀도·글자 크기)을 <html>에 적용한다. 임대인 웹을 떠나면 걷는다.
+  useApplyDisplaySettings();
 
   const navigate = useCallback(
     (key, params = {}, { replace = false } = {}) => {
@@ -300,6 +304,7 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
         <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
         <Route path="/setup" element={<SetupPage {...pageProps} />} />
+        <Route path="/settings" element={<SettingsPage />} />
         {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
         <Route path="/disputes/chat" element={<DisputeChatPage />} />
         <Route path="/disputes" element={<DisputePage {...pageProps} />}>

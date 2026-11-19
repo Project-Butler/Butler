@@ -4,11 +4,45 @@ import { NotificationMenu } from '../NotificationMenu/NotificationMenu';
 import { PropertySwitcher } from '../PropertySwitcher/PropertySwitcher';
 import { UserMenu } from '../UserMenu/UserMenu';
 
-const NavItem = ({ icon: Icon, label, badge, active, onClick }) => (
+// 사이드바 모양. expanded=펼침, collapsed=아이콘만, auto=넓은 화면(xl)에서만 펼침.
+// Tailwind 가 클래스를 찾을 수 있게 전체 문자열로 적는다.
+const SIDEBAR_STYLE = {
+  expanded: {
+    width: 'w-64',
+    brandRow: 'px-5',
+    brandText: '',
+    navRow: 'gap-2.5 px-3',
+    label: '',
+    badge: '',
+    badgeDot: 'hidden',
+  },
+  collapsed: {
+    width: 'w-[4.5rem]',
+    brandRow: 'justify-center px-0',
+    brandText: 'hidden',
+    navRow: 'justify-center px-0',
+    label: 'hidden',
+    badge: 'hidden',
+    badgeDot: '',
+  },
+  auto: {
+    width: 'w-[4.5rem] xl:w-64',
+    brandRow: 'justify-center px-0 xl:justify-start xl:px-5',
+    brandText: 'hidden xl:block',
+    navRow: 'justify-center px-0 xl:justify-start xl:gap-2.5 xl:px-3',
+    label: 'hidden xl:block',
+    badge: 'hidden xl:inline',
+    badgeDot: 'xl:hidden',
+  },
+};
+
+const NavItem = ({ icon: Icon, label, badge, active, onClick, style }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`group flex w-full items-center gap-2.5 rounded-btn px-3 py-2.5 text-left text-body transition-colors ${
+    title={label}
+    aria-label={label}
+    className={`group relative flex w-full items-center rounded-btn py-2.5 text-left text-body transition-colors ${style.navRow} ${
       active ? 'bg-accent-soft font-semibold text-accent-strong' : 'font-medium text-ink-2 hover:bg-surface-2 hover:text-ink'
     }`}
   >
@@ -19,15 +53,19 @@ const NavItem = ({ icon: Icon, label, badge, active, onClick }) => (
         className={active ? 'text-accent-strong' : 'text-ink-3 group-hover:text-ink-2'}
       />
     )}
-    <span className="flex-1">{label}</span>
+    <span className={`flex-1 ${style.label}`}>{label}</span>
     {badge != null && (
-      <span
-        className={`rounded-full px-1.5 py-0.5 text-chip leading-none font-num ${
-          active ? 'bg-surface/70 text-accent-strong' : 'bg-surface-2 text-ink-3'
-        }`}
-      >
-        {badge}
-      </span>
+      <>
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-chip leading-none font-num ${style.badge} ${
+            active ? 'bg-surface/70 text-accent-strong' : 'bg-surface-2 text-ink-3'
+          }`}
+        >
+          {badge}
+        </span>
+        {/* 라벨이 접혔을 땐 숫자 대신 점으로 알린다. */}
+        <span aria-hidden="true" className={`absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ${style.badgeDot}`} />
+      </>
     )}
   </button>
 );
@@ -44,30 +82,33 @@ export const AppShell = ({
   notifications,
   user,
   primaryAction,
+  sidebar = 'expanded',
   children,
 }) => {
+  const style = SIDEBAR_STYLE[sidebar] ?? SIDEBAR_STYLE.expanded;
+
   return (
     <div className="flex min-h-screen bg-ground font-sans text-ink">
-      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col self-start border-r border-line bg-surface">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-btn bg-accent text-white">
+      <aside className={`sticky top-0 flex h-screen shrink-0 flex-col self-start border-r border-line bg-surface ${style.width}`}>
+        <div className={`flex items-center gap-2.5 py-5 ${style.brandRow}`}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn bg-accent text-white">
             <Home size={18} strokeWidth={2.25} />
           </span>
-          <div className="min-w-0">
+          <div className={`min-w-0 ${style.brandText}`}>
             <p className="truncate text-card font-bold leading-tight text-seal-ink">{brand}</p>
             {brandSubtitle && <p className="truncate text-chip leading-tight text-ink-3">{brandSubtitle}</p>}
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3 pt-2">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pt-2">
           {nav.map(({ key, ...item }) => (
-            <NavItem key={key ?? item.label} {...item} />
+            <NavItem key={key ?? item.label} style={style} {...item} />
           ))}
         </nav>
 
         {settingsItem && (
           <div className="border-t border-line px-3 py-3">
-            <NavItem {...settingsItem} />
+            <NavItem style={style} {...settingsItem} />
           </div>
         )}
       </aside>
