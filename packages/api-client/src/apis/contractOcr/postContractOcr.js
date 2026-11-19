@@ -7,7 +7,7 @@ import axiosInstance from '../../axios/axiosInstance';
 // → { fields: { leaseType, deposit, monthlyRent, rentPaymentDay, startDate, endDate, tenantName, tenantPhone, memo }, memoTruncated, warnings: [{ field, code, message }] }
 //   fields의 각 값은 계약서에서 근거를 찾은 것만 있고 나머지는 null. warnings의 field가 null이면 호실·임대인 대조 안내다.
 // 400 CONTRACT_OCR_FILE_REQUIRED, 422 CONTRACT_OCR_UNSUPPORTED_FILE · _FILE_TOO_LARGE · _TOO_MANY_PAGES · _UNREADABLE,
-// 503 CONTRACT_OCR_UNAVAILABLE, 429 RATE_LIMITED(하루 100회), 계약 등록과 같은 404 OWNERSHIP_NOT_FOUND · 422 OWNERSHIP_ENDED · 403 OWNERSHIP_VERIFICATION_REQUIRED
+// 503 CONTRACT_OCR_UNAVAILABLE, 429 RATE_LIMITED(하루 100쪽), 계약 등록과 같은 404 OWNERSHIP_NOT_FOUND · 422 OWNERSHIP_ENDED · 403 OWNERSHIP_VERIFICATION_REQUIRED
 export const postContractOcr = async ({ ownershipId, file }) => {
   const { data } = await axiosInstance.post('/contract-ocr', file, {
     params: { ownershipId },
