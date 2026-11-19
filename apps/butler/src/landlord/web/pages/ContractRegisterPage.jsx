@@ -11,6 +11,7 @@ import {
   toServerFieldErrors,
   validateContractForm,
 } from '../components/ContractForm/ContractForm';
+import { ContractOcrFill } from '../components/ContractOcrFill/ContractOcrFill';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { FormPageLayout } from '../components/FormPageLayout/FormPageLayout';
 import { FormSummary } from '../components/FormSummary/FormSummary';
@@ -51,6 +52,12 @@ const ContractRegisterForm = ({ title, description, initialPropertyId, previous,
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
     setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  // [계약서로 채우기](B팀 #168)가 빈 칸을 채운 폼으로 바꾼다. 이전 저장 오류는 지운다.
+  const fillFromContract = (nextForm) => {
+    setForm(nextForm);
+    setServerFieldErrors({});
   };
 
   const handleSubmit = async () => {
@@ -145,6 +152,9 @@ const ContractRegisterForm = ({ title, description, initialPropertyId, previous,
       description={description}
       actions={actions}
       onSubmit={handleSubmit}
+      notice={
+        <ContractOcrFill ownershipId={ownershipId} form={form} onFill={fillFromContract} disabled={isSubmitting} onUnauthorized={onUnauthorized} />
+      }
       summary={
         <FormSummary icon={FileText} title="등록 요약" rows={summaryRows}>
           {property && (

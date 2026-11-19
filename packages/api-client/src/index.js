@@ -36,6 +36,8 @@ export { getOwnershipVerification } from './apis/ownershipVerifications/getOwner
 export { getLatestOwnershipVerification } from './apis/ownershipVerifications/getLatestOwnershipVerification';
 export { getOwnershipVerificationRenewalTargetList } from './apis/ownershipVerifications/getOwnershipVerificationRenewalTargetList';
 
+export { postContractOcr } from './apis/contractOcr/postContractOcr';
+
 export { getLandlordBuildingList } from './apis/landlordBuildings/getLandlordBuildingList';
 export { getLandlordBuilding } from './apis/landlordBuildings/getLandlordBuilding';
 export { postLandlordBuilding } from './apis/landlordBuildings/postLandlordBuilding';
