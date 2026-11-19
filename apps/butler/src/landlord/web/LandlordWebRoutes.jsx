@@ -22,6 +22,7 @@ import { DisputeSearchPage } from './pages/DisputeSearchPage';
 import { DisputeTopicPage } from './pages/DisputeTopicPage';
 import { NoticeBox } from './components/NoticeBox/NoticeBox';
 import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
+import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
@@ -236,6 +237,13 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
     >
       {children}
       <RenewalDialog userId={user.id} notices={renewal.notices} onNavigate={onNavigate} />
+      {/* 권리자 인증 진행 표시(오른쪽 아래). 보고 있는 호실 상세에서는 그 호실 것을 숨긴다. */}
+      <VerificationProgressDock
+        currentPropertyId={pathname.match(/^\/properties\/([^/]+)/)?.[1]}
+        refreshKey={pathname}
+        onNavigate={onNavigate}
+        onUnauthorized={onUnauthorized}
+      />
     </LandlordLayout>
   );
 };

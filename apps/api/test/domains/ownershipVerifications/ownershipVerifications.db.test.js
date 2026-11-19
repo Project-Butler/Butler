@@ -22,6 +22,7 @@ import { createRemoteRunner } from '../../../src/domains/ownershipVerifications/
 import { identityVerificationError, PURGE_SCHEDULE } from '../../../src/domains/ownershipVerifications/identityVerification.js';
 import {
   findAttemptForUser,
+  findInProgressAttempts,
   findLatestAttempt,
   findRenewalTargets,
   purgeExpiredIdentityVerificationUses,
@@ -258,6 +259,29 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     assert.equal(response.status, 'FAILED');
     assert.ok(!JSON.stringify(response).includes('NOT_MATCHED'));
     assert.equal((await findLatestAttempt(user, ownership.id)).id, attempt.id);
+  });
+
+  test('진행 중 목록: 내 PENDING·RUNNING 시도만, 오래된 순, 호실 이름 포함', async () => {
+    const user = await createUser();
+    const stranger = await createUser();
+    const first = await own(user, await createProperty({ unitNo: '3981' }));
+    const second = await own(user, await createProperty({ unitNo: '3982' }));
+    const finished = await own(user, await createProperty({ unitNo: '3983' }));
+    const now = Date.now();
+    const create = (ownership, status, offsetMs) =>
+      prisma.ownershipVerificationAttempt.create({
+        data: { ownershipId: ownership.id, requestedBy: user.id, status, createdAt: new Date(now - offsetMs) },
+      });
+    const running = await create(first, 'RUNNING', 2000);
+    const pending = await create(second, 'PENDING', 1000);
+    await create(finished, 'FAILED', 3000);
+
+    const items = await findInProgressAttempts(user);
+    assert.deepEqual(items.map((item) => item.id), [running.id, pending.id]);
+    assert.deepEqual(items[0].property, { id: first.propertyId, displayName: items[0].property.displayName });
+    assert.match(items[0].property.displayName, /3981/);
+    assert.equal(items[1].status, 'PENDING');
+    assert.deepEqual(await findInProgressAttempts(stranger), []);
   });
 
   test('가짜 러너 호실 규칙별 실패 사유, 활동에 사유 없음, 원문 없음', async () => {

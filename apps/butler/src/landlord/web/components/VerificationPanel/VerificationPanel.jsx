@@ -1,6 +1,7 @@
 import { Badge, Button } from '@butler/ui';
 import { Phone, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { IconTile } from '../IconTile/IconTile';
+import { ProgressRing } from '../ProgressRing/ProgressRing';
 import { formatDateKST } from '../../utils/format';
 import {
   VERIFICATION_FAILED_MESSAGE,
@@ -12,7 +13,7 @@ import {
 // 호실 상세 오른쪽 위 권리자 인증 카드. 상태별 문구·버튼(인증 절차는 보여 주지 않는다).
 // - 인증 완료: 유효 기간 / 재인증 기간·만료: [인증 다시 하기] / 미인증: [권리자 인증하기]
 // - 실패(최근 시도 FAILED): 실패 칩 + 안내 + [문의하기][다시 인증하기] / 취소(REVOKED): [문의하기]만
-// - 진행 중: 안내만(버튼 잠금)
+// - 진행 중: 도는 링(ProgressRing) + 안내만(버튼 잠금)
 export const getVerificationPanelState = ({ ownership, attempt, isAttemptRunning, now = new Date() }) => {
   const action = getVerificationAction(ownership, now);
   if (ownership.isActive && isAttemptRunning) return 'RUNNING';
@@ -48,16 +49,21 @@ export const VerificationPanel = ({ ownership, attempt, isAttemptRunning, renewa
     ENDED: { icon: Shield, tone: 'mute', title: '권리자 인증', text: '소유가 끝난 호실이에요' },
   }[state];
 
+  // 진행 중은 남색 연한 바탕(design.md §2-4 안내(인증))으로 눈에 띄게 한다. 테두리는 그대로 Line.
+  const isRunning = state === 'RUNNING';
   return (
-    <section className="property-detail-page__verify-panel overflow-hidden rounded-card border border-line bg-surface" aria-label="권리자 인증">
+    <section
+      className={`property-detail-page__verify-panel overflow-hidden rounded-card border border-line ${isRunning ? 'bg-seal-soft' : 'bg-surface'}`}
+      aria-label="권리자 인증"
+    >
       <div className="flex items-start gap-3 p-5">
-        <IconTile icon={view.icon} tone={view.tone} />
+        {isRunning ? <ProgressRing surface="surface" label="권리자 인증 진행 중" /> : <IconTile icon={view.icon} tone={view.tone} />}
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-body font-semibold text-ink">
+          <p className={`flex items-center gap-2 text-body font-semibold ${isRunning ? 'text-seal-ink' : 'text-ink'}`}>
             {view.title}
             {view.chip && <Badge tone="danger">{view.chip}</Badge>}
           </p>
-          <p role={view.alert ? 'alert' : undefined} className={`mt-0.5 text-sub ${view.alert ? 'text-crit-ink' : 'text-ink-3'}`}>
+          <p role={view.alert ? 'alert' : undefined} className={`mt-0.5 text-sub ${view.alert ? 'text-crit-ink' : isRunning ? 'text-seal-ink' : 'text-ink-3'}`}>
             {view.text}
           </p>
         </div>

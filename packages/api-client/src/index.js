@@ -35,6 +35,7 @@ export { postOwnershipVerification } from './apis/ownershipVerifications/postOwn
 export { getOwnershipVerification } from './apis/ownershipVerifications/getOwnershipVerification';
 export { getLatestOwnershipVerification } from './apis/ownershipVerifications/getLatestOwnershipVerification';
 export { getOwnershipVerificationRenewalTargetList } from './apis/ownershipVerifications/getOwnershipVerificationRenewalTargetList';
+export { getInProgressOwnershipVerificationList } from './apis/ownershipVerifications/getInProgressOwnershipVerificationList';
 
 export { postContractOcr } from './apis/contractOcr/postContractOcr';
 
