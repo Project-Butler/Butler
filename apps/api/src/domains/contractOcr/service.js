@@ -8,6 +8,7 @@ import { prisma } from '../../platform/prismaClient.js';
 import { readContractText } from './clovaGeneralOcr.js';
 import { reviewExtractedValues } from './contractValueRules.js';
 import { extractContractValues } from './extractor.js';
+import { addUsedPages, assertPagesLeft } from './pageQuota.js';
 import { removeSensitiveText } from './sensitiveText.js';
 
 const throwUnreadable = () => {
@@ -40,12 +41,15 @@ const findVerifiedOwnership = async (user, ownershipId) => {
   return ownership;
 };
 
-// file: Buffer, format: 'jpg' | 'png' | 'pdf'
+// file: Buffer, format: 'jpg' | 'png' | 'pdf', knownPages: 서버가 미리 센 쪽 수(모르면 0)
 // → { fields: { leaseType, deposit, monthlyRent, rentPaymentDay, startDate, endDate, tenantName, tenantPhone, memo }, memoTruncated, warnings }
-export const readContract = async (user, { ownershipId, file, format }) => {
+export const readContract = async (user, { ownershipId, file, format, knownPages }) => {
   const ownership = await findVerifiedOwnership(user, ownershipId);
 
-  const ocrText = await readContractText({ file, format });
+  // 하루 100쪽 한도: 보내기 전엔 남은 쪽만 확인하고, CLOVA가 읽은 실제 쪽 수를 OCR 직후에 더한다.
+  await assertPagesLeft(user.id, Math.max(knownPages, 1));
+  const { text: ocrText, pageCount } = await readContractText({ file, format });
+  await addUsedPages(user.id, pageCount);
   const text = removeSensitiveText(ocrText);
   if (!text.trim()) throwUnreadable();
 
