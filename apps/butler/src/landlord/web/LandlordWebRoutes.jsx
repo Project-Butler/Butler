@@ -40,6 +40,7 @@ const NAV_KEY_BY_VIEW = {
   contracts: 'leases',
   contractRegister: 'leases',
   contractEdit: 'leases',
+  contractInvite: 'leases',
   contractDetail: 'leases',
   logs: 'log',
   logRegister: 'log',
@@ -61,6 +62,7 @@ const SUB_TITLE_BY_VIEW = {
   contracts: '계약 목록',
   contractRegister: '계약 등록',
   contractEdit: '계약 수정',
+  contractInvite: '임차인 초대',
   contractDetail: '계약 상세',
   logs: '기록 목록',
   logRegister: '기록 추가',
@@ -179,6 +181,22 @@ const ContractDetailRoute = ({ onNavigate, onUnauthorized }) => {
   );
 };
 
+// 임차인 초대 주소(/contracts/:id/invite, 앱 M15)는 웹에선 그 계약의 호실 상세로 보내 초대 팝업(A1)을 띄운다.
+const ContractInviteRoute = ({ onNavigate, onUnauthorized }) => {
+  const { contractId } = useParams();
+  const contractQuery = useGetContract(contractId, { onUnauthorized });
+  const propertyId = contractQuery.data?.property.id;
+  useEffect(() => {
+    if (propertyId) onNavigate('propertyDetail', { propertyId, inviteContractId: contractId }, { replace: true });
+  }, [propertyId, contractId, onNavigate]);
+  if (contractQuery.error) return <NoticeBox>{contractQuery.error.message}</NoticeBox>;
+  return (
+    <p role="status" className="py-10 text-center text-body text-ink-3">
+      불러오는 중입니다
+    </p>
+  );
+};
+
 // 서류함: 고른 호실은 주소(?propertyId)에 남는다. 없거나 내 호실이 아니면 화면이 첫 호실로 바꾼다.
 const DocumentBoxRoute = ({ userId, ...pageProps }) => {
   const [searchParams] = useSearchParams();
@@ -266,6 +284,7 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
         <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
         <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
+        <Route path="/contracts/:contractId/invite" element={<ContractInviteRoute {...pageProps} />} />
         <Route path="/logs" element={<ManagementLogListRoute {...pageProps} />} />
         <Route path="/logs/new" element={<ManagementLogListRoute modalMode="create" {...pageProps} />} />
         <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />

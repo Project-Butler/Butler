@@ -5,6 +5,7 @@ import { useGetContract } from '../../../shared/useGetContract';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
 import { useGetContractThread } from '../../web/hooks/useGetContractThread';
 import { getContractDdayBadge } from '../../web/utils/contract';
+import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { RenewalNoticeCard } from '../components/RenewalNoticeCard/RenewalNoticeCard';
 import { RenewalNoticeSheet } from '../components/RenewalNoticeSheet/RenewalNoticeSheet';
 import { getContractCardTitle, getContractTitle, isContractEnded, toContractRows } from '../utils/contractView';
@@ -25,7 +26,7 @@ const PlaceholderCard = ({ title, children }) => (
 
 // 임대인 앱 계약 관리 (Figma M07). 하단 탭 대신 하단 고정 버튼 바를 쓴다.
 // 갱신 진행 단계·첨부 문서는 저장할 모델·API가 없어 자리만 두고, [갱신 의사 묻기]는 비활성이다. 삭제 요소는 두지 않는다.
-// 지금 계약의 임차인 대화는 부동산 상세 [기본 정보]에서 열고, 끝난 계약은 이미 있는 대화방만 여기서 연다.
+// 지금 계약의 임차인 대화는 부동산 상세 [기본 정보]에서 열고, 임차인 계정이 없으면 초대 카드(#169)를 보여 주며, 끝난 계약은 이미 있는 대화방만 여기서 연다.
 // 끝난 계약(만료·해지)은 '지난 계약'으로 보여 주고 갱신 진행·[갱신 의사 묻기]·갱신 안내를 두지 않는다.
 // 갱신 거절 통지 카드(#163)는 계약 응답의 renewalNotice 가 있을 때만(소유자·진행 중·시작 전 계약) 보이고, [통지 기록]이 기록 시트를 연다.
 export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
@@ -105,6 +106,8 @@ export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
           ))}
         </dl>
       </section>
+
+      <TenantInviteCard contract={contract} onInvite={(id) => goTo('contractInvite', { contractId: id })} />
 
       {pastThread && (
         <Button variant="secondary" size="h48" onClick={() => goTo('thread', { threadId: pastThread.id })}>

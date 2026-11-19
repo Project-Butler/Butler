@@ -19,6 +19,7 @@ import { getPropertyStatusBadge } from '../../web/utils/unitListing';
 import { getVerificationBadge } from '../../web/utils/verificationBadge';
 import { AppTabShell } from '../components/AppTabShell/AppTabShell';
 import { MoreMenu } from '../components/MoreMenu/MoreMenu';
+import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
 import { describeDocument, flattenDocuments } from '../utils/documentBoxView';
 import { formatLogDay } from '../utils/logGroups';
@@ -81,8 +82,9 @@ const CurrentContractLoader = ({ ownershipId, onUnauthorized, children }) => {
 };
 
 // 지금 계약의 임차인과 대화. 임차인 계정이 연결된 계약만 대화가 열려서(아니면 422) 그때만 그린다.
-const TenantChatButton = ({ contract, isOpening, error, onOpen }) => {
-  if (!contract?.tenant?.userId) return null;
+// 연결되지 않은 계약은 대화 버튼 대신 초대 카드(#169)를 그린다.
+const TenantChatButton = ({ contract, isOpening, error, onOpen, onInvite }) => {
+  if (!contract?.tenant?.userId) return <TenantInviteCard contract={contract} onInvite={onInvite} />;
   return (
     <>
       <Button variant="secondary" size="h48" disabled={isOpening} onClick={() => onOpen(contract.id)}>
@@ -307,7 +309,13 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
               complex={complexQuery.data}
               attempt={latestAttempt.data}
               chat={
-                <TenantChatButton contract={currentContract} isOpening={isOpeningThread} error={threadError} onOpen={handleOpenThread} />
+                <TenantChatButton
+                  contract={currentContract}
+                  isOpening={isOpeningThread}
+                  error={threadError}
+                  onOpen={handleOpenThread}
+                  onInvite={(contractId) => goTo('contractInvite', { contractId })}
+                />
               }
               onCommunity={() => navigate(COMMUNITY_PATH)}
             />
