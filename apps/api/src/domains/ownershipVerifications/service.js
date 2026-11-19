@@ -251,6 +251,21 @@ export const findLatestAttempt = async (user, ownershipId) => {
   return attempt ? toAttemptResponse(attempt) : null;
 };
 
+// GET /ownership-verifications/in-progress. 화면 오른쪽 아래 진행 표시용. 내 진행 중(PENDING·RUNNING) 시도 전부, 오래된 순.
+// 시도 응답에 호실 요약(id·displayName)을 더한다(호실 상세로 바로 이동하고 이름을 보여 주려고).
+export const findInProgressAttempts = async (user) => {
+  await expireStaleAttempts();
+  const attempts = await prisma.ownershipVerificationAttempt.findMany({
+    where: { requestedBy: user.id, status: { in: [...ACTIVE_ATTEMPT_STATUSES] } },
+    include: { ownership: { include: { property: { include: { complex: true } } } } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  return attempts.map((attempt) => {
+    const { id, displayName } = toPropertySummary(attempt.ownership.property);
+    return { ...toAttemptResponse(attempt), property: { id, displayName } };
+  });
+};
+
 // GET /ownership-verifications/renewal-targets. 만료 30일 이내·만료된 내 활성 소유 관계, 만료가 빠른 순.
 export const findRenewalTargets = async (user, now = getNow()) => {
   const ownerships = await prisma.ownership.findMany({
