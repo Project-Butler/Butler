@@ -11,7 +11,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      {/* v7 은 이동을 startTransition 으로 감싸 늦춘다. 로그아웃의 "먼저 /login 으로 이동, 그다음 세션 비우기" 순서(useLogout)가 깨지지 않게 끈다. */}
+      <BrowserRouter useTransitions={false}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>
