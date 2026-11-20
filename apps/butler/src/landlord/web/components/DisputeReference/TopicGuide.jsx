@@ -74,7 +74,8 @@ const BasisToggle = ({ item, basisRefs, onOpenReference }) => {
 };
 
 // precedents: [{ reference, question }] — 자주 묻는 질문의 근거 판례와 그 질문(왜 관련 있는지)
-export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, onOpenReference, onAsk }) => {
+// isApp: 앱은 섹션 제목을 상단 바(16px)보다 가볍게 A팀 앱 묶음 라벨처럼(첫 화면 '분쟁 유형'과 같음).
+export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, onOpenReference, onAsk, isApp = false }) => {
   const steps = [FIRST_STEP, ...guide.procedure];
   // 처음엔 모두 펼쳐 둔다(한눈에 읽고, 필요 없는 단계만 접기).
   const [openSteps, setOpenSteps] = useState(() => new Set(steps.map((_, i) => i)));
@@ -212,7 +213,7 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, on
     <>
       <section className="flex flex-col gap-3" aria-label="해결 단계">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-section font-semibold text-ink">해결 단계</h3>
+          <h3 className={isApp ? 'text-m-label font-semibold text-ink-3' : 'text-section font-semibold text-ink'}>해결 단계</h3>
           <button
             type="button"
             onClick={toggleAll}

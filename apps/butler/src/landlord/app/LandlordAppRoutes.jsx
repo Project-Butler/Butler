@@ -3,7 +3,13 @@ import { AccountCard } from '../../shared/AccountCard';
 import { ComingSoon } from '../../shared/ComingSoon';
 import { SearchPage } from '../../shared/search/SearchPage';
 import { buildLocation, HOME_PATH } from '../web/routes';
+import { DisputeChatPage } from '../web/pages/DisputeChatPage';
+import { DisputeHomePage } from '../web/pages/DisputeHomePage';
+import { DisputeReferenceDetailPage } from '../web/pages/DisputeReferenceDetailPage';
+import { DisputeSearchPage } from '../web/pages/DisputeSearchPage';
+import { DisputeTopicPage } from '../web/pages/DisputeTopicPage';
 import { AppTabShell } from './components/AppTabShell/AppTabShell';
+import { DisputeAppLayout, DisputeChatAppScreen } from './components/DisputeAppLayout/DisputeAppLayout';
 import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
@@ -203,6 +209,21 @@ export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
     <Route path="/documents" element={<DocumentBoxRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/schedules" element={<ScheduleRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/search" element={<SearchRoute user={user} onUnauthorized={onUnauthorized} />} />
+    {/* 임대차 분쟁(3팀): 웹과 같은 페이지에 앱 틀만 씌운다(DisputeAppLayout). */}
+    <Route
+      path="/disputes/chat"
+      element={
+        <DisputeChatAppScreen>
+          <DisputeChatPage />
+        </DisputeChatAppScreen>
+      }
+    />
+    <Route path="/disputes" element={<DisputeAppLayout onUnauthorized={onUnauthorized} />}>
+      <Route index element={<DisputeHomePage />} />
+      <Route path="search" element={<DisputeSearchPage />} />
+      <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
+      <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
+    </Route>
     <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
   </Routes>
 );
