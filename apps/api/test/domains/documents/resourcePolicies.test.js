@@ -44,11 +44,12 @@ test('CONTRACT 정책: 조회·문서 조건·잠금 함수, 상한 30, 없으�
   assert.throws(() => policy.throwNotFound(), (error) => error.code === 'CONTRACT_NOT_FOUND' && error.httpStatus === 404);
 });
 
-test('OWNERSHIP 정책: 조회·문서 조건·올리기/지우기 잠금, 상한 30, 허용 종류, 증빙 문서 제외, 없으면 OWNERSHIP_NOT_FOUND', async () => {
+test('OWNERSHIP 정책: 조회·문서 조건·잠금(올리기·지우기 공통), 상한 30, 허용 종류, 증빙 문서 제외, 없으면 OWNERSHIP_NOT_FOUND', async () => {
   const policy = getResourcePolicy('OWNERSHIP');
   assert.equal(typeof policy.canView, 'function');
   assert.equal(typeof policy.lockForWrite, 'function');
-  assert.equal(typeof policy.lockForDelete, 'function');
+  // 올리기·지우기 같은 잠금(2026-11-20): 따로 지우기 잠금이 없다.
+  assert.equal(policy.lockForDelete, undefined);
   assert.equal(policy.maxAttachments, 30);
   assert.deepEqual(policy.allowedDocumentTypes, OWNERSHIP_DOCUMENT_TYPES);
   assert.deepEqual(await visibleDocumentWhere(policy, { id: 'u' }, 'r'), { evidenceFor: { none: {} } });
