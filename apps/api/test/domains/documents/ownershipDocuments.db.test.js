@@ -172,7 +172,7 @@ describe('OWNERSHIP 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal((await getJson(admin, `/documents/${document.id}`)).status, 404);
   });
 
-  test('A-3 소유 종료 뒤: 열람 200·올리기 422 OWNERSHIP_ENDED·올린 본인 삭제 204·남이 올린 문서 삭제 422', async () => {
+  test('A-3 소유 종료 뒤: 열람 200·올리기 201·올린 본인 삭제 204·남이 올린 문서 삭제 422(2026-11-20)', async () => {
     const landlord = await createUser();
     const ownership = await createOwnership(landlord);
     const mine = await insertDocument(landlord, ownership);
@@ -182,9 +182,7 @@ describe('OWNERSHIP 문서 권한', { skip: dbTestSkip }, () => {
 
     assert.equal((await listOwnershipDocuments(landlord, ownership)).status, 200);
     assert.equal((await postJson(landlord, `/documents/${mine.id}/download-url`, {})).status, 200);
-    const rejected = await uploadToOwnership(landlord, ownership);
-    assert.equal(rejected.status, 422);
-    assert.equal(rejected.body.error.code, 'OWNERSHIP_ENDED');
+    assert.equal((await uploadToOwnership(landlord, ownership)).status, 201);
 
     const forbidden = await deleteDocument(landlord, others.id);
     assert.equal(forbidden.status, 422);
@@ -212,29 +210,39 @@ describe('OWNERSHIP 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal(rejected.body.error.code, 'DOCUMENT_TYPE_NOT_ALLOWED');
   });
 
-  test('A-6 미인증·철회 활성 소유자 올리기는 403 OWNERSHIP_VERIFICATION_REQUIRED', async () => {
+  test('A-5b 제한을 없앤 뒤에도 막히는 것: 잠긴 문서 삭제 422, ADMIN 올리기·삭제 404(2026-11-20)', async () => {
+    const landlord = await createUser();
+    const ownership = await createOwnership(landlord, { ended: true });
+    const locked = await insertDocument(landlord, ownership);
+    await prisma.document.update({ where: { id: locked.id }, data: { isLocked: true } });
+    const lockedDelete = await deleteDocument(landlord, locked.id);
+    assert.equal(lockedDelete.status, 422);
+    assert.equal(lockedDelete.body.error.code, 'DOCUMENT_NOT_DELETABLE');
+
+    const admin = await createUser('ADMIN');
+    assert.equal((await uploadToOwnership(admin, ownership)).status, 404);
+    assert.equal((await deleteDocument(admin, locked.id)).status, 404);
+  });
+
+  test('A-6 미인증·철회 활성 소유자도 올린다(권리자 인증 조건 없음, 2026-11-20)', async () => {
     const landlord = await createUser();
     for (const verification of ['UNVERIFIED', 'REVOKED']) {
       const ownership = await createOwnership(landlord, { verification });
-      const rejected = await uploadToOwnership(landlord, ownership);
-      assert.equal(rejected.status, 403, verification);
-      assert.equal(rejected.body.error.code, 'OWNERSHIP_VERIFICATION_REQUIRED');
+      assert.equal((await uploadToOwnership(landlord, ownership)).status, 201, verification);
     }
   });
 
-  test('A-7 인증 만료: 올리기 403, 목록·다운로드 200, 본인 삭제 204', async () => {
+  test('A-7 인증 만료: 올리기 201, 목록·다운로드 200, 본인 삭제 204', async () => {
     const landlord = await createUser();
     const ownership = await createOwnership(landlord, { verification: 'EXPIRED' });
     const document = await insertDocument(landlord, ownership);
-    const rejected = await uploadToOwnership(landlord, ownership);
-    assert.equal(rejected.status, 403);
-    assert.equal(rejected.body.error.code, 'OWNERSHIP_VERIFICATION_REQUIRED');
+    assert.equal((await uploadToOwnership(landlord, ownership)).status, 201);
     assert.equal((await listOwnershipDocuments(landlord, ownership)).status, 200);
     assert.equal((await postJson(landlord, `/documents/${document.id}/download-url`, {})).status, 200);
     assert.equal((await deleteDocument(landlord, document.id)).status, 204);
   });
 
-  test('A-8 소유 종료와 올리기가 겹쳐도 종료 뒤 시각에 붙은 문서는 없다', async () => {
+  test('A-8 소유 종료와 올리기가 겹쳐도 올리기는 성공하고 문서는 그 소유 관계에 남는다', async () => {
     const landlord = await createUser();
     for (let round = 0; round < 3; round += 1) {
       const ownership = await createOwnership(landlord);
@@ -249,20 +257,20 @@ describe('OWNERSHIP 문서 권한', { skip: dbTestSkip }, () => {
         ending,
         postJson(landlord, '/documents', { uploadSessionId: sessionId, resourceType: 'OWNERSHIP', resourceId: ownership.id }),
       ]);
-      assert.ok([201, 422].includes(upload.status), String(upload.status));
-      const documents = await prisma.document.findMany({ where: { resourceType: 'OWNERSHIP', resourceId: ownership.id } });
-      for (const document of documents) assert.ok(document.attachedAt <= endedAt);
-      if (upload.status === 422) assert.equal(documents.length, 0);
+      assert.equal(upload.status, 201);
+      assert.ok(endedAt);
+      assert.equal(await prisma.document.count({ where: { resourceType: 'OWNERSHIP', resourceId: ownership.id, deletedAt: null } }), 1);
     }
   });
 
-  test('A-9 삭제 허용이 올리기로 새지 않는다: 끝난 소유에는 올릴 수 없다', async () => {
+  test('A-9 끝난 내 소유 관계에는 올리고, 남의 소유 관계에는 끝났든 아니든 404', async () => {
     const landlord = await createUser();
     const ownership = await createOwnership(landlord, { ended: true });
-    const rejected = await uploadToOwnership(landlord, ownership);
-    assert.equal(rejected.status, 422);
-    assert.equal(rejected.body.error.code, 'OWNERSHIP_ENDED');
-    assert.equal(await prisma.document.count({ where: { resourceType: 'OWNERSHIP', resourceId: ownership.id } }), 0);
+    assert.equal((await uploadToOwnership(landlord, ownership)).status, 201);
+    const stranger = await createUser();
+    const rejected = await uploadToOwnership(stranger, ownership);
+    assert.equal(rejected.status, 404);
+    assert.equal(rejected.body.error.code, 'OWNERSHIP_NOT_FOUND');
   });
 
   test('C-1 감사(로그인 경로): OWNERSHIP+OTHER 다운로드는 감사 1줄, 미연결 PHOTO는 0줄', async () => {

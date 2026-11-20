@@ -3,13 +3,13 @@ import { FileText, Image, MoreHorizontal } from 'lucide-react';
 import { Badge } from '@butler/ui';
 import { IconTile } from '../IconTile/IconTile';
 import { formatFileSize } from '../../utils/attachment';
-import { canDeleteDocument, getDocumentTypeLabel, isSharedLockedDocument } from '../../utils/documentBox';
+import { canDeleteDocument, getDocumentTypeLabel } from '../../utils/documentBox';
 import { formatDateKST } from '../../utils/format';
 
 const isImage = (doc) => doc.mimeType?.startsWith('image/');
 
 // 더 보기 메뉴: 이름 보기 · 삭제(올린 본인만, 조건은 documentBox.canDeleteDocument). 그림자 없이 border-line + bg-surface로 면을 나눈다.
-const RowMenu = ({ doc, canDelete, isSharedLocked, onDelete }) => {
+const RowMenu = ({ doc, canDelete, onDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState('menu');
   const containerRef = useRef(null);
@@ -67,7 +67,6 @@ const RowMenu = ({ doc, canDelete, isSharedLocked, onDelete }) => {
                   삭제
                 </button>
               )}
-              {isSharedLocked && <p className="px-3 py-2.5 text-sub text-ink-3">임차인에게 공유한 문서라 지울 수 없어요</p>}
             </>
           ) : (
             <dl className="space-y-2 px-3 py-2.5 text-body">
@@ -149,8 +148,7 @@ export const DocumentBoxTable = ({ documents, contract, userId, urlEntries, onOp
               {status === 'error' && <span className="mr-2 text-sub text-ink-3">파일을 열지 못했어요</span>}
               <RowMenu
                 doc={doc}
-                canDelete={canDeleteDocument(doc, { userId, contract })}
-                isSharedLocked={isSharedLockedDocument(doc, { userId, contract })}
+                canDelete={canDeleteDocument(doc, { userId })}
                 onDelete={onDelete}
               />
             </td>

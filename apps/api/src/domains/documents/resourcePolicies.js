@@ -2,7 +2,7 @@
 // 지금은 MANAGEMENT_LOG·TICKET·THREAD_MESSAGE·CONTRACT·OWNERSHIP을 구현했다. 나머지는 그 기능 담당이 같은 모양으로 추가한다.
 //   canView(user, resourceId)          볼 수 있으면 true(못 보면 문서도 404로 숨긴다)
 //   lockForWrite(tx, user, resourceId) 붙이기(와 lockForDelete가 없으면 지우기) 전에 리소스를 잠그고 수정 가능한지 확인(안 되면 에러)
-//   lockForDelete(tx, user, resourceId, document) (선택) 지우기 전용 잠금. 있으면 지울 때 lockForWrite 대신 쓴다(올리기보다 느슨하거나 문서 단위 확인이 필요할 때)
+//   lockForDelete(tx, user, resourceId, document) (선택) 지우기 전용 잠금. 있으면 지울 때 lockForWrite 대신 쓴다(올리기보다 느슨하거나 문서 단위 확인이 필요할 때). 2026-11-20 문서함 제한 제거 뒤로 지금 쓰는 정책은 없다
 //   throwNotFound()                    연결할 리소스가 없을 때의 404
 //   maxAttachments                     리소스 하나에 붙일 수 있는 문서 수
 //   documentWhere(user, resourceId)    (선택) 리소스는 보여도 문서 일부만 보여 줄 때의 Prisma where 조각. 없으면 붙은 문서 전부

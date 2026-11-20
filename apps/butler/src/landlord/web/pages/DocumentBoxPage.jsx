@@ -94,8 +94,8 @@ const CardHeader = ({ icon, title, count, description, action }) => (
   </div>
 );
 
-// 내 소유 문서 카드. 올리기 조건·안내는 서버가 준 ownership.isUploadable·isActive를 그대로 따른다(D-A·D-C).
-const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, onUpload, onNavigate }) => {
+// 내 소유 문서 카드. 올리기는 서버가 준 ownership.isUploadable을 따른다(2026-11-20부터 내 소유 관계면 항상 true).
+const OwnershipCard = ({ box, userId, urlEntries, onOpen, onDelete, onUpload }) => {
   const { primary, past } = splitOwnerships(box.ownerships);
   const [isPastOpen, setIsPastOpen] = useState(false);
   if (!primary) return null;
@@ -111,15 +111,7 @@ const OwnershipCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, 
         description="등기부·매매계약서·보험처럼 호실 자체에 대한 문서"
         action={primary.isUploadable && onUpload ? <UploadButton onClick={() => onUpload({ target: 'OWNERSHIP' })} /> : null}
       />
-      {primary.isActive && !primary.isUploadable && (
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-5 py-3">
-          <p className="text-sub text-ink-2">권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요</p>
-          <Button variant="verifyOutline" size="sm" onClick={() => onNavigate('propertyVerify', { propertyId, fromDetail: true })}>
-            인증하기
-          </Button>
-        </div>
-      )}
-      {!primary.isActive && <p className="border-b border-line bg-surface-2 px-5 py-3 text-sub text-ink-2">끝난 소유 관계라 읽기·삭제만 할 수 있어요</p>}
+      {!primary.isActive && <p className="border-b border-line bg-surface-2 px-5 py-3 text-sub text-ink-2">소유가 끝난 호실이에요. 문서는 계속 올리고 지울 수 있어요</p>}
       {primary.documents.length > 0 ? (
         <DocumentBoxTable documents={primary.documents} {...tableProps} showHead />
       ) : (
@@ -189,7 +181,7 @@ const ContractGroup = ({ contract, userId, urlEntries, onOpen, onDelete, onUploa
   );
 };
 
-// 계약 문서 카드. 진행 중 계약 먼저, 지난 계약은 접힘(지난 계약도 소유 관계가 활성이면 올리기, D-B)
+// 계약 문서 카드. 진행 중 계약 먼저, 지난 계약은 접힘(지난 계약·소유가 끝난 계약도 올리기, 2026-11-20)
 const ContractCard = ({ box, propertyId, userId, urlEntries, onOpen, onDelete, onUpload, onNavigate }) => {
   const { current, past } = splitContracts(box.contracts);
   const [isPastOpen, setIsPastOpen] = useState(false);

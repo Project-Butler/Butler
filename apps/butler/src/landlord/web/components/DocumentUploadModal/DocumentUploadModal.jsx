@@ -130,7 +130,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
       }
     >
       {!target ? (
-        <NoticeBox tone="info">지금은 문서를 올릴 수 있는 곳이 없어요. 권리자 인증을 마치거나 계약을 등록하면 올릴 수 있어요.</NoticeBox>
+        <NoticeBox tone="info">지금은 문서를 올릴 수 있는 곳이 없어요.</NoticeBox>
       ) : (
         <div className="space-y-5">
           <div className="space-y-2">
@@ -141,9 +141,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
                 const isDisabled = !isAvailable(card.target);
                 const hint =
                   card.target === OWNERSHIP_TARGET && isDisabled
-                    ? targets.needsVerification
-                      ? '권리자 인증 후 올릴 수 있어요'
-                      : '지금은 올릴 수 없어요'
+                    ? '지금은 올릴 수 없어요'
                     : card.target === CONTRACT_TARGET && isDisabled
                       ? '올릴 수 있는 계약이 없어요'
                       : card.description;

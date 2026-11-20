@@ -43,12 +43,8 @@ export const getSelectableFileCount = (currentCount, queuedCount = 0) =>
   Math.max(0, Math.min(MAX_FILES_PER_BATCH, getRemainingSlots(currentCount)) - queuedCount);
 
 const IN_PROGRESS_STATUSES = ['UPCOMING', 'ACTIVE', 'EXPIRING_SOON'];
-const ENDED_STATUSES = ['EXPIRED', 'TERMINATED'];
-
-export const isEndedContractStatus = (status) => ENDED_STATUSES.includes(status);
-
 // 지금 진행 중인 계약(시작 전·진행 중·만료 임박이고 소유 관계가 활성). 아니면 '지난 계약' 묶음으로 간다.
-export const isCurrentContract = (contract) => IN_PROGRESS_STATUSES.includes(contract.status) && contract.isUploadable;
+export const isCurrentContract = (contract) => IN_PROGRESS_STATUSES.includes(contract.status) && contract.isOwnershipActive !== false;
 
 // 서버가 이미 정렬해 주므로 순서는 그대로 두고 나눈다.
 export const splitContracts = (contracts) => ({
@@ -69,7 +65,7 @@ const CONTRACT_STATUS_BADGE = {
 
 // 소유가 끝난 계약은 날짜상 진행 중이어도 임대인에게는 끝난 계약이다.
 export const getContractGroupBadge = (contract) =>
-  !contract.isUploadable && IN_PROGRESS_STATUSES.includes(contract.status)
+  contract.isOwnershipActive === false && IN_PROGRESS_STATUSES.includes(contract.status)
     ? { tone: 'default', label: '소유 종료' }
     : (CONTRACT_STATUS_BADGE[contract.status] ?? { tone: 'default', label: contract.status });
 
@@ -82,21 +78,19 @@ export const formatContractOption = (contract) => {
   return `${contract.tenantName} · ${formatContractPeriod(contract.startDate, contract.endDate)}${suffix}`;
 };
 
-// 올리기 팝업에서 계약 문서를 올릴 수 있는 계약(소유 관계가 활성인 것). 기본은 진행 중 계약, 없으면 가장 최근(서버 정렬 첫 번째).
+// 올리기 팝업에서 계약 문서를 올릴 수 있는 계약(내 소유 관계의 계약 전부 — 2026-11-20부터 소유 종료와 무관). 기본은 진행 중 계약, 없으면 가장 최근(서버 정렬 첫 번째).
 export const getUploadableContracts = (contracts) => contracts.filter((contract) => contract.isUploadable);
 export const pickDefaultContract = (contracts) => {
   const uploadable = getUploadableContracts(contracts);
   return uploadable.find(isCurrentContract) ?? uploadable[0] ?? null;
 };
 
-// 올리기 팝업·호실 상세에서 보여 줄 올릴 곳 요약. 내 소유 문서는 인증이 유효한 활성 소유 관계만, 계약 문서는 활성 소유 관계의 계약만 된다.
+// 올리기 팝업·호실 상세에서 보여 줄 올릴 곳 요약. 내 소유 관계(활성·종료)와 그 계약이면 소유 종료·인증과 관계없이 된다(2026-11-20).
 export const getUploadTargets = (box) => {
   const { primary } = splitOwnerships(box?.ownerships ?? []);
   return {
     ownership: primary?.isUploadable ? primary : null,
     contracts: getUploadableContracts(box?.contracts ?? []),
-    // 활성이지만 인증이 안 된 소유 관계(미인증·만료·철회): 인증 안내를 보여 준다
-    needsVerification: Boolean(primary?.isActive && !primary.isUploadable),
   };
 };
 
@@ -105,24 +99,12 @@ export const hasUploadTarget = (box) => {
   return Boolean(targets.ownership) || targets.contracts.length > 0;
 };
 
-// 문서를 지울 수 있는지(올린 본인, 잠기지 않음). 계약 문서는 그 계약(contract)이 필요하다.
-//  - OWNERSHIP: 끝난 소유 관계·인증 만료 뒤에도 본인이면 항상(D-A)
-//  - CONTRACT: 그 계약의 소유 관계가 활성이고(isUploadable), 끝난 계약이면 임차인에게 공유되지 않은 문서만(D-B·D-E)
-export const canDeleteDocument = (document, { userId, contract } = {}) => {
-  if (!userId || document.uploaderId !== userId || document.isLocked) return false;
-  if (document.resourceType === OWNERSHIP_TARGET) return true;
-  if (document.resourceType !== CONTRACT_TARGET || !contract?.isUploadable) return false;
-  return !(isEndedContractStatus(contract.status) && document.isSharedWithTenant);
-};
-
-// 끝난 계약에서 임차인에게 공유한 내 문서: 더 보기 메뉴에 삭제 대신 이유를 보여 준다.
-export const isSharedLockedDocument = (document, { userId, contract } = {}) =>
-  document.resourceType === CONTRACT_TARGET &&
+// 문서를 지울 수 있는지: 올린 본인이고 잠기지 않은 내 소유·계약 문서면 항상(소유 종료·계약 만료·임차인 공유와 무관, 2026-11-20).
+export const canDeleteDocument = (document, { userId } = {}) =>
+  Boolean(userId) &&
   document.uploaderId === userId &&
   !document.isLocked &&
-  Boolean(contract?.isUploadable) &&
-  isEndedContractStatus(contract.status) &&
-  Boolean(document.isSharedWithTenant);
+  [OWNERSHIP_TARGET, CONTRACT_TARGET].includes(document.resourceType);
 
 // 왼쪽 호실 줄 보조 문구: { count(숫자 글꼴로 그릴 문서 수, 없으면 null), text }
 //  - 예전 호실: 문서 n · 소유 종료
@@ -141,7 +123,6 @@ export const describePropertyRow = (property, { isFormer = false } = {}) => {
   const count = property.documentCount ?? 0;
   if (isFormer) return { count, text: '소유 종료' };
   if (count > 0) return { count, text: PROPERTY_STATE_TEXT[property.status] ?? PROPERTY_STATE_TEXT.VACANT };
-  if (property.myRelation?.verificationStatus !== 'VERIFIED') return { count: null, text: '권리자 인증 후 내 소유 문서를 올릴 수 있어요' };
   return { count: null, text: '문서 없음 · 계약서를 올려 두세요' };
 };
 

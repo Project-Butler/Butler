@@ -174,7 +174,7 @@ describe('DocumentBoxPage (문서함)', () => {
     expect(screen.getByText(/소유 종료/)).toBeInTheDocument();
   });
 
-  it('예전 호실 주소로 열면 묶음이 펼쳐지고, 올리기는 없고 내 소유 문서 삭제는 된다(D-A)', async () => {
+  it('예전 호실 주소로 열면 묶음이 펼쳐지고, 올리기와 삭제(공유한 계약서 포함)가 된다(2026-11-20)', async () => {
     setupLists({ formers: [former('p2', '헬리오시티 305동 804호')] });
     api.getPropertyDocumentBox.mockResolvedValue(
       makeBox({
@@ -186,7 +186,7 @@ describe('DocumentBoxPage (문서함)', () => {
             startedAt: '2024-01-01T00:00:00Z',
             endedAt: '2025-01-01T00:00:00Z',
             verificationStatus: 'VERIFIED',
-            isUploadable: false,
+            isUploadable: true,
             documents: [doc('매매계약서', { resourceType: 'OWNERSHIP' })],
           },
         ],
@@ -194,43 +194,42 @@ describe('DocumentBoxPage (문서함)', () => {
           contract('옛', {
             ownershipId: 'o-p2',
             status: 'EXPIRED',
-            isUploadable: false,
+            isUploadable: true,
+            isOwnershipActive: false,
             documents: [doc('옛계약서', { resourceType: 'CONTRACT', isSharedWithTenant: true })],
           }),
         ],
       }),
     );
     renderPage({ propertyId: 'p2' });
-    expect(await screen.findByText('끝난 소유 관계라 읽기·삭제만 할 수 있어요')).toBeInTheDocument();
+    expect(await screen.findByText('소유가 끝난 호실이에요. 문서는 계속 올리고 지울 수 있어요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /예전 호실/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '올리기' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '올리기' }).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: '매매계약서.pdf 더 보기' }));
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
-    // 지난 계약은 접혀 있고, 펼쳐도 삭제 메뉴가 없다
+    // 지난 계약은 접혀 있고, 펼치면 임차인에게 공유한 계약서도 지울 수 있다
     expect(screen.queryByText('옛계약서.pdf')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /지난 계약/ }));
     await userEvent.click(screen.getByRole('button', { name: '옛계약서.pdf 더 보기' }));
     expect(screen.getByText('이름 보기')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
   });
 
-  it('미인증 호실은 인증 안내와 [인증하기]가 보이고 [인증하기]는 호실 상세 인증 팝업으로 간다', async () => {
+  it('미인증 호실도 인증 안내 없이 내 소유 문서를 올릴 수 있다(2026-11-20)', async () => {
     api.getPropertyDocumentBox.mockResolvedValue(
-      makeBox({ ownerships: [{ ...makeBox().ownerships[0], isUploadable: false, verificationStatus: 'UNVERIFIED', documents: [] }] }),
+      makeBox({ ownerships: [{ ...makeBox().ownerships[0], isUploadable: true, verificationStatus: 'UNVERIFIED', documents: [] }] }),
     );
     setupLists({
       owners: [property('p1', '잠실엘스 101동 1203호', { documentCount: 0, myRelation: { type: 'OWNER', ownershipId: 'o-p1', verificationStatus: 'UNVERIFIED' } })],
     });
-    const { onNavigate } = renderPage();
-    expect(await screen.findByText('권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '호실' })).toHaveTextContent('권리자 인증 후 내 소유 문서를 올릴 수 있어요');
-    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '인증하기' }));
-    expect(onNavigate).toHaveBeenCalledWith('propertyVerify', { propertyId: 'p1', fromDetail: true });
+    renderPage();
+    expect(await screen.findByRole('navigation', { name: '호실' })).toHaveTextContent('문서 없음 · 계약서를 올려 두세요');
+    expect(screen.queryByText(/권리자 인증을 마치면/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '인증하기' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '올리기' }).length).toBeGreaterThan(0);
   });
 
-  it('진행 중 계약의 공유 문서는 삭제 메뉴가 있고, 끝난 계약의 공유 문서는 이유 문구만 나온다', async () => {
+  it('진행 중·끝난 계약의 공유 문서 모두 삭제 메뉴가 있다(2026-11-20)', async () => {
     api.getPropertyDocumentBox.mockResolvedValue(
       makeBox({
         contracts: [
@@ -246,8 +245,8 @@ describe('DocumentBoxPage (문서함)', () => {
     await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('button', { name: /지난 계약/ }));
     await userEvent.click(screen.getByRole('button', { name: '퇴거사진.pdf 더 보기' }));
-    expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
-    expect(screen.getByText('임차인에게 공유한 문서라 지울 수 없어요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
+    expect(screen.queryByText('임차인에게 공유한 문서라 지울 수 없어요')).not.toBeInTheDocument();
   });
 
   it('삭제: 확인 팝업 후 deleteDocument를 부르고 문서함을 다시 불러온다. 서버가 거절하면 message를 보여 준다', async () => {
