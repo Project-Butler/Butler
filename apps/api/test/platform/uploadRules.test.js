@@ -67,9 +67,13 @@ test('환경 변수로 크기·동영상 위치를 바꾼다(요청마다 읽음
   assert.equal(getUploadRules({ UPLOAD_MAX_VIDEO_MB: '' }).kinds.VIDEO.maxBytes, 50 * MB);
 });
 
-test('UPLOAD_VIDEO_RESOURCE_TYPES 빈 값이면 동영상을 어디에도 받지 않는다', () => {
-  const rules = getUploadRules({ UPLOAD_VIDEO_RESOURCE_TYPES: '' });
-  for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET']) assert.equal(isKindAllowedFor(rules, resourceType, 'VIDEO'), false);
+test('UPLOAD_VIDEO_RESOURCE_TYPES: none이면 동영상을 어디에도 받지 않고, 빈 값은 기본값', () => {
+  for (const value of ['none', 'NONE', ' none ']) {
+    const rules = getUploadRules({ UPLOAD_VIDEO_RESOURCE_TYPES: value });
+    for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET']) assert.equal(isKindAllowedFor(rules, resourceType, 'VIDEO'), false);
+  }
+  // .env.example을 그대로 복사한 빈 값은 기본값(동영상 켜짐)
+  for (const value of ['', '  ']) assert.equal(isKindAllowedFor(getUploadRules({ UPLOAD_VIDEO_RESOURCE_TYPES: value }), 'TICKET', 'VIDEO'), true);
 });
 
 test('잘못된 값(정수 아님·0·상한 초과)은 기본값으로 두고 경고한다, 모르는 위치는 뺀다', () => {

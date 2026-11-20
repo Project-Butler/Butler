@@ -215,8 +215,8 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
     const tooLarge = await createSession(user, { ...photo, sizeBytes: 20 * MB + 1, targetResourceType: 'TICKET' });
     assert.equal(tooLarge.body.error.code, 'FILE_TOO_LARGE');
     assert.equal(tooLarge.body.error.message, '파일은 20MB까지 올릴 수 있습니다.');
-    // 동영상 위치 목록을 비우면 동영상은 어디에도 못 올린다
-    process.env.UPLOAD_VIDEO_RESOURCE_TYPES = '';
+    // 동영상 위치를 none으로 두면 동영상은 어디에도 못 올린다
+    process.env.UPLOAD_VIDEO_RESOURCE_TYPES = 'none';
     try {
       assert.equal((await createSession(user)).body.error.code, 'FILE_TYPE_NOT_ALLOWED');
     } finally {

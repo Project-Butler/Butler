@@ -4,7 +4,7 @@
 // 회사가 바꾸는 값은 환경 변수로 받는다(요청마다 다시 읽는다 — storage/index.js와 같은 방식).
 //   UPLOAD_MAX_DOCUMENT_MB      사진·PDF 최대 크기(기본 20)
 //   UPLOAD_MAX_VIDEO_MB         동영상 최대 크기(기본 50, Supabase Free 업로드 상한)
-//   UPLOAD_VIDEO_RESOURCE_TYPES 동영상을 받는 곳(기본 OWNERSHIP,CONTRACT,TICKET, 빈 값이면 동영상 끔)
+//   UPLOAD_VIDEO_RESOURCE_TYPES 동영상을 받는 곳(쉼표 구분, 비우면 기본 OWNERSHIP,CONTRACT,TICKET, none이면 동영상 끔)
 // 저장소(Supabase 버킷·프로젝트 전역 업로드 한도)보다 크게 두면 저장소 업로드가 실패한다(README).
 import { AppError } from './AppError.js';
 
@@ -106,10 +106,11 @@ const readMb = (env, name, fallback) => {
   return value;
 };
 
-// 없으면 기본 목록, 빈 값이면 동영상 끔. 모르는 값은 빼고 경고한다.
+// 없거나 비우면 기본 목록(.env.example을 그대로 복사해도 기본값), none이면 동영상 끔. 모르는 값은 빼고 경고한다.
 const readVideoResourceTypes = (env) => {
   const raw = env.UPLOAD_VIDEO_RESOURCE_TYPES;
-  if (raw === undefined) return [...DEFAULT_VIDEO_RESOURCE_TYPES];
+  if (raw === undefined || raw.trim() === '') return [...DEFAULT_VIDEO_RESOURCE_TYPES];
+  if (raw.trim().toLowerCase() === 'none') return [];
   const values = raw.split(',').map((value) => value.trim()).filter(Boolean);
   const unknown = values.filter((value) => !KNOWN_RESOURCE_TYPES.includes(value));
   if (unknown.length > 0) warnOnce(`UPLOAD_VIDEO_RESOURCE_TYPES=${raw}`, `UPLOAD_VIDEO_RESOURCE_TYPES의 모르는 값을 뺍니다: ${unknown.join(', ')}`);
