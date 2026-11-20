@@ -6,15 +6,13 @@ import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
 import { assertDocumentsDeletable, CONTRACT_RESOURCE, softDeleteDocumentsInTx } from '../../platform/documentAttachments.js';
 import { prisma } from '../../platform/prismaClient.js';
-import { isAuditedDownload, MAX_FILE_BYTES, matchesDeclaredType, toStoragePath } from './fileRules.js';
+import { assertKindAllowedFor, describeSizeLimit, getUploadRules, kindOfMime, kindRulesForMime } from '../../platform/uploadRules.js';
+import { isAuditedDownload, matchesDeclaredType, toStoragePath } from './fileRules.js';
 import { getResourcePolicy, visibleDocumentWhere } from './resourcePolicies.js';
 import { removeStoredObjects, selectStorage } from './storage/index.js';
 
-// 결정 Q2: 업로드 15분, 다운로드 5분
-export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
-export const DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
-// 미연결 문서는 24시간 안에 안 붙으면 정리한다(계약 6장)
-export const UNATTACHED_DOCUMENT_TTL_MS = 24 * 60 * 60 * 1000;
+// 업로드 세션·다운로드(보기) 주소·미연결 문서 정리 시간은 형식 묶음마다 다르다(platform/uploadRules.js).
+// 사진·PDF: 업로드 15분·보기 5분·미연결 24시간(결정 Q2·Q5), 동영상: 30분·60분·6시간.
 // 만료된 업로드 세션은 2시간 더 두고 지운다. 만료 직전에 시작한 업로드·등록이 끝날 여유이고,
 // Supabase 서명 업로드 URL은 발급 뒤 2시간 유효(바꿀 수 없음)라 그 안에 늦게 올라온 파일도 행과 함께 지우기 위해서다.
 export const UPLOAD_CLEANUP_GRACE_MS = 2 * 60 * 60 * 1000;
@@ -59,7 +57,7 @@ export const toDocumentResponse = (document) => ({
 export const createUploadSession = async (user, { fileName, mimeType, sizeBytes, documentType }) => {
   const storage = requireStorage();
   const id = randomUUID();
-  const expiresAt = new Date(getNow().getTime() + UPLOAD_SESSION_TTL_MS);
+  const expiresAt = new Date(getNow().getTime() + kindRulesForMime(getUploadRules(), mimeType).uploadSessionTtlMs);
   await prisma.upload.create({
     data: { id, userId: user.id, fileName, mimeType, sizeBytes: BigInt(sizeBytes), type: documentType, storagePath: toStoragePath(id), expiresAt },
   });
@@ -67,7 +65,7 @@ export const createUploadSession = async (user, { fileName, mimeType, sizeBytes,
   return { id, ...target, expiresAt: expiresAt.toISOString() };
 };
 
-// 업로드 본문 서명 확인. 본문(최대 20MB)을 읽기 전에 라우터가 먼저 부르고(controller.checkUploadContent), 받은 뒤에도 다시 본다.
+// 업로드 본문 서명 확인. 본문(최대 크기는 platform/uploadRules.js)을 읽기 전에 라우터가 먼저 부르고(controller.checkUploadContent), 받은 뒤에도 다시 본다.
 export const verifyUploadRequest = (uploadId, token, now) => {
   const storage = requireStorage();
   if (!storage.servesContent) throwUploadSessionNotFound();
@@ -88,7 +86,10 @@ export const receiveUploadContent = async (uploadId, token, body) => {
   if (upload.expiresAt <= now) throwUploadSessionExpired();
 
   const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
-  if (content.length > MAX_FILE_BYTES) throw new AppError('FILE_TOO_LARGE', 422, '파일은 20MB까지 올릴 수 있습니다.');
+  const rules = getUploadRules();
+  if (content.length > kindRulesForMime(rules, upload.mimeType).maxBytes) {
+    throw new AppError('FILE_TOO_LARGE', 422, describeSizeLimit(rules, kindOfMime(upload.mimeType) ?? 'PDF'));
+  }
   if (content.length !== Number(upload.sizeBytes)) {
     throw new AppError('VALIDATION_ERROR', 400, '요청 값이 올바르지 않습니다.', [
       { field: 'body', reason: `업로드 세션의 크기(${upload.sizeBytes}바이트)와 다릅니다.` },
@@ -110,20 +111,22 @@ const ensureUploadCompleted = async (storage, upload, now) => {
   await prisma.upload.update({ where: { id: upload.id }, data: { completedAt: now } });
 };
 
-// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 종류가 허용되는지, 상한을 넘지 않는지 본다.
-// 권한 없는 사람이 종류 422로 리소스 존재를 알 수 없게 권한(lockForWrite)을 먼저 본다.
-const lockResourceForAttach = async (tx, user, policy, resourceId, addCount, documentType) => {
+// 리소스에 붙이기 전 확인: 리소스를 잠그고(수정 가능해야 함) 종류·파일 형식이 허용되는지, 상한을 넘지 않는지 본다.
+// 권한 없는 사람이 종류·형식 422로 리소스 존재를 알 수 없게 권한(lockForWrite)을 먼저 본다.
+const lockResourceForAttach = async (tx, user, policy, resourceId, addCount, { documentType, mimeType }) => {
   await policy.lockForWrite(tx, user, resourceId);
   if (policy.allowedDocumentTypes && !policy.allowedDocumentTypes.includes(documentType)) {
     throw new AppError('DOCUMENT_TYPE_NOT_ALLOWED', 422, '이 곳에는 올릴 수 없는 문서 종류입니다.');
   }
+  // 동영상은 표(platform/uploadRules.js)가 정한 곳에만 붙는다.
+  assertKindAllowedFor(getUploadRules(), policy.resourceType, [mimeType]);
   const attached = await tx.document.count({ where: { resourceType: policy.resourceType, resourceId, deletedAt: null } });
   if (attached + addCount > policy.maxAttachments) {
     throw new AppError('ATTACHMENT_LIMIT_EXCEEDED', 422, `문서는 ${policy.maxAttachments}개까지 붙일 수 있습니다.`);
   }
 };
 
-// POST /documents — resourceType·resourceId를 빼면 미연결 문서(올린 사람만 보고 24시간 안에 안 붙으면 정리).
+// POST /documents — resourceType·resourceId를 빼면 미연결 문서(올린 사람만 보고, 사진·PDF는 24시간·동영상은 6시간 안에 안 붙으면 정리).
 export const registerDocument = async (user, { uploadSessionId, resourceType, resourceId }) => {
   const storage = requireStorage();
   const now = getNow();
@@ -134,7 +137,7 @@ export const registerDocument = async (user, { uploadSessionId, resourceType, re
 
   const policy = resourceType ? { ...getResourcePolicy(resourceType), resourceType } : null;
   const document = await prisma.$transaction(async (tx) => {
-    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1, upload.type);
+    if (policy) await lockResourceForAttach(tx, user, policy, resourceId, 1, { documentType: upload.type, mimeType: upload.mimeType });
     return tx.document.create({
       data: {
         uploadId: upload.id,
@@ -195,7 +198,7 @@ export const findDocumentForUser = async (user, documentId) => toDocumentRespons
 // 돌려주는 값: { url, expiresAt(ISO 문자열) }. 저장소를 못 쓰면 503 STORAGE_UNAVAILABLE.
 export const createDocumentDownloadUrl = async (document, { actor = null, req, purpose = 'VIEW' } = {}) => {
   const storage = requireStorage();
-  const expiresAt = new Date(getNow().getTime() + DOWNLOAD_URL_TTL_MS);
+  const expiresAt = new Date(getNow().getTime() + kindRulesForMime(getUploadRules(), document.mimeType).viewUrlTtlMs);
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
   if (isAuditedDownload(document, { purpose })) {
     await audit.record({
@@ -236,7 +239,8 @@ export const openDocumentContent = async (documentId, token) => {
   if (storage.verifyDownloadToken({ documentId, token, now: getNow() }) !== 'ok') throwSignatureInvalid();
   const document = await prisma.document.findFirst({ where: { id: documentId, deletedAt: null } });
   if (!document) throwDocumentNotFound();
-  return { document, openStream: () => storage.openObjectStream(document.storagePath) };
+  // range: { start, end }(끝 포함, 동영상 탐색) 또는 없음(전체)
+  return { document, openStream: (range) => storage.openObjectStream(document.storagePath, range) };
 };
 
 // DELETE /documents/:documentId — 올린 사람, 연결된 리소스를 수정할 수 있을 때. 잠긴 문서는 422.
@@ -268,7 +272,7 @@ export const deleteDocument = async (user, documentId, req) => {
   await removeStoredObjects(storagePaths);
 };
 
-// 매일 cron: 만료된 업로드 세션(등록 안 된 것)과 24시간 안에 안 붙은 미연결 문서를 정리한다(결정 Q5).
+// 매일 cron: 만료된 업로드 세션(등록 안 된 것)과 정해진 시간 안에 안 붙은 미연결 문서(사진·PDF 24시간, 동영상 6시간)를 정리한다(결정 Q5).
 // 저장소를 쓸 수 없으면 파일을 지울 수 없으므로 아무것도 하지 않는다.
 // 행을 먼저 지우고(그 사이 등록·연결된 것은 남김) 지운 행의 파일만 지운다. 파일 삭제 실패는 다음 정리를 막지 않는다.
 export const cleanupExpiredUploads = async ({ client = prisma, now = getNow() } = {}) => {
@@ -290,8 +294,19 @@ export const cleanupExpiredUploads = async ({ client = prisma, now = getNow() } 
     removedPaths.push(upload.storagePath);
   }
 
+  // 미연결 문서는 형식 묶음마다 다른 시간(사진·PDF 24시간, 동영상 6시간) 뒤 정리한다. 표에 없는 형식은 가장 긴 시간을 쓴다.
+  const { kinds } = getUploadRules();
+  const kindList = Object.values(kinds);
+  const longestTtlMs = Math.max(...kindList.map((kind) => kind.unattachedTtlMs));
   const unattached = await client.document.findMany({
-    where: { resourceType: null, deletedAt: null, createdAt: { lt: new Date(now.getTime() - UNATTACHED_DOCUMENT_TTL_MS) } },
+    where: {
+      resourceType: null,
+      deletedAt: null,
+      OR: [
+        ...kindList.map((kind) => ({ mimeType: { in: kind.mimeTypes }, createdAt: { lt: new Date(now.getTime() - kind.unattachedTtlMs) } })),
+        { mimeType: { notIn: kindList.flatMap((kind) => kind.mimeTypes) }, createdAt: { lt: new Date(now.getTime() - longestTtlMs) } },
+      ],
+    },
     orderBy: { createdAt: 'asc' },
     take: CLEANUP_BATCH,
   });

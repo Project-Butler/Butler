@@ -4,10 +4,11 @@
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
+import { getUploadRules, kindRulesForMime } from '../../platform/uploadRules.js';
 import { isAuditedDownload } from '../documents/fileRules.js';
 import { selectStorage } from '../documents/storage/index.js';
 
-export const INVITATION_DOWNLOAD_URL_TTL_MS = 5 * 60 * 1000;
+// 보기 주소 유효 시간은 형식 묶음마다 다르다(사진·PDF 5분, 동영상 60분 — platform/uploadRules.js).
 
 const SHARED_DOCUMENT_SELECT = { id: true, type: true, resourceType: true, fileName: true, mimeType: true, sizeBytes: true, storagePath: true };
 
@@ -29,12 +30,12 @@ export const toSharedDocumentResponse = (document) => ({
   sizeBytes: Number(document.sizeBytes),
 });
 
-// 5분 서명 주소. 계약서·등기부·계약에 붙은 문서는 actor 없이(로그인 전 열람) invitationId를 summary에 남긴다.
+// 서명 주소(사진·PDF 5분, 동영상 60분). 계약서·등기부·계약에 붙은 문서는 actor 없이(로그인 전 열람) invitationId를 summary에 남긴다.
 // purpose THUMBNAIL(사진 격자 썸네일)은 감사하지 않는다(fileRules.isAuditedDownload).
 export const issueSharedDocumentDownloadUrl = async (client, { invitation, document, req, purpose = 'VIEW' }) => {
   const storage = selectStorage();
   if (!storage) throw new AppError('STORAGE_UNAVAILABLE', 503, '사진·문서 첨부를 준비 중입니다. 잠시 후 다시 시도해 주세요.');
-  const expiresAt = new Date(getNow().getTime() + INVITATION_DOWNLOAD_URL_TTL_MS);
+  const expiresAt = new Date(getNow().getTime() + kindRulesForMime(getUploadRules(), document.mimeType).viewUrlTtlMs);
   // Supabase 드라이버는 비동기라 기다린다(local은 바로 값을 준다).
   const url = await storage.createDownloadUrl({ documentId: document.id, storagePath: document.storagePath, fileName: document.fileName, expiresAt });
   if (isAuditedDownload(document, { purpose })) {
