@@ -12,7 +12,6 @@ import {
   getSelectableFileCount,
   getUploadTargets,
   hasUploadTarget,
-  isSharedLockedDocument,
   splitPropertyName,
   pickDefaultContract,
   splitContracts,
@@ -36,7 +35,7 @@ const SERVER_DOCUMENT_TYPES = [
 const ME = 'user-1';
 const ownershipDoc = (patch = {}) => ({ id: 'd1', resourceType: 'OWNERSHIP', uploaderId: ME, isLocked: false, ...patch });
 const contractDoc = (patch = {}) => ({ id: 'd2', resourceType: 'CONTRACT', uploaderId: ME, isLocked: false, isSharedWithTenant: false, ...patch });
-const contract = (patch = {}) => ({ id: 'c1', status: 'ACTIVE', isUploadable: true, ...patch });
+const contract = (patch = {}) => ({ id: 'c1', status: 'ACTIVE', isUploadable: true, isOwnershipActive: true, ...patch });
 
 describe('문서 종류 라벨', () => {
   it('서버 종류를 모두 덮는다', () => {
@@ -90,16 +89,14 @@ describe('삭제 가능 판단', () => {
     expect(canDeleteDocument(ownershipDoc(), {})).toBe(false);
   });
 
-  it('계약 문서는 그 계약의 소유 관계가 활성일 때만 지운다(isUploadable false면 못 지움)', () => {
-    expect(canDeleteDocument(contractDoc(), { userId: ME, contract: contract() })).toBe(true);
-    expect(canDeleteDocument(contractDoc(), { userId: ME, contract: contract({ isUploadable: false }) })).toBe(false);
-    expect(canDeleteDocument(contractDoc(), { userId: ME })).toBe(false);
+  it('계약 문서는 소유가 끝났어도 올린 본인이면 지운다(2026-11-20)', () => {
+    expect(canDeleteDocument(contractDoc(), { userId: ME })).toBe(true);
+    expect(canDeleteDocument(contractDoc(), { userId: ME, contract: contract({ isOwnershipActive: false }) })).toBe(true);
   });
 
-  it('끝난 계약에서는 임차인에게 공유한 문서만 막는다(D-E)', () => {
+  it('끝난 계약에서도 임차인에게 공유한 문서를 지울 수 있다(2026-11-20)', () => {
     for (const status of ['EXPIRED', 'TERMINATED']) {
-      expect(canDeleteDocument(contractDoc({ isSharedWithTenant: true }), { userId: ME, contract: contract({ status }) }), status).toBe(false);
-      expect(canDeleteDocument(contractDoc({ isSharedWithTenant: false }), { userId: ME, contract: contract({ status }) }), status).toBe(true);
+      expect(canDeleteDocument(contractDoc({ isSharedWithTenant: true }), { userId: ME, contract: contract({ status }) }), status).toBe(true);
     }
   });
 
@@ -109,13 +106,6 @@ describe('삭제 가능 판단', () => {
     }
   });
 
-  it('공유 잠금 안내는 끝난 계약의 내 공유 문서에만 뜬다', () => {
-    const ended = contract({ status: 'EXPIRED' });
-    expect(isSharedLockedDocument(contractDoc({ isSharedWithTenant: true }), { userId: ME, contract: ended })).toBe(true);
-    expect(isSharedLockedDocument(contractDoc({ isSharedWithTenant: false }), { userId: ME, contract: ended })).toBe(false);
-    expect(isSharedLockedDocument(contractDoc({ isSharedWithTenant: true }), { userId: ME, contract: contract() })).toBe(false);
-    expect(isSharedLockedDocument(ownershipDoc(), { userId: ME })).toBe(false);
-  });
 });
 
 describe('묶음 나누기', () => {
@@ -124,7 +114,7 @@ describe('묶음 나누기', () => {
       contract({ id: 'a', status: 'ACTIVE' }),
       contract({ id: 'b', status: 'EXPIRED' }),
       contract({ id: 'c', status: 'UPCOMING' }),
-      contract({ id: 'd', status: 'ACTIVE', isUploadable: false }),
+      contract({ id: 'd', status: 'ACTIVE', isOwnershipActive: false }),
       contract({ id: 'e', status: 'TERMINATED' }),
     ];
     const { current, past } = splitContracts(contracts);
@@ -139,8 +129,8 @@ describe('묶음 나누기', () => {
 
   it('계약 상태 칩: 소유가 끝난 계약은 날짜가 진행 중이어도 소유 종료', () => {
     expect(getContractGroupBadge(contract({ status: 'ACTIVE' }))).toEqual({ tone: 'success', label: '진행 중' });
-    expect(getContractGroupBadge(contract({ status: 'ACTIVE', isUploadable: false }))).toEqual({ tone: 'default', label: '소유 종료' });
-    expect(getContractGroupBadge(contract({ status: 'TERMINATED', isUploadable: false })).label).toBe('해지');
+    expect(getContractGroupBadge(contract({ status: 'ACTIVE', isOwnershipActive: false }))).toEqual({ tone: 'default', label: '소유 종료' });
+    expect(getContractGroupBadge(contract({ status: 'TERMINATED', isOwnershipActive: false })).label).toBe('해지');
   });
 });
 
@@ -154,16 +144,14 @@ describe('표기', () => {
   });
 
 
-  it('호실 줄 문구: 문서 수와 상태, 문서가 없으면 인증 여부에 따라 안내가 갈린다', () => {
+  it('호실 줄 문구: 문서 수와 상태, 문서가 없으면 인증 여부와 관계없이 같은 안내', () => {
     const verified = { documentCount: 0, status: 'VACANT', myRelation: { verificationStatus: 'VERIFIED' } };
     expect(describePropertyRow({ ...verified, documentCount: 3, status: 'LEASED' })).toEqual({ count: 3, text: '계약 중' });
     expect(describePropertyRow({ ...verified, documentCount: 3 })).toEqual({ count: 3, text: '공실' });
     expect(describePropertyRow(verified)).toEqual({ count: null, text: '문서 없음 · 계약서를 올려 두세요' });
-    expect(describePropertyRow({ ...verified, myRelation: { verificationStatus: 'UNVERIFIED' } })).toEqual({
-      count: null,
-      text: '권리자 인증 후 내 소유 문서를 올릴 수 있어요',
-    });
-    expect(describePropertyRow({ ...verified, myRelation: { verificationStatus: 'EXPIRED' } }).text).toBe('권리자 인증 후 내 소유 문서를 올릴 수 있어요');
+    for (const verificationStatus of ['UNVERIFIED', 'EXPIRED']) {
+      expect(describePropertyRow({ ...verified, myRelation: { verificationStatus } })).toEqual({ count: null, text: '문서 없음 · 계약서를 올려 두세요' });
+    }
     expect(describePropertyRow({ ...verified, documentCount: 2 }, { isFormer: true })).toEqual({ count: 2, text: '소유 종료' });
   });
 });
@@ -171,16 +159,14 @@ describe('표기', () => {
 describe('올릴 곳', () => {
   const box = (ownership, contracts = []) => ({ ownerships: [ownership], contracts });
 
-  it('인증된 활성 소유 관계는 내 소유 문서도 올릴 수 있다', () => {
-    const targets = getUploadTargets(box({ isActive: true, isUploadable: true }));
-    expect(targets.ownership).toBeTruthy();
-    expect(targets.needsVerification).toBe(false);
+  it('내 소유 관계면 인증·종료와 관계없이 내 소유 문서를 올릴 수 있다(서버 isUploadable: true)', () => {
+    for (const isActive of [true, false]) {
+      expect(getUploadTargets(box({ isActive, isUploadable: true })).ownership).toBeTruthy();
+    }
   });
 
-  it('미인증·만료 활성 소유 관계는 인증 안내가 뜨고, 계약이 없으면 올릴 곳이 없다', () => {
-    const unverified = box({ isActive: true, isUploadable: false });
-    expect(getUploadTargets(unverified)).toMatchObject({ ownership: null, needsVerification: true });
-    expect(hasUploadTarget(unverified)).toBe(false);
+  it('인증 안내(needsVerification)는 더 이상 없다', () => {
+    expect(getUploadTargets(box({ isActive: true, isUploadable: true }))).not.toHaveProperty('needsVerification');
   });
 
   it('인증이 만료돼도 활성 소유자의 계약 문서는 올릴 수 있다(D-F)', () => {
@@ -189,10 +175,10 @@ describe('올릴 곳', () => {
     expect(getUploadTargets(expired).contracts.map((item) => item.id)).toEqual(['c1']);
   });
 
-  it('끝난 소유 관계는 올릴 곳도 인증 안내도 없다', () => {
-    const ended = box({ isActive: false, isUploadable: false }, [contract({ isUploadable: false })]);
-    expect(hasUploadTarget(ended)).toBe(false);
-    expect(getUploadTargets(ended).needsVerification).toBe(false);
+  it('끝난 소유 관계도 내 소유 문서와 그 계약 문서를 올릴 수 있다(2026-11-20)', () => {
+    const ended = box({ isActive: false, isUploadable: true }, [contract({ status: 'EXPIRED', isOwnershipActive: false })]);
+    expect(hasUploadTarget(ended)).toBe(true);
+    expect(getUploadTargets(ended).contracts.map((item) => item.id)).toEqual(['c1']);
   });
 
   it('기본 계약은 진행 중 계약, 없으면 가장 최근 끝난 계약(올릴 수 있는 것만)', () => {

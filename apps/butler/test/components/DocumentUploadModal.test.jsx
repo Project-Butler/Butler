@@ -59,11 +59,10 @@ describe('DocumentUploadModal (문서 업로드 팝업)', () => {
     expect(screen.queryByRole('button', { name: '영수증' })).not.toBeInTheDocument();
   });
 
-  it('미인증 호실은 내 소유 문서를 고를 수 없고 인증 안내가 보인다', () => {
-    renderModal({ box: makeBox({ ownership: { isUploadable: false, verificationStatus: 'UNVERIFIED' } }) });
-    expect(screen.getByRole('button', { name: /내 소유 문서/ })).toBeDisabled();
-    expect(screen.getByText('권리자 인증 후 올릴 수 있어요')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /계약 문서/ })).toHaveAttribute('aria-pressed', 'true');
+  it('미인증·끝난 소유 호실도 내 소유 문서를 고를 수 있고 인증 안내는 없다(2026-11-20)', () => {
+    renderModal({ box: makeBox({ ownership: { isActive: false, isUploadable: true, verificationStatus: 'UNVERIFIED' } }) });
+    expect(screen.getByRole('button', { name: /내 소유 문서/ })).toBeEnabled();
+    expect(screen.queryByText(/권리자 인증 후/)).not.toBeInTheDocument();
   });
 
   it('고른 직후는 대기이고 서버를 부르지 않는다. 20MB를 넘는 파일은 안내만 한다', async () => {

@@ -103,7 +103,7 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
   if (!target) {
     return (
       <BottomSheet label="문서 올리기" onClose={close}>
-        <p className="text-body text-ink-2">지금은 문서를 올릴 수 있는 곳이 없어요. 권리자 인증을 마치거나 계약을 등록하면 올릴 수 있어요.</p>
+        <p className="text-body text-ink-2">지금은 문서를 올릴 수 있는 곳이 없어요.</p>
         <Button variant="secondary" size="h52" onClick={onClose}>
           닫기
         </Button>
@@ -134,7 +134,6 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
             </button>
           ))}
         </div>
-        {!targets.ownership && targets.needsVerification && <p className="text-m-sub text-ink-3">권리자 인증을 마치면 내 소유 문서(등기부 등)를 올릴 수 있어요.</p>}
       </div>
 
       {target === CONTRACT_TARGET && contract && (
