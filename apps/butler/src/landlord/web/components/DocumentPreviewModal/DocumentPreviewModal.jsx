@@ -3,15 +3,15 @@ import { Download, ExternalLink, FileText } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { Modal } from '../Modal/Modal';
 import { DocumentViewer } from '../../../../shared/documentViewer/DocumentViewer';
-import { isImageDocument, isPdfDocument } from '../../../../shared/documentViewer/documentFiles';
+import { isImageDocument, isPdfDocument, isVideoDocument } from '../../../../shared/documentViewer/documentFiles';
 import { formatFileSize } from '../../utils/attachment';
 
-// 팝업으로 미리 볼 수 있는 파일: 브라우저가 그리는 사진(JPG·PNG·WEBP·GIF)과 PDF. HEIC 등은 새 탭으로 연다.
-export const isPreviewableDocument = (document) => isImageDocument(document) || isPdfDocument(document);
+// 팝업으로 미리 볼 수 있는 파일: 브라우저가 그리는 사진(JPG·PNG·WEBP·GIF), 동영상(MP4·MOV), PDF. HEIC 등은 새 탭으로 연다.
+export const isPreviewableDocument = (document) => isImageDocument(document) || isVideoDocument(document) || isPdfDocument(document);
 
 // 문서함 미리보기 팝업.
 //   - 열 때 그 문서 하나의 새 주소를 받는다(감사 1줄 = 연 횟수). 옆 파일·썸네일 주소는 미리 받지 않는다.
-//   - 사진: 공용 DocumentViewer(확대·끌기·저장)에 이 문서 하나만 넘긴다.
+//   - 사진·동영상: 공용 DocumentViewer(사진 확대·끌기, 동영상 재생, 저장)에 이 문서 하나만 넘긴다.
 //   - PDF: 브라우저 내장 PDF 뷰어(iframe)로 보여 준다. 저장소 응답이 Content-Disposition: inline이라 팝업 안에 그려진다.
 // urls: useDocumentUrls 결과(load·open·save·entries).
 export const DocumentPreviewModal = ({ document, urls, onClose }) => {
@@ -29,7 +29,7 @@ export const DocumentPreviewModal = ({ document, urls, onClose }) => {
     };
   }, [document.id, load]);
 
-  if (isImageDocument(document) && preview.status === 'ready') {
+  if ((isImageDocument(document) || isVideoDocument(document)) && preview.status === 'ready') {
     return <DocumentViewer documents={[document]} urls={urls} onClose={onClose} />;
   }
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ChevronRight, FileText, Image, ShieldCheck, Upload, Wrench } from 'lucide-react';
+import { ChevronRight, FileText, FileVideo, Image, ShieldCheck, Upload, Wrench } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { DocumentViewer } from '../../../shared/documentViewer/DocumentViewer';
-import { isImageDocument } from '../../../shared/documentViewer/documentFiles';
+import { isImageDocument, isVideoDocument } from '../../../shared/documentViewer/documentFiles';
 import { useDocumentUrls } from '../../../shared/documentViewer/useDocumentUrls';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
 import { useGetPropertyDocumentBox } from '../../web/hooks/useGetPropertyDocumentBox';
@@ -34,7 +34,7 @@ const Loading = () => (
 
 const DocumentRow = ({ document, onOpen }) => {
   const { typeLabel, date, size } = describeDocument(document);
-  const Icon = isImageDocument(document) ? Image : FileText;
+  const Icon = isImageDocument(document) ? Image : isVideoDocument(document) ? FileVideo : FileText;
   return (
     <li className="border-b border-line last:border-b-0">
       <button type="button" onClick={() => onOpen(document)} className="flex w-full items-center gap-3 py-3 text-left">
@@ -142,7 +142,8 @@ export const DocumentBoxPage = ({ propertyId, category, onUnauthorized }) => {
   const openCategory = (key) => goTo('documents', { propertyId, type: key });
   const handleOpen = async (document) => {
     setOpenError(null);
-    if (isImageDocument(document)) {
+    // 사진은 크게 보기, 동영상은 뷰어에서 재생. 그 밖(PDF 등)은 새 탭.
+    if (isImageDocument(document) || isVideoDocument(document)) {
       setViewing(document);
       return;
     }

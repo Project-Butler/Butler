@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, FileVideo } from 'lucide-react';
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../../../../shared/apiError';
-import { isRenderableImage } from '../../utils/attachment';
+import { isRenderableImage, isVideoMimeType } from '../../utils/attachment';
 
-// 붙은 문서 한 건의 썸네일. 열 때 다운로드 URL(5분 유효)을 받고, 사진이 안 뜨면(만료 등) 한 번만 다시 받는다.
-// 브라우저가 못 그리는 형식(HEIC·PDF)은 썸네일 대신 다운로드 링크를 보여 준다.
+// 붙은 문서 한 건의 썸네일. 사진은 열 때 다운로드 URL(5분 유효, THUMBNAIL)을 받고, 사진이 안 뜨면(만료 등) 한 번만 다시 받는다.
+// 브라우저가 못 그리는 형식(HEIC·PDF·동영상)은 주소를 미리 받지 않고(목록을 본 것만으로 열람 기록이 남지 않게) 아이콘을 보여 주며,
+// 누를 때 VIEW 주소를 받아 새 탭에서 연다(동영상은 브라우저가 재생).
 export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) => {
   const [url, setUrl] = useState(null);
   const [error, setError] = useState(null);
@@ -28,8 +29,8 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
   }, [document.id, onUnauthorized]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (renderable) load();
+  }, [load, renderable]);
 
   const handleImageError = () => {
     if (hasRetried) {
@@ -66,6 +67,17 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
       </div>
     );
   }
+  if (!renderable) {
+    const isVideo = isVideoMimeType(document.mimeType);
+    const Icon = isVideo ? FileVideo : FileText;
+    return (
+      <button type="button" onClick={handleOpen} className={`${frame} flex-col gap-1.5 px-2 hover:bg-surface`} title={document.fileName}>
+        <Icon size={24} className="text-ink-3" />
+        <span className="w-full truncate text-center text-chip text-ink-2">{document.fileName}</span>
+        <span className="text-chip font-semibold text-accent-strong">{isVideo ? '재생' : '다운로드'}</span>
+      </button>
+    );
+  }
   if (!url) {
     return (
       <div className={frame}>
@@ -73,18 +85,9 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
       </div>
     );
   }
-  if (renderable) {
-    return (
-      <a href={url} target="_blank" rel="noreferrer" onClick={handleOpen} className={`${frame} hover:opacity-90`} title={`${document.fileName} 원본 보기`}>
-        <img src={url} alt={document.fileName} onError={handleImageError} className="h-full w-full object-cover" />
-      </a>
-    );
-  }
   return (
-    <a href={url} target="_blank" rel="noreferrer" onClick={handleOpen} className={`${frame} flex-col gap-1.5 px-2 hover:bg-surface`} title={document.fileName}>
-      <FileText size={24} className="text-ink-3" />
-      <span className="w-full truncate text-center text-chip text-ink-2">{document.fileName}</span>
-      <span className="text-chip font-semibold text-accent-strong">다운로드</span>
+    <a href={url} target="_blank" rel="noreferrer" onClick={handleOpen} className={`${frame} hover:opacity-90`} title={`${document.fileName} 원본 보기`}>
+      <img src={url} alt={document.fileName} onError={handleImageError} className="h-full w-full object-cover" />
     </a>
   );
 };

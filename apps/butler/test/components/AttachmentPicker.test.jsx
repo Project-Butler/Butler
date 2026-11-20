@@ -134,11 +134,24 @@ describe('DocumentThumbnail', () => {
     expect(api.postDocumentDownloadUrl).toHaveBeenCalledTimes(2);
   });
 
-  it('HEIC·PDF는 썸네일 대신 다운로드 링크', async () => {
+  it('HEIC·PDF·동영상은 주소를 미리 받지 않고 아이콘, 누르면 VIEW 주소로 새 탭', async () => {
+    const opened = { opener: 'parent', location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened);
     render(<DocumentThumbnail document={{ id: 'heic', fileName: 'IMG.heic', mimeType: 'image/heic' }} />);
-    const link = await screen.findByRole('link', { name: /다운로드/ });
-    expect(link).toHaveAttribute('href', 'http://api/content/doc');
+    const button = screen.getByRole('button', { name: /다운로드/ });
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    // 목록을 본 것만으로는 주소(열람 기록)를 받지 않는다
+    expect(api.postDocumentDownloadUrl).not.toHaveBeenCalled();
+    await userEvent.click(button);
+    await waitFor(() => expect(opened.location.href).toBe('http://api/content/doc'));
+    expect(api.postDocumentDownloadUrl).toHaveBeenCalledWith('heic');
+    open.mockRestore();
+  });
+
+  it('동영상 칸은 [재생]', () => {
+    render(<DocumentThumbnail document={{ id: 'v', fileName: '누수.mp4', mimeType: 'video/mp4' }} />);
+    expect(screen.getByRole('button', { name: /누수.mp4.*재생|재생/ })).toBeInTheDocument();
+    expect(api.postDocumentDownloadUrl).not.toHaveBeenCalled();
   });
 
   it('원본을 열 때는 주소를 새로 받아 미리 연 창에 넣는다(만료된 주소를 열지 않게)', async () => {

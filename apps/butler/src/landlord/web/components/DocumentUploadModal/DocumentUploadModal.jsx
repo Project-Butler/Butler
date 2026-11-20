@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Badge, Button, FilterChip } from '@butler/ui';
-import { FileSignature, FileText, Image, ShieldCheck, Upload, X } from 'lucide-react';
+import { FileSignature, FileText, FileVideo, Image, ShieldCheck, Upload, X } from 'lucide-react';
 import { useDocumentBoxUploads } from '../../hooks/useDocumentBoxUploads';
-import { ATTACHMENT_ACCEPT, formatFileSize } from '../../utils/attachment';
+import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../utils/attachment';
 import {
   CONTRACT_TARGET,
   DOCUMENT_TYPE_LABELS,
@@ -11,7 +11,6 @@ import {
   getRemainingSlots,
   getSelectableFileCount,
   getUploadTargets,
-  MAX_FILE_SIZE_TEXT,
   MAX_FILES_PER_BATCH,
   OWNERSHIP_TARGET,
   pickDefaultContract,
@@ -33,7 +32,7 @@ const FileRow = ({ item, isSaving, onRemove }) => {
   return (
     <li className="rounded-input border border-line p-2.5">
       <div className="flex items-center gap-2.5">
-        <IconTile icon={item.mimeType?.startsWith('image/') ? Image : FileText} tone="mute" size="sm" />
+        <IconTile icon={item.mimeType?.startsWith('image/') ? Image : isVideoMimeType(item.mimeType) ? FileVideo : FileText} tone="mute" size="sm" />
         <span className="min-w-0 flex-1 text-body text-ink">
           <span className="block truncate" title={item.fileName}>
             {item.fileName}
@@ -75,7 +74,7 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
   const [isDragging, setIsDragging] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
   const uploads = useDocumentBoxUploads({ onUnauthorized });
-  const { items, notice, isSaving, addFiles, removeItem, save } = uploads;
+  const { items, notice, isSaving, addFiles, removeItem, save, rules, kinds } = uploads;
 
   // 고른 값이 올릴 수 없는 곳이면(미리 고른 값 없음·데이터 갱신) 올릴 수 있는 첫 곳으로 맞춘다.
   const isAvailable = (candidate) =>
@@ -234,11 +233,11 @@ export const DocumentUploadModal = ({ box, propertyName, initialTarget, initialC
                 }`}
               >
                 <Upload size={16} aria-hidden="true" />
-                파일을 끌어다 놓거나 눌러서 고르세요 · PDF·JPG·PNG·WEBP·HEIC {MAX_FILE_SIZE_TEXT}까지
+                파일을 끌어다 놓거나 눌러서 고르세요 · {describeDocumentBoxFileLimits(rules, kinds)}
                 <input
                   type="file"
                   multiple
-                  accept={ATTACHMENT_ACCEPT}
+                  accept={buildAttachmentAccept(rules, kinds)}
                   disabled={isSaving}
                   className="sr-only"
                   onChange={(event) => {

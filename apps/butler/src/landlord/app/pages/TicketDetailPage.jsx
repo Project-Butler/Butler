@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { Badge, Button, MobileFormLayout } from '@butler/ui';
 import { DocumentThumbnail } from '../../web/components/DocumentThumbnail/DocumentThumbnail';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
+import { formatAttachmentCount } from '../../web/utils/attachment';
 import { useGetTicket } from '../../web/hooks/useGetTicket';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { usePatchTicket } from '../../web/hooks/usePatchTicket';
@@ -226,8 +227,9 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
       )}
 
       {ticket.attachments.length > 0 && (
-        <section aria-label="사진" className="flex flex-col gap-2">
-          <h2 className="text-m-label font-semibold text-ink-3">사진 {ticket.attachments.length}장</h2>
+        // 동영상이 섞이면 '첨부 n개'. 동영상 칸은 누르면 새 탭에서 재생한다(DocumentThumbnail).
+        <section aria-label="첨부" className="flex flex-col gap-2">
+          <h2 className="text-m-label font-semibold text-ink-3">{formatAttachmentCount(ticket.attachments)}</h2>
           <ul className="grid grid-cols-3 gap-2">
             {ticket.attachments.map((document) => (
               <li key={document.id}>

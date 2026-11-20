@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { postDocument, postUploadSession, putUploadContent } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
-import { checkAttachmentFile, resolveFileMimeType } from '../utils/attachment';
-import { MAX_FILES_PER_BATCH } from '../utils/documentBox';
+import { allowedFileKinds, checkAttachmentFile, resolveFileMimeType } from '../utils/attachment';
+import { CONTRACT_TARGET, MAX_FILES_PER_BATCH, OWNERSHIP_TARGET } from '../utils/documentBox';
+import { useGetUploadRules } from './useGetUploadRules';
+
+// 문서함이 받는 형식: 내 소유 문서·계약 문서 중 한 곳이라도 받는 묶음(파일은 보관할 곳을 고르기 전에 담을 수 있다).
+// 실제로 그 곳이 받는지는 저장할 때 서버가 세션(targetResourceType)에서 다시 본다.
+export const documentBoxFileKinds = (rules) => [
+  ...new Set([...allowedFileKinds(rules, OWNERSHIP_TARGET), ...allowedFileKinds(rules, CONTRACT_TARGET)]),
+];
 
 let nextKey = 0;
 const newKey = () => {
@@ -17,6 +24,8 @@ const STORAGE_UNAVAILABLE_MESSAGE = '지금은 파일을 올릴 수 없어요. �
 // useContractDocumentUploads의 오류 처리(toApiError·isUnauthorizedError·STORAGE_UNAVAILABLE 안내)를 따르되 올릴 곳은 저장할 때 받는다.
 // items: { key, file, fileName, sizeBytes, mimeType, status: 'pending' | 'uploading' | 'error', progress, error }
 export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
+  const rules = useGetUploadRules();
+  const kinds = useMemo(() => documentBoxFileKinds(rules), [rules]);
   const [items, setItems] = useState([]);
   const [notice, setNotice] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,7 +49,7 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
     const messages = [];
     const accepted = [];
     for (const file of Array.from(fileList)) {
-      const problem = checkAttachmentFile(file);
+      const problem = checkAttachmentFile(file, { rules, kinds });
       if (problem) messages.push(problem);
       else accepted.push(file);
     }
@@ -66,7 +75,7 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
         error: null,
       })),
     ]);
-  }, []);
+  }, [rules, kinds]);
 
   const removeItem = useCallback((key) => setItems((prev) => prev.filter((item) => item.key !== key)), []);
 
@@ -83,7 +92,13 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
         if (isUnmountedRef.current) break;
         patchItem(item.key, { status: 'uploading', progress: 0, error: null });
         try {
-          const session = await postUploadSession({ fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes, documentType });
+          const session = await postUploadSession({
+            fileName: item.fileName,
+            mimeType: item.mimeType,
+            sizeBytes: item.sizeBytes,
+            documentType,
+            targetResourceType: resourceType,
+          });
           await putUploadContent(session, item.file, { onProgress: (progress) => patchItem(item.key, { progress }) });
           await postDocument({ uploadSessionId: session.id, resourceType, resourceId });
           setItems((prev) => prev.filter((current) => current.key !== item.key));
@@ -112,5 +127,5 @@ export const useDocumentBoxUploads = ({ onUnauthorized } = {}) => {
     [onUnauthorized, patchItem],
   );
 
-  return { items, notice, isSaving, addFiles, removeItem, save };
+  return { items, notice, isSaving, addFiles, removeItem, save, rules, kinds };
 };

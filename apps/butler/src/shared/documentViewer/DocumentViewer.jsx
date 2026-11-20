@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, ExternalLink, Minimize2, X } from 'lucide-react';
-import { formatBytes, getFileBadge, isImageDocument } from './documentFiles';
+import { formatBytes, getFileBadge, isImageDocument, isVideoDocument, VIDEO_URL_FRESH_MS } from './documentFiles';
 import {
   clampOffset,
   DOUBLE_TAP_SCALE,
@@ -65,7 +65,86 @@ const PdfSlide = ({ document, onOpen }) => (
   </div>
 );
 
+// MediaError.code 4: 형식·코덱을 이 브라우저가 재생하지 못함(예: 아이폰 HEVC MOV를 PC Chrome에서). 주소를 다시 받아도 소용없다.
+const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+
+// 동영상 칸. 지금 칸이 되면 VIEW 주소(60분)를 받아 <video>로 재생한다.
+//  - 재생 중 오류(주소 만료·네트워크)면 주소를 한 번만 다시 받아 보던 자리부터 이어 간다.
+//  - 그래도 실패하거나 형식·코덱을 지원하지 않으면 "재생할 수 없어요" + [내려받기]·[새 탭에서 열기].
+const VideoSlide = ({ document, entry, urls }) => {
+  const [failed, setFailed] = useState(false);
+  const retried = useRef(false);
+  const resumeAt = useRef(0);
+
+  const onError = (event) => {
+    const video = event.currentTarget;
+    if (video.error?.code === MEDIA_ERR_SRC_NOT_SUPPORTED || retried.current) {
+      setFailed(true);
+      return;
+    }
+    retried.current = true;
+    resumeAt.current = video.currentTime || 0;
+    urls.load(document.id, { force: true }).then((url) => {
+      if (!url) setFailed(true);
+    });
+  };
+
+  const onLoadedMetadata = (event) => {
+    if (resumeAt.current > 0) {
+      event.currentTarget.currentTime = resumeAt.current;
+      resumeAt.current = 0;
+    }
+  };
+
+  if (failed || entry?.status === 'error') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center text-white">
+        <div className="min-w-0">
+          <p className="text-body font-semibold">이 브라우저에서 재생할 수 없어요</p>
+          <p className="mt-1 break-all text-m-sub text-white/60">
+            {document.fileName} · <span className="font-num">{formatBytes(document.sizeBytes)}</span>
+          </p>
+        </div>
+        <div className="grid w-full max-w-[280px] grid-cols-2 gap-2">
+          <button type="button" onClick={() => urls.save(document)} className={`${TOOL_BUTTON} px-3`}>
+            <Download size={16} strokeWidth={1.8} aria-hidden="true" />
+            내려받기
+          </button>
+          <button type="button" onClick={() => urls.open(document)} className={`${TOOL_BUTTON} px-3`}>
+            <ExternalLink size={16} strokeWidth={1.8} aria-hidden="true" />
+            새 탭에서 열기
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!entry?.url) {
+    return (
+      <p role="status" className="flex h-full items-center justify-center text-body text-white/60">
+        불러오는 중이에요
+      </p>
+    );
+  }
+  return (
+    <div className="flex h-full items-center justify-center px-2">
+      {/* 사용자가 올린 영상이라 자막 트랙이 없다. */}
+      <video
+        key={entry.url}
+        src={entry.url}
+        controls
+        playsInline
+        preload="metadata"
+        aria-label={document.fileName}
+        onError={onError}
+        onLoadedMetadata={onLoadedMetadata}
+        className="max-h-full max-w-full bg-black"
+      />
+    </div>
+  );
+};
+
 // 사진 크게 보기(시안 B4) · 확대한 상태(B5). 공유된 파일 전체를 한 줄로 넘긴다(옆으로 밀기 · 화살표 · 아래 썸네일).
+//   - 동영상은 그 칸에서 바로 재생한다(VideoSlide). PDF 는 새 탭.
 //   - 두 손가락 벌리기 · 두 번 누르기 · (PC) 휠로 확대, 확대하면 끌어서 옮기고 오른쪽 위 작은 지도와 배율 칩을 보여 준다.
 //   - [저장]은 그때 받은 새 주소로 원본을 내려받는다. 돌리기는 두지 않는다.
 //   - PDF 칸·썸네일은 새 탭에서 PDF 를 연다. 자동 보정·글자 판독은 하지 않는다.
@@ -86,6 +165,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
 
   const current = documents[index];
   const isImage = isImageDocument(current);
+  const isVideo = isVideoDocument(current);
   const natural = naturals[current?.id];
   const content = useMemo(() => (natural ? fitInto(natural, stage) : { ratio: 1, width: 0, height: 0 }), [natural, stage]);
   const isZoomed = view.scale > MIN_SCALE;
@@ -98,6 +178,9 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
       const document = documents[position];
       if (document && isImageDocument(document)) load(document.id, { purpose: position === index ? 'VIEW' : 'THUMBNAIL' });
     });
+    // 동영상은 지금 칸일 때만 받는다(미리 받지 않음 — 재생 주소 발급은 열람으로 남는다).
+    const document = documents[index];
+    if (document && isVideoDocument(document)) load(document.id, { purpose: 'VIEW', freshMs: VIDEO_URL_FRESH_MS });
   }, [documents, index, load]);
 
   // 열려 있는 동안 뒤 화면이 스크롤되지 않게 하고, 닫으면 원래대로.
@@ -255,7 +338,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
   const selectThumb = (position) => {
     const document = documents[position];
     goTo(position);
-    if (!isImageDocument(document)) urls.open(document);
+    if (!isImageDocument(document) && !isVideoDocument(document)) urls.open(document);
   };
 
   const onImageLoad = (event) => {
@@ -283,7 +366,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
       <div
         ref={stageRef}
         data-testid="viewer-stage"
-        className="relative flex-1 touch-none select-none overflow-hidden"
+        className={`relative flex-1 select-none overflow-hidden ${isVideo ? '' : 'touch-none'}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -325,6 +408,8 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
               불러오는 중이에요
             </p>
           )
+        ) : isVideo ? (
+          <VideoSlide key={current.id} document={current} entry={entry} urls={urls} />
         ) : (
           <PdfSlide document={current} onOpen={urls.open} />
         )}
@@ -361,7 +446,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
       <div className="mx-auto w-full max-w-[430px] shrink-0">
         {(!isImage || isZoomed) && (
           <p className="py-2 text-center text-m-sub text-white/60">
-            {!isImage ? 'PDF 는 새 탭에서 열려요' : '끌어서 옮기기 · 두 번 누르면 원래 크기'}
+            {isVideo ? '재생이 안 되면 [저장]으로 내려받아 보세요' : !isImage ? 'PDF 는 새 탭에서 열려요' : '끌어서 옮기기 · 두 번 누르면 원래 크기'}
           </p>
         )}
         <div className="space-y-3 px-4 pb-4 pt-2">
@@ -377,12 +462,12 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
                       aria-label={`${position + 1}번째 파일 ${document.fileName}`}
                       aria-current={active ? 'true' : undefined}
                       onClick={() => selectThumb(position)}
-                      className={`flex h-11 w-8 items-center justify-center overflow-hidden rounded ${active ? 'border-2 border-white' : 'border border-white/30'} ${isImageDocument(document) ? 'bg-surface-2' : 'bg-crit-box'}`}
+                      className={`flex h-11 w-8 items-center justify-center overflow-hidden rounded ${active ? 'border-2 border-white' : 'border border-white/30'} ${isImageDocument(document) ? 'bg-surface-2' : isVideoDocument(document) ? 'bg-black' : 'bg-crit-box'}`}
                     >
                       {isImageDocument(document) ? (
                         thumbUrl && <img src={thumbUrl} alt="" draggable={false} className="h-full w-full object-cover" />
                       ) : (
-                        <span className="font-num text-[9px] font-bold text-crit-ink">{getFileBadge(document)}</span>
+                        <span className={`font-num text-[9px] font-bold ${isVideoDocument(document) ? 'text-white' : 'text-crit-ink'}`}>{getFileBadge(document)}</span>
                       )}
                     </button>
                   </li>

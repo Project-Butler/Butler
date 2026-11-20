@@ -1,9 +1,17 @@
 import { useRef } from 'react';
-import { FileText, ImagePlus, Lock, X } from 'lucide-react';
+import { FileText, FileVideo, ImagePlus, Lock, X } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { DocumentThumbnail } from '../DocumentThumbnail/DocumentThumbnail';
-import { ATTACHMENT_ACCEPT, formatFileSize, MAX_LOG_ATTACHMENTS } from '../../utils/attachment';
+import {
+  buildAttachmentAccept,
+  DEFAULT_FILE_KINDS,
+  DEFAULT_UPLOAD_RULES,
+  describeAttachmentLimits,
+  formatFileSize,
+  isVideoMimeType,
+  MAX_LOG_ATTACHMENTS,
+} from '../../utils/attachment';
 
 const UploadingPreview = ({ item }) => (
   <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">
@@ -11,7 +19,7 @@ const UploadingPreview = ({ item }) => (
       <img src={item.previewUrl} alt={item.fileName} className="h-full w-full object-cover" />
     ) : (
       <span className="flex flex-col items-center gap-1.5 px-2">
-        <FileText size={24} className="text-ink-3" />
+        {isVideoMimeType(item.mimeType) ? <FileVideo size={24} className="text-ink-3" /> : <FileText size={24} className="text-ink-3" />}
         <span className="w-full truncate text-center text-chip text-ink-2">{item.fileName}</span>
       </span>
     )}
@@ -39,6 +47,10 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
   const { items, addFiles, remove, notice, storageUnavailable } = uploads;
   const maxCount = uploads.maxCount ?? MAX_LOG_ATTACHMENTS;
   const isFull = items.length >= maxCount;
+  // 받는 형식은 useAttachmentUploads(resourceType)가 정한다. 동영상을 받는 곳(수리 요청)만 버튼·안내가 달라진다.
+  const rules = uploads.rules ?? DEFAULT_UPLOAD_RULES;
+  const kinds = uploads.kinds ?? DEFAULT_FILE_KINDS;
+  const acceptsVideo = kinds.includes('VIDEO');
 
   const handleChange = (event) => {
     addFiles(event.target.files);
@@ -62,19 +74,19 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
           disabled={disabled || storageUnavailable || isFull}
         >
           <ImagePlus size={14} className="-ml-0.5 mr-1 inline-block" />
-          사진 추가
+          {acceptsVideo ? '사진·동영상 추가' : '사진 추가'}
         </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
-          accept={ATTACHMENT_ACCEPT}
+          accept={buildAttachmentAccept(rules, kinds)}
           onChange={handleChange}
           className="hidden"
           aria-label="사진 파일 선택"
         />
       </div>
-      <p className="text-chip text-ink-3">JPEG·PNG·WEBP·HEIC 사진과 PDF, 한 파일 20MB까지 붙일 수 있어요.</p>
+      <p className="text-chip text-ink-3">{describeAttachmentLimits(rules, kinds)}</p>
       {storageUnavailable && <NoticeBox tone="warn">사진 첨부 준비 중이에요. 글은 그대로 저장할 수 있어요.</NoticeBox>}
       {notice && <NoticeBox tone="warn">{notice}</NoticeBox>}
 

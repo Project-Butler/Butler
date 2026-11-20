@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Image, MoreHorizontal } from 'lucide-react';
+import { FileText, FileVideo, Image, MoreHorizontal } from 'lucide-react';
 import { Badge } from '@butler/ui';
 import { IconTile } from '../IconTile/IconTile';
-import { formatFileSize } from '../../utils/attachment';
+import { formatFileSize, isVideoMimeType } from '../../utils/attachment';
 import { canDeleteDocument, getDocumentTypeLabel } from '../../utils/documentBox';
 import { formatDateKST } from '../../utils/format';
 
 const isImage = (doc) => doc.mimeType?.startsWith('image/');
+const iconOf = (doc) => (isImage(doc) ? Image : isVideoMimeType(doc.mimeType) ? FileVideo : FileText);
 
 // 더 보기 메뉴: 이름 보기 · 삭제(올린 본인만, 조건은 documentBox.canDeleteDocument). 그림자 없이 border-line + bg-surface로 면을 나눈다.
 const RowMenu = ({ doc, canDelete, onDelete }) => {
@@ -125,7 +126,7 @@ export const DocumentBoxTable = ({ documents, contract, userId, urlEntries, onOp
           >
             <td className="w-full max-w-0 px-5 py-4">
               <span className="flex items-center gap-2.5">
-                <IconTile icon={isImage(doc) ? Image : FileText} tone="mute" size="sm" />
+                <IconTile icon={iconOf(doc)} tone="mute" size="sm" />
                 <button
                   type="button"
                   aria-label={`${doc.fileName} 열기`}
