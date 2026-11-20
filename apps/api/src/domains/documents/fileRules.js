@@ -1,6 +1,7 @@
 // 파일·문서 규칙(DB 의존 없음). 계약 6장 "파일 · 문서".
 import { assertAllowedBody, throwIfInvalid } from '../../platform/requestValidation.js';
-
+
+
 export const MAX_FILE_NAME_LENGTH = 255;
 // 관리 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
 export const MAX_LOG_ATTACHMENTS = 10;
