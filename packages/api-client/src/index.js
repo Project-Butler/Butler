@@ -74,7 +74,7 @@ export { getThreadMessageList } from './apis/threads/getThreadMessageList';
 export { postThreadMessage } from './apis/threads/postThreadMessage';
 export { postThreadRead } from './apis/threads/postThreadRead';
 
-export { getUploadRules } from './apis/files/getUploadRules';
+export { getUploadRules } from './apis/documents/getUploadRules';
 export { postUploadSession } from './apis/documents/postUploadSession';
 export { putUploadContent } from './apis/documents/putUploadContent';
 export { postDocument } from './apis/documents/postDocument';

@@ -7,7 +7,8 @@ import { isRenderableImage, isVideoMimeType } from '../../utils/attachment';
 // 붙은 문서 한 건의 썸네일. 사진은 열 때 다운로드 URL(5분 유효, THUMBNAIL)을 받고, 사진이 안 뜨면(만료 등) 한 번만 다시 받는다.
 // 브라우저가 못 그리는 형식(HEIC·PDF·동영상)은 주소를 미리 받지 않고(목록을 본 것만으로 열람 기록이 남지 않게) 아이콘을 보여 주며,
 // 누를 때 VIEW 주소를 받아 새 탭에서 연다(동영상은 브라우저가 재생).
-export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) => {
+// onOpen: 주면 누를 때 새 탭 대신 이것을 부른다(예: 수리 요청 상세의 동영상을 공용 뷰어로 재생).
+export const DocumentThumbnail = ({ document, onUnauthorized, onOpen, className = '' }) => {
   const [url, setUrl] = useState(null);
   const [error, setError] = useState(null);
   const [hasRetried, setHasRetried] = useState(false);
@@ -45,6 +46,10 @@ export const DocumentThumbnail = ({ document, onUnauthorized, className = '' }) 
   // 응답을 기다린 뒤 창을 열면 팝업 차단에 걸려서 빈 창을 먼저 열고 주소를 넣는다.
   const handleOpen = async (event) => {
     event.preventDefault();
+    if (onOpen) {
+      onOpen(document);
+      return;
+    }
     const opened = window.open('', '_blank');
     if (opened) opened.opener = null;
     try {

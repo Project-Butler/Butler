@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { postDocumentDownloadUrl } from '@butler/api-client';
 import { Badge, Button, MobileFormLayout } from '@butler/ui';
+import { DocumentViewer } from '../../../shared/documentViewer/DocumentViewer';
+import { isVideoDocument } from '../../../shared/documentViewer/documentFiles';
+import { useDocumentUrls } from '../../../shared/documentViewer/useDocumentUrls';
 import { DocumentThumbnail } from '../../web/components/DocumentThumbnail/DocumentThumbnail';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
 import { formatAttachmentCount } from '../../web/utils/attachment';
@@ -111,6 +115,9 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
   const { openThread, isLoading: isOpening } = useOpenThread({ onUnauthorized });
   const [sheet, setSheet] = useState(openComplete ? 'complete' : null);
   const [actionError, setActionError] = useState(null);
+  // 동영상 첨부는 새 탭(MOV는 브라우저가 내려받아 버린다) 대신 공용 뷰어에서 재생한다.
+  const [playing, setPlaying] = useState(null);
+  const urls = useDocumentUrls(postDocumentDownloadUrl);
 
   if (!ticket) {
     return (
@@ -233,7 +240,11 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
           <ul className="grid grid-cols-3 gap-2">
             {ticket.attachments.map((document) => (
               <li key={document.id}>
-                <DocumentThumbnail document={document} onUnauthorized={onUnauthorized} />
+                <DocumentThumbnail
+                  document={document}
+                  onUnauthorized={onUnauthorized}
+                  onOpen={isVideoDocument(document) ? () => setPlaying(document) : undefined}
+                />
               </li>
             ))}
           </ul>
@@ -256,6 +267,7 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
           요청 취소
         </button>
       )}
+      {playing && <DocumentViewer documents={[playing]} urls={urls} onClose={() => setPlaying(null)} />}
     </MobileFormLayout>
   );
 };
