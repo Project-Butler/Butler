@@ -65,7 +65,7 @@ const PdfSlide = ({ document, onOpen }) => (
   </div>
 );
 
-// MediaError.code 4: 형식·코덱을 이 브라우저가 재생하지 못함(예: 아이폰 HEVC MOV를 PC Chrome에서). 주소를 다시 받아도 소용없다.
+// MediaError.code 4: 형식·코덱을 이 브라우저가 재생하지 못함(예: 브라우저가 지원하지 않는 코덱으로 찍은 영상). 주소를 다시 받아도 소용없다.
 const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
 // 동영상 칸. 지금 칸이 되면 VIEW 주소(60분)를 받아 <video>로 재생한다.
