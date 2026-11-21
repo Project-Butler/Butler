@@ -44,7 +44,7 @@ export const DisputeAppLayout = ({ onUnauthorized }) => {
   );
 };
 
-// AI 상담(/disputes/chat, 주동욱 님 화면)은 화면을 고치지 않고 앱 틀(하단 탭 없음, 입력창이 아래)만 씌운다.
+// AI 상담(/disputes/chat, 주동욱 님 화면)에 앱 틀(하단 탭 없음)을 씌운다. 화면은 isApp으로 안쪽 제목을 숨기고 입력창을 아래에 붙인다.
 export const DisputeChatAppScreen = ({ children }) => {
   const goBack = useGoBack('disputes');
   return (

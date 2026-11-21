@@ -65,6 +65,16 @@ describe('DisputeChatPage', () => {
     expect(await screen.findByText('아직 상담 기록이 없어요.')).toBeInTheDocument();
   });
 
+  it('웹은 제목을 보여주고, 입력창은 대화 스크롤 칸 밖(아래)에 둔다', async () => {
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'AI 분쟁 상담' })).toBeInTheDocument();
+    const composer = screen.getByLabelText('상담 질문').closest('form');
+    expect(composer.closest('.overflow-y-auto')).toBeNull();
+    expect(screen.getByRole('button', { name: '계약이 끝났는데 세입자가 이사를 안 나가요.' }).closest('.overflow-y-auto')).not.toBeNull();
+    expect(await screen.findByText('아직 상담 기록이 없어요.')).toBeInTheDocument();
+  });
+
   it('질문을 보내면 답변을 마크다운으로 보여주고, [1]을 근거 자료와 연결한다', async () => {
     const user = userEvent.setup();
     let resolveAnswer;

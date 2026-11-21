@@ -3,7 +3,8 @@ import { Button } from '@butler/ui';
 // 서버(apps/api disputes controller)의 질문 길이 제한과 같다.
 const MAX_QUESTION_LENGTH = 2000;
 
-export const ChatComposer = ({ value, onChange, onSubmit, isPending }) => {
+// compact: 앱(휴대폰)에서는 입력칸을 2줄로 줄여 대화가 보이는 칸을 넓힌다. 길게 쓰면 칸 안에서 스크롤된다.
+export const ChatComposer = ({ value, onChange, onSubmit, isPending, compact = false }) => {
   const canSubmit = value.trim().length > 0 && value.length <= MAX_QUESTION_LENGTH && !isPending;
 
   const handleKeyDown = (event) => {
@@ -26,7 +27,7 @@ export const ChatComposer = ({ value, onChange, onSubmit, isPending }) => {
       </label>
       <textarea
         id="dispute-question"
-        rows={3}
+        rows={compact ? 2 : 3}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}

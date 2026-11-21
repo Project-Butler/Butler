@@ -214,7 +214,7 @@ export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
       path="/disputes/chat"
       element={
         <DisputeChatAppScreen>
-          <DisputeChatPage />
+          <DisputeChatPage isApp />
         </DisputeChatAppScreen>
       }
     />

@@ -1,5 +1,5 @@
 // 임대인 앱 임대차 분쟁(3팀). 실패 조건: 앱에서 /disputes 가 '준비 중'으로 감 · 웹 제목 줄(PageHeader)이 상단 바와 겹쳐 제목이 둘 ·
-// 상단 바 제목이 화면과 다름 · 사례 상세의 AI 버튼이 화면에 고정돼 따라다님 · AI 상담에 하단 탭이 남아 입력창과 겹침 · 주소로 바로 들어온 화면에서 뒤로 가기가 앱 밖으로 나감.
+// 상단 바 제목이 화면과 다름 · 사례 상세의 AI 버튼이 화면에 고정돼 따라다님 · AI 상담에 하단 탭이 남아 입력창과 겹침 · AI 상담 제목이 둘이거나 입력창이 대화를 따라 떠다님 · 주소로 바로 들어온 화면에서 뒤로 가기가 앱 밖으로 나감.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -112,9 +112,13 @@ describe('앱 분쟁 화면 틀', () => {
     expect(tabBar()).toBeInTheDocument();
   });
 
-  it('AI 상담은 하단 탭 없는 앱 틀로 열린다', () => {
+  it('AI 상담은 하단 탭 없는 앱 틀로 열리고, 제목은 상단 바 하나 · 입력창은 화면 아래에 붙는다', () => {
     renderAt('/landlord/disputes/chat');
     expect(screen.getByRole('heading', { level: 1, name: 'AI 상담' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'AI 분쟁 상담' })).not.toBeInTheDocument();
+    expect(screen.queryByText('AI 도움 · 법률 자문 아님')).not.toBeInTheDocument();
+    expect(screen.getByText(/법률 자문이 아니에요/)).toBeInTheDocument();
+    expect(screen.getByLabelText('상담 질문').closest('.sticky')).not.toBeNull();
     expect(tabBar()).not.toBeInTheDocument();
   });
 });
