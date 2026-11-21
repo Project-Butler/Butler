@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DocumentViewer } from './DocumentViewer';
-import { formatBytes, getFileBadge, splitDocuments } from './documentFiles';
+import { formatBytes, getFileBadge, isVideoDocument, splitDocuments } from './documentFiles';
 import { useDocumentUrls } from './useDocumentUrls';
 
 const PhotoTile = ({ document, number, entry, onOpen, onError, height }) => (
@@ -18,7 +18,7 @@ const PhotoTile = ({ document, number, entry, onOpen, onError, height }) => (
   </button>
 );
 
-// 공유된 계약서(시안 B3 · E2): PDF 등 파일은 줄로 [열기], 사진은 3칸 격자 → 누르면 전체 화면 뷰어(B4).
+// 공유된 계약서(시안 B3 · E2): PDF 등 파일은 줄로 [열기](동영상은 [재생] → 뷰어에서 재생), 사진은 3칸 격자 → 누르면 전체 화면 뷰어(B4).
 // 보기만 한다(올리기 없음, 결정 4). fetchUrl(documentId) 는 화면마다 다르다(초대 확인 세션 주소 · 로그인 문서 주소).
 // variant: 'inline'(B3, 카드 하나 안에) | 'cards'(E2, 파일·사진 칸을 각각 카드로)
 export const SharedDocuments = ({ documents, fetchUrl, variant = 'inline', title }) => {
@@ -40,10 +40,12 @@ export const SharedDocuments = ({ documents, fetchUrl, variant = 'inline', title
   };
 
   const isCards = variant === 'cards';
-  const fileRows = files.map((document) => (
+  const fileRows = files.map((document, position) => {
+    const isVideo = isVideoDocument(document);
+    return (
     <li key={document.id} className={isCards ? 'flex items-center gap-3 rounded-card border border-line bg-surface p-3' : 'flex items-center gap-3'}>
       <span
-        className={`flex shrink-0 items-center justify-center rounded border border-line bg-crit-box font-num text-[10px] font-bold text-crit-ink ${isCards ? 'h-10 w-8' : 'h-14 w-11'}`}
+        className={`flex shrink-0 items-center justify-center rounded border border-line font-num text-[10px] font-bold ${isVideo ? 'bg-surface-2 text-ink-2' : 'bg-crit-box text-crit-ink'} ${isCards ? 'h-10 w-8' : 'h-14 w-11'}`}
       >
         {getFileBadge(document)}
       </span>
@@ -53,14 +55,15 @@ export const SharedDocuments = ({ documents, fetchUrl, variant = 'inline', title
       </span>
       <button
         type="button"
-        onClick={() => openFile(document)}
-        aria-label={`${document.fileName} 열기`}
+        onClick={() => (isVideo ? setViewerIndex(position) : openFile(document))}
+        aria-label={`${document.fileName} ${isVideo ? '재생' : '열기'}`}
         className={isCards ? 'h-9 rounded-btn border border-line bg-surface px-3 text-btn-sm font-semibold text-ink hover:bg-surface-2' : 'px-1 text-m-sub font-semibold text-accent'}
       >
-        열기
+        {isVideo ? '재생' : '열기'}
       </button>
     </li>
-  ));
+    );
+  });
 
   const photoGrid = photos.length > 0 && (
     <div className={isCards ? 'rounded-card border border-line bg-surface p-3' : files.length > 0 ? 'border-t border-line pt-3' : ''}>

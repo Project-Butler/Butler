@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { postDocumentDownloadUrl } from '@butler/api-client';
 import { Badge, Button, MobileFormLayout } from '@butler/ui';
+import { DocumentViewer } from '../../../shared/documentViewer/DocumentViewer';
+import { isVideoDocument } from '../../../shared/documentViewer/documentFiles';
+import { useDocumentUrls } from '../../../shared/documentViewer/useDocumentUrls';
 import { DocumentThumbnail } from '../../web/components/DocumentThumbnail/DocumentThumbnail';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
+import { formatAttachmentCount } from '../../web/utils/attachment';
 import { useGetTicket } from '../../web/hooks/useGetTicket';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { usePatchTicket } from '../../web/hooks/usePatchTicket';
@@ -110,6 +115,9 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
   const { openThread, isLoading: isOpening } = useOpenThread({ onUnauthorized });
   const [sheet, setSheet] = useState(openComplete ? 'complete' : null);
   const [actionError, setActionError] = useState(null);
+  // 동영상 첨부는 새 탭(MOV는 브라우저가 내려받아 버린다) 대신 공용 뷰어에서 재생한다.
+  const [playing, setPlaying] = useState(null);
+  const urls = useDocumentUrls(postDocumentDownloadUrl);
 
   if (!ticket) {
     return (
@@ -226,12 +234,17 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
       )}
 
       {ticket.attachments.length > 0 && (
-        <section aria-label="사진" className="flex flex-col gap-2">
-          <h2 className="text-m-label font-semibold text-ink-3">사진 {ticket.attachments.length}장</h2>
+        // 동영상이 섞이면 '첨부 n개'. 동영상 칸은 누르면 새 탭에서 재생한다(DocumentThumbnail).
+        <section aria-label="첨부" className="flex flex-col gap-2">
+          <h2 className="text-m-label font-semibold text-ink-3">{formatAttachmentCount(ticket.attachments)}</h2>
           <ul className="grid grid-cols-3 gap-2">
             {ticket.attachments.map((document) => (
               <li key={document.id}>
-                <DocumentThumbnail document={document} onUnauthorized={onUnauthorized} />
+                <DocumentThumbnail
+                  document={document}
+                  onUnauthorized={onUnauthorized}
+                  onOpen={isVideoDocument(document) ? () => setPlaying(document) : undefined}
+                />
               </li>
             ))}
           </ul>
@@ -254,6 +267,7 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
           요청 취소
         </button>
       )}
+      {playing && <DocumentViewer documents={[playing]} urls={urls} onClose={() => setPlaying(null)} />}
     </MobileFormLayout>
   );
 };

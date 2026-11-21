@@ -94,7 +94,14 @@ describe('DocumentUploadModal (문서 업로드 팝업)', () => {
     await userEvent.upload(fileInput(), pdf('신고필증.pdf'));
     await userEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(api.postUploadSession).toHaveBeenCalledWith({ fileName: '신고필증.pdf', mimeType: 'application/pdf', sizeBytes: 1024, documentType: 'LEASE_REPORT' });
+    // 붙일 곳(targetResourceType)을 세션에 함께 보낸다(서버가 그 곳이 받는 형식·크기를 바로 확인)
+    expect(api.postUploadSession).toHaveBeenCalledWith({
+      fileName: '신고필증.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 1024,
+      documentType: 'LEASE_REPORT',
+      targetResourceType: 'CONTRACT',
+    });
     expect(api.postDocument).toHaveBeenCalledWith({ uploadSessionId: 'session-1', resourceType: 'CONTRACT', resourceId: 'contract-1' });
     expect(onUploaded).toHaveBeenCalledWith(1);
   });

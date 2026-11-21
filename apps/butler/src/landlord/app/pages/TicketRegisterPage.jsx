@@ -32,7 +32,8 @@ export const TicketRegisterPage = ({ propertyId: initialPropertyId, onUnauthoriz
   const goTo = useGoTo();
   const goBack = useGoBack('tickets');
   const owned = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, { onUnauthorized });
-  const uploads = useAttachmentUploads([], { onUnauthorized });
+  // 수리 요청은 사진·PDF와 함께 동영상(MP4·MOV)도 받는다(업로드 규칙의 TICKET).
+  const uploads = useAttachmentUploads([], { onUnauthorized, resourceType: 'TICKET' });
   const { createTicket, isLoading: isSubmitting, error } = usePostTicket({ onUnauthorized });
   const [form, setForm] = useState({ propertyId: initialPropertyId ?? '', category: 'REPAIR', title: '', description: '' });
 

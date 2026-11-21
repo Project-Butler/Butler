@@ -9,7 +9,7 @@ import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import app from '../../../src/app.js';
 import { signAccessToken } from '../../../src/domains/auth/service.js';
-import { MAX_FILE_BYTES } from '../../../src/domains/documents/fileRules.js';
+import { getUploadRules } from '../../../src/platform/uploadRules.js';
 import { cleanupExpiredUploads } from '../../../src/domains/documents/service.js';
 import { createStorageToken } from '../../../src/domains/documents/storage/signature.js';
 import { createManagementLog } from '../../../src/domains/managementLogs/service.js';
@@ -18,6 +18,8 @@ import { getTodayKST } from '../../../src/platform/dateUtils.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
 
 const SECRET = 'test-secret';
+// 사진·PDF 최대 크기(기본 20MB, platform/uploadRules.js)
+const MAX_FILE_BYTES = getUploadRules({}).kinds.IMAGE.maxBytes;
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]), Buffer.from('JFIF test image body')]);
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('png body....')]);
 const PDF = Buffer.from('%PDF-1.7\n테스트 계약서');

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Badge, Button, FilterChip } from '@butler/ui';
-import { FileText, Image, Upload, X } from 'lucide-react';
+import { FileText, FileVideo, Image, Upload, X } from 'lucide-react';
 import { NoticeBox } from '../../../web/components/NoticeBox/NoticeBox';
 import { useDocumentBoxUploads } from '../../../web/hooks/useDocumentBoxUploads';
-import { ATTACHMENT_ACCEPT, formatFileSize } from '../../../web/utils/attachment';
+import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../../web/utils/attachment';
 import {
   CONTRACT_TARGET,
   DOCUMENT_TYPE_LABELS,
@@ -12,7 +12,6 @@ import {
   getRemainingSlots,
   getSelectableFileCount,
   getUploadTargets,
-  MAX_FILE_SIZE_TEXT,
   MAX_FILES_PER_BATCH,
   OWNERSHIP_TARGET,
   pickDefaultContract,
@@ -26,7 +25,7 @@ const SECTION_LABEL = 'text-m-label font-semibold text-ink';
 const FileRow = ({ item, isSaving, onRemove }) => {
   const isUploading = item.status === 'uploading';
   const percent = Math.round(item.progress * 100);
-  const Icon = item.mimeType?.startsWith('image/') ? Image : FileText;
+  const Icon = item.mimeType?.startsWith('image/') ? Image : isVideoMimeType(item.mimeType) ? FileVideo : FileText;
   return (
     <li className="rounded-input border border-line p-2.5">
       <div className="flex items-center gap-2.5">
@@ -76,7 +75,7 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
   const [chosenContractId, setChosenContractId] = useState(null);
   const [chosenType, setChosenType] = useState(null);
   const [savedCount, setSavedCount] = useState(0);
-  const { items, notice, isSaving, addFiles, removeItem, save } = useDocumentBoxUploads({ onUnauthorized });
+  const { items, notice, isSaving, addFiles, removeItem, save, rules, kinds } = useDocumentBoxUploads({ onUnauthorized });
 
   const isAvailable = (candidate) =>
     (candidate === OWNERSHIP_TARGET && Boolean(targets.ownership)) || (candidate === CONTRACT_TARGET && targets.contracts.length > 0);
@@ -189,11 +188,11 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
         {capacity > 0 ? (
           <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-input border border-dashed border-dash px-3 py-3 text-center text-m-sub text-ink-3">
             <Upload size={16} aria-hidden="true" />
-            파일 고르기 · PDF·JPG·PNG·WEBP·HEIC {MAX_FILE_SIZE_TEXT}까지
+            파일 고르기 · {describeDocumentBoxFileLimits(rules, kinds)}
             <input
               type="file"
               multiple
-              accept={ATTACHMENT_ACCEPT}
+              accept={buildAttachmentAccept(rules, kinds)}
               disabled={isSaving}
               aria-label="올릴 파일 고르기"
               className="sr-only"

@@ -92,7 +92,8 @@ npm test -w apps/butler            # 단위·컴포넌트·정적 검사 (vitest
 - 소셜 로그인을 쓸 때 `OAUTH_REDIRECT_BASE_URL`과 `OAUTH_FRONTEND_URL`은 **프론트 주소**로 넣고, 구글·카카오 콘솔의 Redirect URI도 `{프론트 주소}/api/v1/auth/oauth/{google|kakao}/callback`으로 등록한다.
 - API의 `FRONTEND_ORIGINS`는 배포된 프론트 origin으로 맞춘다.
 - 사진·문서 첨부는 Supabase Storage를 쓴다. API 프로젝트에 `STORAGE_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(서버 전용, 프론트에 넣지 않는다), 필요하면 `SUPABASE_STORAGE_BUCKET`(기본 `documents`)을 넣는다. 하나라도 빠지면 첨부 업로드·다운로드가 503 `STORAGE_UNAVAILABLE`이다(`local`은 Vercel에서 쓸 수 없다).
-  - 버킷은 Supabase 대시보드 › Storage에서 **비공개(Public 끔)**로 만든다. File size limit `20MB`, Allowed MIME types `image/jpeg, image/png, image/webp, image/heic, image/heif, application/pdf`로 API와 같은 제한을 건다. 버킷 정책(RLS)은 만들지 않는다 — 서버가 서비스 키로 서명 URL을 발급하고, 브라우저는 그 서명 URL로만 올리고 받는다.
+  - 버킷은 Supabase 대시보드 › Storage에서 **비공개(Public 끔)**로 만든다. File size limit `50MB`(동영상 한도), Allowed MIME types `image/jpeg, image/png, image/webp, image/heic, image/heif, application/pdf, video/mp4, video/quicktime`로 API와 같은 제한을 건다(사진·PDF 20MB는 API가 막는다). 버킷 정책(RLS)은 만들지 않는다 — 서버가 서비스 키로 서명 URL을 발급하고, 브라우저는 그 서명 URL로만 올리고 받는다.
+  - 올릴 수 있는 형식·크기·동영상 위치는 `apps/api/src/platform/uploadRules.js` 한 곳과 API 환경 변수 `UPLOAD_MAX_DOCUMENT_MB`(사진·PDF, 기본 20), `UPLOAD_MAX_VIDEO_MB`(동영상, 기본 50), `UPLOAD_VIDEO_RESOURCE_TYPES`(비우면 기본 `OWNERSHIP,CONTRACT,TICKET`, `none`이면 동영상 끔)로 정한다. 화면은 `GET /api/v1/files/upload-rules`로 같은 값을 받는다. **환경 변수를 버킷 File size limit·프로젝트 전역 업로드 한도보다 크게 두지 않는다**(Free는 파일당 50MB가 상한). Pro로 올리면 Supabase › Project Settings › Storage의 전역 업로드 한도 → 버킷 File size limit → `UPLOAD_MAX_VIDEO_MB` 순서로 함께 올린다(버킷 값은 전역 값을 넘을 수 없다).
   - 업로드 서명 URL은 Supabase가 2시간으로 고정한다. 등록되지 않은 업로드는 매일 cron(`/api/cron/reference-data`)이 세션 만료 2시간 뒤에 파일과 함께 지운다.
 
 ## DB 작업 규칙
