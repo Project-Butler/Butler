@@ -135,6 +135,7 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const { state } = useLocation();
   const { onNavigate } = pageProps;
   const propertyId = searchParams.get('propertyId') ?? undefined;
+  const showAll = searchParams.get('all') === '1';
   const modal = modalMode === 'create' ? {} : modalMode === 'edit' ? { logId } : null;
   const openModal = useCallback(
     (next) =>
@@ -146,11 +147,12 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const closeModal = useCallback(() => {
     if (state?.fromPage) window.history.back();
     else if (modalMode === 'edit') onNavigate('logDetail', { logId }, { replace: true });
-    else onNavigate('logs', { propertyId }, { replace: true });
-  }, [state, modalMode, onNavigate, logId, propertyId]);
+    else onNavigate('logs', { propertyId, all: showAll }, { replace: true });
+  }, [state, modalMode, onNavigate, logId, propertyId, showAll]);
   return (
     <ManagementLogListPage
       propertyId={propertyId}
+      showAll={showAll}
       selectedLogId={modalMode ? undefined : logId}
       modal={modal}
       onOpenModal={openModal}
