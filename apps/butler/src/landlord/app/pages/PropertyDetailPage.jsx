@@ -34,7 +34,7 @@ const DOCUMENT_PREVIEW_SIZE = 3;
 const TAB_OPTIONS = [
   { value: 'info', label: '기본 정보' },
   { value: 'contracts', label: '계약' },
-  { value: 'logs', label: '관리 로그' },
+  { value: 'logs', label: '하우스 로그' },
   { value: 'documents', label: '문서' },
 ];
 
@@ -171,7 +171,7 @@ const ContractsTab = ({ ownershipId, onOpen, onUnauthorized }) => {
   );
 };
 
-// [관리 로그] 최근 기록 몇 건 + 전체 보기(호실 필터).
+// [하우스 로그] 최근 기록 몇 건 + 전체 보기(호실 필터).
 const LogsTab = ({ propertyId, onOpen, onAll, onUnauthorized }) => {
   const list = useGetManagementLogList({ propertyId, size: LOG_PREVIEW_SIZE }, { onUnauthorized });
   if (list.error && !list.data) return <NoticeBox>{list.error.message}</NoticeBox>;
@@ -180,9 +180,9 @@ const LogsTab = ({ propertyId, onOpen, onAll, onUnauthorized }) => {
   return (
     <div className="flex flex-col gap-3">
       {logs.length === 0 ? (
-        <EmptyText>아직 관리 로그가 없어요</EmptyText>
+        <EmptyText>아직 하우스 로그가 없어요</EmptyText>
       ) : (
-        <ul aria-label="최근 관리 로그" className={`${CARD_CLASS} px-4`}>
+        <ul aria-label="최근 하우스 로그" className={`${CARD_CLASS} px-4`}>
           {logs.map((log) => (
             <li key={log.id} className="border-b border-line last:border-b-0">
               <button type="button" onClick={() => onOpen(log.id)} className="flex w-full items-center gap-3 py-3 text-left">

@@ -41,7 +41,7 @@ const ManagementLogTable = ({ propertyId, type, selectedId, onSelect, onReset, o
     return (
       <EmptyState
         icon={History}
-        title={hasFilter ? '조건에 맞는 기록이 없어요' : '아직 관리 로그가 없어요'}
+        title={hasFilter ? '조건에 맞는 기록이 없어요' : '아직 하우스 로그가 없어요'}
         description={hasFilter ? '필터를 바꾸거나 새 기록을 남겨 보세요.' : '수리·점검·메모를 남기면 날짜 순서로 여기에 모여요.'}
         action={
           hasFilter && (
@@ -121,7 +121,7 @@ const ManagementLogTable = ({ propertyId, type, selectedId, onSelect, onReset, o
 // 유형 세그먼트: 전체 + 수리·점검·메모·수리 요청 완료. 값 ''은 전체(유형 조건 없음).
 const TYPE_SEGMENT_OPTIONS = [{ value: '', label: '전체' }, ...TYPE_FILTER_OPTIONS];
 
-// 관리 로그(하우스 로그) 목록(S-04): 표 7 : 기록 상세 패널 3. 작업 줄은 호실 · 유형 · [초기화] · 건수.
+// 하우스 로그(하우스 로그) 목록(S-04): 표 7 : 기록 상세 패널 3. 작업 줄은 호실 · 유형 · [초기화] · 건수.
 // - 호실 필터는 주소(?propertyId=)에 남겨 호실 상세의 [전체 보기]로 바로 들어온다.
 // - selectedLogId: /logs/:logId 로 들어온 기록(오른쪽 패널에 연다). 표에서 고르면 화면 안에서만 바꾼다.
 // - modal: 주소에 묶인 기록 팝업({ logId }는 수정, {}는 추가). onCloseModal로 닫고, 저장하면 표와 패널을 새로 고친다.
@@ -162,7 +162,7 @@ export const ManagementLogListPage = ({ propertyId, selectedLogId, modal, onOpen
   return (
     <div className="logs-page w-full space-y-5 pb-10">
       <PageHeader
-        title="관리 로그 (하우스 로그)"
+        title="하우스 로그"
         description="내 호실의 수리·점검·메모를 날짜 순서로 모아 봐요."
         actions={
           <Button onClick={() => onOpenModal({})}>

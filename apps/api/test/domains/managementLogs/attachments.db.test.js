@@ -1,4 +1,4 @@
-// 관리 로그 사진 첨부(실제 로컬 Postgres + 임시 폴더의 실제 파일). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
+// 하우스 로그 사진 첨부(실제 로컬 Postgres + 임시 폴더의 실제 파일). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
 // 첨부 상한, 수정에서 빼기·더하기, 나만 보기 삭제 시 문서 숨김, 소유 종료 후 읽기 전용·잠금.
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
@@ -32,7 +32,7 @@ const rejectsWith = async (promise, code) => {
   });
 };
 
-describe('관리 로그 첨부', { skip: dbTestSkip }, () => {
+describe('하우스 로그 첨부', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
   const userIds = [];
   const saved = {};
@@ -182,7 +182,7 @@ describe('관리 로그 첨부', { skip: dbTestSkip }, () => {
     const activity = await prisma.activity.findFirst({ where: { userId: user.id, type: 'MANAGEMENT_LOG_UPDATED' } });
     assert.deepEqual(activity.params.fields, ['attachments']);
     const audit = await prisma.auditLog.findFirst({ where: { action: 'MANAGEMENT_LOG_UPDATED', resourceId: log.id } });
-    assert.equal(audit.summary, '관리 기록 수정: 첨부');
+    assert.equal(audit.summary, '하우스 로그 수정: 첨부');
 
     // 같은 목록이면 바뀐 것이 없다
     await updateManagementLog(user, log.id, { attachmentDocumentIds: [added.id, keep.id] });

@@ -152,7 +152,7 @@ describe('티켓 서비스', { skip: dbTestSkip }, () => {
     assert.equal(active.items[0].id, second.id);
   });
 
-  test('처리 시작 → 완료: 비용은 임대인에게만, 요약 관리 로그 생성, 감사 로그', async () => {
+  test('처리 시작 → 완료: 비용은 임대인에게만, 요약 하우스 로그 생성, 감사 로그', async () => {
     const { landlord, tenant, property, ownership } = await setup({ verified: true });
     const ticket = await createTicket(tenant, input(property.id));
     const started = await updateTicket(landlord, ticket.id, { status: 'IN_PROGRESS' });

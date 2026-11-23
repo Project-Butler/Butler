@@ -113,7 +113,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     }
   };
 
-  test('업로드 → 등록(관리 로그) → 목록·상세 → 다운로드 → 삭제', async () => {
+  test('업로드 → 등록(하우스 로그) → 목록·상세 → 다운로드 → 삭제', async () => {
     const user = await landlord();
     const property = await createProperty();
     await own(user, property);
@@ -395,7 +395,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     const log = await writeLog(user, property);
     const document = await uploadDocument(user);
     const stale = await prisma.document.findUnique({ where: { id: document.id } });
-    // 삭제 요청이 읽은 뒤 다른 요청이 관리 로그에 붙였다
+    // 삭제 요청이 읽은 뒤 다른 요청이 하우스 로그에 붙였다
     await prisma.document.update({ where: { id: document.id }, data: { resourceType: 'MANAGEMENT_LOG', resourceId: log.id, attachedAt: new Date() } });
     await assert.rejects(
       prisma.$transaction((tx) => softDeleteDocumentsInTx(tx, [stale], new Date())),

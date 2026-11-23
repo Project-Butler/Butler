@@ -106,7 +106,7 @@ export const describeDocumentBoxFileLimits = (rules = DEFAULT_UPLOAD_RULES, kind
 
 export const isRenderableImage = (mimeType) => RENDERABLE_IMAGE_TYPES.has(mimeType);
 
-// 수리 요청·관리 로그 첨부의 문서 종류. 동영상도 현장 기록이라 사진(PHOTO)으로 둔다.
+// 수리 요청·하우스 로그 첨부의 문서 종류. 동영상도 현장 기록이라 사진(PHOTO)으로 둔다.
 export const toDocumentType = (mimeType) => (mimeType === 'application/pdf' ? 'OTHER' : 'PHOTO');
 
 // 목록·홈에서는 썸네일 없이 개수만. 동영상이 섞이면 '첨부 n개'.

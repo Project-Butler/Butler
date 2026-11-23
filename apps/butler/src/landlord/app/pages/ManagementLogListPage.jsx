@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 // 호실 필터는 지금 소유한 호실과 소유가 끝난 호실 전부(목록 API 최대 크기, 웹과 같음)
 const PROPERTY_PICKER_SIZE = 100;
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
-const IMMUTABLE_NOTICE = '관리 로그는 수정·삭제할 수 없습니다. 바뀐 내용은 새 기록으로 쌓이고 감사 로그에 남습니다.';
+const IMMUTABLE_NOTICE = '하우스 로그는 수정·삭제할 수 없습니다. 바뀐 내용은 새 기록으로 쌓이고 감사 로그에 남습니다.';
 
 // 기록 한 줄: 날짜 · **호실** 제목 · 첨부 · 연결 대상(파란 글자). 누르면 기록 상세.
 const LogRow = ({ log, onOpen }) => {
@@ -51,7 +51,7 @@ const LogListSection = ({ propertyId, type, onOpen, onUnauthorized }) => {
   if (data.items.length === 0) {
     return (
       <p className="py-10 text-center text-body text-ink-3">
-        {propertyId || type ? '조건에 맞는 기록이 없어요' : '아직 관리 로그가 없어요'}
+        {propertyId || type ? '조건에 맞는 기록이 없어요' : '아직 하우스 로그가 없어요'}
       </p>
     );
   }
@@ -105,8 +105,8 @@ const PropertyPicker = ({ properties, propertyId, onSelect, onClose }) => (
   </div>
 );
 
-// 임대인 앱 관리 로그 House Log (Figma M08). 웹 관리 로그와 같은 API·같은 유형 칩이고, 월별로 묶어 보여 준다.
-// 관리 로그는 고치거나 지우지 않는 원칙이라 목록에 수정·삭제 동작이 없다. 기록 추가 진입점은 피그마에 없어 두지 않는다.
+// 임대인 앱 하우스 로그 (Figma M08). 웹 하우스 로그와 같은 API·같은 유형 칩이고, 월별로 묶어 보여 준다.
+// 하우스 로그는 고치거나 지우지 않는 원칙이라 목록에 수정·삭제 동작이 없다. 기록 추가 진입점은 피그마에 없어 두지 않는다.
 export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
@@ -134,7 +134,7 @@ export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
   );
 
   return (
-    <AppTabShell backBar={{ title: '관리 로그', onBack: goBack, action: filterButton }}>
+    <AppTabShell backBar={{ title: '하우스 로그', onBack: goBack, action: filterButton }}>
       <div className="flex flex-col gap-3.5">
         {propertyId && (
           <p className="text-m-sub text-ink-2">

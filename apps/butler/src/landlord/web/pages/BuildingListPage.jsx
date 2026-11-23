@@ -15,7 +15,7 @@ import { getTodayKST } from '../utils/contract';
 import { getLatestPastLog, getNeededAction, getNextEvent, groupByProperty, pickCardContract } from '../utils/unitCard';
 
 const UNIT_PAGE_SIZE = 20;
-// 카드에 붙일 계약·소유 관계·관리 로그는 한 번에 받는다(목록 API 최대 크기). 임대인 호실은 평균 2~3, 많아야 5개다.
+// 카드에 붙일 계약·소유 관계·하우스 로그는 한 번에 받는다(목록 API 최대 크기). 임대인 호실은 평균 2~3, 많아야 5개다.
 const JOIN_SIZE = 100;
 // 호실이 이 수보다 적으면 마지막에 점선 "부동산 등록" 카드를 둔다.
 const ADD_CARD_LIMIT = 5;

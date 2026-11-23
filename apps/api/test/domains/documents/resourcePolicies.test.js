@@ -64,7 +64,7 @@ test('RENEWAL_NOTICE 정책: 조회·잠금 함수, 상한 5, 없으면 RENEWAL_
   assert.throws(() => policy.throwNotFound(), (error) => error.code === 'RENEWAL_NOTICE_NOT_FOUND' && error.httpStatus === 404);
 });
 
-test('documentWhere가 없는 정책(관리 로그·티켓·메시지·통지 기록)은 붙은 문서 전부를 본다', async () => {
+test('documentWhere가 없는 정책(하우스 로그·티켓·메시지·통지 기록)은 붙은 문서 전부를 본다', async () => {
   for (const type of ['MANAGEMENT_LOG', 'TICKET', 'THREAD_MESSAGE', 'RENEWAL_NOTICE']) {
     const policy = getResourcePolicy(type);
     assert.equal(policy.documentWhere, undefined);

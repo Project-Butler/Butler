@@ -1,4 +1,4 @@
-// 날짜 타일(월 / 일). 관리 로그 타임라인·다가오는 일정에서 쓴다. date: 'YYYY-MM-DD'
+// 날짜 타일(월 / 일). 하우스 로그 타임라인·다가오는 일정에서 쓴다. date: 'YYYY-MM-DD'
 export const DateTile = ({ date }) => {
   const [, month, day] = date.split('-');
   return (

@@ -39,7 +39,7 @@ const UploadingPreview = ({ item }) => (
   </div>
 );
 
-// 관리 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
+// 하우스 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
 // 형식·크기는 고를 때 미리 검사하고, 업로드 진행·미리보기·빼기를 보여 준다.
 // label: 칸 이름(기본 '사진 (선택)', 동영상을 받는 곳은 '사진·동영상 (선택)'). 갱신 거절 통지 증빙처럼 PDF 도 받는 곳은 다른 이름을 준다.
 export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthorized }) => {

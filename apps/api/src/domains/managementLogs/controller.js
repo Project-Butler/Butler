@@ -1,4 +1,4 @@
-// 관리 로그 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
+// 하우스 로그 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
 import { AppError } from '../../platform/AppError.js';
 import { MAX_LOG_ATTACHMENTS } from '../documents/fileRules.js';
 import {
@@ -37,7 +37,7 @@ const throwPropertyNotFound = () => {
 };
 
 const throwLogNotFound = () => {
-  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '관리 로그를 찾을 수 없습니다.');
+  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '하우스 로그를 찾을 수 없습니다.');
 };
 
 const FIELD_PARSERS = {

@@ -11,7 +11,7 @@ import { TopicTile } from '../components/DisputeReference/TopicTile';
 import { DISPUTE_TOPICS } from '../utils/disputeReference';
 import { HELP_ROUTES, POPULAR_QUESTIONS } from '../utils/disputePortal';
 
-// 앱은 카드 목록 위 묶음 이름이라 A팀 앱(관리 로그 묶음·수리 상세 '처리 내용')과 같은 작은 회색 라벨. 화면 이름(상단 바)과 카드 제목이 가장 무겁게 보인다.
+// 앱은 카드 목록 위 묶음 이름이라 A팀 앱(하우스 로그 묶음·수리 상세 '처리 내용')과 같은 작은 회색 라벨. 화면 이름(상단 바)과 카드 제목이 가장 무겁게 보인다.
 const SectionTitle = ({ isApp, children }) => (
   <h3 className={isApp ? 'text-m-label font-semibold text-ink-3' : 'text-section font-semibold text-ink'}>{children}</h3>
 );

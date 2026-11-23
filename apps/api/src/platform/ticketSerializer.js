@@ -26,7 +26,7 @@ export const toTicketResponse = (ticket, user) => ({
   // 처리 비용은 그 호실의 임대인(이 티켓을 처리하는 소유자)에게만 보인다. 임차인·운영자에게는 null.
   cost: ticket.ownership.userId === user.id ? (toMoney(ticket.cost) ?? null) : null,
   requester: ticket.requester,
-  // DONE이 되면 자동으로 만든 TICKET_SUMMARY 관리 로그
+  // DONE이 되면 자동으로 만든 TICKET_SUMMARY 하우스 로그
   historyLogId: ticket.logId ?? null,
   // 붙은 문서(숨기지 않은 것, 올린 순서). 행에 attachments를 붙여 넘긴다(documentAttachments.withAttachments).
   attachments: (ticket.attachments ?? []).map(toAttachmentResponse),

@@ -587,7 +587,7 @@ model RenewalNotice {
 
 // 수리·점검 요청 (노션 6번 10장, 계약 5장).
 // category는 등록형 문자열(REPAIR, INSPECTION, OTHER, 피처가 추가)이라 enum이 아니다.
-// 관리 로그(하우스 로그, 계약 5장). API 경로·활동·감사 이름은 management-logs·MANAGEMENT_LOG_*를 쓴다.
+// 하우스 로그(계약 5장). API 경로·활동·감사 이름은 management-logs·MANAGEMENT_LOG_*를 쓴다.
 enum PropertyLogScope {
   PRIVATE
   PROPERTY_HISTORY
@@ -648,7 +648,7 @@ model Ticket {
   status         TicketStatus @default(OPEN)
   resolutionNote String?      @map("resolution_note")
   cost           BigInt? // 임대인에게만 보인다
-  // DONE이 되면 자동 생성되는 TICKET_SUMMARY 관리 로그(응답의 historyLogId).
+  // DONE이 되면 자동 생성되는 TICKET_SUMMARY 하우스 로그(응답의 historyLogId).
   logId          String?      @map("log_id") @db.Uuid
   log            PropertyLog? @relation(fields: [logId], references: [id])
   closedAt       DateTime?    @map("closed_at") @db.Timestamptz(3) // DONE·CANCELED가 된 시각

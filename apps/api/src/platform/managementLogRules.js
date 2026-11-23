@@ -1,4 +1,4 @@
-// 관리 로그 규칙(DB 의존 없음). 계약 5장, docs/5. 부동산 관리 로그 개발/명세.md.
+// 하우스 로그 규칙(DB 의존 없음). 계약 5장, docs/5. 부동산 관리 로그 개발/명세.md.
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 
 export const MANAGEMENT_LOG_SCOPES = ['PRIVATE', 'PROPERTY_HISTORY'];

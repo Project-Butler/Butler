@@ -41,7 +41,7 @@ export const getMoreMenuTargets = (property) => {
   if (relation.verificationStatus === 'VERIFIED' && property.status === 'VACANT') {
     targets.push({ key: 'contract', label: '계약 등록', target: { key: 'contractRegister', params: { propertyId } } });
   }
-  targets.push({ key: 'log', label: '관리 로그 기록 추가', target: { key: 'propertyLogRegister', params: { propertyId } } });
+  targets.push({ key: 'log', label: '하우스 로그 기록 추가', target: { key: 'propertyLogRegister', params: { propertyId } } });
   targets.push({ key: 'tickets', label: '수리·점검', target: { key: 'tickets', params: { propertyId } } });
   return targets;
 };

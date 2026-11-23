@@ -3,7 +3,7 @@ import { assertAllowedBody, throwIfInvalid } from '../../platform/requestValidat
 
 
 export const MAX_FILE_NAME_LENGTH = 255;
-// 관리 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
+// 하우스 로그 한 건에 붙일 수 있는 문서 수(계약 5장)
 export const MAX_LOG_ATTACHMENTS = 10;
 // 티켓 첨부 최대 10개(계약 5장)
 export const MAX_TICKET_ATTACHMENTS = 10;
@@ -45,7 +45,7 @@ export const parseDownloadUrlBody = (body) => {
 // 계약 6장의 resourceType 목록. 권한 확인은 resourcePolicies.js에 구현된 것만 받는다.
 export const DOCUMENT_RESOURCE_TYPES = ['PROPERTY', 'OWNERSHIP', 'CONTRACT', 'TICKET', 'MANAGEMENT_LOG', 'THREAD_MESSAGE'];
 
-// 형식·크기·파일 앞부분 검사는 platform/uploadRules.js 한 곳에 있다(관리 로그·티켓 등 platform 함수도 같은 표를 본다).
+// 형식·크기·파일 앞부분 검사는 platform/uploadRules.js 한 곳에 있다(하우스 로그·티켓 등 platform 함수도 같은 표를 본다).
 export { matchesDeclaredType, SIGNATURE_PEEK_BYTES } from '../../platform/uploadRules.js';
 
 // 저장 경로는 업로드 id로만 만든다(원본 파일 이름을 쓰지 않아 경로 조작을 막는다).

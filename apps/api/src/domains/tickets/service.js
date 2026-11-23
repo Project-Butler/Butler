@@ -1,5 +1,5 @@
 // 티켓(수리·점검 요청, 계약 5장). 임차인이 요청하고 임대인이 처리한다.
-// 쓰기는 티켓이 붙은 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js) — 소유 종료·관리 로그와 줄을 선다.
+// 쓰기는 티켓이 붙은 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js) — 소유 종료·하우스 로그와 줄을 선다.
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { computeContractStatus } from '../../platform/contractStatus.js';
@@ -41,7 +41,7 @@ const respondOne = async (client, ticket, user) => {
 };
 
 // 볼 수 있는 범위: 이 티켓을 처리하는 소유자(소유가 끝난 뒤에도 본인 것), 요청자, 운영자.
-// 다음 소유자에게는 넘어가지 않는다(완료 요약만 관리 로그로 넘어간다).
+// 다음 소유자에게는 넘어가지 않는다(완료 요약만 하우스 로그로 넘어간다).
 export const toVisibleTicketWhere = (user) =>
   user.role === 'ADMIN' ? {} : { OR: [{ ownership: { userId: user.id } }, { requesterId: user.id }] };
 
@@ -162,7 +162,7 @@ export const lockWritableTicket = async (tx, user, ticketId) => {
   return ticket;
 };
 
-// DONE이 되면 관리 로그에 요약을 남긴다. 소유 관계가 인증 상태면 호실 이력(다음 소유자에게 넘어감), 아니면 나만 보기.
+// DONE이 되면 하우스 로그에 요약을 남긴다. 소유 관계가 인증 상태면 호실 이력(다음 소유자에게 넘어감), 아니면 나만 보기.
 // 다음 소유자에게 넘어갈 수 있으므로 임차인이 쓴 설명·이름은 넣지 않는다. 제목·처리 내용·수리 비용만 남긴다.
 const appendTicketSummary = (tx, ticket) =>
   appendPropertyHistory({

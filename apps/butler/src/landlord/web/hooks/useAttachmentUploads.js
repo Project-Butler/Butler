@@ -31,14 +31,14 @@ const toExistingItem = (attachment) => ({
   error: null,
 });
 
-// 관리 로그 사진 첨부 업로드 상태.
+// 하우스 로그 사진 첨부 업로드 상태.
 // 순서: 업로드 세션 발급 → uploadUrl로 PUT → POST /documents(리소스 없이 = 미연결 문서).
 // 기록은 아직 없을 수도 있어서(작성 화면) 문서를 먼저 미연결로 등록하고, 저장할 때 attachmentDocumentIds로 한꺼번에 붙인다.
 // 수정 화면도 같은 방식이다 — 저장할 때 최종 목록을 보내면 서버가 빠진 문서는 지우고 새 문서는 붙인다(저장 전 취소하면 그대로).
 // 저장소를 쓸 수 없는 환경(503 STORAGE_UNAVAILABLE)이면 storageUnavailable이 true가 되고, 글 작성은 그대로 된다.
-// maxCount: 붙일 수 있는 최대 개수(기본 관리 로그 10장). 갱신 거절 통지 증빙은 5개다.
+// maxCount: 붙일 수 있는 최대 개수(기본 하우스 로그 10장). 갱신 거절 통지 증빙은 5개다.
 // resourceType: 붙일 곳(예: 'TICKET'). 주면 그 곳이 받는 형식(동영상 포함 여부)을 업로드 규칙에서 찾고 세션에 targetResourceType으로 보낸다.
-// 빼면 지금처럼 사진·PDF만 받는다(관리 로그·갱신 거절 통지).
+// 빼면 지금처럼 사진·PDF만 받는다(하우스 로그·갱신 거절 통지).
 export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType } = {}) => {
   const rules = useGetUploadRules();
   const kinds = useMemo(() => allowedFileKinds(rules, resourceType), [rules, resourceType]);

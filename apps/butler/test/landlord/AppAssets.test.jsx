@@ -1,6 +1,6 @@
-// 임대인 앱 M05 내 자산 · M06 부동산 상세 · M07 계약 관리 · M08 관리 로그. 웹과 같은 API로 Figma 배치대로 보이는지 본다.
+// 임대인 앱 M05 내 자산 · M06 부동산 상세 · M07 계약 관리 · M08 하우스 로그. 웹과 같은 API로 Figma 배치대로 보이는지 본다.
 // 실패 조건: 공실에 보증금 · API에 없는 반려 칩/문서가 실제처럼 보임 · 버튼이 엉뚱한 주소로 감 · 401에 onUnauthorized 를 안 부름
-// · 관리 로그에 수정·삭제 동작이 생김 · [갱신 의사 묻기]가 눌림.
+// · 하우스 로그에 수정·삭제 동작이 생김 · [갱신 의사 묻기]가 눌림.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -227,9 +227,9 @@ describe('M06 부동산 상세', () => {
     expect(where()).toBe('/landlord/documents?propertyId=p1');
   });
 
-  it('[관리 로그] 전체 보기는 호실 필터로 간다', async () => {
+  it('[하우스 로그] 전체 보기는 호실 필터로 간다', async () => {
     renderAt('/landlord/properties/p1');
-    await userEvent.click(await screen.findByRole('tab', { name: '관리 로그' }));
+    await userEvent.click(await screen.findByRole('tab', { name: '하우스 로그' }));
     await userEvent.click(await screen.findByRole('button', { name: '전체 보기' }));
     expect(where()).toBe('/landlord/logs?propertyId=p1');
   });
@@ -238,8 +238,8 @@ describe('M06 부동산 상세', () => {
     renderAt('/landlord/properties/p1');
     await userEvent.click(await within(banner()).findByRole('button', { name: '더보기' }));
     const menu = screen.getByRole('menu', { name: '더보기' });
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['관리 로그 기록 추가', '수리·점검']);
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '관리 로그 기록 추가' }));
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['하우스 로그 기록 추가', '수리·점검']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '하우스 로그 기록 추가' }));
     expect(where()).toBe('/landlord/properties/p1/logs/new');
   });
 
@@ -323,14 +323,14 @@ describe('M07 계약 관리', () => {
   });
 });
 
-describe('M08 관리 로그', () => {
+describe('M08 하우스 로그', () => {
   it('월별로 묶고, 수정·삭제 안내만 있고 동작은 없다. 행을 누르면 기록 상세', async () => {
     renderAt('/landlord/logs');
     const october = await screen.findByRole('region', { name: '2026년 10월' });
     expect(within(october).getByText('101동 101호')).toBeInTheDocument();
     expect(within(october).getByText(/보일러 수리 완료/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '2026년 9월' })).getByText(/수리 요청/)).toBeInTheDocument();
-    expect(screen.getByText(/관리 로그는 수정·삭제할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/하우스 로그는 수정·삭제할 수 없습니다/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /삭제|수정/ })).not.toBeInTheDocument();
 
     await userEvent.click(within(october).getByRole('button'));
@@ -357,7 +357,7 @@ describe('M08 관리 로그', () => {
   it('기록이 없으면 빈 안내', async () => {
     api.getManagementLogList.mockResolvedValue(page([]));
     renderAt('/landlord/logs');
-    expect(await screen.findByText('아직 관리 로그가 없어요')).toBeInTheDocument();
+    expect(await screen.findByText('아직 하우스 로그가 없어요')).toBeInTheDocument();
   });
 });
 

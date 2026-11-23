@@ -1,4 +1,4 @@
-// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다(홈 M03·부동산 등록 M04 는 #98, 내 자산 M05~관리 로그 M08 은 #112 에서 실제 화면).
+// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다(홈 M03·부동산 등록 M04 는 #98, 내 자산 M05~하우스 로그 M08 은 #112 에서 실제 화면).
 // 하단 탭 4칸(Figma IA 기준 임시): 홈 /landlord/home · 내 자산 /landlord/buildings · 커뮤니티 /landlord/community · 내 정보 /landlord/settings
 // 표가 많은 웹 화면을 모바일에 그대로 보여 주지 않는다.
 import { render, screen, within } from '@testing-library/react';

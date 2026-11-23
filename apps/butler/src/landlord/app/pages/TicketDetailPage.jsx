@@ -28,7 +28,7 @@ const TEXTAREA_CLASS =
   'min-h-28 w-full rounded-input border border-line bg-surface px-3 py-2.5 text-body text-ink outline-none focus:border-accent disabled:bg-surface-2';
 const MAX_RESOLUTION_NOTE_LENGTH = 3000;
 
-// 완료 처리: 처리 내용(선택)·비용(선택)을 적고 DONE 으로 바꾼다. 완료되면 서버가 관리 로그(TICKET_SUMMARY)를 자동으로 남긴다.
+// 완료 처리: 처리 내용(선택)·비용(선택)을 적고 DONE 으로 바꾼다. 완료되면 서버가 하우스 로그(TICKET_SUMMARY)를 자동으로 남긴다.
 const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
   const [resolutionNote, setResolutionNote] = useState('');
   const [cost, setCost] = useState('');
@@ -75,7 +75,7 @@ const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
           </div>
           <p className="text-m-sub text-ink-3">비용은 임대인에게만 보여요.</p>
         </div>
-        <p className="rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">완료하면 처리 내용이 관리 로그에 자동으로 기록되고, 이후에는 바꿀 수 없어요.</p>
+        <p className="rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">완료하면 처리 내용이 하우스 로그에 자동으로 기록되고, 이후에는 바꿀 수 없어요.</p>
         {error && <NoticeBox>{error}</NoticeBox>}
         <div className="flex gap-2.5">
           <Button variant="secondary" size="h52" onClick={onClose} disabled={isSubmitting}>
@@ -257,7 +257,7 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
           onClick={() => goTo('logDetail', { logId: ticket.historyLogId })}
           className={`${CARD_CLASS} flex items-center justify-between gap-2 p-4 text-left text-body text-ink`}
         >
-          관리 로그에 남은 기록 보기
+          하우스 로그에 남은 기록 보기
           <ChevronRight size={18} className="text-ink-3" aria-hidden="true" />
         </button>
       )}

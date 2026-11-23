@@ -1,4 +1,4 @@
-// 관리 로그(계약 5장). 쓰기는 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
+// 하우스 로그(계약 5장). 쓰기는 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
@@ -29,7 +29,7 @@ const throwPropertyNotFound = () => {
 };
 
 const throwLogNotFound = () => {
-  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '관리 로그를 찾을 수 없습니다.');
+  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '하우스 로그를 찾을 수 없습니다.');
 };
 
 const throwVerificationRequired = () => {
@@ -209,7 +209,7 @@ export const updateManagementLog = async (user, logId, { attachmentDocumentIds, 
         action: 'MANAGEMENT_LOG_UPDATED',
         resourceType: 'MANAGEMENT_LOG',
         resourceId: row.id,
-        summary: `관리 기록 수정: ${fields.map((field) => FIELD_LABELS[field]).join(', ')}`,
+        summary: `하우스 로그 수정: ${fields.map((field) => FIELD_LABELS[field]).join(', ')}`,
         req,
         client: tx,
       });

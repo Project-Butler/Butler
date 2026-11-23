@@ -1,4 +1,4 @@
-// 관리 로그 저장 경로와 시스템 기록용 공유 함수(계약 9장 appendPropertyHistory).
+// 하우스 로그 저장 경로와 시스템 기록용 공유 함수(계약 9장 appendPropertyHistory).
 import { isOwnershipVerified } from './managementLogRules.js';
 import { prisma } from './prismaClient.js';
 

@@ -42,7 +42,7 @@ const footerButtons = ({ onClose, onSubmit, isReady, isSubmitting, label }) => (
 );
 
 // 기록 추가(S-02). fixedPropertyId가 있으면 그 호실로 고정(호실 상세에서), 없으면 호실을 고른다.
-// initialPropertyId: 관리 로그의 호실 필터처럼 미리 고를 호실(바꿀 수 있다).
+// initialPropertyId: 하우스 로그의 호실 필터처럼 미리 고를 호실(바꿀 수 있다).
 const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
@@ -236,6 +236,6 @@ const EditLogModal = ({ logId, onClose, onSaved, onUnauthorized }) => {
   );
 };
 
-// 기록 추가·수정 팝업 하나(관리 로그·호실 상세 공용). logId가 있으면 수정, 없으면 추가.
+// 기록 추가·수정 팝업 하나(하우스 로그·호실 상세 공용). logId가 있으면 수정, 없으면 추가.
 // onSaved(log): 저장한 기록을 받아 목록을 새로 고치고 팝업을 닫는다.
 export const LogFormModal = ({ logId, ...props }) => (logId ? <EditLogModal logId={logId} {...props} /> : <CreateLogModal {...props} />);
