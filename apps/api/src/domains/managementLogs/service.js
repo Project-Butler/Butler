@@ -301,3 +301,67 @@ export const deleteManagementLog = async (user, logId) => {
   });
   await removeStoredObjects(removedPaths);
 };
+
+// ── 인증 뒤 올리기(H-44) ──
+// 처음 인증하기 전에 쓴 나만 보기 기록 중 수리·점검과 [나만 보기]를 고르지 않은 메모를 호실 이력으로 한 번에 올린다.
+// 소유 관계당 한 번(logsPromotedAt). 인증이 끊긴 동안 쓴 기록은 firstVerifiedAt 뒤라 대상이 아니다.
+const PROMOTE_TARGET_LIMIT = 100;
+
+const throwOwnershipNotFound = () => {
+  throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
+};
+
+// 그 소유 관계의 인증된 활성 소유자만. 남의 소유 관계는 404, 끝났으면 422, 인증 상태가 아니면 403.
+const assertPromotableOwnership = (ownership, user) => {
+  if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
+  if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
+  if (!isOwnershipVerified(ownership, getNow())) {
+    throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증 후 호실 이력으로 올릴 수 있어요.');
+  }
+};
+
+const toPromoteTargetWhere = (ownership) => ({
+  ownershipId: ownership.id,
+  scope: 'PRIVATE',
+  createdAt: { lt: ownership.firstVerifiedAt },
+  OR: [{ type: { in: PROPERTY_HISTORY_ONLY_TYPES } }, { type: 'NOTE', keepPrivate: false }],
+});
+
+// GET /property-ownerships/:ownershipId/management-logs/promote-preview — 이미 처리했으면 count 0.
+// items는 날짜 최근 순 최대 100건(count는 전체).
+export const findPromotePreview = async (user, ownershipId) => {
+  const ownership = await prisma.ownership.findUnique({ where: { id: ownershipId } });
+  assertPromotableOwnership(ownership, user);
+  if (ownership.logsPromotedAt || !ownership.firstVerifiedAt) return { count: 0, items: [] };
+  const where = toPromoteTargetWhere(ownership);
+  const [count, rows] = await Promise.all([
+    prisma.propertyLog.count({ where }),
+    prisma.propertyLog.findMany({
+      where,
+      select: { id: true, title: true, type: true, occurredOn: true },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+      take: PROMOTE_TARGET_LIMIT,
+    }),
+  ]);
+  return { count, items: rows.map((row) => ({ ...row, occurredOn: toDateOnlyString(row.occurredOn) })) };
+};
+
+// POST /property-ownerships/:ownershipId/management-logs/promote — skip: true면 올리지 않고 처리한 것으로만 남긴다.
+export const promoteUnverifiedLogs = (user, ownershipId, { skip = false }) =>
+  prisma.$transaction(async (tx) => {
+    const ownership = await lockOwnershipRow(tx, ownershipId);
+    assertPromotableOwnership(ownership, user);
+    if (ownership.logsPromotedAt) throw new AppError('ALREADY_PROMOTED', 409, '이미 처리했어요.');
+
+    const now = getNow();
+    let promotedCount = 0;
+    if (!skip && ownership.firstVerifiedAt) {
+      const { count } = await tx.propertyLog.updateMany({
+        where: toPromoteTargetWhere(ownership),
+        data: { scope: 'PROPERTY_HISTORY', updatedAt: now },
+      });
+      promotedCount = count;
+    }
+    await tx.ownership.update({ where: { id: ownership.id }, data: { logsPromotedAt: now } });
+    return { promotedCount };
+  });

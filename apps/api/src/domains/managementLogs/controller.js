@@ -23,7 +23,9 @@ import {
   deleteManagementLog,
   findManagementLogForUser,
   findManagementLogs,
+  findPromotePreview,
   findPropertyManagementLogs,
+  promoteUnverifiedLogs,
   updateManagementLog,
 } from './service.js';
 
@@ -246,6 +248,36 @@ export const removeManagementLog = async (req, res, next) => {
     if (!isUuid(logId)) throwLogNotFound();
     await deleteManagementLog(req.user, logId);
     res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const throwOwnershipNotFound = () => {
+  throw new AppError('OWNERSHIP_NOT_FOUND', 404, '소유 관계를 찾을 수 없습니다.');
+};
+
+// 인증 뒤 올리기(H-44). 경로는 propertyOwnerships 라우터에 있다.
+export const getPromotePreview = async (req, res, next) => {
+  try {
+    const { ownershipId } = req.params;
+    if (!isUuid(ownershipId)) throwOwnershipNotFound();
+    sendData(res, await findPromotePreview(req.user, ownershipId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const postPromote = async (req, res, next) => {
+  try {
+    const { ownershipId } = req.params;
+    if (!isUuid(ownershipId)) throwOwnershipNotFound();
+    const body = req.body ?? {};
+    assertAllowedBody(body, ['skip']);
+    if (body.skip !== undefined && typeof body.skip !== 'boolean') {
+      throwIfInvalid([{ field: 'skip', reason: 'true 또는 false여야 합니다.' }]);
+    }
+    sendData(res, await promoteUnverifiedLogs(req.user, ownershipId, { skip: body.skip ?? false }));
   } catch (error) {
     next(error);
   }

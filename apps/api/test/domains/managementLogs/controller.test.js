@@ -99,3 +99,17 @@ test('목록: from 형식과 from > until(H-25)', async () => {
   assertInvalid(await callList({ from: '2026-13-01' }), 'from');
   assertInvalid(await callList({ from: '2026-11-02', until: '2026-11-01' }), 'from', 'until보다 늦을 수 없습니다.');
 });
+
+test('올리기: 경로 id와 skip 형식(H-44)', async () => {
+  const { getPromotePreview, postPromote } = await import('../../../src/domains/managementLogs/controller.js');
+  const call = async (handler, req) => {
+    let received;
+    await handler({ user: { id: 'u' }, ...req }, {}, (error) => {
+      received = error;
+    });
+    return received;
+  };
+  assert.equal((await call(getPromotePreview, { params: { ownershipId: 'x' } })).code, 'OWNERSHIP_NOT_FOUND');
+  assertInvalid(await call(postPromote, { params: { ownershipId: PROPERTY_ID }, body: { skip: 'y' } }), 'skip');
+  assertInvalid(await call(postPromote, { params: { ownershipId: PROPERTY_ID }, body: { all: true } }), 'all');
+});

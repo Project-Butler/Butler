@@ -1,13 +1,19 @@
 // 인증 전 하우스 로그(실제 로컬 Postgres + 임시 폴더의 실제 파일). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
 // H-37: 한 번도 인증하지 않은 소유 관계가 끝나면(사용자·운영자·자동 만료·SUPERSEDED) 기록·첨부가 모두 지워진다.
+// H-44: 처음 인증 뒤 인증 전 기록을 호실 이력으로 한 번 올린다(promote-preview·promote).
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { endOwnershipByAdmin } from '../../../src/domains/admin/service.js';
+import {
+  createManagementLog,
+  findPromotePreview,
+  promoteUnverifiedLogs,
+} from '../../../src/domains/managementLogs/service.js';
 import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
 import { getTodayKST } from '../../../src/platform/dateUtils.js';
 import { applyOwnershipVerification, endAbandonedUnverifiedOwnerships } from '../../../src/platform/ownershipVerification.js';
@@ -17,6 +23,7 @@ const DAY = 86400000;
 const FUTURE = () => new Date(Date.now() + DAY * 365);
 const PAST = () => new Date(Date.now() - DAY);
 const STORAGE_KEYS = ['STORAGE_DRIVER', 'STORAGE_SIGNING_SECRET', 'LOCAL_STORAGE_DIR', 'VERCEL'];
+const MIGRATION_SQL = new URL('../../../prisma/migrations/20261124100000_house_log_keep_private/migration.sql', import.meta.url);
 
 const rejectsWith = async (promise, code) => {
   await assert.rejects(promise, (error) => {
@@ -202,5 +209,92 @@ describe('인증 전 하우스 로그', { skip: dbTestSkip }, () => {
     await verifyNow(newOwner, mine);
     assert.equal((await prisma.ownership.findUnique({ where: { id: lapsed.id } })).endReason, 'SUPERSEDED');
     await assertKept(lapsedLog);
+  });
+
+  test('H-44 올리기: 수리·점검·체크 안 한 메모만, 나만 보기 메모·TICKET_SUMMARY는 그대로. 두 번째는 409', async () => {
+    const user = await createUser();
+    const stranger = await createUser();
+    const property = await createProperty();
+    const ownership = await own(user, property);
+    const write = (input) => createManagementLog(user, property.id, { title: '기록', occurredOn: getTodayKST(), ...input });
+    const repair = await write({ type: 'REPAIR' });
+    const inspection = await write({ type: 'INSPECTION' });
+    const note = await write({ type: 'NOTE' });
+    const keptNote = await write({ type: 'NOTE', keepPrivate: true });
+    const summary = await seedLog(user, ownership, { type: 'TICKET_SUMMARY' });
+
+    // 인증 전에는 올릴 수 없다.
+    await rejectsWith(findPromotePreview(user, ownership.id), 'OWNERSHIP_VERIFICATION_REQUIRED');
+    await verifyNow(user, ownership);
+    const verifiedRow = await prisma.ownership.findUnique({ where: { id: ownership.id } });
+    assert.ok(verifiedRow.firstVerifiedAt);
+    assert.equal(verifiedRow.logsPromotedAt, null);
+
+    await rejectsWith(findPromotePreview(stranger, ownership.id), 'OWNERSHIP_NOT_FOUND');
+    const preview = await findPromotePreview(user, ownership.id);
+    assert.equal(preview.count, 3);
+    assert.deepEqual(preview.items.map((item) => item.id).sort(), [repair.id, inspection.id, note.id].sort());
+    assert.deepEqual(Object.keys(preview.items[0]).sort(), ['id', 'occurredOn', 'title', 'type']);
+    assert.equal(preview.items[0].occurredOn, getTodayKST());
+
+    assert.deepEqual(await promoteUnverifiedLogs(user, ownership.id, {}), { promotedCount: 3 });
+    const scopes = Object.fromEntries(
+      (await prisma.propertyLog.findMany({ where: { ownershipId: ownership.id }, select: { id: true, scope: true } })).map((row) => [row.id, row.scope]),
+    );
+    assert.equal(scopes[repair.id], 'PROPERTY_HISTORY');
+    assert.equal(scopes[inspection.id], 'PROPERTY_HISTORY');
+    assert.equal(scopes[note.id], 'PROPERTY_HISTORY');
+    assert.equal(scopes[keptNote.id], 'PRIVATE');
+    assert.equal(scopes[summary.log.id], 'PRIVATE');
+
+    await rejectsWith(promoteUnverifiedLogs(user, ownership.id, {}), 'ALREADY_PROMOTED');
+    assert.equal((await findPromotePreview(user, ownership.id)).count, 0);
+
+    // 인증이 끊긴 동안 쓴 기록은 재인증 뒤에도 대상이 아니다(이미 처리함).
+    await prisma.ownership.update({ where: { id: ownership.id }, data: { verificationExpiresAt: PAST() } });
+    await write({ type: 'REPAIR', title: '끊긴 동안' });
+    await verifyNow(user, ownership);
+    assert.equal((await findPromotePreview(user, ownership.id)).count, 0);
+    assert.equal((await prisma.ownership.findUnique({ where: { id: ownership.id } })).firstVerifiedAt.getTime(), verifiedRow.firstVerifiedAt.getTime());
+  });
+
+  test('H-44 나만 보기로 두기: skip이면 올리지 않고 처리한 것으로 남긴다', async () => {
+    const user = await createUser();
+    const property = await createProperty();
+    const ownership = await own(user, property);
+    const repair = await createManagementLog(user, property.id, { type: 'REPAIR', title: '기록', occurredOn: getTodayKST() });
+    await verifyNow(user, ownership);
+    assert.equal((await findPromotePreview(user, ownership.id)).count, 1);
+    assert.deepEqual(await promoteUnverifiedLogs(user, ownership.id, { skip: true }), { promotedCount: 0 });
+    assert.equal((await prisma.propertyLog.findUnique({ where: { id: repair.id } })).scope, 'PRIVATE');
+    assert.ok((await prisma.ownership.findUnique({ where: { id: ownership.id } })).logsPromotedAt);
+    await rejectsWith(promoteUnverifiedLogs(user, ownership.id, { skip: true }), 'ALREADY_PROMOTED');
+  });
+
+  test('마이그레이션 백필: 기존 PRIVATE은 keep_private=true, 인증한 적 있는 관계는 first_verified_at·logs_promoted_at 채움 → 미리보기 0', async () => {
+    const user = await createUser();
+    const property = await createProperty();
+    // 마이그레이션 전 모양: 인증했지만 새 칸이 비어 있다.
+    const ownership = await own(user, property, { verificationStatus: 'VERIFIED', verifiedAt: PAST(), verificationExpiresAt: FUTURE() });
+    const note = await seedLog(user, ownership, { type: 'NOTE' });
+    const plainOwnership = await own(user, await createProperty());
+
+    // 마이그레이션의 UPDATE 문을 이 테스트 행에만 적용한다.
+    const sql = await readFile(MIGRATION_SQL, 'utf8');
+    const updates = sql.split(';').map((part) => part.replace(/--.*$/gm, '').trim()).filter((part) => part.startsWith('UPDATE'));
+    assert.equal(updates.length, 3);
+    for (const statement of updates) {
+      const ids = statement.includes('"property_logs"') ? [note.log.id] : [ownership.id, plainOwnership.id];
+      await prisma.$executeRawUnsafe(`${statement} AND "id" = ANY($1::uuid[])`, ids);
+    }
+
+    assert.equal((await prisma.propertyLog.findUnique({ where: { id: note.log.id } })).keepPrivate, true);
+    const backfilled = await prisma.ownership.findUnique({ where: { id: ownership.id } });
+    assert.equal(backfilled.firstVerifiedAt.getTime(), backfilled.verifiedAt.getTime());
+    assert.ok(backfilled.logsPromotedAt);
+    const plain = await prisma.ownership.findUnique({ where: { id: plainOwnership.id } });
+    assert.equal(plain.firstVerifiedAt, null);
+    assert.equal(plain.logsPromotedAt, null);
+    assert.equal((await findPromotePreview(user, ownership.id)).count, 0);
   });
 });
