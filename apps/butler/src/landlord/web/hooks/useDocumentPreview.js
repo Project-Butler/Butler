@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { createElement, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { isUnauthorizedError } from '../../../shared/apiError';
@@ -41,12 +41,13 @@ export const useDocumentPreview = ({ onUnauthorized } = {}) => {
     () =>
       previewing
         ? createPortal(
-            <DocumentPreviewModal
-              documents={previewing.documents}
-              startIndex={previewing.startIndex}
-              urls={urls}
-              onClose={() => setPreviewing(null)}
-            />,
+            // 훅 파일은 .js라 JSX 대신 createElement로 만든다(.jsx 파일 이름은 PascalCase 규칙).
+            createElement(DocumentPreviewModal, {
+              documents: previewing.documents,
+              startIndex: previewing.startIndex,
+              urls,
+              onClose: () => setPreviewing(null),
+            }),
             document.body,
           )
         : null,
