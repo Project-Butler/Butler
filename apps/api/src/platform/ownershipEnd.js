@@ -8,10 +8,11 @@ const throwOwnershipEnded = () => {
   throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
 };
 
-// 한 번도 인증하지 않은 소유 관계가 끝나면 그 기록을 모두 지운다(H-37). 붙은 문서는 숨기고 지울 파일 경로를 돌려준다.
-// 기록을 가리키던 티켓은 DB가 log_id를 비운다(ON DELETE SET NULL).
-const removeUnverifiedLogsInTx = async (tx, ownershipId, now) => {
-  const logs = await tx.propertyLog.findMany({ where: { ownershipId }, select: { id: true } });
+// 소유 관계의 기록을 지운다(where는 기록 조건 — 소유 관계 id 포함). 붙은 문서는 숨기고 지울 파일 경로를 돌려준다.
+// 한 번도 인증하지 않은 소유 관계가 끝날 때 전부(H-37), [목록에서 지우기] 때 나만 보기 기록(H-41)에 쓴다.
+// 기록을 가리키던 티켓은 DB가 log_id를 비운다(ON DELETE SET NULL). 숨김 행은 DB가 함께 지운다(ON DELETE CASCADE).
+export const removeLogsInTx = async (tx, where, now) => {
+  const logs = await tx.propertyLog.findMany({ where, select: { id: true } });
   if (logs.length === 0) return [];
   const logIds = logs.map((log) => log.id);
   const documents = await tx.document.findMany({
@@ -60,7 +61,7 @@ export const endOwnershipInTx = async (tx, ownership, { endReason, note, checkAc
   if (count === 0) throwOwnershipEnded();
   // 인증 전 기록은 지우고(H-37), 인증한 적 있으면 호실 이력이 다음 소유자에게 넘어가므로 거기 붙은 문서를 잠근다(삭제 불가).
   // undefined(칸을 읽지 않음)를 인증 전으로 보지 않도록 null만 본다.
-  const removedPaths = ownership.firstVerifiedAt === null ? await removeUnverifiedLogsInTx(tx, ownership.id, now) : [];
+  const removedPaths = ownership.firstVerifiedAt === null ? await removeLogsInTx(tx, { ownershipId: ownership.id }, now) : [];
   if (ownership.firstVerifiedAt !== null) await lockHistoryLogDocumentsInTx(tx, ownership.id);
   // 끝난 소유 관계의 계약은 읽기 전용이라 PENDING 초대를 CANCELED, 확인 세션은 폐기한다(docs/11 2-3).
   await cancelContractInvitationsInTx(tx, { ownershipId: ownership.id });

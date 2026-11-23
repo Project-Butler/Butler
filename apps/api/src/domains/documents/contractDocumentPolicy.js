@@ -58,7 +58,8 @@ export const contractDocumentPolicy = {
   lockForWrite: lockOwnContract,
   // 서류함·목록 수용 배치 where. 임대인으로서 볼 수 있는 계약(내 소유 관계의 계약)만 남긴다. 단건 documentWhere의 LANDLORD 값({})과 같다.
   landlordScopeWhere: async (user, contractIds) => {
-    const owned = await prisma.contract.findMany({ where: { id: { in: contractIds }, ownership: { userId: user.id } }, select: { id: true } });
+    // 목록에서 지운 소유 관계(H-41)의 계약 서류는 서류함·검색에서 뺀다(지우지는 않음).
+    const owned = await prisma.contract.findMany({ where: { id: { in: contractIds }, ownership: { userId: user.id, removedAt: null } }, select: { id: true } });
     return { resourceType: CONTRACT_RESOURCE, resourceId: { in: owned.map((contract) => contract.id) } };
   },
   throwNotFound: throwContractNotFound,

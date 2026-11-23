@@ -256,7 +256,7 @@ const complexFilter = (complexId) =>
     ? Prisma.sql`AND EXISTS (SELECT 1 FROM properties p WHERE p.id = o.property_id AND p.complex_id = ${complexId}::uuid)`
     : Prisma.empty;
 
-// relation=FORMER_OWNER — 지금은 소유하지 않는 호실마다 가장 최근에 끝난 내 소유 관계 1개.
+// relation=FORMER_OWNER — 지금은 소유하지 않는 호실마다 가장 최근에 끝난 내 소유 관계 1개. 목록에서 지운 관계(removed_at)는 뺀다(H-41).
 // 호실별 1행을 고르는 DISTINCT ON은 Prisma 쿼리로 표현할 수 없어서 $queryRaw를 쓴다.
 const formerOwnerCte = (userId, complexId) => Prisma.sql`
   WITH latest AS (
@@ -264,6 +264,7 @@ const formerOwnerCte = (userId, complexId) => Prisma.sql`
     FROM ownerships o
     WHERE o.user_id = ${userId}::uuid
       AND o.ended_at IS NOT NULL
+      AND o.removed_at IS NULL
       AND NOT EXISTS (
         SELECT 1 FROM ownerships a
         WHERE a.property_id = o.property_id AND a.user_id = ${userId}::uuid AND a.ended_at IS NULL
@@ -302,7 +303,7 @@ const findFormerOwnerProperties = async (user, { page, size, complexId }) => {
   const [properties, ownerships] = await Promise.all([
     prisma.property.findMany({ where: { id: { in: propertyIds } }, include: { complex: true } }),
     prisma.ownership.findMany({
-      where: { userId: user.id, propertyId: { in: propertyIds } },
+      where: { userId: user.id, propertyId: { in: propertyIds }, removedAt: null },
       include: { contracts: CONTRACT_SELECT },
     }),
   ]);

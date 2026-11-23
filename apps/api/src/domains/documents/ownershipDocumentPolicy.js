@@ -34,8 +34,9 @@ export const ownershipDocumentPolicy = {
   // 올리기·지우기 모두 내 소유 관계인지만 본다. 올린 본인인지는 deleteDocument(assertDocumentsDeletable)가 본다.
   lockForWrite: lockOwnOwnership,
   // 서류함·목록 수용 배치 where. 넘겨받은 id를 믿지 않고 내 소유 관계로 다시 거른다.
+  // 목록에서 지운 소유 관계(H-41)의 서류는 지우지 않고 서류함·검색에서만 뺀다.
   landlordScopeWhere: async (user, ownershipIds) => {
-    const owned = await prisma.ownership.findMany({ where: { id: { in: ownershipIds }, userId: user.id }, select: { id: true } });
+    const owned = await prisma.ownership.findMany({ where: { id: { in: ownershipIds }, userId: user.id, removedAt: null }, select: { id: true } });
     return { resourceType: OWNERSHIP_RESOURCE, resourceId: { in: owned.map((ownership) => ownership.id) }, ...(await documentWhere()) };
   },
   throwNotFound: throwOwnershipNotFound,

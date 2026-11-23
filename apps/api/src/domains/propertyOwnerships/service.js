@@ -2,7 +2,7 @@ import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
-import { endOwnershipInTx } from '../../platform/ownershipEnd.js';
+import { endOwnershipInTx, removeLogsInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
@@ -21,9 +21,9 @@ const throwOwnershipEnded = () => {
   throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
 };
 
-// GET /property-ownerships — 본인 것만, 시작일 최신순.
+// GET /property-ownerships — 본인 것만, 시작일 최신순. 목록에서 지운 소유 관계(removedAt)는 뺀다.
 export const findMyOwnerships = async (user, { active, page, size }) => {
-  const where = { userId: user.id };
+  const where = { userId: user.id, removedAt: null };
   if (active === true) where.endedAt = null;
   if (active === false) where.endedAt = { not: null };
 
@@ -121,4 +121,27 @@ export const endOwnership = async (user, ownershipId, { reason, endReason = 'SEL
 
   await removeStoredObjects(removedPaths);
   return toResponse(ended);
+};
+
+// POST /property-ownerships/:ownershipId/remove — 끝난 내 소유 관계를 목록에서 지운다(H-41).
+// 그 관계의 나만 보기 기록·첨부를 지우고(파일은 커밋 뒤), 그 관계에서 만든 숨김을 지우고, removedAt을 남긴다.
+// 계약·계약 문서·소유 서류는 지우지 않는다(목록·검색·서류함에서만 빠진다). 넘어간 호실 이력은 다음 소유자에게 그대로다.
+// 활성 소유 관계는 422 OWNERSHIP_ACTIVE, 이미 지웠으면 그대로 성공(204).
+export const removeOwnership = async (user, ownershipId, req) => {
+  const removedPaths = await prisma.$transaction(async (tx) => {
+    const ownership = await lockOwnershipRow(tx, ownershipId);
+    if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
+    if (!ownership.endedAt) {
+      throw new AppError('OWNERSHIP_ACTIVE', 422, '소유 중인 호실은 목록에서 지울 수 없어요. 소유를 먼저 종료해 주세요.');
+    }
+    if (ownership.removedAt) return [];
+
+    const now = getNow();
+    const paths = await removeLogsInTx(tx, { ownershipId, scope: 'PRIVATE' }, now);
+    await tx.propertyLogHide.deleteMany({ where: { ownershipId } });
+    await tx.ownership.update({ where: { id: ownershipId }, data: { removedAt: now } });
+    await audit.record({ actor: user, action: 'OWNERSHIP_REMOVED', resourceType: 'OWNERSHIP', resourceId: ownershipId, req, client: tx });
+    return paths;
+  });
+  await removeStoredObjects(removedPaths);
 };

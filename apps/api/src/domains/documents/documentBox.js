@@ -56,11 +56,11 @@ export const sortDocumentBoxContracts = (contracts) => {
 
 const toDateOrNull = (value) => (value ? toDateOnlyString(value) : null);
 
-// GET /properties/:propertyId/documents. 그 호실에 내 소유 관계(진행·종료)가 없으면 null(→ 404).
+// GET /properties/:propertyId/documents. 그 호실에 내 소유 관계(진행·종료, 목록에서 지운 것 제외)가 없으면 null(→ 404).
 export const findPropertyDocumentBox = async (user, propertyId) => {
   // 필요한 칸만 읽는다(tenantPhone·deposit·monthlyRent는 읽지 않는다).
   const ownerships = await prisma.ownership.findMany({
-    where: { propertyId, userId: user.id },
+    where: { propertyId, userId: user.id, removedAt: null },
     select: {
       id: true,
       startedAt: true,
