@@ -11,6 +11,7 @@ import {
   getPastBarEnd,
   getPopoverPlacement,
   getTimelineStatus,
+  isInAxis,
   toPercent,
 } from '../../utils/houseLogTimeline';
 
@@ -124,6 +125,8 @@ export const HouseLogTimeline = ({
   const currentStart = current ? pct(current.startDate) : 0;
   const currentEnd = current ? pct(current.endDate) : 0;
   const todayPercent = pct(today);
+  // 오늘이 축 밖이면(매도한 호실·시작 전 계약) 세로선 대신 끝에 방향 표시만 둔다.
+  const isTodayInAxis = isInAxis(today, axis);
   const flagTop = '-46px';
 
   return (
@@ -273,15 +276,26 @@ export const HouseLogTimeline = ({
           })}
 
           {/* 오늘 */}
-          <div className="pointer-events-none absolute -bottom-3 -top-3 z-20 w-0.5 bg-ink" style={{ left: `${todayPercent}%` }} data-testid="today-line">
+          {isTodayInAxis ? (
+            <div className="pointer-events-none absolute -bottom-3 -top-3 z-20 w-0.5 bg-ink" style={{ left: `${todayPercent}%` }} data-testid="today-line">
+              <span
+                className={`absolute -top-6 whitespace-nowrap rounded-md bg-ink px-2 text-chip font-bold text-surface ${
+                  todayPercent > 94 ? 'right-0' : todayPercent < 6 ? 'left-0' : 'left-1/2 -translate-x-1/2'
+                }`}
+              >
+                오늘 {today.slice(5)}
+              </span>
+            </div>
+          ) : (
             <span
-              className={`absolute -top-6 whitespace-nowrap rounded-md bg-ink px-2 text-chip font-bold text-surface ${
-                todayPercent > 94 ? 'right-0' : todayPercent < 6 ? 'left-0' : 'left-1/2 -translate-x-1/2'
+              className={`pointer-events-none absolute -top-9 whitespace-nowrap rounded-md border border-line bg-surface px-2 text-chip font-semibold text-ink-2 ${
+                today > axis.end ? 'right-0' : 'left-0'
               }`}
+              data-testid="today-outside"
             >
-              오늘 {today.slice(5)}
+              {today > axis.end ? `오늘 ${today.slice(5)} →` : `← 오늘 ${today.slice(5)}`}
             </span>
-          </div>
+          )}
         </div>
 
         {/* 계약 없음 안내 */}

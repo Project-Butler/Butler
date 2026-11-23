@@ -125,6 +125,12 @@ describe('타임라인 그리기', () => {
     expect(card).toHaveTextContent('2026-09-01 소유 시작 · 지금 계약 2026-10-01 ~ 2028-09-30');
   });
 
+  it('오늘이 축 밖이면(매도한 호실) 세로선 대신 끝에 "오늘 →" 표시', () => {
+    renderTimeline({ ownershipEndedOn: '2026-10-31' });
+    expect(screen.queryByTestId('today-line')).not.toBeInTheDocument();
+    expect(screen.getByTestId('today-outside')).toHaveTextContent('오늘 11-24 →');
+  });
+
   it('소유가 끝난 호실: 읽기 전용 머리, 빈 상태·통지 없음', () => {
     renderTimeline({ ownershipEndedOn: '2026-10-31' });
     const card = screen.getByRole('region', { name: '계약 타임라인' });

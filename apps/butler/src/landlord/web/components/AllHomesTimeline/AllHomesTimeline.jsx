@@ -15,7 +15,7 @@ const Lane = ({ row, axis, today }) => {
   const contractStarts = [row.current, row.next].filter((contract) => contract && isInAxis(contract.startDate, axis));
   return (
     <div className="relative mr-6 min-h-[76px]">
-      <span className="absolute inset-y-0 z-20 w-0.5 bg-ink" style={{ left: `${pct(today)}%` }} aria-hidden="true" />
+      {isInAxis(today, axis) && <span className="absolute inset-y-0 z-20 w-0.5 bg-ink" style={{ left: `${pct(today)}%` }} aria-hidden="true" />}
       <div className="absolute inset-x-0 top-1/2 -mt-1.5 h-3">
         {bar ? (
           <span
@@ -106,9 +106,11 @@ export const AllHomesTimeline = ({ axis, rows, today, summaryOf, onOpenHome }) =
               {tick.label}
             </span>
           ))}
-          <span className="absolute top-1.5 z-10 -translate-x-1/2 rounded-md bg-ink px-2 text-chip font-bold text-surface" style={{ left: `${todayPercent}%` }}>
-            오늘
-          </span>
+          {isInAxis(today, axis) && (
+            <span className="absolute top-1.5 z-10 -translate-x-1/2 rounded-md bg-ink px-2 text-chip font-bold text-surface" style={{ left: `${todayPercent}%` }}>
+              오늘
+            </span>
+          )}
         </div>
       </div>
       {rows.length === 0 && <p className="py-10 text-center text-body text-ink-3">호실이 없어요</p>}
