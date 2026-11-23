@@ -52,7 +52,7 @@ const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, 
 
   const [propertyId, setPropertyId] = useState(fixedPropertyId ?? initialPropertyId ?? '');
   const [scope, setScope] = useState('PRIVATE');
-  const [form, setForm] = useState({ type: 'REPAIR', title: '', content: '', occurredOn: getTodayKST(), cost: '' });
+  const [form, setForm] = useState({ type: 'REPAIR', room: '', title: '', content: '', occurredOn: getTodayKST(), cost: '' });
   const [serverFieldErrors, setServerFieldErrors] = useState({});
 
   const property = properties.find((item) => item.id === propertyId);

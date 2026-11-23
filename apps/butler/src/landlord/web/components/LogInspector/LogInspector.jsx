@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@butler/ui';
-import { Building2, CalendarDays, ClipboardCheck, Coins, History, Pencil, Search, StickyNote, Wrench, X } from 'lucide-react';
+import { Building2, CalendarDays, ClipboardCheck, Coins, History, MapPin, Pencil, Search, StickyNote, Wrench, X } from 'lucide-react';
 import { DocumentThumbnail } from '../DocumentThumbnail/DocumentThumbnail';
 import { EmptyState } from '../EmptyState/EmptyState';
 import { IconTile } from '../IconTile/IconTile';
 import { ManagementLogBadges } from '../ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
+import { RoomChip } from '../RoomChip/RoomChip';
 import { useDeleteManagementLog } from '../../hooks/useDeleteManagementLog';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
@@ -100,6 +101,9 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
       <div className="px-5 pt-3">
         <InfoRow icon={CalendarDays} label="날짜">
           {log.occurredOn}
+        </InfoRow>
+        <InfoRow icon={MapPin} label="방">
+          <RoomChip room={log.room} />
         </InfoRow>
         {log.cost != null && (
           <InfoRow icon={Coins} label="비용">
