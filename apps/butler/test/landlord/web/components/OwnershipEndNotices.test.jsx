@@ -12,7 +12,7 @@ const ticket = (id, status, title) => ({
   status,
   title,
   createdAt: '2026-11-10T03:00:00.000Z',
-  property: { buildingNo: '101', unitNo: '1203' },
+  room: 'BOILER_ROOM',
 });
 
 const renderNotices = (props = {}) =>
@@ -34,7 +34,7 @@ describe('OwnershipEndNotices', () => {
     expect(within(alert).getByText(/처리 중인 유지보수 요청 2건은 새 임대인에게 넘어가지 않아요/)).toBeInTheDocument();
     expect(within(alert).getByText('확인 필요')).toBeInTheDocument();
     expect(within(alert).getByText('처리 중')).toBeInTheDocument();
-    expect(within(alert).getByText(/보일러 고장/)).toBeInTheDocument();
+    expect(within(alert).getAllByText(/보일러 고장 · 보일러실/).length).toBeGreaterThan(0);
     expect(within(alert).queryByRole('link')).toBeNull();
     expect(within(alert).getByText(/매도하면 이 요청은 멈추고 읽기 전용이 돼요/)).toBeInTheDocument();
   });

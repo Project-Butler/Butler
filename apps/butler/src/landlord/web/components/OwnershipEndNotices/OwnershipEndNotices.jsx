@@ -4,7 +4,7 @@ import { getTicketStatusBadge } from '../../../app/utils/ticketView';
 import { useGetTicketList } from '../../hooks/useGetTicketList';
 import { formatDateKST } from '../../utils/format';
 import { UNVERIFIED_LOG_WARNING } from '../../utils/managementLog';
-import { formatUnitLabel } from '../../utils/unitAddress';
+import { getRoomLabel } from '../../utils/room';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
 const IN_PROGRESS_STATUS = 'OPEN,IN_PROGRESS';
@@ -32,7 +32,8 @@ const SoldTicketWarning = ({ propertyId, onUnauthorized }) => {
                 {badge.label}
               </Badge>
               <span className="min-w-0 flex-1 truncate">
-                {ticket.title} · {formatUnitLabel(ticket.property?.buildingNo, ticket.property?.unitNo)}
+                {ticket.title}
+                {getRoomLabel(ticket.room) ? ` · ${getRoomLabel(ticket.room)}` : ''}
               </span>
               <span className="shrink-0 font-num tabular-nums">{formatDateKST(ticket.createdAt)}</span>
             </li>
