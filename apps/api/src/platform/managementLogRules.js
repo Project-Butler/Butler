@@ -36,8 +36,49 @@ export const toVisibleLogWhere = (user, ownerships, now = new Date()) => {
   };
 };
 
+// 늘 호실 이력으로 남는 유형(인증 활성 소유자). 메모는 나만 보기를 고를 수 있다(H-29).
+export const PROPERTY_HISTORY_ONLY_TYPES = ['REPAIR', 'INSPECTION'];
+
+// 새 기록의 공개 범위(H-29·H-45). verified: 쓰는 소유 관계가 지금 인증 상태인지.
+// 돌려주는 값: { scope, keepPrivate } 또는 { error }.
+// error: INVALID_COMBINATION(keepPrivate와 PROPERTY_HISTORY를 함께 요청, 400), SCOPE_NOT_ALLOWED(인증 소유자가 수리·점검을 나만 보기로, 400),
+//        VERIFICATION_REQUIRED(인증 전 PROPERTY_HISTORY 요청, 403).
+export const resolveCreateScope = ({ type, keepPrivate = false, requestedScope = null, verified }) => {
+  if (keepPrivate && requestedScope === 'PROPERTY_HISTORY') return { error: 'INVALID_COMBINATION' };
+  const historyOnly = PROPERTY_HISTORY_ONLY_TYPES.includes(type);
+  const wantsPrivate = keepPrivate || requestedScope === 'PRIVATE';
+  // 인증 전: 모두 나만 보기. 수리·점검은 나만 보기 뜻을 남기지 않는다(인증 뒤 올리기 대상).
+  if (!verified) {
+    if (requestedScope === 'PROPERTY_HISTORY') return { error: 'VERIFICATION_REQUIRED' };
+    return { scope: 'PRIVATE', keepPrivate: !historyOnly && wantsPrivate };
+  }
+  if (historyOnly) return wantsPrivate ? { error: 'SCOPE_NOT_ALLOWED' } : { scope: 'PROPERTY_HISTORY', keepPrivate: false };
+  // 메모에서 PRIVATE를 직접 요청하면 나만 보기를 고른 것으로 본다.
+  return { scope: wantsPrivate ? 'PRIVATE' : 'PROPERTY_HISTORY', keepPrivate: wantsPrivate };
+};
+
+// 그 기록이 붙은 소유 관계의 인증된 활성 소유자인지(수리 요청 완료 요약을 고치고 지울 수 있는 사람, H-47).
+const isActiveVerifiedOwner = (log, user, now) =>
+  log.ownership.userId === user.id && !log.ownership.endedAt && isOwnershipVerified(log.ownership, now);
+
 // 수정 가능 여부. 작성자이고 소유 관계가 활성이어야 하며, 호실 이력은 지금도 인증 상태여야 한다(D-16).
-export const canEditLog = (log, user, now = new Date()) =>
-  log.authorId === user.id &&
-  !log.ownership.endedAt &&
-  (log.scope !== 'PROPERTY_HISTORY' || isOwnershipVerified(log.ownership, now));
+// 수리 요청 완료 요약(TICKET_SUMMARY, 작성자 없음)은 그 소유 관계의 인증된 활성 소유자가 고친다(H-47).
+export const canEditLog = (log, user, now = new Date()) => {
+  if (log.type === 'TICKET_SUMMARY') return isActiveVerifiedOwner(log, user, now);
+  return (
+    log.authorId === user.id &&
+    !log.ownership.endedAt &&
+    (log.scope !== 'PROPERTY_HISTORY' || isOwnershipVerified(log.ownership, now))
+  );
+};
+
+// 삭제 가능 여부(H-36·H-47).
+// 1) 작성자 + 활성 소유 관계 + (나만 보기이거나 지금 인증 상태) — 호실 이력도 지울 수 있다.
+// 2) 수리 요청 완료 요약은 그 소유 관계의 인증된 활성 소유자.
+// 3) 작성자는 소유가 끝난 뒤에도 자기 나만 보기 기록을 지울 수 있다(D-13).
+export const canDeleteLog = (log, user, now = new Date()) => {
+  if (log.type === 'TICKET_SUMMARY') return isActiveVerifiedOwner(log, user, now);
+  if (log.authorId !== user.id) return false;
+  if (log.ownership.endedAt) return log.scope === 'PRIVATE';
+  return log.scope === 'PRIVATE' || isOwnershipVerified(log.ownership, now);
+};

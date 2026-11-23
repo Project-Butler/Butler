@@ -21,7 +21,7 @@ const shift = (days) => {
 };
 const LOG_LIST = { propertyId: null, scope: null, types: [], rooms: [], q: null, until: null, sortDirection: 'desc', page: 1, size: 20 };
 const TICKET_LIST = { propertyId: null, statuses: [], categories: [], rooms: [], sortDirection: 'desc', page: 1, size: 20 };
-const logInput = (overrides = {}) => ({ scope: 'PRIVATE', type: 'REPAIR', title: '기록', occurredOn: TODAY, ...overrides });
+const logInput = (overrides = {}) => ({ type: 'REPAIR', title: '기록', occurredOn: TODAY, ...overrides });
 
 const rejectsWith = async (promise, code) => {
   await assert.rejects(promise, (error) => {

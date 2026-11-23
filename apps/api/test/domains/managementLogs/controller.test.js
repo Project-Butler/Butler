@@ -89,3 +89,13 @@ test('목록: room 필터와 검색어 q 형식(H-02·H-04)', async () => {
   assertInvalid(await callList({ q: '   ' }), 'q');
   assertInvalid(await callList({ q: '가'.repeat(51) }), 'q');
 });
+
+test('공개 범위: keepPrivate는 boolean, PROPERTY_HISTORY와 함께 못 고른다(H-29)', async () => {
+  assertInvalid(await callPost({ ...VALID, type: 'NOTE', keepPrivate: 'yes' }), 'keepPrivate');
+  assertInvalid(await callPost({ ...VALID, type: 'NOTE', keepPrivate: true, scope: 'PROPERTY_HISTORY' }), 'keepPrivate');
+});
+
+test('목록: from 형식과 from > until(H-25)', async () => {
+  assertInvalid(await callList({ from: '2026-13-01' }), 'from');
+  assertInvalid(await callList({ from: '2026-11-02', until: '2026-11-01' }), 'from', 'until보다 늦을 수 없습니다.');
+});

@@ -27,7 +27,8 @@ import {
   updateManagementLog,
 } from './service.js';
 
-const CREATE_FIELDS = ['scope', ...MANAGEMENT_LOG_EDITABLE_FIELDS, 'attachmentDocumentIds'];
+// scope는 보내지 않아도 된다(서버가 유형·인증 상태로 정한다, H-29). keepPrivate = 메모의 [나만 보기] 체크.
+const CREATE_FIELDS = ['scope', 'keepPrivate', ...MANAGEMENT_LOG_EDITABLE_FIELDS, 'attachmentDocumentIds'];
 // 수정은 첨부의 최종 목록을 받는다(빠진 문서는 삭제, 새 문서는 붙임).
 const UPDATE_FIELDS = [...MANAGEMENT_LOG_EDITABLE_FIELDS, 'attachmentDocumentIds'];
 const MAX_TITLE_LENGTH = 100;
@@ -105,14 +106,19 @@ const parseCreateBody = (body) => {
   }
   throwIfInvalid(details);
 
-  const scope = body.scope ?? 'PRIVATE';
-  if (!MANAGEMENT_LOG_SCOPES.includes(scope)) {
+  const scope = body.scope ?? null;
+  if (scope !== null && !MANAGEMENT_LOG_SCOPES.includes(scope)) {
     details.push({ field: 'scope', reason: `${MANAGEMENT_LOG_SCOPES.join(', ')} 중 하나여야 합니다.` });
+  }
+  const keepPrivate = body.keepPrivate ?? false;
+  if (typeof keepPrivate !== 'boolean') details.push({ field: 'keepPrivate', reason: 'true 또는 false여야 합니다.' });
+  else if (keepPrivate && scope === 'PROPERTY_HISTORY') {
+    details.push({ field: 'keepPrivate', reason: '나만 보기와 호실 이력(PROPERTY_HISTORY)을 함께 고를 수 없습니다.' });
   }
   const attachmentDocumentIds = parseAttachmentIds(body.attachmentDocumentIds ?? [], details);
   const data = parseFields(body, details);
   throwIfInvalid(details);
-  return { scope, ...data, attachmentDocumentIds };
+  return { scope, keepPrivate, ...data, attachmentDocumentIds };
 };
 
 const parseUpdateBody = (body) => {
@@ -142,7 +148,7 @@ const parseSearchQuery = (value, details) => {
   return null;
 };
 
-// L-02·L-03 공통. 둘 다 scope·type·room·until·q를 받고, propertyId는 L-03에서만 쓴다(L-02는 경로의 호실).
+// L-02·L-03 공통. 둘 다 scope·type·room·from·until·q를 받고(from·until은 그날 포함), propertyId는 L-03에서만 쓴다(L-02는 경로의 호실).
 const parseListQuery = (query) => {
   assertSingleValues(query);
   const details = [];
@@ -154,8 +160,12 @@ const parseListQuery = (query) => {
   if (types.some((type) => !MANAGEMENT_LOG_TYPES.includes(type))) {
     details.push({ field: 'type', reason: `${MANAGEMENT_LOG_TYPES.join(', ')} 중에서 쉼표로 고릅니다.` });
   }
-  if (query.until !== undefined && !isValidLogDate(query.until)) {
-    details.push({ field: 'until', reason: 'YYYY-MM-DD 날짜여야 합니다.' });
+  for (const field of ['from', 'until']) {
+    if (query[field] !== undefined && !isValidLogDate(query[field])) details.push({ field, reason: 'YYYY-MM-DD 날짜여야 합니다.' });
+  }
+  // 같은 형식의 날짜 문자열이라 문자열 비교로 순서를 본다.
+  if (isValidLogDate(query.from) && isValidLogDate(query.until) && query.from > query.until) {
+    details.push({ field: 'from', reason: 'until보다 늦을 수 없습니다.' });
   }
   const rooms = parseRoomFilter(query.room, details);
   const q = parseSearchQuery(query.q, details);
@@ -170,6 +180,7 @@ const parseListQuery = (query) => {
     types,
     rooms,
     q,
+    from: query.from ?? null,
     until: query.until ?? null,
     sortDirection: sortMatch[1],
     page,

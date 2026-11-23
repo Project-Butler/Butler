@@ -82,7 +82,16 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
     const user = await fixture.createUser();
     const { ownership } = await createOwnedUnit(user);
     const row = await prisma.$transaction((tx) => lockOwnershipRow(tx, ownership.id));
-    assert.deepEqual(Object.keys(row).sort(), ['endedAt', 'id', 'propertyId', 'userId', 'verificationExpiresAt', 'verificationStatus']);
+    assert.deepEqual(Object.keys(row).sort(), [
+      'endedAt',
+      'firstVerifiedAt',
+      'id',
+      'logsPromotedAt',
+      'propertyId',
+      'userId',
+      'verificationExpiresAt',
+      'verificationStatus',
+    ]);
     assert.equal(row.userId, user.id);
     assert.equal(row.verificationStatus, 'VERIFIED');
   });

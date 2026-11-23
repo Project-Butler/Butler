@@ -475,6 +475,10 @@ model Ownership {
   verificationStatus    VerificationStatus @default(UNVERIFIED) @map("verification_status")
   verifiedAt            DateTime?          @map("verified_at") @db.Timestamptz(3)
   verificationExpiresAt DateTime?          @map("verification_expires_at") @db.Timestamptz(3)
+  // 처음 인증한 시각. 재인증으로 덮어써지는 verifiedAt과 달리 한 번만 채운다(하우스 로그 H-37·H-44).
+  firstVerifiedAt       DateTime?          @map("first_verified_at") @db.Timestamptz(3)
+  // 인증 전 기록 올리기(H-44)를 처리한 시각(올리기·나만 보기로 두기 모두). 소유 관계당 한 번.
+  logsPromotedAt        DateTime?          @map("logs_promoted_at") @db.Timestamptz(3)
 
   // 등기부 증빙 문서
   evidenceDocumentId String?   @map("evidence_document_id") @db.Uuid
@@ -607,6 +611,8 @@ model PropertyLog {
   author      User?     @relation("AuthoredPropertyLogs", fields: [authorId], references: [id])
 
   scope      PropertyLogScope
+  // 작성자가 고른 나만 보기(메모 체크). 인증 전 기록 올리기(H-44)에서 뺀다. 공개 범위 표시는 scope 기준.
+  keepPrivate Boolean          @default(false) @map("keep_private")
   type       String           @db.VarChar(30) // REPAIR, INSPECTION, NOTE, TICKET_SUMMARY(등록형)
   title      String           @db.VarChar(100)
   content    String?
