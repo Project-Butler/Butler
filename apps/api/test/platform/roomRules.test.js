@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseRoom, parseRoomFilter, ROOM_LABELS, ROOMS, toRoomWhere } from '../../src/platform/roomRules.js';
 
-test('방 값: 6가지와 null(방 없음)만 받는다', () => {
+test('방 값: 9가지와 null(방 없음)만 받는다', () => {
+  assert.deepEqual(ROOMS, ['ENTRANCE', 'LIVING', 'KITCHEN', 'BATHROOM', 'BEDROOM', 'UTILITY', 'BALCONY', 'BOILER_ROOM', 'OTHER']);
   const details = [];
   for (const room of ROOMS) assert.equal(parseRoom(room, details), room);
   assert.equal(parseRoom(null, details), null);
@@ -18,6 +19,10 @@ test('방 값: 6가지와 null(방 없음)만 받는다', () => {
 
 test('방 라벨이 모든 방에 있다', () => {
   assert.deepEqual(Object.keys(ROOM_LABELS).sort(), [...ROOMS].sort());
+  assert.equal(ROOM_LABELS.BATHROOM, '욕실·화장실');
+  assert.equal(ROOM_LABELS.UTILITY, '다용도실');
+  assert.equal(ROOM_LABELS.BALCONY, '베란다');
+  assert.equal(ROOM_LABELS.BOILER_ROOM, '보일러실');
 });
 
 test('목록 필터: 쉼표, NONE 허용, 모르는 값은 400 사유', () => {
@@ -25,6 +30,7 @@ test('목록 필터: 쉼표, NONE 허용, 모르는 값은 400 사유', () => {
   assert.deepEqual(parseRoomFilter(undefined, details), []);
   assert.deepEqual(parseRoomFilter('', details), []);
   assert.deepEqual(parseRoomFilter('KITCHEN, NONE', details), ['KITCHEN', 'NONE']);
+  assert.deepEqual(parseRoomFilter('BOILER_ROOM,UTILITY', details), ['BOILER_ROOM', 'UTILITY']);
   assert.equal(details.length, 0);
   parseRoomFilter('KITCHEN,ATTIC', details);
   assert.equal(details[0].field, 'room');

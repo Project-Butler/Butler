@@ -1,6 +1,6 @@
 // 방(위치) 태그 규칙(DB 의존 없음). 하우스 로그 기록과 수리 요청이 같이 쓰는 버틀러 공통 위치 태그.
 // 등록형: 새 방을 더하면 여기와 화면의 방 라벨을 함께 고친다.
-export const ROOMS = ['ENTRANCE', 'LIVING', 'KITCHEN', 'BATHROOM', 'BEDROOM', 'OTHER'];
+export const ROOMS = ['ENTRANCE', 'LIVING', 'KITCHEN', 'BATHROOM', 'BEDROOM', 'UTILITY', 'BALCONY', 'BOILER_ROOM', 'OTHER'];
 
 // 목록 필터에서 '방 없음'(room이 null)을 고를 때 쓰는 값. 저장 값으로는 쓰지 않는다.
 export const ROOM_FILTER_NONE = 'NONE';
@@ -9,8 +9,11 @@ export const ROOM_LABELS = {
   ENTRANCE: '현관',
   LIVING: '거실',
   KITCHEN: '주방',
-  BATHROOM: '욕실',
+  BATHROOM: '욕실·화장실',
   BEDROOM: '침실',
+  UTILITY: '다용도실',
+  BALCONY: '베란다',
+  BOILER_ROOM: '보일러실',
   OTHER: '기타',
 };
 
