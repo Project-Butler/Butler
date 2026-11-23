@@ -16,10 +16,20 @@ import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { insertPropertyLog, toDbDate } from '../../platform/propertyHistory.js';
+import { toRoomWhere } from '../../platform/roomRules.js';
 import { removeStoredObjects } from '../documents/storage/index.js';
+import { keywordsWhere, splitQuery } from '../search/searchQuery.js';
 
 // 감사 로그 summary에 쓰는 칸 이름(값은 넣지 않는다, 명세 D-04)
-const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용', attachments: '첨부' };
+const FIELD_LABELS = {
+  type: '유형',
+  title: '제목',
+  content: '내용',
+  occurredOn: '날짜',
+  cost: '비용',
+  room: '방',
+  attachments: '첨부',
+};
 
 const isSameFieldValue = (log, field, value) =>
   field === 'occurredOn' ? toDateOnlyString(log.occurredOn) === value : log[field] === value;
@@ -47,11 +57,20 @@ const recordLogActivity = (tx, user, type, log, extra = {}) =>
 
 const findUserOwnerships = (user) => prisma.ownership.findMany({ where: { userId: user.id } });
 
-const buildFilters = ({ propertyId, scope, types, until }) => ({
-  ...(propertyId ? { propertyId } : {}),
-  ...(scope ? { scope } : {}),
-  ...(types?.length > 0 ? { type: { in: types } } : {}),
-  ...(until ? { occurredOn: { lte: toDbDate(until) } } : {}),
+// 검색 칸. 통합 검색(domains/search)의 하우스 로그 검색과 같다.
+const LOG_SEARCH_FIELDS = ['title', 'content'];
+
+const buildFilters = ({ propertyId, scope, types, rooms, q, until }) => ({
+  AND: [
+    {
+      ...(propertyId ? { propertyId } : {}),
+      ...(scope ? { scope } : {}),
+      ...(types?.length > 0 ? { type: { in: types } } : {}),
+      ...(until ? { occurredOn: { lte: toDbDate(until) } } : {}),
+    },
+    toRoomWhere(rooms),
+    q ? keywordsWhere(splitQuery(q), LOG_SEARCH_FIELDS) : {},
+  ],
 });
 
 const findPage = async (user, ownerships, filters, { sortDirection, page, size }) => {

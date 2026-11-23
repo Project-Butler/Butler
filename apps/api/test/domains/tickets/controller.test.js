@@ -68,3 +68,9 @@ test('목록: status·category는 쉼표 값, sort는 createdAt', async () => {
   assertInvalid(await list({ propertyId: 'x' }), 'propertyId');
   assertInvalid(await list({ size: '101' }), 'size');
 });
+
+test('방: 만들기·수정은 6가지 방 또는 null, 목록 필터는 NONE도', async () => {
+  assertInvalid(await call(postTicket, { body: { ...VALID, room: 'ATTIC' } }), 'room');
+  assertInvalid(await call(patchTicket, { params: { ticketId: PROPERTY_ID }, body: { room: 'ATTIC' } }), 'room');
+  assertInvalid(await call(listTickets, { query: { room: 'KITCHEN,ATTIC' } }), 'room');
+});

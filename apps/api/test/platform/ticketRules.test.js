@@ -62,3 +62,10 @@ test('수정 가능 여부: 끝 상태는 아무도, 그 밖에는 활성 소유
   assert.equal(canEditTicket(ticketOf(), STRANGER), false);
   assert.equal(canEditTicket(ticketOf({ ownership: { userId: OWNER.id, endedAt: new Date() } }), OWNER), false);
 });
+
+test('칸 권한: 방은 요청자(OPEN일 때)와 활성 소유자가 고친다(H-20)', () => {
+  assert.deepEqual(findForbiddenTicketFields(ticketOf(), requesterActor, ['room']), []);
+  assert.deepEqual(findForbiddenTicketFields(ticketOf({ status: 'IN_PROGRESS' }), requesterActor, ['room']), ['room']);
+  assert.deepEqual(findForbiddenTicketFields(ticketOf({ status: 'IN_PROGRESS' }), ownerActor, ['room']), []);
+  assert.deepEqual(findForbiddenTicketFields(ticketOf(), formerOwnerActor, ['room']), ['room']);
+});

@@ -7,6 +7,7 @@ import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { attachDocumentsInTx, TICKET_RESOURCE, withAttachments } from '../../platform/documentAttachments.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { toRoomWhere } from '../../platform/roomRules.js';
 import { appendPropertyHistory } from '../../platform/propertyHistory.js';
 import {
   checkTicketTransition,
@@ -96,10 +97,15 @@ export const createTicket = async (user, { propertyId, attachmentDocumentIds = [
   return respondOne(prisma, created, user);
 };
 
-const buildFilters = ({ propertyId, statuses, categories }) => ({
-  ...(propertyId ? { propertyId } : {}),
-  ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
-  ...(categories.length > 0 ? { category: { in: categories } } : {}),
+const buildFilters = ({ propertyId, statuses, categories, rooms }) => ({
+  AND: [
+    {
+      ...(propertyId ? { propertyId } : {}),
+      ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
+      ...(categories.length > 0 ? { category: { in: categories } } : {}),
+    },
+    toRoomWhere(rooms),
+  ],
 });
 
 // GET /tickets — 볼 수 있는 것만. 최근 요청 순(sortDirection).
@@ -173,12 +179,14 @@ const appendTicketSummary = (tx, ticket) =>
     content: ticket.resolutionNote ?? null,
     occurredOn: getTodayKST(),
     cost: ticket.cost ?? null,
+    room: ticket.room ?? null,
     source: { feature: 'platform', resourceType: TICKET_RESOURCE, resourceId: ticket.id },
     client: tx,
   });
 
 // PATCH /tickets/:ticketId — data는 컨트롤러가 검증한 값(보낸 칸만).
 // 요청자: title·description(OPEN일 때만), status → CANCELED. 활성 소유자: status·resolutionNote·cost.
+// room: 요청자는 OPEN일 때, 활성 소유자는 끝나기 전까지.
 export const updateTicket = async (user, ticketId, { status, ...fields }, req) => {
   const updated = await prisma.$transaction(async (tx) => {
     const { ticket, actor } = await lockTicket(tx, user, ticketId);

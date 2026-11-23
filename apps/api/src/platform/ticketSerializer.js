@@ -19,6 +19,7 @@ export const toTicketResponse = (ticket, user) => ({
   property: toPropertySummary(ticket.property),
   contractId: ticket.contractId ?? null,
   category: ticket.category,
+  room: ticket.room ?? null,
   title: ticket.title,
   description: ticket.description,
   status: ticket.status,

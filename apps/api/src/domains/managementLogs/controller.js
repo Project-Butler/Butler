@@ -1,8 +1,10 @@
 // 하우스 로그 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
 import { AppError } from '../../platform/AppError.js';
 import { MAX_LOG_ATTACHMENTS } from '../documents/fileRules.js';
+import { parseRoom, parseRoomFilter } from '../../platform/roomRules.js';
 import {
   isValidLogDate,
+  MAX_LOG_QUERY_LENGTH,
   MANAGEMENT_LOG_EDITABLE_FIELDS,
   MANAGEMENT_LOG_SCOPES,
   MANAGEMENT_LOG_TYPES,
@@ -70,6 +72,8 @@ const FIELD_PARSERS = {
     details.push({ field: 'cost', reason: '0 이상의 정수 또는 null이어야 합니다.' });
     return undefined;
   },
+  // 방(위치) 태그. null = 방 없음.
+  room: (value, details) => parseRoom(value, details),
 };
 
 // 미연결 문서 id 목록. 최대 10개, 중복 없음.
@@ -129,7 +133,16 @@ const parseUpdateBody = (body) => {
   return data;
 };
 
-// L-02·L-03 공통. L-03만 propertyId·until을, 둘 다 scope·type을 받는다.
+// 검색어: 앞뒤 공백을 뺀 1~50자. 띄어쓰기로 나눈 낱말이 모두 제목·내용 어딘가에 있어야 한다(통합 검색과 같은 방식).
+const parseSearchQuery = (value, details) => {
+  if (value === undefined) return null;
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text.length >= 1 && text.length <= MAX_LOG_QUERY_LENGTH) return text;
+  details.push({ field: 'q', reason: `1~${MAX_LOG_QUERY_LENGTH}자여야 합니다.` });
+  return null;
+};
+
+// L-02·L-03 공통. 둘 다 scope·type·room·until·q를 받고, propertyId는 L-03에서만 쓴다(L-02는 경로의 호실).
 const parseListQuery = (query) => {
   assertSingleValues(query);
   const details = [];
@@ -144,6 +157,8 @@ const parseListQuery = (query) => {
   if (query.until !== undefined && !isValidLogDate(query.until)) {
     details.push({ field: 'until', reason: 'YYYY-MM-DD 날짜여야 합니다.' });
   }
+  const rooms = parseRoomFilter(query.room, details);
+  const q = parseSearchQuery(query.q, details);
   const sortMatch = SORT_PATTERN.exec(query.sort ?? 'occurredOn:desc');
   if (!sortMatch) details.push({ field: 'sort', reason: 'occurredOn:asc|desc 형식이어야 합니다.' });
   const { page, size } = parsePagination(query, details);
@@ -153,6 +168,8 @@ const parseListQuery = (query) => {
     propertyId: query.propertyId ?? null,
     scope: query.scope ?? null,
     types,
+    rooms,
+    q,
     until: query.until ?? null,
     sortDirection: sortMatch[1],
     page,

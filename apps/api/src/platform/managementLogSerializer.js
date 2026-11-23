@@ -22,6 +22,7 @@ export const toManagementLogResponse = (log, user, now = new Date()) => ({
   content: log.content ?? null,
   occurredOn: toDateOnlyString(log.occurredOn),
   cost: toMoney(log.cost) ?? null,
+  room: log.room ?? null,
   // 작성자 본인에게만 보인다(다른 소유자·운영자에게는 null).
   author: log.authorId === user.id ? log.author : null,
   source: {

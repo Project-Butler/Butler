@@ -51,6 +51,8 @@ export const TICKET_OWNER_FIELDS = ['resolutionNote', 'cost'];
 // status 밖의 칸을 이 사람이 지금 고칠 수 있는지. 못 고치는 칸 이름 목록을 돌려준다.
 export const findForbiddenTicketFields = (ticket, actor, fields) =>
   fields.filter((field) => {
+    // 방은 요청자(OPEN일 때)와 활성 소유자 둘 다 고칠 수 있다.
+    if (field === 'room') return !(actor.isActiveOwner || (actor.isRequester && ticket.status === 'OPEN'));
     if (TICKET_REQUESTER_FIELDS.includes(field)) return !(actor.isRequester && ticket.status === 'OPEN');
     if (TICKET_OWNER_FIELDS.includes(field)) return !actor.isActiveOwner;
     return false;
