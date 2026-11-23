@@ -116,7 +116,7 @@ export const DocumentBoxTable = ({ documents, contract, userId, urlEntries, onOp
         const isOpening = status === 'loading';
         // 줄 어디를 눌러도 연다. 키보드는 파일 이름 버튼(Enter·Space)으로 열고, 그 클릭도 줄로 올라와 한 번만 연다.
         const handleRowClick = () => {
-          if (!isOpening) onOpen(doc);
+          if (!isOpening) onOpen(doc, documents);
         };
         return (
           <tr
