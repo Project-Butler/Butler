@@ -48,6 +48,10 @@ export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthori
   const inputRef = useRef(null);
   const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
   const { items, addFiles, remove, notice, storageUnavailable } = uploads;
+  // 올라간 파일들만 이전·다음으로 넘겨 본다(올리는 중인 파일은 아직 서버 문서가 아니다).
+  const uploadedDocuments = items
+    .filter((item) => item.status === 'done' && item.documentId)
+    .map((item) => ({ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes }));
   const maxCount = uploads.maxCount ?? MAX_LOG_ATTACHMENTS;
   const isFull = items.length >= maxCount;
   // 받는 형식은 useAttachmentUploads(resourceType)가 정한다. 동영상을 받는 곳(수리 요청)만 버튼·안내가 달라진다.
@@ -103,7 +107,7 @@ export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthori
                   <DocumentThumbnail
                     document={{ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes }}
                     onUnauthorized={onUnauthorized}
-                    onOpen={previewInPopup ? openPreview : undefined}
+                    onOpen={previewInPopup ? (document) => openPreview(document, uploadedDocuments) : undefined}
                   />
                 ) : (
                   <UploadingPreview item={item} />

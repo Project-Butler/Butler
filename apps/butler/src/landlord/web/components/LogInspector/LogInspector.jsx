@@ -120,7 +120,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
           <ul className="grid grid-cols-3 gap-2">
             {log.attachments.map((attachment) => (
               <li key={attachment.id}>
-                <DocumentThumbnail document={attachment} onUnauthorized={onUnauthorized} onOpen={openPreview} />
+                <DocumentThumbnail document={attachment} onUnauthorized={onUnauthorized} onOpen={(document) => openPreview(document, log.attachments)} />
               </li>
             ))}
           </ul>
