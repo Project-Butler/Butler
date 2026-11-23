@@ -3,6 +3,7 @@ import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX } fro
 import { Badge, Button } from '@butler/ui';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { HouseLogTimeline } from '../components/HouseLogTimeline/HouseLogTimeline';
+import { HouseLogTodo } from '../components/HouseLogTodo/HouseLogTodo';
 import { LogFilterCard, MAX_QUERY_LENGTH } from '../components/LogFilterCard/LogFilterCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { LogHomeSelect } from '../components/LogHomeSelect/LogHomeSelect';
@@ -15,7 +16,7 @@ import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useHouseLogTimeline } from '../hooks/useHouseLogTimeline';
 import { formatWon, getTodayKST } from '../utils/contract';
-import { groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
+import { buildTodoItems, groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
 import { ROOM_FILTER_OPTIONS } from '../utils/room';
 import { formatUnitLabel } from '../utils/unitAddress';
@@ -163,7 +164,7 @@ const TimelinePlaceholder = ({ error }) => (
   </section>
 );
 
-// 한 호실: 계약 타임라인(H-22). 유형·방 거르기는 기록 점만 줄인다.
+// 한 호실: 계약 타임라인 → 앞으로 할 일(H-22). 유형·방 거르기는 기록 점만 줄인다.
 // 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
 const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onUnauthorized }) => {
   const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
@@ -172,11 +173,16 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
     () => groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)]),
     [logs, axis, types, rooms, current, next, nextKind, past, notices],
   );
+  const todo = useMemo(() => buildTodoItems({ current, next, nextKind, today }), [current, next, nextKind, today]);
 
   if (timeline.error && logs.length === 0) return <TimelinePlaceholder error={timeline.error} />;
   if (timeline.isLoading && logs.length === 0) return <TimelinePlaceholder />;
 
   const showContract = (contractId) => onNavigate('propertyDetail', { propertyId, contractId });
+  const handleTodoAction = (action) => {
+    if (action.kind === 'RENEW') onNavigate('contractRegister', { propertyId, renewFrom: action.contractId });
+    else showContract(action.contractId);
+  };
 
   return (
     <>
@@ -198,6 +204,7 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
         onShowContract={showContract}
         onRegisterContract={() => onNavigate('propertyDetail', { propertyId })}
       />
+      {!timeline.endedOn && <HouseLogTodo items={todo} onAction={handleTodoAction} />}
     </>
   );
 };
