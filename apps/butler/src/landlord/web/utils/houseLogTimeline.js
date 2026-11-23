@@ -1,7 +1,7 @@
 // 하우스 로그 계약 타임라인·앞으로 할 일·전체 호실 계산(순수 함수, #203 P-4b).
 // 근거: docs/15 수정 계획 H-22~H-47, 2단계 타임라인 변경 계획 2장 P-4b. 날짜는 모두 'YYYY-MM-DD'(KST) 문자열.
 // 계약·통지는 계약 쪽 데이터를 읽어서 보여 주기만 한다(H-23). 저장하거나 바꾸지 않는다.
-import { addDays, addYears, daysBetween } from './contract';
+import { addDays, addYears, daysBetween, formatDday } from './contract';
 import { formatDateKST } from './format';
 import { ROOM_FILTER_NONE } from './room';
 
@@ -331,16 +331,16 @@ export const getHomeRowSummary = ({ current, nextKind, endedOn, isSold }, today)
   if (nextKind === 'RENEWAL') return { tone: 'success', badge: '갱신 확정', next: `갱신 계약 ${current.endDate} 뒤 시작` };
   const notice = current.renewalNotice;
   const daysToEnd = daysBetween(today, current.endDate);
-  if (!notice) return { tone: 'default', badge: `만료 D-${daysToEnd}`, next: '할 일 없음' };
-  if (notice.hasDeliveredInTime) return { tone: 'success', badge: `만료 D-${daysToEnd}`, next: '통지 도달 기록 있음' };
+  if (!notice) return { tone: 'default', badge: `만료 ${formatDday(daysToEnd)}`, next: '할 일 없음' };
+  if (notice.hasDeliveredInTime) return { tone: 'success', badge: `만료 ${formatDday(daysToEnd)}`, next: '통지 도달 기록 있음' };
   if (notice.phase === 'OPEN' || notice.phase === 'CLOSING_SOON') {
     return {
       tone: notice.phase === 'CLOSING_SOON' ? 'danger' : 'warning',
-      badge: `통지 마감 D-${daysBetween(today, notice.safeDeadline)}`,
+      badge: `통지 마감 ${formatDday(daysBetween(today, notice.safeDeadline))}`,
       next: notice.latestNotice ? '도달한 통지 기록 없음' : '갱신 거절 통지 기록 없음',
     };
   }
-  if (notice.phase === 'CLOSED') return { tone: 'warning', badge: `만료 D-${daysToEnd}`, next: '통지 없이 마감 지남' };
+  if (notice.phase === 'CLOSED') return { tone: 'warning', badge: `만료 ${formatDday(daysToEnd)}`, next: '통지 없이 마감 지남' };
   return { tone: 'default', badge: '통지 기간 전', next: `통지 기간 ${notice.windowStart}부터` };
 };
 

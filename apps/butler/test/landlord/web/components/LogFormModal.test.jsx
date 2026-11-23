@@ -137,6 +137,23 @@ describe('LogFormModal 공개 범위(H-29)', () => {
     expect(screen.queryByText(HISTORY_NOTICE)).not.toBeInTheDocument();
   });
 
+  it('매도한 호실도 고를 수 있고, 나만 보기 안내만 보이며 keepPrivate를 보내지 않는다(H-41)', async () => {
+    const sold = { ...VERIFIED_PROPERTY, id: 'p9', displayName: '매도한 호실' };
+    vi.mocked(getPropertyList)
+      .mockReset()
+      .mockImplementation(async ({ relation }) => ({ data: relation === 'FORMER_OWNER' ? [sold] : [], meta: { page: 1, size: 100, total: 1, hasNext: false } }));
+    renderModal({ initialPropertyId: 'p9' });
+    expect(await screen.findByText(/매도한 호실이라 나만 보기로 저장돼요/)).toBeInTheDocument();
+    expect(screen.queryByText(HISTORY_NOTICE)).not.toBeInTheDocument();
+    expect(screen.queryByText('내 호실 중에 없어요.')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '매도한 호실 (매도)' })).toBeInTheDocument();
+    await typeTitle('매도 후 관리비 정산');
+    await userEvent.click(screen.getByRole('button', { name: '기록 저장' }));
+    const body = vi.mocked(postManagementLog).mock.calls[0];
+    expect(body[0]).toBe('p9');
+    expect(body[1]).not.toHaveProperty('keepPrivate');
+  });
+
   it('수정: 수리 요청 완료 기록은 유형을 바꿀 수 없고 type을 보내지 않는다(H-47)', async () => {
     useProperty(VERIFIED_PROPERTY);
     vi.mocked(getManagementLog).mockResolvedValue({ ...LOG, type: 'TICKET_SUMMARY', scope: 'PROPERTY_HISTORY', author: null });

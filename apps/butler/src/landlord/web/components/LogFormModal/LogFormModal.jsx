@@ -22,6 +22,7 @@ import { getTodayKST } from '../../utils/contract';
 import {
   getLogScopeBadge,
   HISTORY_NOTICE,
+  SOLD_PRIVATE_NOTICE,
   HISTORY_ONLY_TYPES,
   SCOPE_LABEL,
   UNVERIFIED_LOG_WARNING,
@@ -56,9 +57,14 @@ const footerButtons = ({ onClose, onSubmit, isReady, isSubmitting, label }) => (
 const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
   const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
+  // 매도한 호실도 목록에서 지우기 전까지 나만 보기 기록을 남긴다(H-41). 서버가 매도로 끝난 관계만 받는다.
+  const formerList = useGetPropertyList({ relation: 'FORMER_OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
   const create = usePostManagementLog(hookOptions);
   const uploads = useAttachmentUploads([], hookOptions);
-  const properties = propertyList.data?.items ?? [];
+  const ownedItems = propertyList.data?.items ?? [];
+  const ownedIds = new Set(ownedItems.map((item) => item.id));
+  const formerItems = (formerList.data?.items ?? []).filter((item) => !ownedIds.has(item.id));
+  const properties = [...ownedItems, ...formerItems];
 
   const [propertyId, setPropertyId] = useState(fixedPropertyId ?? initialPropertyId ?? '');
   const [keepPrivate, setKeepPrivate] = useState(false);
@@ -66,13 +72,14 @@ const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, 
   const [serverFieldErrors, setServerFieldErrors] = useState({});
 
   const property = properties.find((item) => item.id === propertyId);
-  const isVerified = property?.myRelation?.verificationStatus === 'VERIFIED';
+  const isFormer = Boolean(property) && !ownedIds.has(property.id);
+  const isVerified = !isFormer && property?.myRelation?.verificationStatus === 'VERIFIED';
   const isNote = !HISTORY_ONLY_TYPES.includes(form.type);
   const clientErrors = validateLogForm(form);
   const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
   const isSubmitting = create.isLoading;
   const isReady = Boolean(property) && isLogFormComplete(form) && Object.keys(clientErrors).length === 0 && isAttachmentReady(uploads);
-  const isPropertyMissing = propertyList.data && propertyId && !property;
+  const isPropertyMissing = propertyList.data && formerList.data && propertyId && !property;
 
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -84,7 +91,7 @@ const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, 
     const { data, error } = await create.mutate(propertyId, {
       ...toLogFields(form),
       // 나만 보기 체크는 메모에만 있다(수리·점검에 보내면 400).
-      ...(isNote && keepPrivate ? { keepPrivate: true } : {}),
+      ...(isNote && keepPrivate && !isFormer ? { keepPrivate: true } : {}),
       attachmentDocumentIds: uploads.documentIds,
     });
     if (data) {
@@ -113,18 +120,25 @@ const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, 
         </option>
         {properties.map((item) => (
           <option key={item.id} value={item.id}>
-            {item.displayName}
+            {ownedIds.has(item.id) ? item.displayName : `${item.displayName} (매도)`}
           </option>
         ))}
       </select>
       {propertyList.error && <p className="text-chip text-crit-ink">{propertyList.error.message}</p>}
-      {isPropertyMissing && <p className="text-chip text-crit-ink">지금 소유한 호실 중에 없어요.</p>}
+      {isPropertyMissing && <p className="text-chip text-crit-ink">내 호실 중에 없어요.</p>}
       {propertyList.data && properties.length === 0 && <p className="text-chip text-ink-3">먼저 호실을 등록해 주세요</p>}
     </div>
   );
   // 수리·점검: 안내 한 줄(인증 전이면 나만 보기 칩). 메모: [나만 보기] 체크(기본 해제).
   let scopeContent;
-  if (isNote) {
+  if (isFormer) {
+    scopeContent = (
+      <p className="flex min-h-11 items-center gap-2 text-sub text-ink-2">
+        <PrivateChip />
+        {SOLD_PRIVATE_NOTICE}
+      </p>
+    );
+  } else if (isNote) {
     scopeContent = (
       <label className="flex min-h-11 cursor-pointer items-center gap-2 text-body text-ink">
         <input
@@ -176,7 +190,7 @@ const CreateLogModal = ({ fixedPropertyId, initialPropertyId, onClose, onSaved, 
           propertyField={propertyField}
           scopeField={scopeField}
         />
-        {property && !isVerified && (
+        {property && !isVerified && !isFormer && (
           <NoticeBox tone="warn">
             <p>{UNVERIFIED_PRIVATE_NOTICE}</p>
             <p>{UNVERIFIED_LOG_WARNING}</p>

@@ -352,6 +352,12 @@ describe('전체 호실 (H-28)', () => {
     expect(rows[1].current.id).toBe('c1');
   });
 
+  it('줄 요약 칩: 마감·만료 당일과 지난 날은 D-day·D+n 지남(D--1 없음)', () => {
+    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: '2026-11-23' }) }) }, TODAY).badge).toBe('통지 마감 D+1 지남');
+    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: TODAY }) }) }, TODAY).badge).toBe('통지 마감 D-day');
+    expect(getHomeRowSummary({ current: contract({ endDate: TODAY, renewalNotice: null }) }, TODAY).badge).toBe('만료 D-day');
+  });
+
   it('줄 요약 칩', () => {
     expect(getHomeRowSummary({ endedOn: '2026-10-31', isSold: true }, TODAY)).toMatchObject({ badge: '2026-10-31 매도' });
     expect(getHomeRowSummary({ current: null }, TODAY).badge).toBe('계약 없음');
