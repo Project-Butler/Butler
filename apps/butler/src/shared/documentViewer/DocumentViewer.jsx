@@ -149,7 +149,8 @@ const VideoSlide = ({ document, entry, urls }) => {
 //   - [저장]은 그때 받은 새 주소로 원본을 내려받는다. 돌리기는 두지 않는다.
 //   - PDF 칸·썸네일은 새 탭에서 PDF 를 연다. 자동 보정·글자 판독은 하지 않는다.
 // documents: [{ id, fileName, mimeType, sizeBytes }], urls: useDocumentUrls 의 결과.
-export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => {
+// label: 화면 읽기 프로그램이 읽는 팝업 이름(기본 계약서 화면 문구). 하우스 로그·문서함은 '파일 크게 보기'.
+export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose, label = '계약서 크게 보기' }) => {
   const [index, setIndex] = useState(() => Math.min(Math.max(0, startIndex), documents.length - 1));
   const [view, setView] = useState(RESET_VIEW);
   const [naturals, setNaturals] = useState({});
@@ -352,7 +353,7 @@ export const DocumentViewer = ({ documents, startIndex = 0, urls, onClose }) => 
   if (!current) return null;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="계약서 크게 보기" className={`fixed inset-0 z-50 flex flex-col ${BG} font-sans text-white`}>
+    <div role="dialog" aria-modal="true" aria-label={label} className={`fixed inset-0 z-50 flex flex-col ${BG} font-sans text-white`}>
       <header className="mx-auto flex h-12 w-full max-w-[430px] shrink-0 items-center gap-2 px-1">
         <button ref={closeRef} type="button" aria-label="닫기" onClick={onClose} className={ROUND_BUTTON}>
           <X size={20} strokeWidth={1.8} aria-hidden="true" />

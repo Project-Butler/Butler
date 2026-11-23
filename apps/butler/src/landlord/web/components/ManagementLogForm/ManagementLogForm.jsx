@@ -108,7 +108,7 @@ export const ManagementLogForm = ({
       />
       {fieldError('content') && <p className="text-chip text-crit-ink">{fieldError('content')}</p>}
     </div>
-    {uploads && <AttachmentPicker uploads={uploads} disabled={disabled} onUnauthorized={onUnauthorized} />}
+    {uploads && <AttachmentPicker uploads={uploads} disabled={disabled} onUnauthorized={onUnauthorized} previewInPopup />}
     {fieldError('attachmentDocumentIds') && <p className="text-chip text-crit-ink">{fieldError('attachmentDocumentIds')}</p>}
   </>
 );

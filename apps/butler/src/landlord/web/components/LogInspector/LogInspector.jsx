@@ -7,6 +7,7 @@ import { IconTile } from '../IconTile/IconTile';
 import { ManagementLogBadges } from '../ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { useDeleteManagementLog } from '../../hooks/useDeleteManagementLog';
+import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
 import { formatWon } from '../../utils/contract';
 import { canDeleteLog } from '../../utils/managementLog';
@@ -58,6 +59,8 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
 // 수정은 isReadOnly가 아닐 때, 삭제는 내가 쓴 나만 보기만.
 export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, onUnauthorized }) => {
   const { data: log, error } = useGetManagementLog(logId, { onUnauthorized });
+  // 사진·동영상·PDF는 새 탭 대신 미리보기 팝업으로 연다.
+  const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
 
   const frame = (children) => (
     <aside className="logs-page__inspector-panel sticky top-6 col-span-3 self-start overflow-hidden rounded-card border border-line bg-surface" aria-label="기록 상세">
@@ -113,11 +116,11 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
           사진 <span className="font-num font-normal tabular-nums text-ink-3">{log.attachments.length}</span>
         </p>
         {log.attachments.length > 0 ? (
-          // 다운로드 URL은 패널을 열 때 문서마다 받는다(5분 유효). 사진을 누르면 원본을 새 창에서 연다.
+          // 다운로드 URL은 패널을 열 때 문서마다 받는다(5분 유효). 사진을 누르면 미리보기 팝업으로 연다.
           <ul className="grid grid-cols-3 gap-2">
             {log.attachments.map((attachment) => (
               <li key={attachment.id}>
-                <DocumentThumbnail document={attachment} onUnauthorized={onUnauthorized} />
+                <DocumentThumbnail document={attachment} onUnauthorized={onUnauthorized} onOpen={(document) => openPreview(document, log.attachments)} />
               </li>
             ))}
           </ul>
@@ -145,6 +148,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
         </div>
         {canDeleteLog(log) && <DeleteRow key={log.id} log={log} onDeleted={onDeleted} onUnauthorized={onUnauthorized} />}
       </div>
+      {preview}
     </>,
   );
 };
