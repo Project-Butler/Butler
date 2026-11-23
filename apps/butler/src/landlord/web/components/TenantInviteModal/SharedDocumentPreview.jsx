@@ -5,7 +5,7 @@ import { isUnauthorizedError } from '../../../../shared/apiError';
 import { isContractPhoto } from '../../utils/tenantInvite';
 
 // A2b 크게 보기: 어두운 전체 덮개 위에 파일 이름 · n / 전체 · 이전·다음 · 아래 썸네일 줄.
-// 미리보기만 하고 자동 보정(반듯하게 펴기·글자 판독)은 하지 않는다(결정 10). PDF는 새 창에서 연다.
+// 미리보기만 하고 자동 보정(반듯하게 펴기·글자 판독)은 하지 않는다(결정 10). PDF도 덮개 안에서(브라우저 PDF 뷰어) 본다.
 // Esc는 이 덮개만 닫는다(뒤의 초대 팝업까지 닫히지 않게 window 캡처 단계에서 먼저 받는다).
 export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, onClose, onUnauthorized }) => {
   const [index, setIndex] = useState(Math.min(initialIndex, documents.length - 1));
@@ -41,17 +41,17 @@ export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, 
   const [viewUrls, setViewUrls] = useState({});
   const requestedViews = useRef(new Set());
   const currentId = current?.id;
-  const currentIsPhoto = current ? isContractPhoto(current.mimeType) : false;
   const currentIsLocal = currentId ? String(imageUrls[currentId] ?? '').startsWith('blob:') : false;
+  // PDF도 볼 때 VIEW 주소를 받는다(팝업 안에서 그린다). 방금 올린 PDF는 서버 주소가 없어 새 창 버튼만 둔다.
   useEffect(() => {
-    if (!currentId || !currentIsPhoto || currentIsLocal || requestedViews.current.has(currentId)) return;
+    if (!currentId || currentIsLocal || requestedViews.current.has(currentId)) return;
     requestedViews.current.add(currentId);
     postDocumentDownloadUrl(currentId)
       .then((issued) => setViewUrls((prev) => ({ ...prev, [currentId]: issued.url })))
       .catch((error) => {
         if (isUnauthorizedError(error)) onUnauthorized?.();
       });
-  }, [currentId, currentIsPhoto, currentIsLocal, onUnauthorized]);
+  }, [currentId, currentIsLocal, onUnauthorized]);
 
   // 응답을 기다린 뒤 창을 열면 팝업 차단에 걸려서 빈 창을 먼저 열고 주소를 넣는다(DocumentThumbnail과 같다).
   const openOriginal = async () => {
@@ -70,6 +70,7 @@ export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, 
   if (!current) return null;
   const isPhoto = isContractPhoto(current.mimeType);
   const imageUrl = viewUrls[current.id] ?? imageUrls[current.id];
+  const pdfUrl = isPhoto ? null : viewUrls[current.id];
 
   return (
     <div
@@ -111,6 +112,8 @@ export const SharedDocumentPreview = ({ documents, initialIndex = 0, imageUrls, 
           ) : (
             <p className="text-body text-white/70">불러오는 중</p>
           )
+        ) : pdfUrl ? (
+          <iframe title={`${current.fileName} 미리보기`} src={pdfUrl} className="h-full w-[calc(100%-8rem)] rounded-input bg-white" />
         ) : (
           <div className="flex w-72 flex-col items-center gap-3 rounded-card bg-surface p-8 text-center text-ink">
             <span className="flex h-14 w-14 items-center justify-center rounded-btn bg-crit-soft text-crit-ink" aria-hidden="true">

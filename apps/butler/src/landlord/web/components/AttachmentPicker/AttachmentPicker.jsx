@@ -3,6 +3,7 @@ import { FileText, FileVideo, ImagePlus, Lock, X } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { DocumentThumbnail } from '../DocumentThumbnail/DocumentThumbnail';
+import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import {
   buildAttachmentAccept,
   DEFAULT_FILE_KINDS,
@@ -42,8 +43,10 @@ const UploadingPreview = ({ item }) => (
 // 관리 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
 // 형식·크기는 고를 때 미리 검사하고, 업로드 진행·미리보기·빼기를 보여 준다.
 // label: 칸 이름(기본 '사진 (선택)', 동영상을 받는 곳은 '사진·동영상 (선택)'). 갱신 거절 통지 증빙처럼 PDF 도 받는 곳은 다른 이름을 준다.
-export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthorized }) => {
+// previewInPopup: 올라간 파일을 누르면 새 탭 대신 미리보기 팝업으로 연다(PC 웹). 앱 화면은 지금처럼 새 탭.
+export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthorized, previewInPopup = false }) => {
   const inputRef = useRef(null);
+  const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
   const { items, addFiles, remove, notice, storageUnavailable } = uploads;
   const maxCount = uploads.maxCount ?? MAX_LOG_ATTACHMENTS;
   const isFull = items.length >= maxCount;
@@ -97,7 +100,11 @@ export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthori
             <li key={item.key} className="space-y-1">
               <div className="relative">
                 {item.status === 'done' && !item.previewUrl ? (
-                  <DocumentThumbnail document={{ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType }} onUnauthorized={onUnauthorized} />
+                  <DocumentThumbnail
+                    document={{ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes }}
+                    onUnauthorized={onUnauthorized}
+                    onOpen={previewInPopup ? openPreview : undefined}
+                  />
                 ) : (
                   <UploadingPreview item={item} />
                 )}
@@ -124,6 +131,7 @@ export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthori
           ))}
         </ul>
       )}
+      {preview}
     </div>
   );
 };

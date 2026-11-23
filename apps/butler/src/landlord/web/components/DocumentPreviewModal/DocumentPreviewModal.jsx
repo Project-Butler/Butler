@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, ExternalLink, FileText } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { Modal } from '../Modal/Modal';
@@ -18,6 +18,22 @@ export const DocumentPreviewModal = ({ document, urls, onClose }) => {
   const [preview, setPreview] = useState({ status: 'loading', url: null });
   const { load } = urls;
 
+  // 다른 팝업(기록 추가·수정 등) 위에서 열려도 Esc는 이 미리보기만 닫는다.
+  // window 캡처 단계에서 먼저 받아 뒤의 팝업·뷰어 핸들러로 넘기지 않는다.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopImmediatePropagation();
+      onCloseRef.current();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
+
   useEffect(() => {
     let isActive = true;
     // force: 4분 안에 다시 열어도 새 주소를 받는다(열 때마다 감사). 같은 순간 두 번 불려도 진행 중인 요청을 같이 쓴다.
@@ -30,7 +46,7 @@ export const DocumentPreviewModal = ({ document, urls, onClose }) => {
   }, [document.id, load]);
 
   if ((isImageDocument(document) || isVideoDocument(document)) && preview.status === 'ready') {
-    return <DocumentViewer documents={[document]} urls={urls} onClose={onClose} />;
+    return <DocumentViewer documents={[document]} urls={urls} onClose={onClose} label="파일 크게 보기" />;
   }
 
   const openInTab = () => {
