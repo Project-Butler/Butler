@@ -1,7 +1,7 @@
 // 하우스 로그 응답 직렬화(DB 의존 없음). 목록·상세·쓰기 응답이 모두 이 함수를 쓴다(계약 5장).
 import { toDateOnlyString } from './dateUtils.js';
 import { toAttachmentResponse } from './documentAttachments.js';
-import { canDeleteLog, canEditLog } from './managementLogRules.js';
+import { canDeleteLog, canEditLog, isHideOnlyLog } from './managementLogRules.js';
 import { toMoney } from './money.js';
 import { toPropertySummary } from './propertySerializer.js';
 
@@ -34,6 +34,8 @@ export const toManagementLogResponse = (log, user, now = new Date()) => ({
   attachments: (log.attachments ?? []).map(toAttachmentResponse),
   isReadOnly: !canEditLog(log, user, now),
   isDeletable: canDeleteLog(log, user, now),
+  // 삭제가 숨김인지(H-41): 매도 뒤 판 사람의 넘어간 호실 이력·요약. 지우면 내 화면에서만 사라진다("내 화면에서 삭제").
+  isHideOnly: isHideOnlyLog(log, user),
   // 이전 소유자의 소유 관계에 붙은 기록(넘겨받은 호실 이력, 읽기 전용, H-30).
   isFromPreviousOwner: log.ownership.userId !== user.id,
   createdAt: log.createdAt.toISOString(),

@@ -14,6 +14,7 @@ import {
 import {
   canDeleteLog,
   canEditLog,
+  isHideOnlyLog,
   isOwnershipVerified,
   PROPERTY_HISTORY_ONLY_TYPES,
   resolveCreateScope,
@@ -67,6 +68,7 @@ const recordLogActivity = (tx, user, type, log, extra = {}) =>
     params: { buildingNo: log.property.buildingNo, unitNo: log.property.unitNo, title: log.title, type: log.type, ...extra },
   });
 
+// removedAt([목록에서 지우기])도 읽는다 — toVisibleLogWhere가 지운 소유 관계의 기록을 뺀다.
 const findUserOwnerships = (user) => prisma.ownership.findMany({ where: { userId: user.id } });
 
 // 검색 칸. 통합 검색(domains/search)의 하우스 로그 검색과 같다.
@@ -114,16 +116,42 @@ const findPage = async (user, ownerships, filters, { sortDirection, page, size }
 const attachLogDocuments = (tx, user, logId, documentIds) =>
   attachDocumentsInTx(tx, user, { resourceType: MANAGEMENT_LOG_RESOURCE, resourceId: logId, documentIds, now: getNow() });
 
+// 기록을 쓸 소유 관계를 잠가서 돌려준다. 활성 소유 관계가 없으면 매도 뒤 판 사람의 쓰기(H-41):
+// 인증한 적 있고 매도(SOLD)로 끝났고 목록에서 지우지 않은 가장 최근 소유 관계. 그 밖(SUPERSEDED 등)은 404.
+const lockCreatableOwnership = async (tx, user, propertyId) => {
+  const active = await tx.ownership.findFirst({ where: { userId: user.id, propertyId, endedAt: null }, select: { id: true } });
+  if (active) {
+    const ownership = await lockOwnershipRow(tx, active.id);
+    if (!ownership.endedAt) return { ownership, afterSale: false };
+  }
+  const sold = await tx.ownership.findFirst({
+    where: { userId: user.id, propertyId, endReason: 'SOLD', firstVerifiedAt: { not: null }, removedAt: null },
+    orderBy: [{ endedAt: 'desc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  if (!sold) throwPropertyNotFound();
+  const ownership = await lockOwnershipRow(tx, sold.id);
+  // 잠금을 기다리는 사이 목록에서 지웠을 수 있다.
+  if (ownership.removedAt) throwPropertyNotFound();
+  return { ownership, afterSale: true };
+};
+
+// 매도 뒤 새 기록은 나만 보기로만 남는다(H-41). 호실 이력은 다음 소유자 것이라 요청하면 400.
+const resolveAfterSaleScope = (requestedScope) => {
+  if (requestedScope === 'PROPERTY_HISTORY') throwScopeNotAllowed('scope', '매도한 호실에는 나만 보기 기록만 남길 수 있어요.');
+  return { scope: 'PRIVATE', keepPrivate: true };
+};
+
 // POST /properties/:propertyId/management-logs
 // 사진은 먼저 미연결 문서로 올리고(POST /documents) 그 id를 attachmentDocumentIds로 넘긴다. 같은 트랜잭션에서 붙인다.
 // 공개 범위는 서버가 정한다(resolveCreateScope, H-29·H-45): 인증 전엔 모두 나만 보기, 인증 뒤 수리·점검은 호실 이력.
+// 매도 뒤 판 사람은 끝난 소유 관계에 나만 보기로 쓴다(H-41).
 export const createManagementLog = async (user, propertyId, { attachmentDocumentIds = [], scope: requestedScope = null, keepPrivate = false, ...input }) => {
   const created = await prisma.$transaction(async (tx) => {
-    const active = await tx.ownership.findFirst({ where: { userId: user.id, propertyId, endedAt: null }, select: { id: true } });
-    if (!active) throwPropertyNotFound();
-    const ownership = await lockOwnershipRow(tx, active.id);
-    if (ownership.endedAt) throwPropertyNotFound();
-    const resolved = resolveCreateScope({ type: input.type, keepPrivate, requestedScope, verified: isOwnershipVerified(ownership) });
+    const { ownership, afterSale } = await lockCreatableOwnership(tx, user, propertyId);
+    const resolved = afterSale
+      ? resolveAfterSaleScope(requestedScope)
+      : resolveCreateScope({ type: input.type, keepPrivate, requestedScope, verified: isOwnershipVerified(ownership) });
     if (resolved.error === 'VERIFICATION_REQUIRED') throwVerificationRequired();
     if (resolved.error === 'SCOPE_NOT_ALLOWED') throwScopeNotAllowed('scope', '수리·점검은 집 이력으로 남아요.');
     if (resolved.error) {
@@ -152,7 +180,8 @@ export const createManagementLog = async (user, propertyId, { attachmentDocument
 // GET /properties/:propertyId/management-logs — 활성·이전 소유자, 운영자. 그 밖에는 호실을 숨긴다.
 export const findPropertyManagementLogs = async (user, propertyId, query) => {
   const ownerships = await findUserOwnerships(user);
-  const isRelated = ownerships.some((ownership) => ownership.propertyId === propertyId);
+  // 목록에서 지운 소유 관계만 있는 호실은 관계없는 호실로 본다.
+  const isRelated = ownerships.some((ownership) => ownership.propertyId === propertyId && !ownership.removedAt);
   if (!isRelated) {
     if (user.role !== 'ADMIN') throwPropertyNotFound();
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true } });
@@ -178,12 +207,12 @@ export const findManagementLogForUser = async (user, logId) => {
 };
 
 // 쓰기 공통: 기록을 찾고 그 소유 관계를 잠근 뒤 다시 읽는다.
-// 내 소유 관계의 기록(시스템 기록 포함)이 아니고 내가 쓴 것도 아니면 404로 숨긴다.
+// 내 소유 관계의 기록(시스템 기록 포함)이 아니거나 목록에서 지운 소유 관계의 기록이면 404로 숨긴다.
 const lockLogForWriter = async (tx, user, logId) => {
   const found = await tx.propertyLog.findUnique({ where: { id: logId }, select: { ownershipId: true } });
   if (!found) throwLogNotFound();
   const ownership = await lockOwnershipRow(tx, found.ownershipId);
-  if (ownership.userId !== user.id) throwLogNotFound();
+  if (ownership.userId !== user.id || ownership.removedAt) throwLogNotFound();
   // 잠금을 기다리는 사이 다른 요청이 지웠을 수 있다.
   const log = await tx.propertyLog.findUnique({ where: { id: logId }, include: MANAGEMENT_LOG_INCLUDE });
   if (!log) throwLogNotFound();
@@ -191,7 +220,7 @@ const lockLogForWriter = async (tx, user, logId) => {
 };
 
 const throwLogReadOnly = () => {
-  throw new AppError('MANAGEMENT_LOG_READ_ONLY', 422, '소유가 끝난 호실의 기록이나 시스템이 만든 기록은 수정할 수 없습니다.');
+  throw new AppError('MANAGEMENT_LOG_READ_ONLY', 422, '다음 소유자에게 넘어간 호실 이력이나 시스템이 만든 기록은 수정할 수 없습니다.');
 };
 
 // 수정(첨부 추가·삭제 포함)할 수 있는 기록을 잠가서 돌려준다. 문서 API도 같은 규칙을 쓴다(documents/resourcePolicies.js).
@@ -282,12 +311,17 @@ export const updateManagementLog = async (user, logId, { attachmentDocumentIds, 
   return toManagementLogResponse(withDocuments, user, getNow());
 };
 
-// DELETE /management-logs/:logId — 규칙은 canDeleteLog(H-36·H-47). 작성자는 인증 상태면 호실 이력도 지우고,
+// DELETE /management-logs/:logId — 규칙은 canDeleteLog(H-36·H-47·H-41). 작성자는 인증 상태면 호실 이력도 지우고,
 // 소유가 끝난 뒤에도 나만 보기 기록은 지울 수 있다(D-13). 수리 요청 완료 요약은 인증된 활성 소유자가 지운다.
+// 소유가 끝난 판 사람의 호실 이력·요약은 지우지 않고 숨긴다(내 화면에서만, 이미 숨겼어도 204).
 // 활성 소유 관계 본인인데 못 지우면 인증이 끊긴 것이라 403, 끝난 소유 관계는 422. 붙은 문서도 숨기고 파일을 지운다.
 export const deleteManagementLog = async (user, logId) => {
   const removedPaths = await prisma.$transaction(async (tx) => {
     const log = await lockLogForWriter(tx, user, logId);
+    if (isHideOnlyLog(log, user)) {
+      await tx.propertyLogHide.createMany({ data: [{ userId: user.id, logId: log.id, ownershipId: log.ownershipId }], skipDuplicates: true });
+      return [];
+    }
     if (!canDeleteLog(log, user, getNow())) {
       if (!log.ownership.endedAt) throwVerificationRequired();
       throw new AppError('MANAGEMENT_LOG_NOT_DELETABLE', 422, '소유가 끝난 호실의 호실 이력과 시스템이 만든 기록은 삭제할 수 없습니다.');

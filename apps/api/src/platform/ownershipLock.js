@@ -10,7 +10,9 @@ export const lockOwnershipRow = async (tx, ownershipId) => {
            verification_status::text AS "verificationStatus",
            verification_expires_at AS "verificationExpiresAt",
            first_verified_at AS "firstVerifiedAt",
-           logs_promoted_at AS "logsPromotedAt"
+           logs_promoted_at AS "logsPromotedAt",
+           end_reason::text AS "endReason",
+           removed_at AS "removedAt"
     FROM ownerships
     WHERE id = ${ownershipId}::uuid
     FOR UPDATE`;

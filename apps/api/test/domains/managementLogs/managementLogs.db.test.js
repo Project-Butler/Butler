@@ -140,7 +140,11 @@ describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
 
     const sellerView = await findPropertyManagementLogs(seller, property.id, LIST_DEFAULTS);
     assert.equal(sellerView.meta.total, 2);
-    assert.ok(sellerView.items.every((log) => log.isReadOnly));
+    // 판 사람: 넘어간 호실 이력은 읽기 전용·숨김만, 나만 보기 메모는 고칠 수 있다(H-41).
+    const sellerHistory = sellerView.items.find((log) => log.id === history.id);
+    const sellerSecret = sellerView.items.find((log) => log.id === secret.id);
+    assert.deepEqual([sellerHistory.isReadOnly, sellerHistory.isDeletable, sellerHistory.isHideOnly], [true, true, true]);
+    assert.deepEqual([sellerSecret.isReadOnly, sellerSecret.isDeletable, sellerSecret.isHideOnly], [false, true, false]);
     assert.ok(sellerView.items.every((log) => !log.isFromPreviousOwner));
   });
 
@@ -164,19 +168,19 @@ describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
     await rejectsWith(findPropertyManagementLogs(stranger, property.id, LIST_DEFAULTS), 'PROPERTY_NOT_FOUND');
   });
 
-  test('R-06·D-13: 소유 종료 뒤 수정은 422, 나만 보기 삭제는 된다', async () => {
+  test('D-13·H-41: 소유 종료 뒤에도 내 나만 보기 기록은 고치고 지운다', async () => {
     const user = await createUser();
     const property = await createProperty();
     const ownership = await own(user, property);
     const log = await createManagementLog(user, property.id, logInput());
     await endOwnership(ownership);
-    await rejectsWith(updateManagementLog(user, log.id, { title: '수정' }), 'MANAGEMENT_LOG_READ_ONLY');
+    assert.equal((await updateManagementLog(user, log.id, { title: '수정' })).title, '수정');
     await deleteManagementLog(user, log.id);
     assert.equal(await prisma.propertyLog.count({ where: { id: log.id } }), 0);
     assert.equal(await activityCount(user, 'MANAGEMENT_LOG_DELETED'), 1);
   });
 
-  test('H-36: 작성자 + 활성 + 인증이면 호실 이력도 삭제(204). 인증이 끊기면 403, 소유가 끝나면 422', async () => {
+  test('H-36: 작성자 + 활성 + 인증이면 호실 이력도 삭제(204). 인증이 끊기면 403, 소유가 끝나면 숨김(H-41)', async () => {
     const user = await createUser();
     const property = await createProperty();
     const ownership = await own(user, property, verified);
@@ -193,7 +197,9 @@ describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
     await rejectsWith(deleteManagementLog(user, lapsed.id), 'OWNERSHIP_VERIFICATION_REQUIRED');
 
     await endOwnership(ownership);
-    await rejectsWith(deleteManagementLog(user, lapsed.id), 'MANAGEMENT_LOG_NOT_DELETABLE');
+    await deleteManagementLog(user, lapsed.id);
+    assert.equal(await prisma.propertyLog.count({ where: { id: lapsed.id } }), 1);
+    assert.equal(await prisma.propertyLogHide.count({ where: { userId: user.id, logId: lapsed.id } }), 1);
     assert.equal(await activityCount(user, 'MANAGEMENT_LOG_DELETED'), 1);
   });
 
@@ -356,7 +362,7 @@ describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
     assert.equal(await prisma.propertyLog.count({ where: { id: summary.id } }), 0);
   });
 
-  test('H-47: 수리 요청 완료 요약 — 인증이 끊기면 403(422 아님), 소유가 끝나면 422', async () => {
+  test('H-47: 수리 요청 완료 요약 — 인증이 끊기면 403(422 아님), 소유가 끝나면 수정 422·삭제는 숨김', async () => {
     const user = await createUser();
     const property = await createProperty();
     const ownership = await own(user, property, verified);
@@ -367,7 +373,9 @@ describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
 
     await endOwnership(ownership);
     await rejectsWith(updateManagementLog(user, summary.id, { title: '수정' }), 'MANAGEMENT_LOG_READ_ONLY');
-    await rejectsWith(deleteManagementLog(user, summary.id), 'MANAGEMENT_LOG_NOT_DELETABLE');
+    await deleteManagementLog(user, summary.id);
+    assert.equal(await prisma.propertyLog.count({ where: { id: summary.id } }), 1);
+    assert.equal(await findManagementLogForUser(user, summary.id), null);
   });
 
   test('H-29: 인증 소유자의 생성 범위 — 수리 PRIVATE 400, 메모 기본 호실 이력, 나만 보기 메모는 PRIVATE', async () => {
