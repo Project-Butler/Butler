@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { EmptyState } from '../components/EmptyState/EmptyState';
+import { HouseLogTimeline } from '../components/HouseLogTimeline/HouseLogTimeline';
 import { LogFilterCard, MAX_QUERY_LENGTH } from '../components/LogFilterCard/LogFilterCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { LogHomeSelect } from '../components/LogHomeSelect/LogHomeSelect';
@@ -12,7 +13,9 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { RoomChip } from '../components/RoomChip/RoomChip';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
-import { formatWon } from '../utils/contract';
+import { useHouseLogTimeline } from '../hooks/useHouseLogTimeline';
+import { formatWon, getTodayKST } from '../utils/contract';
+import { groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
 import { ROOM_FILTER_OPTIONS } from '../utils/room';
 import { formatUnitLabel } from '../utils/unitAddress';
@@ -148,6 +151,57 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
   );
 };
 
+const TimelinePlaceholder = ({ error }) => (
+  <section className="rounded-card border border-line bg-surface p-6" aria-label="계약 타임라인">
+    {error ? (
+      <NoticeBox>{error.message}</NoticeBox>
+    ) : (
+      <p role="status" className="py-6 text-center text-body text-ink-3">
+        불러오는 중입니다
+      </p>
+    )}
+  </section>
+);
+
+// 한 호실: 계약 타임라인(H-22). 유형·방 거르기는 기록 점만 줄인다.
+// 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
+const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onUnauthorized }) => {
+  const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
+  const { logs, axis, current, next, nextKind, past, notices } = timeline;
+  const groups = useMemo(
+    () => groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)]),
+    [logs, axis, types, rooms, current, next, nextKind, past, notices],
+  );
+
+  if (timeline.error && logs.length === 0) return <TimelinePlaceholder error={timeline.error} />;
+  if (timeline.isLoading && logs.length === 0) return <TimelinePlaceholder />;
+
+  const showContract = (contractId) => onNavigate('propertyDetail', { propertyId, contractId });
+
+  return (
+    <>
+      {timeline.error && <NoticeBox>{timeline.error.message}</NoticeBox>}
+      <HouseLogTimeline
+        axis={axis}
+        groups={groups}
+        current={current}
+        next={next}
+        nextKind={nextKind}
+        past={past}
+        band={timeline.band}
+        today={today}
+        endedOn={timeline.endedOn}
+        isSold={timeline.isSold}
+        hiddenPastCount={timeline.hiddenPastCount}
+        propertyName={propertyName}
+        onShowLog={onShowLog}
+        onShowContract={showContract}
+        onRegisterContract={() => onNavigate('propertyDetail', { propertyId })}
+      />
+    </>
+  );
+};
+
 // 하우스 로그(S-04).
 // - 집 선택(U-02): 주소에 propertyId·all이 없고 활성 소유 호실이 2개 이상이면 집 카드. 1개면 바로 그 집 표로.
 //   기록 주소(/logs/:logId)·수정 팝업 주소는 늘 표 + 상세 패널로 연다.
@@ -170,6 +224,8 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
   const [selectedId, setSelectedId] = useState(selectedLogId ?? null);
   const [reloadKey, setReloadKey] = useState(0);
   const [total, setTotal] = useState();
+  // 오늘(KST)은 화면을 여는 동안 한 번만 정한다(자정을 넘겨도 계산이 흔들리지 않게).
+  const [today] = useState(getTodayKST);
 
   // 수정 팝업 주소(/logs/:logId/edit)로 바로 들어오면 그 기록을 패널에도 연다.
   const editingLogId = modal?.logId;
@@ -272,6 +328,20 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
           rooms={rooms}
           onRoomsChange={setRooms}
         />
+        {propertyId ? (
+          <SingleHomeOverview
+            key={propertyId}
+            propertyId={propertyId}
+            propertyName={properties.find((property) => property.id === propertyId)?.displayName}
+            types={types}
+            rooms={rooms}
+            reloadKey={reloadKey}
+            today={today}
+            onShowLog={setSelectedId}
+            onNavigate={onNavigate}
+            onUnauthorized={onUnauthorized}
+          />
+        ) : null}
         <div className="grid grid-cols-10 items-start gap-5">
           <section className="logs-page__table-wrap col-span-7 min-w-0 overflow-hidden rounded-card border border-line bg-surface">
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
@@ -322,7 +392,7 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
         description={
           isHomeSelect
             ? `집 ${activeHomes.length}채 · 진행 중인 수리 요청이 많은 집부터 보여요.`
-            : '내 호실의 수리·점검·메모를 날짜 순서로 모아 봐요.'
+            : '이 집에서 있었던 일(계약·수리·점검·통지)을 한곳에서 봐요.'
         }
         actions={
           <>

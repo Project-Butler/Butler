@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@butler/api-client', () => ({
   getPropertyList: vi.fn(),
+  getPropertyOwnershipList: vi.fn(),
+  getContractList: vi.fn(),
+  getRenewalNoticeList: vi.fn(),
   getManagementLogList: vi.fn(),
   getManagementLog: vi.fn(),
   getTicketList: vi.fn(),
@@ -12,7 +15,7 @@ vi.mock('@butler/api-client', () => ({
   postDocumentDownloadUrl: vi.fn(),
 }));
 
-import { getManagementLogList, getPropertyList, getTicketList } from '@butler/api-client';
+import { getContractList, getManagementLogList, getPropertyList, getPropertyOwnershipList, getRenewalNoticeList, getTicketList } from '@butler/api-client';
 import { ManagementLogListPage } from '../../../../src/landlord/web/pages/ManagementLogListPage';
 
 const home = (id, complexName, unitNo) => ({
@@ -57,7 +60,16 @@ const renderPage = (props = {}) => {
   return handlers;
 };
 
-const lastListParams = () => vi.mocked(getManagementLogList).mock.calls.at(-1)[0];
+// 표의 목록 요청(20건씩). 타임라인은 100건씩 끝까지 따로 읽는다.
+const tableCalls = () => vi.mocked(getManagementLogList).mock.calls.filter(([params]) => params.size !== 100);
+const lastListParams = () => tableCalls().at(-1)[0];
+
+// 타임라인 데이터(소유 관계·계약·통지)는 기본으로 비어 있다.
+beforeEach(() => {
+  vi.mocked(getPropertyOwnershipList).mockResolvedValue(page([]));
+  vi.mocked(getContractList).mockResolvedValue(page([]));
+  vi.mocked(getRenewalNoticeList).mockResolvedValue([]);
+});
 
 describe('하우스 로그 집 선택 (U-02)', () => {
   beforeEach(() => {
@@ -171,10 +183,10 @@ describe('하우스 로그 거르기 카드 (시안 E)', () => {
   it('공백만 적으면 검색어를 보내지 않는다', async () => {
     renderPage({ propertyId: 'p1' });
     await screen.findByText('주방 수전 교체');
-    const before = vi.mocked(getManagementLogList).mock.calls.length;
+    const before = tableCalls().length;
     await userEvent.type(screen.getByRole('searchbox', { name: '검색' }), '   ');
     await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(vi.mocked(getManagementLogList).mock.calls.length).toBe(before);
+    expect(tableCalls().length).toBe(before);
   });
 
   it('호실 칸: 전체 호실을 고르면 all, 집을 고르면 그 집으로', async () => {
