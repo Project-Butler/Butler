@@ -9,6 +9,7 @@ import { PageHeader } from '../components/PageHeader/PageHeader';
 import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
 import { PropertyDocumentBoxCard } from '../components/PropertyDocumentBoxCard/PropertyDocumentBoxCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
+import { UnverifiedLogPromoteDialog } from '../components/UnverifiedLogPromoteDialog/UnverifiedLogPromoteDialog';
 import { VerifyModal } from '../components/VerifyModal/VerifyModal';
 import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
 import { useGetComplex } from '../hooks/useGetComplex';
@@ -715,6 +716,12 @@ export const PropertyDetailPage = ({
           onUnauthorized={onUnauthorized}
         />
       )}
+      {/* 권리자 인증을 마치면 인증 전 기록을 호실 이력으로 남길지 한 번 묻는다(H-44). 인증 팝업이 닫힌 뒤에. */}
+      <UnverifiedLogPromoteDialog
+        ownershipId={!isVerifyOpen && ownership?.id === activeOwnershipId && ownership?.verificationStatus === 'VERIFIED' ? ownership.id : undefined}
+        onDone={() => setLogReloadKey((prev) => prev + 1)}
+        onUnauthorized={onUnauthorized}
+      />
     </div>
   );
 };
