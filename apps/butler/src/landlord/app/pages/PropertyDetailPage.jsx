@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, MessageCircle } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
@@ -7,8 +7,10 @@ import { useGetComplex } from '../../web/hooks/useGetComplex';
 import { useGetContractList } from '../../web/hooks/useGetContractList';
 import { useGetLatestOwnershipVerification } from '../../web/hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../../web/hooks/useGetManagementLogList';
+import { useGetOwnershipRenewalNoticeList } from '../../web/hooks/useGetOwnershipRenewalNoticeList';
 import { useGetProperty } from '../../web/hooks/useGetProperty';
 import { useGetPropertyDocumentBox } from '../../web/hooks/useGetPropertyDocumentBox';
+import { useGetPropertyOwnership } from '../../web/hooks/useGetPropertyOwnership';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../../web/utils/contract';
@@ -21,6 +23,7 @@ import { AppTabShell } from '../components/AppTabShell/AppTabShell';
 import { MoreMenu } from '../components/MoreMenu/MoreMenu';
 import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
+import { VerificationCard } from '../components/VerificationCard/VerificationCard';
 import { describeDocument, flattenDocuments } from '../utils/documentBoxView';
 import { formatLogDay } from '../utils/logGroups';
 import { useGoBack, useGoTo } from '../utils/navigation';
@@ -239,7 +242,8 @@ const DocumentsTab = ({ propertyId, onOpenBox, onUnauthorized }) => {
 };
 
 // 임대인 앱 부동산 상세 (Figma M06). 웹 호실 상세와 같은 API를 쓰고, 수정·소유 종료처럼 폼이 필요한 동작은 웹 상세에서 한다.
-export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
+// 권리자 인증 카드(VerificationCard)는 요약 카드 아래에 둔다. 인증을 마치면 onVerified 로 내 정보(커뮤니티 권한)를 다시 읽는다.
+export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerified, onUnauthorized }) => {
   const navigate = useNavigate();
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
@@ -251,7 +255,28 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipId = property?.myRelation?.ownershipId;
   const activeOwnershipId = property?.myRelation?.type === 'OWNER' ? ownershipId : undefined;
-  const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, hookOptions);
+  const ownershipQuery = useGetPropertyOwnership(activeOwnershipId, hookOptions);
+  const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, hookOptions);
+  const { refetch: refetchProperty } = propertyQuery;
+  const { refetch: refetchOwnership } = ownershipQuery;
+  const { refetch: refetchRenewal } = renewal;
+
+  // 인증 화면을 나가도 인증은 계속되므로 여기서도 진행 상태를 읽고, 끝나면 화면을 맞춘다.
+  const handleVerificationFinished = useCallback(
+    (attempt) => {
+      refetchProperty();
+      refetchOwnership();
+      if (attempt.status === 'VERIFIED') {
+        refetchRenewal();
+        onVerified?.();
+      }
+    },
+    [refetchProperty, refetchOwnership, refetchRenewal, onVerified],
+  );
+  const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, {
+    onFinished: handleVerificationFinished,
+    onUnauthorized,
+  });
   const { openThread, isLoading: isOpeningThread, error: threadError } = useOpenThread(hookOptions);
 
   const handleOpenThread = async (contractId) => {
@@ -299,6 +324,17 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
           {current?.error && <NoticeBox>{current.error.message}</NoticeBox>}
           <SummaryStats contract={currentContract} />
         </section>
+
+        {ownershipQuery.data && (
+          <VerificationCard
+            ownership={ownershipQuery.data}
+            attempt={latestAttempt.data}
+            isAttemptRunning={latestAttempt.isActive}
+            renewalNotice={renewal.notices.find((notice) => notice.id === ownershipQuery.data.id)}
+            onVerify={() => goTo('propertyVerify', { propertyId: property.id })}
+            onInquiry={() => goTo('supportInquiry')}
+          />
+        )}
 
         <UnderlineTabs ariaLabel="부동산 정보" idPrefix="property" options={TAB_OPTIONS} value={tab} onChange={setTab} />
 
