@@ -10,25 +10,16 @@ import { requestOwnerIdentityVerification } from '../../utils/identityVerificati
 import {
   getVerificationAction,
   RUNNER_UNAVAILABLE_CODE,
+  VERIFICATION_CONSENT_ROWS,
   VERIFICATION_PREPARING_MESSAGE,
   VERIFICATION_REVOKED_CODE,
   VERIFICATION_REVOKED_MESSAGE,
   VERIFICATION_RUNNING_MESSAGE,
 } from '../../utils/ownershipVerification';
 
-const CONSENT_ROWS = [
-  ['수집 항목', '본인인증 결과(이름·생년월일), 회원 정보의 이름·생년월일, 건축물대장의 소유자 정보'],
-  ['이용 목적', '본인인증 결과와 회원 정보가 같은지 확인하고, 회원 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.'],
-  [
-    '보유 기간',
-    '본인인증 결과와 건축물대장의 소유자 정보는 비교가 끝나면 바로 파기해요. 회원 정보는 따로 저장하지 않고 비교에만 써요. 이번 본인인증을 처리했다는 기록(본인인증 번호·처리 시각)은 부정 사용을 막기 위해 보관하고, 하루가 지나면 파기해요.',
-  ],
-  ['거부 권리', '동의하지 않을 수 있지만, 동의하지 않으면 인증을 진행할 수 없어요.'],
-];
-
 const ConsentNotice = () => (
   <dl className="space-y-1.5 rounded-input bg-surface-2 p-4 text-sub text-ink-2">
-    {CONSENT_ROWS.map(([term, description]) => (
+    {VERIFICATION_CONSENT_ROWS.map(([term, description]) => (
       <div key={term} className="flex gap-2">
         <dt className="w-16 shrink-0 font-semibold text-ink">{term}</dt>
         <dd>{description}</dd>

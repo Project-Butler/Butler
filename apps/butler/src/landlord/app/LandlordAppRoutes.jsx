@@ -24,6 +24,7 @@ import { TenantInvitePage } from './pages/TenantInvitePage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
 import { TicketListPage } from './pages/TicketListPage';
 import { TicketRegisterPage } from './pages/TicketRegisterPage';
+import { VerifyPage } from './pages/VerifyPage';
 import { useNotificationUnreadCount } from './hooks/useNotificationUnreadCount';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 import { parseCategoryParam } from './utils/documentBoxView';
@@ -74,9 +75,26 @@ const TabScreens = ({ user, onLogout, onUnauthorized }) => {
 };
 
 // 주소의 id 가 바뀌면 화면을 새로 시작한다(앞 호실·계약의 상태가 남지 않게).
-const PropertyDetailRoute = ({ onUnauthorized }) => {
+const PropertyDetailRoute = ({ verifiedLegalDongCodes, onRefreshMe, onUnauthorized }) => {
   const { propertyId } = useParams();
-  return <PropertyDetailPage key={propertyId} propertyId={propertyId} onUnauthorized={onUnauthorized} />;
+  return (
+    <PropertyDetailPage
+      key={propertyId}
+      propertyId={propertyId}
+      verifiedLegalDongCodes={verifiedLegalDongCodes}
+      onVerified={onRefreshMe}
+      onUnauthorized={onUnauthorized}
+    />
+  );
+};
+
+// 권리자 인증. 등록 직후 안내(notice)는 history state 로만 온다(웹 routes.js propertyVerify 와 같다).
+const VerifyRoute = ({ onRefreshMe, onUnauthorized }) => {
+  const { propertyId } = useParams();
+  const location = useLocation();
+  return (
+    <VerifyPage key={propertyId} propertyId={propertyId} notice={location.state?.notice} onVerified={onRefreshMe} onUnauthorized={onUnauthorized} />
+  );
 };
 
 const ContractDetailRoute = ({ onUnauthorized }) => {
@@ -181,13 +199,18 @@ const ThreadRoute = ({ user, onUnauthorized }) => {
 // 부동산 등록(M04)·계약 관리(M07)·계약 수정·임차인 초대(M15)처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
 // 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다. 문서함(M11)도 탭 셸을 직접 그린다.
 // 일정·알림(#163)은 홈형 상단 바의 종에서 들어오고, 하단 탭 없이 뒤로 가기 상단 바를 쓴다. 통합 검색(M13)은 상단 바의 돋보기에서 들어오고 검색창 상단 바만 있다.
-// 아래에 없는 하위 주소(/properties/:id/verify, /logs/:id 등)는 탭 화면의 "준비 중"으로 간다.
-// 로그인·세션은 앱 최상위가 하고, 여기는 user·onLogout·onUnauthorized 를 props 로 받는다.
-export const LandlordAppRoutes = ({ user, onLogout, onUnauthorized }) => (
+// 권리자 인증(/properties/:id/verify)은 하단 탭 없는 전체 화면이다. 휴대폰 본인인증(리디렉션)도 이 주소로 돌아온다.
+// 아래에 없는 하위 주소(/logs/:id 등)는 탭 화면의 "준비 중"으로 간다.
+// 로그인·세션은 앱 최상위가 하고, 여기는 user·verifiedLegalDongCodes·onLogout·onUnauthorized·onRefreshMe 를 props 로 받는다.
+export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUnauthorized, onRefreshMe }) => (
   <Routes>
     <Route path="/properties/new" element={<PropertyRegisterPage onUnauthorized={onUnauthorized} />} />
     <Route path="/buildings" element={<BuildingListRoute user={user} onUnauthorized={onUnauthorized} />} />
-    <Route path="/properties/:propertyId" element={<PropertyDetailRoute onUnauthorized={onUnauthorized} />} />
+    <Route
+      path="/properties/:propertyId"
+      element={<PropertyDetailRoute verifiedLegalDongCodes={verifiedLegalDongCodes} onRefreshMe={onRefreshMe} onUnauthorized={onUnauthorized} />}
+    />
+    <Route path="/properties/:propertyId/verify" element={<VerifyRoute onRefreshMe={onRefreshMe} onUnauthorized={onUnauthorized} />} />
     {/* 계약 등록은 앱 화면이 아직 없다. /contracts/:contractId 가 'new'를 계약 id 로 읽지 않게 따로 둔다. */}
     <Route
       path="/contracts/new"
