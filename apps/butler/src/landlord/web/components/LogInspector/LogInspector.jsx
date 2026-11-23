@@ -11,7 +11,6 @@ import { useDeleteManagementLog } from '../../hooks/useDeleteManagementLog';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
 import { formatWon } from '../../utils/contract';
-import { canDeleteLog } from '../../utils/managementLog';
 
 export const LOG_TYPE_ICON = { REPAIR: Wrench, INSPECTION: Search, NOTE: StickyNote, TICKET_SUMMARY: ClipboardCheck };
 
@@ -23,7 +22,7 @@ const InfoRow = ({ icon: Icon, label, children }) => (
   </div>
 );
 
-// 삭제: [삭제] → 안내 → [취소]·[삭제] 2단계(빨강 없음). 내가 쓴 나만 보기 기록만.
+// 삭제: [삭제] → 안내 → [취소]·[삭제] 2단계(빨강 없음). 지울 수 있는지는 서버가 준 isDeletable(H-36·H-47).
 const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   const remove = useDeleteManagementLog({ onUnauthorized });
   const [isConfirming, setIsConfirming] = useState(false);
@@ -57,7 +56,7 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
 };
 
 // 하우스 로그 오른쪽 기록 상세 패널(표 7 : 패널 3). 기록 상세 페이지를 대신한다.
-// 수정은 isReadOnly가 아닐 때, 삭제는 내가 쓴 나만 보기만.
+// 수정은 isReadOnly가 아닐 때, 삭제는 isDeletable일 때.
 export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, onUnauthorized }) => {
   const { data: log, error } = useGetManagementLog(logId, { onUnauthorized });
   // 사진·동영상·PDF는 새 탭 대신 미리보기 팝업으로 연다.
@@ -134,7 +133,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
       </div>
       {log.isReadOnly && (
         <p className="px-5 pb-4 text-sub text-ink-3">
-          소유가 끝난 호실의 기록, 다른 소유자의 기록, 자동 기록, 인증이 끊긴 호실 이력은 수정할 수 없어요.
+          소유가 끝난 호실의 기록, 다른 소유자의 기록, 인증이 끊긴 호실의 호실 이력·자동 기록은 수정할 수 없어요.
         </p>
       )}
       <div className="space-y-3 border-t border-line px-5 py-4">
@@ -150,7 +149,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
             </Button>
           )}
         </div>
-        {canDeleteLog(log) && <DeleteRow key={log.id} log={log} onDeleted={onDeleted} onUnauthorized={onUnauthorized} />}
+        {log.isDeletable && <DeleteRow key={log.id} log={log} onDeleted={onDeleted} onUnauthorized={onUnauthorized} />}
       </div>
       {preview}
     </>,

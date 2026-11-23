@@ -6,6 +6,7 @@ import { LogFilterCard, MAX_QUERY_LENGTH } from '../components/LogFilterCard/Log
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { LogHomeSelect } from '../components/LogHomeSelect/LogHomeSelect';
 import { LogInspector } from '../components/LogInspector/LogInspector';
+import { PrivateChip } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { RoomChip } from '../components/RoomChip/RoomChip';
@@ -123,6 +124,7 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
                   <td className={TD}>
                     <span className="flex gap-1.5">
                       <Badge>{getLogTypeLabel(log.type)}</Badge>
+                      {log.scope === 'PRIVATE' && <PrivateChip />}
                       {isFutureLog(log) && <Badge tone="warning">예정</Badge>}
                     </span>
                   </td>
