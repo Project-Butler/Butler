@@ -33,7 +33,7 @@ const renderInspector = (logId) => {
   return handlers;
 };
 
-describe('LogInspector (관리 로그 오른쪽 기록 상세)', () => {
+describe('LogInspector (하우스 로그 오른쪽 기록 상세)', () => {
   beforeEach(() => {
     vi.mocked(getManagementLog).mockReset();
     vi.mocked(deleteManagementLog).mockReset();

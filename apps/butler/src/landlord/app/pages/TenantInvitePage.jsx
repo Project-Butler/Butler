@@ -24,7 +24,7 @@ const CONTRACT_OPTION_SIZE = 20;
 const PHONE_ERROR = '010으로 시작하는 휴대폰 번호를 입력해 주세요';
 
 const VISIBLE_ITEMS = ['계약 기간·보증금·월세', '수리 요청과 진행 상황', '나와의 소통 이력'];
-const HIDDEN_ITEMS = '다른 부동산 · 관리 로그 전체 · 문서함';
+const HIDDEN_ITEMS = '다른 부동산 · 하우스 로그 전체 · 문서함';
 
 // 서버 오류 코드 → 화면 문구. 없는 코드는 서버 문구를 그대로 쓴다.
 const INVITE_ERROR_MESSAGE = {

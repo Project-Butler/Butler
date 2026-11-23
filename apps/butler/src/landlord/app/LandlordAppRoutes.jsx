@@ -155,7 +155,7 @@ const ScheduleRoute = ({ onUnauthorized }) => {
   return <SchedulePage tab={searchParams.get('tab') === 'notifications' ? 'notifications' : 'schedules'} onUnauthorized={onUnauthorized} />;
 };
 
-// 통합 검색(M13, #172). 결과를 누르면 그 항목의 앱 화면으로 간다(관리 로그·문서는 그 호실로 거른 목록).
+// 통합 검색(M13, #172). 결과를 누르면 그 항목의 앱 화면으로 간다(하우스 로그·문서는 그 호실로 거른 목록).
 const toLandlordTarget = (sectionKey, item) => {
   switch (sectionKey) {
     case 'properties':
@@ -195,7 +195,7 @@ const ThreadRoute = ({ user, onUnauthorized }) => {
 };
 
 // 임대인 앱 화면. 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소는 웹과 같고 화면만 다르다).
-// 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·관리 로그(M08)는 화면이 직접 탭 셸을 그리고,
+// 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·하우스 로그(M08)는 화면이 직접 탭 셸을 그리고,
 // 부동산 등록(M04)·계약 관리(M07)·계약 수정·임차인 초대(M15)처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
 // 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다. 문서함(M11)도 탭 셸을 직접 그린다.
 // 일정·알림(#163)은 홈형 상단 바의 종에서 들어오고, 하단 탭 없이 뒤로 가기 상단 바를 쓴다. 통합 검색(M13)은 상단 바의 돋보기에서 들어오고 검색창 상단 바만 있다.

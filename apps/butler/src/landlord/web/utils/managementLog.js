@@ -1,4 +1,4 @@
-// 관리 로그 화면 공통 값·표시 함수(계약 5장, docs/5. 부동산 관리 로그 개발/명세.md).
+// 하우스 로그 화면 공통 값·표시 함수(계약 5장, docs/5. 부동산 관리 로그 개발/명세.md).
 import { getTodayKST } from './contract';
 
 export const SCOPE_LABEL = { PRIVATE: '나만 보기', PROPERTY_HISTORY: '호실 이력' };

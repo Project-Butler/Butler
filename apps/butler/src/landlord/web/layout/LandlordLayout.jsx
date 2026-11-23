@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { key: 'buildingList', label: '내 부동산', icon: Building2 },
   { key: 'leases', label: '계약', icon: FileSignature },
   { key: 'tickets', label: '유지보수 요청', icon: Wrench },
-  { key: 'log', label: '관리 로그', icon: ClipboardList },
+  { key: 'log', label: '하우스 로그', icon: ClipboardList },
   { key: 'documents', label: '문서', icon: FolderOpen },
   { key: 'community', label: '커뮤니티', icon: Users },
   { key: 'disputes', label: '임대차 분쟁', icon: Scale },

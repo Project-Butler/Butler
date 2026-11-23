@@ -1,4 +1,4 @@
-// 리소스에 붙은 문서(documents.resource_type + resource_id) 공용 함수. 관리 로그·소유 종료·문서 API가 함께 쓴다.
+// 리소스에 붙은 문서(documents.resource_type + resource_id) 공용 함수. 하우스 로그·소유 종료·문서 API가 함께 쓴다.
 // 파일 삭제는 하지 않는다 — 행을 숨긴(deletedAt) 뒤 돌려준 저장 경로로 호출하는 쪽이 지운다(트랜잭션 밖에서).
 import { AppError } from './AppError.js';
 import { assertKindAllowedFor, getUploadRules } from './uploadRules.js';
@@ -42,7 +42,7 @@ const throwAttachmentNotFound = () => {
 };
 
 // 미연결 문서(내가 올렸고 아직 어디에도 안 붙음)만 붙인다. 남의 문서·이미 붙은 문서·지운 문서는 없는 문서로 본다(404).
-// 그 곳이 받지 않는 형식(예: 관리 로그·메시지·갱신 통지의 동영상)은 422 FILE_TYPE_NOT_ALLOWED(platform/uploadRules.js).
+// 그 곳이 받지 않는 형식(예: 하우스 로그·메시지·갱신 통지의 동영상)은 422 FILE_TYPE_NOT_ALLOWED(platform/uploadRules.js).
 // 남의 문서 id로 형식을 알아낼 수 없게 404를 먼저 본다.
 export const attachDocumentsInTx = async (tx, user, { resourceType, resourceId, documentIds, now }) => {
   if (documentIds.length === 0) return;

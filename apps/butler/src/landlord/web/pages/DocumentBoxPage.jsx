@@ -436,7 +436,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
             <>
               <OwnershipCard key={`ownership-${selected.id}`} {...cardProps} />
               <ContractCard key={`contract-${selected.id}`} {...cardProps} />
-              <p className="text-sub text-ink-3">관리 로그·유지보수 요청에 붙인 사진은 각 기록에서 봐요.</p>
+              <p className="text-sub text-ink-3">하우스 로그·유지보수 요청에 붙인 사진은 각 기록에서 봐요.</p>
             </>
           )}
         </div>

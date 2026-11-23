@@ -1,11 +1,13 @@
-// 관리 로그 규칙(DB 의존 없음). 계약 5장, docs/5. 부동산 관리 로그 개발/명세.md.
+// 하우스 로그 규칙(DB 의존 없음). 계약 5장, docs/5. 부동산 관리 로그 개발/명세.md.
 import { computeOwnershipVerificationStatus } from './ownershipStatus.js';
 
 export const MANAGEMENT_LOG_SCOPES = ['PRIVATE', 'PROPERTY_HISTORY'];
 // 요청으로 쓸 수 있는 유형. TICKET_SUMMARY는 시스템만 쓴다.
 export const MANAGEMENT_LOG_WRITABLE_TYPES = ['REPAIR', 'INSPECTION', 'NOTE'];
 export const MANAGEMENT_LOG_TYPES = [...MANAGEMENT_LOG_WRITABLE_TYPES, 'TICKET_SUMMARY'];
-export const MANAGEMENT_LOG_EDITABLE_FIELDS = ['type', 'title', 'content', 'occurredOn', 'cost'];
+export const MANAGEMENT_LOG_EDITABLE_FIELDS = ['type', 'title', 'content', 'occurredOn', 'cost', 'room'];
+// 목록 검색어(q) 길이. 통합 검색과 같다(domains/search/searchQuery.js).
+export const MAX_LOG_QUERY_LENGTH = 50;
 
 // 'YYYY-MM-DD'이고 실제로 있는 날짜인지. 오래된 수리 이력과 미래 예정도 쓰므로 범위는 막지 않는다(D-10).
 // 연도 오타(0998 등)만 거른다.

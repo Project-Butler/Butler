@@ -33,7 +33,7 @@ const SummaryColumn = ({ icon: Icon, title, summary, hint }) => (
   </div>
 );
 
-// 호실 상세의 문서함 카드(관리 로그 아래). 제목 "문서함 n건" + [문서 올리기] + [문서함 열기], 내 소유 문서·계약 문서 두 칸.
+// 호실 상세의 문서함 카드(하우스 로그 아래). 제목 "문서함 n건" + [문서 올리기] + [문서함 열기], 내 소유 문서·계약 문서 두 칸.
 // [문서 올리기]는 올릴 곳(내 소유 관계 또는 그 계약)이 있으면 보인다. 끝난 소유 호실·미인증 호실도 올릴 수 있다(2026-11-20).
 export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized }) => {
   const { data: box, error, isLoading, refetch } = useGetPropertyDocumentBox(propertyId, { onUnauthorized });

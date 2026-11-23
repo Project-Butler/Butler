@@ -1,5 +1,5 @@
 // 동영상 업로드(실제 로컬 Postgres + 임시 폴더의 실제 파일). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
-// 동영상은 문서함(OWNERSHIP·CONTRACT)과 수리 요청(TICKET)에만 붙고, 관리 로그·메시지·갱신 통지에는 붙지 않는다(platform/uploadRules.js).
+// 동영상은 문서함(OWNERSHIP·CONTRACT)과 수리 요청(TICKET)에만 붙고, 하우스 로그·메시지·갱신 통지에는 붙지 않는다(platform/uploadRules.js).
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -285,20 +285,20 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
     assert.equal((await fetch(`${origin}${url.body.data.url}`, { headers: { Range: 'bytes=0-1,5-6' } })).status, 200);
   });
 
-  test('붙이기: 동영상은 관리 로그에 붙일 수 없다(POST /documents), 남의 동영상은 404가 먼저', async () => {
+  test('붙이기: 동영상은 하우스 로그에 붙일 수 없다(POST /documents), 남의 동영상은 404가 먼저', async () => {
     const { landlord, property } = await setup();
     const log = await createManagementLog(landlord, property.id, { scope: 'PRIVATE', type: 'REPAIR', title: '누수', occurredOn: TODAY });
     // 세션은 TICKET으로 받아도 붙일 곳에서 다시 본다
     const registered = await uploadVideo(landlord, { target: 'TICKET', documentType: 'PHOTO', resource: { resourceType: 'MANAGEMENT_LOG', resourceId: log.id } });
     assert.equal(registered.status, 422);
     assert.equal(registered.body.error.code, 'FILE_TYPE_NOT_ALLOWED');
-    // 남의 관리 로그면 형식보다 404가 먼저
+    // 남의 하우스 로그면 형식보다 404가 먼저
     const stranger = await createUser('LANDLORD');
     const strangerVideo = await uploadVideo(stranger, { target: 'TICKET', documentType: 'PHOTO', resource: { resourceType: 'MANAGEMENT_LOG', resourceId: log.id } });
     assert.equal(strangerVideo.status, 404);
   });
 
-  test('붙이기 4경로: 수리 요청 생성은 동영상을 받고, 관리 로그·메시지·갱신 통지는 422', async () => {
+  test('붙이기 4경로: 수리 요청 생성은 동영상을 받고, 하우스 로그·메시지·갱신 통지는 422', async () => {
     const { landlord, tenant, property } = await setup();
     const tenantVideo = await uploadVideo(tenant, { content: MOV, mimeType: 'video/quicktime', target: 'TICKET', documentType: 'PHOTO' });
     assert.equal(tenantVideo.status, 201);
@@ -312,7 +312,7 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
     assert.equal(ticket.attachments.length, 1);
     assert.equal(ticket.attachments[0].mimeType, 'video/quicktime');
 
-    // 관리 로그 작성
+    // 하우스 로그 작성
     const logVideo = await uploadVideo(landlord, { target: 'TICKET', documentType: 'PHOTO' });
     await rejectsWith(
       createManagementLog(landlord, property.id, { scope: 'PRIVATE', type: 'REPAIR', title: '영상', occurredOn: TODAY, attachmentDocumentIds: [logVideo.body.data.id] }),
@@ -329,7 +329,7 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
     }
     const stillUnattached = await prisma.document.findUnique({ where: { id: logVideo.body.data.id } });
     assert.equal(stillUnattached.resourceType, null);
-    // 사진은 관리 로그에 그대로 붙는다(회귀)
+    // 사진은 하우스 로그에 그대로 붙는다(회귀)
     const photo = await createSession(landlord, { fileName: 'a.jpg', mimeType: 'image/jpeg', sizeBytes: JPEG.length, documentType: 'PHOTO', targetResourceType: undefined });
     assert.equal((await putContent(photo.body.data.uploadUrl, JPEG, 'image/jpeg')).status, 204);
     const photoDoc = await postJson(landlord, '/documents', { uploadSessionId: photo.body.data.id });

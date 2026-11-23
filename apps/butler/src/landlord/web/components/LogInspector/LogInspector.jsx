@@ -54,7 +54,7 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   );
 };
 
-// 관리 로그 오른쪽 기록 상세 패널(표 7 : 패널 3). 기록 상세 페이지를 대신한다.
+// 하우스 로그 오른쪽 기록 상세 패널(표 7 : 패널 3). 기록 상세 페이지를 대신한다.
 // 수정은 isReadOnly가 아닐 때, 삭제는 내가 쓴 나만 보기만.
 export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, onUnauthorized }) => {
   const { data: log, error } = useGetManagementLog(logId, { onUnauthorized });

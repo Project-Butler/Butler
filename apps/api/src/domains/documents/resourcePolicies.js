@@ -36,7 +36,7 @@ const POLICIES = {
     canView: canViewManagementLog,
     lockForWrite: lockWritableLog,
     throwNotFound: () => {
-      throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '관리 로그를 찾을 수 없습니다.');
+      throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '하우스 로그를 찾을 수 없습니다.');
     },
     maxAttachments: MAX_LOG_ATTACHMENTS,
   },

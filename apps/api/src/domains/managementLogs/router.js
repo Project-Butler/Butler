@@ -6,7 +6,7 @@ import { getManagementLog, listManagementLogs, patchManagementLog, removeManagem
 
 const router = Router();
 
-// api-contract.md 5장 "관리 로그". 호실 아래 경로(작성·호실별 목록)는 properties 라우터에 있다.
+// api-contract.md 5장 "하우스 로그". 호실 아래 경로(작성·호실별 목록)는 properties 라우터에 있다.
 // 볼 수 없는 기록은 404로 숨긴다.
 router.use(authGuard);
 

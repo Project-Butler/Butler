@@ -1,4 +1,4 @@
-// 관리 로그(계약 5장). 쓰기는 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
+// 하우스 로그(계약 5장). 쓰기는 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js).
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
@@ -16,10 +16,20 @@ import { MANAGEMENT_LOG_INCLUDE, toManagementLogResponse } from '../../platform/
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { insertPropertyLog, toDbDate } from '../../platform/propertyHistory.js';
+import { toRoomWhere } from '../../platform/roomRules.js';
 import { removeStoredObjects } from '../documents/storage/index.js';
+import { keywordsWhere, splitQuery } from '../search/searchQuery.js';
 
 // 감사 로그 summary에 쓰는 칸 이름(값은 넣지 않는다, 명세 D-04)
-const FIELD_LABELS = { type: '유형', title: '제목', content: '내용', occurredOn: '날짜', cost: '비용', attachments: '첨부' };
+const FIELD_LABELS = {
+  type: '유형',
+  title: '제목',
+  content: '내용',
+  occurredOn: '날짜',
+  cost: '비용',
+  room: '방',
+  attachments: '첨부',
+};
 
 const isSameFieldValue = (log, field, value) =>
   field === 'occurredOn' ? toDateOnlyString(log.occurredOn) === value : log[field] === value;
@@ -29,7 +39,7 @@ const throwPropertyNotFound = () => {
 };
 
 const throwLogNotFound = () => {
-  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '관리 로그를 찾을 수 없습니다.');
+  throw new AppError('MANAGEMENT_LOG_NOT_FOUND', 404, '하우스 로그를 찾을 수 없습니다.');
 };
 
 const throwVerificationRequired = () => {
@@ -47,11 +57,20 @@ const recordLogActivity = (tx, user, type, log, extra = {}) =>
 
 const findUserOwnerships = (user) => prisma.ownership.findMany({ where: { userId: user.id } });
 
-const buildFilters = ({ propertyId, scope, types, until }) => ({
-  ...(propertyId ? { propertyId } : {}),
-  ...(scope ? { scope } : {}),
-  ...(types?.length > 0 ? { type: { in: types } } : {}),
-  ...(until ? { occurredOn: { lte: toDbDate(until) } } : {}),
+// 검색 칸. 통합 검색(domains/search)의 하우스 로그 검색과 같다.
+const LOG_SEARCH_FIELDS = ['title', 'content'];
+
+const buildFilters = ({ propertyId, scope, types, rooms, q, until }) => ({
+  AND: [
+    {
+      ...(propertyId ? { propertyId } : {}),
+      ...(scope ? { scope } : {}),
+      ...(types?.length > 0 ? { type: { in: types } } : {}),
+      ...(until ? { occurredOn: { lte: toDbDate(until) } } : {}),
+    },
+    toRoomWhere(rooms),
+    q ? keywordsWhere(splitQuery(q), LOG_SEARCH_FIELDS) : {},
+  ],
 });
 
 const findPage = async (user, ownerships, filters, { sortDirection, page, size }) => {
@@ -209,7 +228,7 @@ export const updateManagementLog = async (user, logId, { attachmentDocumentIds, 
         action: 'MANAGEMENT_LOG_UPDATED',
         resourceType: 'MANAGEMENT_LOG',
         resourceId: row.id,
-        summary: `관리 기록 수정: ${fields.map((field) => FIELD_LABELS[field]).join(', ')}`,
+        summary: `하우스 로그 수정: ${fields.map((field) => FIELD_LABELS[field]).join(', ')}`,
         req,
         client: tx,
       });

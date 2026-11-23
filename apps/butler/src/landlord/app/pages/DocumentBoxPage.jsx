@@ -226,7 +226,7 @@ export const DocumentBoxPage = ({ propertyId, category, onUnauthorized }) => {
           </>
         )}
 
-        <p className="text-m-sub text-ink-3">관리 로그·수리 요청에 붙인 사진은 각 기록에서 봐요. 문서 삭제는 웹 문서함에서 할 수 있어요.</p>
+        <p className="text-m-sub text-ink-3">하우스 로그·수리 요청에 붙인 사진은 각 기록에서 봐요. 문서 삭제는 웹 문서함에서 할 수 있어요.</p>
       </div>
 
       {isUploadOpen && (

@@ -127,7 +127,7 @@ const PropertyListRoute = (pageProps) => {
   return <PropertyListPage relation={searchParams.get('relation') ?? 'OWNER'} {...pageProps} />;
 };
 
-// 관리 로그 목록·기록 상세(/logs/:logId)·기록 추가(/logs/new)·수정(/logs/:logId/edit)은 같은 화면이다.
+// 하우스 로그 목록·기록 상세(/logs/:logId)·기록 추가(/logs/new)·수정(/logs/:logId/edit)은 같은 화면이다.
 // 상세는 오른쪽 패널, 추가·수정은 가운데 팝업. 화면에서 연 팝업(state.fromPage)은 뒤로 가서 닫고, 바로 들어온 주소면 목록 주소로 바꾼다.
 const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const { logId } = useParams();

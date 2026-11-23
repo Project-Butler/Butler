@@ -1,7 +1,7 @@
 // 요청 형식 검사(R-01·R-02). 서비스까지 가기 전에 400으로 끝나는 경우만 본다.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { patchManagementLog, postPropertyManagementLog } from '../../../src/domains/managementLogs/controller.js';
+import { listManagementLogs, patchManagementLog, postPropertyManagementLog } from '../../../src/domains/managementLogs/controller.js';
 
 const PROPERTY_ID = '00000000-0000-4000-8000-000000000001';
 const VALID = { type: 'REPAIR', title: '제목', occurredOn: '2026-11-02' };
@@ -64,4 +64,28 @@ test('수정: scope는 바꿀 수 없고 필수 칸을 비울 수 없다', async
   assert.equal((await callPatch({})).code, 'VALIDATION_ERROR');
   assertInvalid(await callPatch({ attachmentDocumentIds: ['x'] }), 'attachmentDocumentIds');
   assertInvalid(await callPatch({ attachmentDocumentIds: null }), 'attachmentDocumentIds');
+});
+
+const callList = async (query) => {
+  let received;
+  await listManagementLogs({ query, user: { id: 'u', role: 'LANDLORD' } }, {}, (error) => {
+    received = error;
+  });
+  return received;
+};
+
+test('방: 작성·수정은 6가지 방 또는 null(H-02)', async () => {
+  assertInvalid(await callPost({ ...VALID, room: 'ATTIC' }), 'room');
+  assertInvalid(await callPost({ ...VALID, room: 'NONE' }), 'room');
+  let error;
+  await patchManagementLog({ params: { logId: PROPERTY_ID }, body: { room: 'garage' }, user: { id: 'u' } }, {}, (e) => {
+    error = e;
+  });
+  assertInvalid(error, 'room');
+});
+
+test('목록: room 필터와 검색어 q 형식(H-02·H-04)', async () => {
+  assertInvalid(await callList({ room: 'KITCHEN,ATTIC' }), 'room');
+  assertInvalid(await callList({ q: '   ' }), 'q');
+  assertInvalid(await callList({ q: '가'.repeat(51) }), 'q');
 });

@@ -1,5 +1,5 @@
 // 통합 검색(api-contract.md 7장 "검색" v1.1, #172). 유형마다 각 도메인 목록과 같은 범위에서 찾는다.
-// 권한 판단은 새로 짜지 않고 관리 로그·티켓·서류함·일정의 범위 함수를 그대로 쓴다.
+// 권한 판단은 새로 짜지 않고 하우스 로그·티켓·서류함·일정의 범위 함수를 그대로 쓴다.
 import { computeContractStatus } from '../../platform/contractStatus.js';
 import { CONTRACT_RESOURCE, TICKET_RESOURCE } from '../../platform/documentAttachments.js';
 import { addDaysToDateString, compareDateStrings, getNow, getTodayKST, toDateOnlyString } from '../../platform/dateUtils.js';
@@ -122,7 +122,7 @@ const searchTickets = async (user, { keywords, scopedPropertyIds }) => {
   }));
 };
 
-// 관리 로그는 소유 관계에 붙어 있어 임대인만.
+// 하우스 로그는 소유 관계에 붙어 있어 임대인만.
 const searchManagementLogs = async (user, context, { keywords, scopedPropertyIds }) => {
   if (user.role !== 'LANDLORD') return [];
   const rows = await prisma.propertyLog.findMany({

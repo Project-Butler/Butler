@@ -1,6 +1,6 @@
 // 분쟁 화면의 알약 칩(자주 묻는 질문 · 자료 찾기 상황). 공용 FilterChip은 휴대폰에서 44px로 커져 화면마다 칩 크기가 달라져서 따로 둔다.
 // 웹은 칩을 줄바꿈해 다 보이게(카카오 고객센터 추천 키워드처럼 넘기기 없이), 앱은 폭이 좁아 여러 줄이 되므로
-// A팀 관리 로그 유형 칩처럼 화면 끝까지 닿는 가로 스크롤 한 줄.
+// A팀 하우스 로그 유형 칩처럼 화면 끝까지 닿는 가로 스크롤 한 줄.
 const APP_SCROLL_LINE = '-mx-5 flex w-[calc(100%+2.5rem)] gap-1.5 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 export const DisputeChip = ({ selected, onClick, children }) => (

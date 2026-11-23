@@ -98,7 +98,7 @@ describe('수리 요청 첨부(resourceType TICKET)', () => {
   });
 });
 
-describe('관리 로그 첨부(resourceType 없음)', () => {
+describe('하우스 로그 첨부(resourceType 없음)', () => {
   it('규칙을 받아도 동영상은 고를 수 없고, 세션에 targetResourceType을 넣지 않는다', async () => {
     render(<Harness />);
     await waitFor(() => expect(api.getUploadRules).toHaveBeenCalled());
