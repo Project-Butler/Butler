@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX } from 'lucide-react';
+import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX, Send } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
 import { AllHomesTimeline } from '../components/AllHomesTimeline/AllHomesTimeline';
 import { EmptyState } from '../components/EmptyState/EmptyState';
@@ -13,6 +13,7 @@ import { PrivateChip } from '../components/ManagementLogBadges/ManagementLogBadg
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { RoomChip } from '../components/RoomChip/RoomChip';
+import { SoldHomeBanner } from '../components/SoldHomeBanner/SoldHomeBanner';
 import { useAllHomesTimeline } from '../hooks/useAllHomesTimeline';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
@@ -131,6 +132,12 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
                     <span className="flex gap-1.5">
                       <Badge>{getLogTypeLabel(log.type)}</Badge>
                       {log.scope === 'PRIVATE' && <PrivateChip />}
+                      {log.isHideOnly && (
+                        <Badge tone="verified" className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <Send size={12} aria-hidden="true" />
+                          넘어간 이력
+                        </Badge>
+                      )}
                       {isFutureLog(log) && <Badge tone="warning">예정</Badge>}
                     </span>
                   </td>
@@ -166,9 +173,9 @@ const TimelinePlaceholder = ({ error }) => (
   </section>
 );
 
-// 한 호실: 계약 타임라인 → 앞으로 할 일(H-22). 유형·방 거르기는 기록 점만 줄인다.
+// 한 호실: (소유가 끝났으면 안내 띠) → 계약 타임라인 → 앞으로 할 일(H-22). 유형·방 거르기는 기록 점만 줄인다.
 // 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
-const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onUnauthorized }) => {
+const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onRemoved, onUnauthorized }) => {
   const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
   const { logs, axis, current, next, nextKind, past, notices } = timeline;
   const groups = useMemo(
@@ -188,6 +195,15 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
 
   return (
     <>
+      {timeline.endedOn && timeline.ownership && (
+        <SoldHomeBanner
+          ownershipId={timeline.ownership.id}
+          endedOn={timeline.endedOn}
+          isSold={timeline.isSold}
+          onRemoved={onRemoved}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
       {timeline.error && <NoticeBox>{timeline.error.message}</NoticeBox>}
       <HouseLogTimeline
         axis={axis}
@@ -294,6 +310,12 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
     setSelectedId(null);
     setReloadKey((prev) => prev + 1);
   };
+  // 목록에서 지우기(H-41) 뒤: 호실 목록을 다시 읽고 하우스 로그 첫 화면으로.
+  const handleOwnershipRemoved = () => {
+    owned.refetch();
+    formerlyOwned.refetch();
+    onNavigate('logs', {});
+  };
 
   const addButton = (
     <Button onClick={() => onOpenModal({})}>
@@ -365,6 +387,7 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
             today={today}
             onShowLog={setSelectedId}
             onNavigate={onNavigate}
+            onRemoved={handleOwnershipRemoved}
             onUnauthorized={onUnauthorized}
           />
         ) : (
