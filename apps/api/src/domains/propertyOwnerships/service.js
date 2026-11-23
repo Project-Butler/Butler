@@ -6,6 +6,7 @@ import { endOwnershipInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
+import { removeStoredObjects } from '../documents/storage/index.js';
 
 const PROPERTY_INCLUDE = { property: { include: { complex: true } } };
 
@@ -87,13 +88,18 @@ export const updateOwnership = async (user, ownershipId, data) => {
 
 // POST /property-ownerships/:ownershipId/end — 조회·활성 계약 확인·종료를 한 트랜잭션으로 한다.
 // SOLD는 진행 중 계약이 있어도 끝나고 계약은 읽기 전용으로 남는다(증명은 하지 않는다).
+// 인증한 적 없는 소유 관계면 하우스 로그가 지워지고(H-37) 첨부 파일은 커밋 뒤 지운다.
 export const endOwnership = async (user, ownershipId, { reason, endReason = 'SELF_ENDED' }, req) => {
-  const ended = await prisma.$transaction(async (tx) => {
+  const { ended, removedPaths } = await prisma.$transaction(async (tx) => {
     // 계약 등록·수정·해지와 같은 행 잠금으로 줄을 세운다(종료된 소유 관계에 진행 중 계약이 붙지 않게).
     const ownership = await lockOwnershipRow(tx, ownershipId);
     if (!ownership || ownership.userId !== user.id) throwOwnershipNotFound();
 
-    const endedRow = await endOwnershipInTx(tx, ownership, { endReason, note: reason, checkActiveContracts: endReason === 'SELF_ENDED' });
+    const { ownership: endedRow, removedPaths: paths } = await endOwnershipInTx(tx, ownership, {
+      endReason,
+      note: reason,
+      checkActiveContracts: endReason === 'SELF_ENDED',
+    });
     await recordActivity(tx, {
       userId: user.id,
       type: ACTIVITY_TYPES.OWNERSHIP_ENDED,
@@ -110,8 +116,9 @@ export const endOwnership = async (user, ownershipId, { reason, endReason = 'SEL
       req,
       client: tx,
     });
-    return endedRow;
+    return { ended: endedRow, removedPaths: paths };
   });
 
+  await removeStoredObjects(removedPaths);
   return toResponse(ended);
 };

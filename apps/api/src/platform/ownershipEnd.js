@@ -1,15 +1,32 @@
 // 소유 관계 종료(트랜잭션 안). 사용자 종료·운영자 종료·인증 시 자동 종료가 함께 쓴다.
 import { AppError } from './AppError.js';
 import { getNow, getTodayKST } from './dateUtils.js';
-import { lockHistoryLogDocumentsInTx } from './documentAttachments.js';
+import { lockHistoryLogDocumentsInTx, MANAGEMENT_LOG_RESOURCE, softDeleteDocumentsInTx } from './documentAttachments.js';
 import { cancelContractInvitationsInTx } from './tenantInvitationLifecycle.js';
 
 const throwOwnershipEnded = () => {
   throw new AppError('OWNERSHIP_ENDED', 422, '이미 종료된 소유 관계입니다.');
 };
 
+// 한 번도 인증하지 않은 소유 관계가 끝나면 그 기록을 모두 지운다(H-37). 붙은 문서는 숨기고 지울 파일 경로를 돌려준다.
+// 기록을 가리키던 티켓은 DB가 log_id를 비운다(ON DELETE SET NULL).
+const removeUnverifiedLogsInTx = async (tx, ownershipId, now) => {
+  const logs = await tx.propertyLog.findMany({ where: { ownershipId }, select: { id: true } });
+  if (logs.length === 0) return [];
+  const logIds = logs.map((log) => log.id);
+  const documents = await tx.document.findMany({
+    where: { resourceType: MANAGEMENT_LOG_RESOURCE, resourceId: { in: logIds }, deletedAt: null },
+  });
+  const removedPaths = await softDeleteDocumentsInTx(tx, documents, now);
+  await tx.propertyLog.deleteMany({ where: { id: { in: logIds } } });
+  return removedPaths;
+};
+
 // checkActiveContracts: 본인 종료(SELF_ENDED)만 true — 매도(SOLD)·자동 종료·운영자 종료는 계약이 있어도 진행한다(api-contract.md 3장).
-// 없는 소유 관계·본인 확인은 호출하는 쪽이 먼저 한다. 종료된 행(property·complex 포함)을 돌려준다.
+// 없는 소유 관계·본인 확인은 호출하는 쪽이 먼저 한다.
+// 돌려주는 값: { ownership: 종료된 행(property·complex 포함), removedPaths: 지울 파일 경로 }.
+// 파일은 트랜잭션 밖에서 지워야 하므로 호출하는 쪽이 커밋 뒤 removeStoredObjects(removedPaths)를 부른다.
+// ownership.firstVerifiedAt이 필요하다(lockOwnershipRow·lockActiveOwnershipRows가 읽는다).
 export const endOwnershipInTx = async (tx, ownership, { endReason, note, checkActiveContracts }) => {
   if (ownership.endedAt) throwOwnershipEnded();
 
@@ -35,15 +52,19 @@ export const endOwnershipInTx = async (tx, ownership, { endReason, note, checkAc
   }
 
   // 동시에 종료 요청이 와도 한 번만 종료되도록 endedAt null 조건을 건다.
+  const now = getNow();
   const { count } = await tx.ownership.updateMany({
     where: { id: ownership.id, endedAt: null },
-    data: { endedAt: getNow(), endReason, endNote: note },
+    data: { endedAt: now, endReason, endNote: note },
   });
   if (count === 0) throwOwnershipEnded();
-  // 호실 이력이 다음 소유자에게 넘어가므로 거기 붙은 문서를 잠근다(삭제 불가).
-  await lockHistoryLogDocumentsInTx(tx, ownership.id);
+  // 인증 전 기록은 지우고(H-37), 인증한 적 있으면 호실 이력이 다음 소유자에게 넘어가므로 거기 붙은 문서를 잠근다(삭제 불가).
+  // undefined(칸을 읽지 않음)를 인증 전으로 보지 않도록 null만 본다.
+  const removedPaths = ownership.firstVerifiedAt === null ? await removeUnverifiedLogsInTx(tx, ownership.id, now) : [];
+  if (ownership.firstVerifiedAt !== null) await lockHistoryLogDocumentsInTx(tx, ownership.id);
   // 끝난 소유 관계의 계약은 읽기 전용이라 PENDING 초대를 CANCELED, 확인 세션은 폐기한다(docs/11 2-3).
   await cancelContractInvitationsInTx(tx, { ownershipId: ownership.id });
 
-  return tx.ownership.findUnique({ where: { id: ownership.id }, include: { property: { include: { complex: true } } } });
+  const ended = await tx.ownership.findUnique({ where: { id: ownership.id }, include: { property: { include: { complex: true } } } });
+  return { ownership: ended, removedPaths };
 };
