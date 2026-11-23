@@ -92,6 +92,17 @@ describe('LogInspector (하우스 로그 오른쪽 기록 상세)', () => {
     expect(await screen.findByRole('button', { name: '기록 삭제' })).toBeInTheDocument();
   });
 
+  it('매도 뒤 넘어간 기록(isHideOnly)은 [내 화면에서 삭제]이고 새 임대인에게는 그대로라고 묻는다(H-41)', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, scope: 'PROPERTY_HISTORY', isReadOnly: true, isDeletable: true, isHideOnly: true });
+    vi.mocked(deleteManagementLog).mockResolvedValue({ id: 'log-1' });
+    const { onDeleted } = renderInspector('log-1');
+    await userEvent.click(await screen.findByRole('button', { name: '내 화면에서 삭제' }));
+    expect(screen.getByText('내 화면에서만 지워요. 새 임대인에게는 그대로 보여요.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    expect(deleteManagementLog).toHaveBeenCalledWith('log-1');
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
   it('isDeletable이 false면 나만 보기라도 삭제 버튼이 없다', async () => {
     vi.mocked(getManagementLog).mockResolvedValue({ ...log, isDeletable: false });
     renderInspector('log-1');

@@ -23,6 +23,7 @@ const InfoRow = ({ icon: Icon, label, children }) => (
 );
 
 // 삭제: [삭제] → 안내 → [취소]·[삭제] 2단계(빨강 없음). 지울 수 있는지는 서버가 준 isDeletable(H-36·H-47).
+// isHideOnly(매도 뒤 판 사람의 넘어간 기록)는 내 화면에서만 지운다(H-41).
 const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   const remove = useDeleteManagementLog({ onUnauthorized });
   const [isConfirming, setIsConfirming] = useState(false);
@@ -35,13 +36,15 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   if (!isConfirming) {
     return (
       <button type="button" onClick={() => setIsConfirming(true)} className="text-sub font-medium text-ink-3 hover:text-ink">
-        기록 삭제
+        {log.isHideOnly ? '내 화면에서 삭제' : '기록 삭제'}
       </button>
     );
   }
   return (
     <div className="space-y-2 rounded-input bg-surface-2 p-3">
-      <p className="text-sub text-ink-2">이 기록을 삭제할까요? 삭제하면 되돌릴 수 없어요.</p>
+      <p className="text-sub text-ink-2">
+        {log.isHideOnly ? '내 화면에서만 지워요. 새 임대인에게는 그대로 보여요.' : '이 기록을 삭제할까요? 삭제하면 되돌릴 수 없어요.'}
+      </p>
       {remove.error && <NoticeBox>{remove.error.message}</NoticeBox>}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={() => setIsConfirming(false)} disabled={remove.isLoading}>
