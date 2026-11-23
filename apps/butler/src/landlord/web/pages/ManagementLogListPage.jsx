@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
+import { AllHomesTimeline } from '../components/AllHomesTimeline/AllHomesTimeline';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { HouseLogTimeline } from '../components/HouseLogTimeline/HouseLogTimeline';
 import { HouseLogTodo } from '../components/HouseLogTodo/HouseLogTodo';
@@ -12,11 +13,12 @@ import { PrivateChip } from '../components/ManagementLogBadges/ManagementLogBadg
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { RoomChip } from '../components/RoomChip/RoomChip';
+import { useAllHomesTimeline } from '../hooks/useAllHomesTimeline';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useHouseLogTimeline } from '../hooks/useHouseLogTimeline';
 import { formatWon, getTodayKST } from '../utils/contract';
-import { buildTodoItems, groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
+import { buildTodoItems, getHomeRowSummary, groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
 import { ROOM_FILTER_OPTIONS } from '../utils/room';
 import { formatUnitLabel } from '../utils/unitAddress';
@@ -209,6 +211,23 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
   );
 };
 
+// 전체 호실: 같은 달력 위 호실별 줄(H-28). 지금 소유 + 예전 소유(매도) 호실.
+const AllHomesOverview = ({ homes, types, rooms, reloadKey, today, onNavigate, onUnauthorized }) => {
+  const filter = useMemo(() => ({ types, rooms }), [types, rooms]);
+  const { isLoading, error, axis, rows } = useAllHomesTimeline({ homes, filter, today, reloadKey }, { onUnauthorized });
+  if (error) return <TimelinePlaceholder error={error} />;
+  if (isLoading && rows.every((row) => row.logs.length === 0)) return <TimelinePlaceholder />;
+  return (
+    <AllHomesTimeline
+      axis={axis}
+      rows={rows}
+      today={today}
+      summaryOf={(row) => getHomeRowSummary(row, today)}
+      onOpenHome={(id) => onNavigate('logs', { propertyId: id })}
+    />
+  );
+};
+
 // 하우스 로그(S-04).
 // - 집 선택(U-02): 주소에 propertyId·all이 없고 활성 소유 호실이 2개 이상이면 집 카드. 1개면 바로 그 집 표로.
 //   기록 주소(/logs/:logId)·수정 팝업 주소는 늘 표 + 상세 패널로 연다.
@@ -348,7 +367,19 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
             onNavigate={onNavigate}
             onUnauthorized={onUnauthorized}
           />
-        ) : null}
+        ) : (
+          showAll && (
+            <AllHomesOverview
+              homes={properties}
+              types={types}
+              rooms={rooms}
+              reloadKey={reloadKey}
+              today={today}
+              onNavigate={onNavigate}
+              onUnauthorized={onUnauthorized}
+            />
+          )
+        )}
         <div className="grid grid-cols-10 items-start gap-5">
           <section className="logs-page__table-wrap col-span-7 min-w-0 overflow-hidden rounded-card border border-line bg-surface">
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
