@@ -16,6 +16,7 @@ import {
   findChatWithMessages,
   findReferenceById,
   findReferenceForRelated,
+  cleanSearchKeyword,
   findReferences,
   findRelatedCandidates,
   findSameCategoryReferences,
@@ -69,7 +70,8 @@ const parseKeyword = (q, details) => {
   if (keyword.length > MAX_KEYWORD_LENGTH) {
     details.push({ field: 'q', reason: `${MAX_KEYWORD_LENGTH}자 이하여야 합니다.` });
   }
-  return keyword;
+  // "보증금?"·"(보증금)"처럼 붙인 문장부호는 빼고 찾는다(service.js cleanSearchKeyword).
+  return cleanSearchKeyword(keyword);
 };
 
 // ?type=A&type=B처럼 같은 키가 여러 번 오면 배열이 되므로 문자열만 받는다.

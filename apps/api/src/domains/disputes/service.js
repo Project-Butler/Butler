@@ -8,6 +8,7 @@ import {
   isSameMeaning,
   isStopWord,
   replaceSearchWord,
+  splitCompoundWord,
 } from './searchSynonyms.js';
 import { findLegalReferences, normalizeLegalReferences, toLawTitlePatterns, toLegalReferencePattern } from './legalReferences.js';
 import { findClosestWord, latinToHangul, toJamo } from './searchSuggestion.js';
@@ -46,11 +47,22 @@ const toListItem = ({ caseNumber, ...item }) => ({
   sourceUrl: toSourceUrl({ sourceKey: item.sourceKey, title: item.title, caseNumber }),
 });
 
+// 검색어의 문장부호를 공백으로 바꾼다. "보증금?", "(보증금)", "\"보증금\"", "보증금."처럼 부호를 붙여 치면
+// 부호까지 글자로 찾아 0건이 되었다. 자료에서 뜻을 가지는 부호는 남긴다: %(5%), _·\(그대로 찾음, escapeLike),
+// -·/··(날짜·법 이름·"도배·장판"), 숫자 사이의 .과 ,("2.5%", "1,000만 원").
+// 부호를 빼서 아무것도 남지 않으면("???") 원래 검색어 그대로 찾는다(전체 목록이 나오지 않게).
+const PUNCTUATION = /[?!？！()[\]{}<>（）［］「」『』【】〈〉《》"'`“”‘’*~;:；：…。、#@^=+|$&]|(?<![0-9])[.,]|[.,](?![0-9])/g;
+export const cleanSearchKeyword = (keyword) => {
+  const cleaned = keyword.replace(PUNCTUATION, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : keyword;
+};
+
 // 검색어를 공백으로 나눈 단어 목록(중복 제거). "보증금 반환"은 ['보증금', '반환'].
 // 불용어("싶어요"·"방법"·"어떻게", searchSynonyms.js)는 뺀다. 다 빠지면("방법") 그대로 찾는다.
 // 사건번호·조문은 한 가지 모양으로 붙여 쓴 뒤 나눈다("2020다 226452" → "2020다226452", "6조의 3" → "제6조의3", legalReferences.js).
 export const toSearchTerms = (keyword) => {
-  const words = [...new Set(normalizeLegalReferences(keyword).split(/\s+/).filter(Boolean))];
+  // 붙임말 나눠 찾기("전세사기" → "보증금 사기", searchSynonyms.js COMPOUND_WORDS)
+  const words = [...new Set(normalizeLegalReferences(keyword).split(/\s+/).filter(Boolean).flatMap(splitCompoundWord))];
   const kept = words.filter((word) => !isStopWord(word));
   return kept.length > 0 ? kept : words;
 };
