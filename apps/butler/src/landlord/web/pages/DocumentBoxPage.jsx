@@ -277,7 +277,7 @@ const DeleteDocumentModal = ({ doc, onClose, onDeleted, onUnauthorized }) => {
 
 // 임대인 문서함(/landlord/documents). 왼쪽 호실 목록 3 : 오른쪽 선택한 호실의 문서 7.
 // propertyId(주소의 ?propertyId)가 없거나 내 호실이 아니면 첫 호실을 골라 주소를 바꾼다. 예전 호실(FORMER_OWNER)도 같은 화면에서 연다.
-// 열기: PDF·사진은 미리보기 팝업(DocumentPreviewModal), 그 밖은 useDocumentUrls의 open(새 탭).
+// 열기: 사진·동영상·PDF는 공용 미리보기 팝업(DocumentPreviewModal), 그 밖은 useDocumentUrls의 open(새 탭).
 // 어느 쪽이든 누를 때마다 새 주소를 받아 감사 줄이 사람이 연 횟수만큼 남는다. 화면을 열 때 썸네일 주소는 받지 않는다.
 export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized }) => {
   const hookOptions = { onUnauthorized };
@@ -369,7 +369,8 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
     propertyId: selected?.id,
     userId,
     urlEntries: urls.entries,
-    onOpen: (document) => (isPreviewableDocument(document) ? setPreviewing(document) : urls.open(document)),
+    // 같은 표의 파일끼리 이전·다음으로 넘겨 본다.
+    onOpen: (document, documents) => (isPreviewableDocument(document) ? setPreviewing({ document, documents }) : urls.open(document)),
     onDelete: setDeleting,
     onUpload: setUploadRequest,
     onNavigate,
@@ -453,7 +454,14 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
           onUnauthorized={onUnauthorized}
         />
       )}
-      {previewing && <DocumentPreviewModal document={previewing} urls={urls} onClose={() => setPreviewing(null)} />}
+      {previewing && (
+        <DocumentPreviewModal
+          documents={previewing.documents ?? [previewing.document]}
+          startIndex={Math.max(0, (previewing.documents ?? []).findIndex((item) => item.id === previewing.document.id))}
+          urls={urls}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
       {deleting && <DeleteDocumentModal doc={deleting} onClose={() => setDeleting(null)} onDeleted={handleDeleted} onUnauthorized={onUnauthorized} />}
     </div>
   );

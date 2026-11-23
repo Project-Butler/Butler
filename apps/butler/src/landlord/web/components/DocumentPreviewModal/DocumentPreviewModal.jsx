@@ -118,7 +118,8 @@ export const DocumentPreviewModal = ({ document, documents, startIndex = 0, urls
             </button>
           </>
         )}
-        <div className="flex h-[70vh] items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">
+        {/* 팝업 머리·버튼 줄·여백을 뺀 높이(최대 70vh). 1440×900에서도 팝업 안에 스크롤이 생기지 않게 한다. */}
+        <div className="flex h-[min(70vh,calc(100vh-17rem))] items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">
           {!ready && !failed && <p className="text-body text-ink-3">불러오는 중입니다</p>}
           {failed && <p className="text-body text-ink-3">파일을 열지 못했어요</p>}
           {ready && kind === 'image' &&

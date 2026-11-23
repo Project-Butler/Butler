@@ -75,7 +75,7 @@ describe('TenantInviteModal (임차인 초대 팝업)', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: '입주사진.jpg' }));
     const bigButtons = screen.getAllByRole('button', { name: '크게 보기' });
     await userEvent.click(bigButtons[bigButtons.length - 1]);
-    await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledWith('photo-1'));
+    await waitFor(() => expect(api.postDocumentDownloadUrl).toHaveBeenCalledWith('photo-1', { purpose: 'VIEW' }));
   });
 
   it('[링크 만들기] → A3 링크 복사 안내', async () => {
