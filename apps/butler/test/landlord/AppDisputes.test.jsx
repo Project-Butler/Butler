@@ -128,6 +128,16 @@ describe('앱 입구·이동(#215)', () => {
     renderAt('/landlord/disputes/search');
     expect(screen.getByRole('group', { name: '결과 종류' }).closest('.scroll-mt-16')).not.toBeNull();
   });
+
+  it('사례 상세의 [AI로 내 상황에 적용해 보기]는 AI 상담 입력창에 질문을 채우고, 기록 state 는 비운다', async () => {
+    renderAt('/landlord/disputes/references/ref-case');
+    await userEvent.click(await screen.findByRole('button', { name: /AI로 내 상황에 적용해 보기/ }));
+    expect(where()).toBe('/landlord/disputes/chat');
+    expect(screen.getByLabelText('상담 질문')).toHaveValue(
+      '"퇴거 후 벽지·장판 손상, 원상복구 비용은 어디까지?" 사례가 제 상황에도 해당하는지 알고 싶어요.\n제 상황: ',
+    );
+    expect(api.postDisputeChat).not.toHaveBeenCalled();
+  });
 });
 
 describe('주소로 바로 들어왔을 때 뒤로 가기', () => {
