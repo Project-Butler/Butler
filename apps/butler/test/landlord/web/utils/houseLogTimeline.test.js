@@ -230,7 +230,7 @@ describe('점', () => {
     expect(dots.at(-1)).toMatchObject({ title: '새 임차인 계약 시작 · 2029-02-28까지', description: '임차인 이새집 · 시작 전', contractId: 'c2' });
   });
 
-  it('축에서 가까운 점(첫 점과 minGapPercent 안)은 한 묶음, 라벨은 첫 날 ~ 끝 날(B1)', () => {
+  it('축에서 가까운 점(바로 앞 점과 minGapPercent 안)은 한 묶음, 라벨은 첫 날 ~ 끝 날(B1)', () => {
     const axis = { start: '2025-01-01', end: '2026-12-31' };
     const groups = groupDotsByDate(
       [{ key: 'a', date: '2026-11-08' }, { key: 'b', date: '2026-11-21' }, { key: 'c', date: '2026-11-24' }, { key: 'd', date: '2026-06-01' }],

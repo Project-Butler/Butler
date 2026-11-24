@@ -179,14 +179,14 @@ export const toContractDots = ({ current, next, nextKind, past = [], notices = [
 };
 
 // 같은 날 점은 하나로 묶는다(H-26). 날짜 순.
-// axis·minGapPercent를 주면 화면에서 겹칠 만큼 가까운 날짜(첫 점과 minGapPercent% 안)도 한 묶음으로(B1).
+// axis·minGapPercent를 주면 화면에서 겹칠 만큼 가까운 날짜(바로 앞 점과 minGapPercent% 안)도 한 묶음으로(B1).
 // 묶음의 date는 첫 날짜(점 위치), endDate는 마지막 날짜, label은 '날짜' 또는 '첫 날 ~ 끝 날'.
 export const groupDotsByDate = (dots, { axis = null, minGapPercent = 0 } = {}) => {
   const sorted = [...dots].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const groups = [];
   sorted.forEach((dot) => {
     const last = groups[groups.length - 1];
-    const isNear = last && (dot.date === last.date || (axis && minGapPercent > 0 && toPercent(dot.date, axis) - toPercent(last.date, axis) < minGapPercent));
+    const isNear = last && (dot.date === last.date || (axis && minGapPercent > 0 && toPercent(dot.date, axis) - toPercent(last.items[last.items.length - 1].date, axis) < minGapPercent));
     if (isNear) last.items.push(dot);
     else groups.push({ key: `g-${dot.date}`, date: dot.date, items: [dot] });
   });
