@@ -101,8 +101,15 @@ describe('계약 나누기 (H-27·H-34)', () => {
     expect(result.next).toBeNull();
   });
 
+  it('지금 계약이 없고 마지막 계약이 해지 없이 만료됐으면 lapsed(C5)', () => {
+    const expired = contract({ id: 'e1', status: 'EXPIRED', startDate: '2024-11-01', endDate: '2026-10-31' });
+    expect(classifyContracts([expired]).lapsed?.id).toBe('e1');
+    expect(classifyContracts([contract({ id: 't1', status: 'TERMINATED', terminatedOn: '2026-05-01' })]).lapsed).toBeNull();
+    expect(classifyContracts([expired, contract()]).lapsed).toBeNull();
+  });
+
   it('계약이 없으면 모두 비어 있다', () => {
-    expect(classifyContracts([])).toEqual({ current: null, next: null, nextKind: null, past: [] });
+    expect(classifyContracts([])).toEqual({ current: null, next: null, nextKind: null, past: [], lapsed: null });
   });
 
   it('소유가 끝났으면 모두 지난 계약이고, 끝난 날 뒤로 넘는 계약은 그날에서 자른다', () => {
@@ -298,6 +305,22 @@ describe('앞으로 할 일 (U-16)', () => {
 
   it('계약이 없거나 renewalNotice가 없으면(끝난 소유·해지) 할 일 없음', () => {
     expect(buildTodoItems({ current: null, today: TODAY })).toEqual([]);
+  });
+
+  it('만료 뒤 통지 도달 기록이 없으면 묵시적 갱신 안내(C5), 기간 안 도달 기록이 있거나 2년 지나면 없음', () => {
+    const lapsed = contract({ id: 'old', status: 'EXPIRED', startDate: '2024-11-01', endDate: '2026-10-31', renewalNotice: null });
+    const items = buildTodoItems({ current: null, lapsed, lapsedNotices: [], today: TODAY });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ id: 'implicit-renewal-lapsed', action: { kind: 'RENEW', contractId: 'old' } });
+    expect(items[0].title).toContain('2026-10-31');
+    expect(buildTodoItems({ current: null, lapsed, lapsedNotices: [{ id: 'n1', deliveredOn: '2026-07-01' }], today: TODAY })).toEqual([]);
+    expect(buildTodoItems({ current: null, lapsed, lapsedNotices: [{ id: 'n2', deliveredOn: '2026-09-15' }], today: TODAY })).toHaveLength(1);
+    expect(buildTodoItems({ current: null, lapsed, lapsedNotices: [], today: '2028-12-01' })).toEqual([]);
+  });
+
+  it('지금 계약이 없으면 통지 점을 그리지 않는다(오류 없음)', () => {
+    const axis = { start: '2025-01-01', end: '2027-12-31' };
+    expect(() => toContractDots({ current: null, next: null, nextKind: null, past: [], notices: [{ id: 'n', kind: 'REFUSE_RENEWAL', sentOn: '2026-08-01', deliveredOn: null }] }, axis)).not.toThrow();
     expect(buildTodoItems({ current: contract({ renewalNotice: null }), today: TODAY })).toEqual([]);
   });
 });

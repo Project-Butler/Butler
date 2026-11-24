@@ -177,12 +177,15 @@ const TimelinePlaceholder = ({ error }) => (
 // 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
 const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onRemoved, onUnauthorized }) => {
   const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
-  const { logs, axis, current, next, nextKind, past, notices } = timeline;
+  const { logs, axis, current, next, nextKind, past, notices, lapsed, lapsedNotices } = timeline;
   const groups = useMemo(
     () => groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)]),
     [logs, axis, types, rooms, current, next, nextKind, past, notices],
   );
-  const todo = useMemo(() => buildTodoItems({ current, next, nextKind, today }), [current, next, nextKind, today]);
+  const todo = useMemo(
+    () => buildTodoItems({ current, next, nextKind, today, lapsed, lapsedNotices }),
+    [current, next, nextKind, today, lapsed, lapsedNotices],
+  );
 
   if (timeline.error && logs.length === 0) return <TimelinePlaceholder error={timeline.error} />;
   if (timeline.isLoading && logs.length === 0) return <TimelinePlaceholder />;
@@ -228,11 +231,12 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
 };
 
 // 전체 호실: 같은 달력 위 호실별 줄(H-28). 지금 소유 + 예전 소유(매도) 호실.
-const AllHomesOverview = ({ homes, types, rooms, reloadKey, today, onNavigate, onUnauthorized }) => {
+const AllHomesOverview = ({ homes, isHomesLoading, types, rooms, reloadKey, today, onNavigate, onUnauthorized }) => {
   const filter = useMemo(() => ({ types, rooms }), [types, rooms]);
   const { isLoading, error, axis, rows } = useAllHomesTimeline({ homes, filter, today, reloadKey }, { onUnauthorized });
   if (error) return <TimelinePlaceholder error={error} />;
-  if (isLoading && rows.every((row) => row.logs.length === 0)) return <TimelinePlaceholder />;
+  // 호실 목록을 받기 전에는 "호실이 없어요" 대신 불러오는 중(C8).
+  if (isHomesLoading || (isLoading && rows.every((row) => row.logs.length === 0))) return <TimelinePlaceholder />;
   return (
     <AllHomesTimeline
       axis={axis}
@@ -394,6 +398,7 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
           showAll && (
             <AllHomesOverview
               homes={properties}
+              isHomesLoading={(!owned.data && !owned.error) || (!formerlyOwned.data && !formerlyOwned.error)}
               types={types}
               rooms={rooms}
               reloadKey={reloadKey}

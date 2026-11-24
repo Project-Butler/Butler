@@ -69,14 +69,17 @@ export const classifyContracts = (contracts = [], { ownershipEndedOn = null } = 
     const past = sorted
       .filter((contract) => contract.startDate <= ownershipEndedOn)
       .map((contract) => (getContractEnd(contract) > ownershipEndedOn ? { ...contract, cutOn: ownershipEndedOn } : contract));
-    return { current: null, next: null, nextKind: null, past };
+    return { current: null, next: null, nextKind: null, past, lapsed: null };
   }
   const upcoming = sorted.filter((contract) => contract.status === 'UPCOMING');
   const current = sorted.find((contract) => IN_PROGRESS.includes(contract.status)) ?? upcoming[0] ?? null;
   const next = current ? (upcoming.find((contract) => contract.id !== current.id && contract.startDate > current.endDate) ?? null) : null;
   const nextKind = next ? (next.previousContractId === current.id ? 'RENEWAL' : 'NEW_TENANT') : null;
   const past = sorted.filter((contract) => contract.status === 'EXPIRED' || contract.status === 'TERMINATED');
-  return { current, next, nextKind, past };
+  // lapsed: 지금·시작 전 계약이 없고 가장 최근 계약이 해지 없이 만료된 경우(C5 묵시적 갱신 안내용).
+  const latestPast = past[past.length - 1];
+  const lapsed = !current && latestPast && latestPast.status === 'EXPIRED' && !latestPast.terminatedOn ? latestPast : null;
+  return { current, next, nextKind, past, lapsed };
 };
 
 // 지난 계약 막대의 끝: 해지일 · 만료일 · (소유가 끝나 잘린 날) 중 이른 날.
@@ -147,7 +150,8 @@ export const toContractDots = ({ current, next, nextKind, past = [], notices = [
     push(`start-${current.id}`, current.startDate, '계약 시작', `${current.startDate} ~ ${current.endDate}${tenant(current) ? ` · ${tenant(current)}` : ''}`, current);
     if (current.terminatedOn) push(`end-${current.id}`, current.terminatedOn, '계약 해지', tenant(current), current);
   }
-  notices.forEach((notice) => {
+  // 통지 점은 지금 계약에 붙는다. 지금 계약이 없으면(만료 뒤 등) 그리지 않는다.
+  if (current) notices.forEach((notice) => {
     const date = notice.deliveredOn ?? notice.sentOn;
     push(`notice-${notice.id}`, date, NOTICE_TITLE[notice.kind] ?? '통지 기록', notice.deliveredOn ? `도달 ${notice.deliveredOn}` : `보낸 날 ${notice.sentOn} · 도달일 없음`, current);
   });
@@ -214,7 +218,27 @@ export const getContractYears = (contract) => Math.max(1, Math.round(daysBetween
 // 항목: { id, tone(crit·warn·ok·mute·later), icon, title, description, dday?, action?: { kind, label, contractId } }
 // - action.kind: 'NOTICE'(통지 기록하기 → 호실 상세 계약 칸), 'CONTRACT'(계약 보기), 'RENEW'(갱신 계약 등록)
 // - 퇴거 점검·입주 인수인계는 누를 곳 없는 알림 문구만(H-42).
-export const buildTodoItems = ({ current, next, nextKind, today }) => {
+// 만료 뒤 묵시적 갱신 안내를 보여 주는 기간(만료 뒤 2년 = 갱신된 기간).
+const LAPSED_NOTICE_DAYS = 730;
+
+export const buildTodoItems = ({ current, next, nextKind, today, lapsed = null, lapsedNotices = [] }) => {
+  // 계약이 해지 없이 만료됐는데 통지 기간 안에 도달한 통지 기록이 없으면, 같은 조건 2년 갱신으로 본다(H-27·C5).
+  if (!current && lapsed) {
+    const window = computeNoticeWindow(lapsed.endDate);
+    const deliveredInTime = lapsedNotices.some((item) => item.deliveredOn && item.deliveredOn >= window.windowStart && item.deliveredOn <= window.deadline);
+    const daysSince = daysBetween(lapsed.endDate, today);
+    if (deliveredInTime || daysSince <= 0 || daysSince > LAPSED_NOTICE_DAYS) return [];
+    return [
+      {
+        id: 'implicit-renewal-lapsed',
+        tone: 'warn',
+        icon: 'notice',
+        title: `계약 만료일(${lapsed.endDate})이 지났지만 갱신 거절 통지 도달 기록이 없어요`,
+        description: '같은 조건으로 2년 갱신된 것으로 봐요 · 갱신 계약을 등록해 기간을 맞추세요.',
+        action: { kind: 'RENEW', label: '갱신 계약 등록', contractId: lapsed.id },
+      },
+    ];
+  }
   const notice = current?.renewalNotice;
   if (!current || !notice) return [];
   const items = [];

@@ -26,7 +26,8 @@ export const useHouseLogTimeline = ({ propertyId, today, reloadKey }, { onUnauth
     [contracts.data, ownership],
   );
   const split = useMemo(() => classifyContracts(ownContracts, { ownershipEndedOn: endedOn }), [ownContracts, endedOn]);
-  const notices = useGetRenewalNoticeList(split.current?.id, hookOptions);
+  // 지금 계약이 없으면 만료된 마지막 계약(lapsed)의 통지 기록을 읽어 묵시적 갱신 안내에 쓴다(C5).
+  const notices = useGetRenewalNoticeList(split.current?.id ?? split.lapsed?.id, hookOptions);
 
   const verifiedAt = ownership?.firstVerifiedAt ?? ownership?.verifiedAt ?? null;
   const myStart = verifiedAt ? toDateOnly(verifiedAt) : null;
@@ -62,6 +63,7 @@ export const useHouseLogTimeline = ({ propertyId, today, reloadKey }, { onUnauth
     axis,
     hiddenPastCount: axis.hiddenPastCount,
     logs,
-    notices: notices.data ?? [],
+    notices: split.current ? (notices.data ?? []) : [],
+    lapsedNotices: !split.current && split.lapsed ? (notices.data ?? []) : [],
   };
 };
