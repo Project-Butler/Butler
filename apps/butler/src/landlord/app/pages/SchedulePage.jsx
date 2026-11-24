@@ -7,12 +7,12 @@ import { addDays, formatDday, formatManwon, getDdayTone, getTodayKST } from '../
 import { Switch } from '../components/Switch/Switch';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
 import { useGetScheduleList } from '../hooks/useGetScheduleList';
-import { useNotificationList } from '../hooks/useNotificationList';
+import { useNotificationList } from '../../../shared/notifications/useNotificationList';
 import { useNotificationPreference } from '../hooks/useNotificationPreference';
-import { useNotificationUnreadCount } from '../hooks/useNotificationUnreadCount';
+import { useNotificationUnreadCount } from '../../../shared/notifications/useNotificationUnreadCount';
 import { useGoBack, useGoTo } from '../utils/navigation';
+import { formatNotificationTime } from '../../../shared/notifications/formatNotificationTime';
 import {
-  formatNotificationTime,
   formatScheduleDate,
   formatWeekMonthLabel,
   getDayOfMonth,
