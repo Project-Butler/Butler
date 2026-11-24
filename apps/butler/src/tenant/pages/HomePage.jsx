@@ -4,7 +4,7 @@ import { getContractList } from '@butler/api-client';
 import { ChevronRight, FileText, Wrench } from 'lucide-react';
 import { formatDday, formatMonthDay, formatPeriod, getTenantStatusBadge } from '../../shared/contractFormat';
 import { useLoad } from '../hooks/useLoad';
-import { contractPath, TICKETS_PATH } from '../routes';
+import { contractPath, TICKET_NEW_PATH } from '../routes';
 import { getNextRentDays, sortTenantContracts } from '../utils/home';
 
 // 임차인에게 보이는 계약은 서버가 정한다(연결된 계약만). 한 사람이 가진 계약은 몇 건뿐이라 한 번에 받는다.
@@ -91,7 +91,7 @@ export const HomePage = ({ user, onUnauthorized }) => {
 
       <button
         type="button"
-        onClick={() => navigate(TICKETS_PATH)}
+        onClick={() => navigate(TICKET_NEW_PATH)}
         className="flex w-full items-center gap-3 rounded-card border border-line bg-surface p-4 text-left hover:bg-surface-2"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-input bg-accent text-white">
