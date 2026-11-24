@@ -99,10 +99,11 @@ const TenantChatButton = ({ contract, isOpening, error, onOpen, onInvite }) => {
   );
 };
 
-// [기본 정보] 등기 고유번호는 응답에 없어 두지 않는다. 등기부 대조 카드는 인증 완료일 때 인증 응답의 날짜만 쓴다.
-const InfoTab = ({ property, complex, attempt, chat, onCommunity }) => {
+// [기본 정보] 권리자 인증은 건축물대장의 소유자와 대조한다(등기부는 대조하지 않는다).
+// 대조 카드 날짜는 소유 관계의 인증일(verifiedAt)을 쓴다. 인증 시도 없이 인증된 호실(운영자 처리·시드)도 보이게 웹과 맞춘다.
+const InfoTab = ({ property, complex, ownership, chat, onCommunity }) => {
   const isVerified = property.myRelation?.verificationStatus === 'VERIFIED';
-  const verifiedOn = attempt?.status === 'VERIFIED' ? formatDateKST(attempt.finishedAt) : null;
+  const verifiedOn = ownership?.verificationStatus === 'VERIFIED' ? formatDateKST(ownership.verifiedAt) : null;
   return (
     <div className="flex flex-col gap-3">
       <dl className={`${CARD_CLASS} px-4`}>
@@ -113,8 +114,8 @@ const InfoTab = ({ property, complex, attempt, chat, onCommunity }) => {
         <InfoRow label="등록일" value={formatDateKST(property.createdAt)} numeric />
       </dl>
       {isVerified && verifiedOn && (
-        <section aria-label="등기부 대조 완료" className="rounded-card border border-seal bg-seal-box px-4 py-3.5">
-          <h3 className="text-m-label font-semibold text-seal-ink">등기부 대조 완료</h3>
+        <section aria-label="건축물대장 대조 완료" className="rounded-card border border-seal bg-seal-box px-4 py-3.5">
+          <h3 className="text-m-label font-semibold text-seal-ink">건축물대장 대조 완료</h3>
           <p className="mt-1 font-num text-num-sub tabular-nums text-seal-ink">인증 완료 · {verifiedOn}</p>
         </section>
       )}
@@ -343,7 +344,7 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
             <InfoTab
               property={property}
               complex={complexQuery.data}
-              attempt={latestAttempt.data}
+              ownership={ownershipQuery.data}
               chat={
                 <TenantChatButton
                   contract={currentContract}
