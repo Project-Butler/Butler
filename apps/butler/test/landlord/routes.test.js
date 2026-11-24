@@ -24,6 +24,12 @@ describe('임대인 routes', () => {
     expect(resolveViewKey('/landlord/documents')).toBe('documents');
   });
 
+  it('하우스 로그(logs): 호실은 propertyId, 전체 호실 표는 all=1, 아무것도 없으면 첫 화면', () => {
+    expect(buildLocation('logs', { propertyId: 'p-1' })).toEqual({ pathname: '/landlord/logs', search: '?propertyId=p-1' });
+    expect(buildLocation('logs', { all: true })).toEqual({ pathname: '/landlord/logs', search: '?all=1' });
+    expect(buildLocation('logs').search).toBe('');
+  });
+
   it('state(안내 문구)와 쿼리는 접두어를 붙여도 그대로 남는다', () => {
     expect(buildLocation('buildingList', { notice: '등록됨' })).toEqual({ pathname: '/landlord/buildings', state: { notice: '등록됨' } });
     expect(buildLocation('properties', { relation: 'FORMER_OWNER' })).toEqual({ pathname: '/landlord/properties', search: '?relation=FORMER_OWNER' });

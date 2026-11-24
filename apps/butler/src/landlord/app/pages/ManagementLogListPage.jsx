@@ -6,6 +6,7 @@ import { useGetManagementLogList } from '../../web/hooks/useGetManagementLogList
 import { useGetPropertyList } from '../../web/hooks/useGetPropertyList';
 import { formatAttachmentCount } from '../../web/utils/attachment';
 import { TYPE_FILTER_OPTIONS } from '../../web/utils/managementLog';
+import { getRoomLabel, ROOM_FILTER_OPTIONS } from '../../web/utils/room';
 import { formatUnitLabel } from '../../web/utils/unitAddress';
 import { AppTabShell } from '../components/AppTabShell/AppTabShell';
 import { formatLogDay, getLogSourceLabel, groupLogsByMonth } from '../utils/logGroups';
@@ -17,16 +18,20 @@ const PROPERTY_PICKER_SIZE = 100;
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
 const IMMUTABLE_NOTICE = '하우스 로그는 수정·삭제할 수 없습니다. 바뀐 내용은 새 기록으로 쌓이고 감사 로그에 남습니다.';
 
-// 기록 한 줄: 날짜 · **호실** 제목 · 첨부 · 연결 대상(파란 글자). 누르면 기록 상세.
+const CHIP_ROW_CLASS = '-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
+// 기록 한 줄: 날짜 · **호실** 제목 · 방 · 첨부 · 연결 대상(파란 글자). 누르면 기록 상세.
 const LogRow = ({ log, onOpen }) => {
   const attachment = formatAttachmentCount(log.attachments);
   const source = getLogSourceLabel(log);
+  const room = getRoomLabel(log.room);
   return (
     <li className="border-b border-line last:border-b-0">
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 py-3 text-left">
         <span className="w-11 shrink-0 pt-px font-num text-num-sub tabular-nums text-ink-3">{formatLogDay(log.occurredOn)}</span>
         <span className="min-w-0 flex-1 text-body text-ink">
           <strong className="font-semibold">{formatUnitLabel(log.property.buildingNo, log.property.unitNo)}</strong> {log.title}
+          {room && <span className="text-ink-3"> · {room}</span>}
           {attachment && <span className="text-ink-3"> · {attachment}</span>}
           {source && <span className="text-seal"> · {source}</span>}
         </span>
@@ -36,9 +41,9 @@ const LogRow = ({ log, onOpen }) => {
 };
 
 // 한 필터 조합의 목록. 필터가 바뀌면 key 로 새로 시작해 page 가 1로 돌아간다.
-const LogListSection = ({ propertyId, type, onOpen, onUnauthorized }) => {
+const LogListSection = ({ propertyId, type, room, onOpen, onUnauthorized }) => {
   const [page, setPage] = useState(1);
-  const { data, error, isLoading, refetch } = useGetManagementLogList({ propertyId, type, page, size: PAGE_SIZE }, { onUnauthorized });
+  const { data, error, isLoading, refetch } = useGetManagementLogList({ propertyId, type, room, page, size: PAGE_SIZE }, { onUnauthorized });
 
   if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
   if (!data) {
@@ -51,7 +56,7 @@ const LogListSection = ({ propertyId, type, onOpen, onUnauthorized }) => {
   if (data.items.length === 0) {
     return (
       <p className="py-10 text-center text-body text-ink-3">
-        {propertyId || type ? '조건에 맞는 기록이 없어요' : '아직 하우스 로그가 없어요'}
+        {propertyId || type || room ? '조건에 맞는 기록이 없어요' : '아직 하우스 로그가 없어요'}
       </p>
     );
   }
@@ -105,12 +110,19 @@ const PropertyPicker = ({ properties, propertyId, onSelect, onClose }) => (
   </div>
 );
 
-// 임대인 앱 하우스 로그 (Figma M08). 웹 하우스 로그와 같은 API·같은 유형 칩이고, 월별로 묶어 보여 준다.
+// 임대인 앱 하우스 로그 (Figma M08). 웹 하우스 로그와 같은 API·같은 유형 칩·방 칩(여러 개)이고, 월별로 묶어 보여 준다.
 // 하우스 로그는 고치거나 지우지 않는 원칙이라 목록에 수정·삭제 동작이 없다. 기록 추가 진입점은 피그마에 없어 두지 않는다.
 export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
   const [type, setType] = useState(null);
+  // 방은 여러 개 함께 고른다(빈 배열 = 전체). 보낼 때는 보기 순서대로 쉼표로.
+  const [rooms, setRooms] = useState([]);
+  const room =
+    ROOM_FILTER_OPTIONS.filter((option) => rooms.includes(option.value))
+      .map((option) => option.value)
+      .join(',') || undefined;
+  const toggleRoom = (value) => setRooms((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const hookOptions = { onUnauthorized };
@@ -142,7 +154,7 @@ export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
           </p>
         )}
 
-        <div role="group" aria-label="유형" className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="유형" className={CHIP_ROW_CLASS}>
           {[{ value: null, label: '전체' }, ...TYPE_FILTER_OPTIONS].map((option) => (
             <span key={option.value ?? 'all'} className="shrink-0">
               <FilterChip selected={option.value === type} onClick={() => setType(option.value)}>
@@ -152,12 +164,28 @@ export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
           ))}
         </div>
 
+        <div role="group" aria-label="방" className={CHIP_ROW_CLASS}>
+          <span className="shrink-0">
+            <FilterChip selected={rooms.length === 0} onClick={() => setRooms([])}>
+              전체
+            </FilterChip>
+          </span>
+          {ROOM_FILTER_OPTIONS.map((option) => (
+            <span key={option.value} className="shrink-0">
+              <FilterChip selected={rooms.includes(option.value)} onClick={() => toggleRoom(option.value)}>
+                {option.label}
+              </FilterChip>
+            </span>
+          ))}
+        </div>
+
         <p className="rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">{IMMUTABLE_NOTICE}</p>
 
         <LogListSection
-          key={`${propertyId}-${type}`}
+          key={`${propertyId}-${type}-${room}`}
           propertyId={propertyId}
           type={type ?? undefined}
+          room={room}
           onOpen={(logId) => goTo('logDetail', { logId })}
           onUnauthorized={onUnauthorized}
         />

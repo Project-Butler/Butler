@@ -612,7 +612,7 @@ model PropertyLog {
   content    String?
   occurredOn DateTime         @map("occurred_on") @db.Date
   cost       BigInt?
-  // 방(위치) 태그: ENTRANCE·LIVING·KITCHEN·BATHROOM·BEDROOM·OTHER(등록형, platform/roomRules.js). null = 방 없음.
+  // 방(위치) 태그: ENTRANCE·LIVING·KITCHEN·BATHROOM·BEDROOM·UTILITY·BALCONY·BOILER_ROOM·OTHER(등록형, platform/roomRules.js). null = 방 없음.
   room       String?          @db.VarChar(20)
   // 수리 완료 정보(하우스 로그 개편 H-09·H-10). 보증은 끝나는 날짜 하나만 둔다.
   vendorName    String?   @map("vendor_name") @db.VarChar(100)

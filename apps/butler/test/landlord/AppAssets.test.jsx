@@ -345,6 +345,28 @@ describe('M08 하우스 로그', () => {
     await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'INSPECTION' })));
   });
 
+  it('방 칩은 전체 + 9가지 + 방 없음, 여러 개 고르면 쉼표로, 전체를 누르면 풀린다', async () => {
+    renderAt('/landlord/logs');
+    const chips = await screen.findByRole('group', { name: '방' });
+    expect(within(chips).getAllByRole('button').map((chip) => chip.textContent)).toEqual([
+      '전체', '현관', '거실', '주방', '욕실·화장실', '침실', '다용도실', '베란다', '보일러실', '기타', '방 없음',
+    ]);
+    expect(within(chips).getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(chips).getByRole('button', { name: '방 없음' }));
+    await userEvent.click(within(chips).getByRole('button', { name: '주방' }));
+    expect(within(chips).getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ room: 'KITCHEN,NONE' })));
+    await userEvent.click(within(chips).getByRole('button', { name: '전체' }));
+    await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ room: undefined })));
+  });
+
+  it('기록 줄에 방을 보여 준다', async () => {
+    api.getManagementLogList.mockResolvedValue(page([LOG({ room: 'BOILER_ROOM' })]));
+    renderAt('/landlord/logs');
+    const october = await screen.findByRole('region', { name: '2026년 10월' });
+    expect(within(october).getByText(/보일러실/)).toBeInTheDocument();
+  });
+
   it('필터 아이콘으로 호실을 고르면 주소에 남긴다', async () => {
     renderAt('/landlord/logs');
     await userEvent.click(await within(banner()).findByRole('button', { name: '호실 선택' }));
