@@ -13,6 +13,7 @@ import { DisputeAppLayout, DisputeChatAppScreen } from './components/DisputeAppL
 import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
+import { ContractRegisterPage } from './pages/ContractRegisterPage';
 import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { HomePage } from './pages/HomePage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
@@ -95,6 +96,15 @@ const VerifyRoute = ({ onRefreshMe, onUnauthorized }) => {
   return (
     <VerifyPage key={propertyId} propertyId={propertyId} notice={location.state?.notice} onVerified={onRefreshMe} onUnauthorized={onUnauthorized} />
   );
+};
+
+// 계약 등록. 미리 고를 호실(propertyId)·갱신할 이전 계약(renewFrom)은 주소에 남긴다(웹 routes.js contractRegister 와 같다).
+// 둘이 바뀌면 화면을 새로 시작한다.
+const ContractRegisterRoute = ({ onUnauthorized }) => {
+  const [searchParams] = useSearchParams();
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  const renewFrom = searchParams.get('renewFrom') ?? undefined;
+  return <ContractRegisterPage key={`${propertyId}-${renewFrom}`} propertyId={propertyId} renewFrom={renewFrom} onUnauthorized={onUnauthorized} />;
 };
 
 const ContractDetailRoute = ({ onUnauthorized }) => {
@@ -196,7 +206,7 @@ const ThreadRoute = ({ user, onUnauthorized }) => {
 
 // 임대인 앱 화면. 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소는 웹과 같고 화면만 다르다).
 // 홈(M03)은 탭 화면 안에 둔다. 상단 바가 화면마다 다른 내 자산(M05)·부동산 상세(M06)·하우스 로그(M08)는 화면이 직접 탭 셸을 그리고,
-// 부동산 등록(M04)·계약 관리(M07)·계약 수정·임차인 초대(M15)처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
+// 부동산 등록(M04)·계약 관리(M07)·계약 등록·계약 수정·임차인 초대(M15)처럼 하단 탭이 없는 화면은 탭 셸 밖에 놓는다.
 // 수리·점검 목록(M09)은 탭 셸을 직접 그리고, 요청 상세·등록·소통(M10)은 하단 탭 없이 고정 버튼 바를 쓴다. 문서함(M11)도 탭 셸을 직접 그린다.
 // 일정·알림(#163)은 홈형 상단 바의 종에서 들어오고, 하단 탭 없이 뒤로 가기 상단 바를 쓴다. 통합 검색(M13)은 상단 바의 돋보기에서 들어오고 검색창 상단 바만 있다.
 // 권리자 인증(/properties/:id/verify)은 하단 탭 없는 전체 화면이다. 휴대폰 본인인증(리디렉션)도 이 주소로 돌아온다.
@@ -211,15 +221,8 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
       element={<PropertyDetailRoute verifiedLegalDongCodes={verifiedLegalDongCodes} onRefreshMe={onRefreshMe} onUnauthorized={onUnauthorized} />}
     />
     <Route path="/properties/:propertyId/verify" element={<VerifyRoute onRefreshMe={onRefreshMe} onUnauthorized={onUnauthorized} />} />
-    {/* 계약 등록은 앱 화면이 아직 없다. /contracts/:contractId 가 'new'를 계약 id 로 읽지 않게 따로 둔다. */}
-    <Route
-      path="/contracts/new"
-      element={
-        <HomeTopBarShell user={user} onUnauthorized={onUnauthorized}>
-          <ComingSoon title="준비 중인 화면" />
-        </HomeTopBarShell>
-      }
-    />
+    {/* /contracts/:contractId 가 'new'를 계약 id 로 읽지 않게 앞에 둔다. */}
+    <Route path="/contracts/new" element={<ContractRegisterRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/contracts/:contractId" element={<ContractDetailRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/contracts/:contractId/edit" element={<ContractEditRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/contracts/:contractId/invite" element={<TenantInviteRoute onUnauthorized={onUnauthorized} />} />

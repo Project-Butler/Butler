@@ -62,7 +62,6 @@ describe('임대인 앱: 하단 탭', () => {
     ['/landlord/home', '홈'],
     ['/landlord/buildings', '내 자산'],
     ['/landlord/properties/p-1', '내 자산'],
-    ['/landlord/properties/p-1/verify', '내 자산'],
     ['/landlord/logs', '내 자산'],
     ['/landlord/logs/l-1', '내 자산'],
     ['/landlord/community', '커뮤니티'],
@@ -113,8 +112,6 @@ describe('임대인 앱: 준비 중 화면', () => {
     '/landlord/community/briefing',
     '/landlord/settings',
     '/landlord/contracts',
-    '/landlord/contracts/new',
-    '/landlord/properties/p-1/verify',
     '/landlord/logs/l-1',
     '/landlord/no-such-page',
   ])('%s 은 앱 셸 안에서 "준비 중"을 보여 준다 (웹 화면을 그대로 보여 주지 않는다)', (path) => {
@@ -141,6 +138,20 @@ describe('임대인 앱: 내 자산·상세 화면의 셸', () => {
     renderAt('/landlord/contracts/c-1');
     expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+  });
+
+  it('권리자 인증(/landlord/properties/:id/verify)은 "준비 중"이 아니고 하단 탭 없는 전체 화면이다', () => {
+    renderAt('/landlord/properties/p-1/verify');
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+  });
+
+  it('계약 등록(/landlord/contracts/new)은 "준비 중"이 아니고 하단 탭 없이 뒤로 가기 상단 바를 쓴다', () => {
+    renderAt('/landlord/contracts/new');
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('heading', { name: '계약 등록' })).toBeInTheDocument();
   });
 
   it('계약 수정(/landlord/contracts/:id/edit)은 "준비 중"이 아니고 하단 탭 없이 뒤로 가기 상단 바를 쓴다', () => {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Plus } from 'lucide-react';
 import { Badge, Button, MobileFormLayout } from '@butler/ui';
 import { useGetContract } from '../../../shared/useGetContract';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
 import { useGetContractThread } from '../../web/hooks/useGetContractThread';
-import { getContractDdayBadge } from '../../web/utils/contract';
+import { getContractDdayBadge, isContractInProgress } from '../../web/utils/contract';
 import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { RenewalNoticeCard } from '../components/RenewalNoticeCard/RenewalNoticeCard';
 import { RenewalNoticeSheet } from '../components/RenewalNoticeSheet/RenewalNoticeSheet';
@@ -29,6 +29,7 @@ const PlaceholderCard = ({ title, children }) => (
 // 지금 계약의 임차인 대화는 부동산 상세 [기본 정보]에서 열고, 임차인 계정이 없으면 초대 카드(#169)를 보여 주며, 끝난 계약은 이미 있는 대화방만 여기서 연다.
 // 끝난 계약(만료·해지)은 '지난 계약'으로 보여 주고 갱신 진행·[갱신 의사 묻기]·갱신 안내를 두지 않는다.
 // 갱신 거절 통지 카드(#163)는 계약 응답의 renewalNotice 가 있을 때만(소유자·진행 중·시작 전 계약) 보이고, [통지 기록]이 기록 시트를 연다.
+// [갱신 계약 등록]은 웹 호실 상세 계약 영역과 같은 조건(수정할 수 있는 진행 중 계약)에서만 보이고, 이전 계약 값을 채운 계약 등록 화면을 연다.
 export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
@@ -53,6 +54,7 @@ export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
 
   const dday = getContractDdayBadge(contract);
   const rows = toContractRows(contract);
+  const canRenew = !contract.isReadOnly && isContractInProgress(contract.status);
 
   return (
     <MobileFormLayout
@@ -106,6 +108,13 @@ export const ContractDetailPage = ({ contractId, onUnauthorized }) => {
           ))}
         </dl>
       </section>
+
+      {canRenew && (
+        <Button variant="secondary" size="h48" onClick={() => goTo('contractRegister', { renewFrom: contract.id })}>
+          <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+          갱신 계약 등록
+        </Button>
+      )}
 
       <TenantInviteCard contract={contract} onInvite={(id) => goTo('contractInvite', { contractId: id })} />
 
