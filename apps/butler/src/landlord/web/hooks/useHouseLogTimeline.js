@@ -25,7 +25,7 @@ export const useHouseLogTimeline = ({ propertyId, today, reloadKey }, { onUnauth
     () => (contracts.data?.items ?? []).filter((contract) => ownership && contract.ownershipId === ownership.id),
     [contracts.data, ownership],
   );
-  const split = useMemo(() => classifyContracts(ownContracts, { ownershipEndedOn: endedOn }), [ownContracts, endedOn]);
+  const split = useMemo(() => classifyContracts(ownContracts, { ownershipEndedOn: endedOn, today }), [ownContracts, endedOn, today]);
   // 지금 계약이 없으면 만료된 마지막 계약(lapsed)의 통지 기록을 읽어 묵시적 갱신 안내에 쓴다(C5).
   const notices = useGetRenewalNoticeList(split.current?.id ?? split.lapsed?.id, hookOptions);
 

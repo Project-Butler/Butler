@@ -101,6 +101,21 @@ describe('계약 나누기 (H-27·H-34)', () => {
     expect(result.next).toBeNull();
   });
 
+  it('중도 해지: 해지일이 오늘 이후면 해지일까지 지금 계약, 새 계약은 새 임차인 다음 계약(C6)', () => {
+    const ending = contract({ id: 'old', status: 'TERMINATED', startDate: '2025-03-01', endDate: '2027-02-28', terminatedOn: '2026-12-15' });
+    const fresh = contract({ id: 'new', status: 'UPCOMING', startDate: '2026-12-16', endDate: '2028-12-15', previousContractId: null, tenantName: '이새집' });
+    const result = classifyContracts([ending, fresh], { today: TODAY });
+    expect(result.current).toMatchObject({ id: 'old', endDate: '2026-12-15', originalEndDate: '2027-02-28', isEndingEarly: true });
+    expect(result.next?.id).toBe('new');
+    expect(result.nextKind).toBe('NEW_TENANT');
+    expect(result.past.map((item) => item.id)).not.toContain('old');
+    // 해지일이 지났으면 지난 계약
+    expect(classifyContracts([ending, fresh], { today: '2026-12-20' }).current.id).toBe('new');
+    const items = buildTodoItems({ ...result, today: TODAY });
+    expect(items.map((item) => item.id)).toEqual(['move-out', 'move-in']);
+    expect(items[0].title).toContain('2026-12-15 중도 해지');
+  });
+
   it('지금 계약이 없고 마지막 계약이 해지 없이 만료됐으면 lapsed(C5)', () => {
     const expired = contract({ id: 'e1', status: 'EXPIRED', startDate: '2024-11-01', endDate: '2026-10-31' });
     expect(classifyContracts([expired]).lapsed?.id).toBe('e1');

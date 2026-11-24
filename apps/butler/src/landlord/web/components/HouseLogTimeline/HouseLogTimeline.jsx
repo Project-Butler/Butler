@@ -116,7 +116,7 @@ export const HouseLogTimeline = ({
   } else {
     const parts = [];
     if (band) parts.push(`${band.end} 소유 시작`);
-    parts.push(`${past.length > 0 || band ? '지금 계약 ' : ''}${current.startDate} ~ ${current.endDate}`);
+    parts.push(`${past.length > 0 || band ? '지금 계약 ' : ''}${current.startDate} ~ ${current.endDate}${current.isEndingEarly ? ' 중도 해지' : ''}`);
     if (current.startDate <= today) parts.push(`${getContractYears(current)}년 중 ${getElapsedPercent(current, today)}% 지남`);
     else parts.push('시작 전');
     if (current.tenantName) parts.push(`임차인 ${current.tenantName}`);

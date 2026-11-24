@@ -63,7 +63,7 @@ export const getContractEnd = (contract) => contract.terminatedOn ?? contract.en
 // - next: 지금 계약 뒤에 시작하는 시작 전 계약. previousContractId가 지금 계약이면 RENEWAL(갱신), 아니면 NEW_TENANT(새 임차인, H-27).
 // - past: 끝난(만료·해지) 계약, 시작일 순(H-34).
 // ownershipEnded(매도 등)면 진행 중·시작 전이어도 모두 지난 계약으로 본다(읽기 전용, 소유가 끝난 날까지).
-export const classifyContracts = (contracts = [], { ownershipEndedOn = null } = {}) => {
+export const classifyContracts = (contracts = [], { ownershipEndedOn = null, today = null } = {}) => {
   const sorted = [...contracts].sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0));
   if (ownershipEndedOn) {
     const past = sorted
@@ -72,10 +72,18 @@ export const classifyContracts = (contracts = [], { ownershipEndedOn = null } = 
     return { current: null, next: null, nextKind: null, past, lapsed: null };
   }
   const upcoming = sorted.filter((contract) => contract.status === 'UPCOMING');
-  const current = sorted.find((contract) => IN_PROGRESS.includes(contract.status)) ?? upcoming[0] ?? null;
+  // 중도 해지: 해지일이 오늘 이후면 그날까지는 지금 계약으로 본다(임차인이 아직 산다, C6). 끝나는 날 = 해지일.
+  const endingEarly = today
+    ? sorted.find((contract) => contract.status === 'TERMINATED' && contract.terminatedOn && contract.startDate <= today && contract.terminatedOn >= today)
+    : null;
+  const current =
+    sorted.find((contract) => IN_PROGRESS.includes(contract.status)) ??
+    (endingEarly ? { ...endingEarly, endDate: endingEarly.terminatedOn, originalEndDate: endingEarly.endDate, isEndingEarly: true } : null) ??
+    upcoming[0] ??
+    null;
   const next = current ? (upcoming.find((contract) => contract.id !== current.id && contract.startDate > current.endDate) ?? null) : null;
   const nextKind = next ? (next.previousContractId === current.id ? 'RENEWAL' : 'NEW_TENANT') : null;
-  const past = sorted.filter((contract) => contract.status === 'EXPIRED' || contract.status === 'TERMINATED');
+  const past = sorted.filter((contract) => (contract.status === 'EXPIRED' || contract.status === 'TERMINATED') && contract.id !== current?.id);
   // lapsed: 지금·시작 전 계약이 없고 가장 최근 계약이 해지 없이 만료된 경우(C5 묵시적 갱신 안내용).
   const latestPast = past[past.length - 1];
   const lapsed = !current && latestPast && latestPast.status === 'EXPIRED' && !latestPast.terminatedOn ? latestPast : null;
@@ -239,6 +247,30 @@ export const buildTodoItems = ({ current, next, nextKind, today, lapsed = null, 
       },
     ];
   }
+  // 중도 해지 예정: 통지는 필요 없고 퇴거(해지일)와, 새 임차인 계약이 있으면 입주를 알린다(C6).
+  if (current?.isEndingEarly) {
+    const items = [
+      {
+        id: 'move-out',
+        tone: 'mute',
+        icon: 'moveOut',
+        title: `퇴거 점검 · ${current.endDate} 중도 해지${current.tenantName ? ` (${current.tenantName})` : ''}`,
+        description: '집 상태 사진, 열쇠·출입카드 돌려받기, 공과금 정산 · 알림만(점검 목록 기능은 나중에)',
+        dday: daysBetween(today, current.endDate),
+      },
+    ];
+    if (next) {
+      items.push({
+        id: 'move-in',
+        tone: 'seal',
+        icon: 'moveIn',
+        title: `입주 인수인계 · ${next.startDate}${next.tenantName ? ` (${next.tenantName})` : ''}`,
+        description: '퇴거 사진과 같은 자리를 입주 사진으로 남겨 비교 · 새 임차인 앱 초대 · 알림만',
+        dday: daysBetween(today, next.startDate),
+      });
+    }
+    return items;
+  }
   const notice = current?.renewalNotice;
   if (!current || !notice) return [];
   const items = [];
@@ -355,6 +387,7 @@ export const getHomeRowSummary = ({ current, nextKind, endedOn, isSold }, today)
   if (nextKind === 'RENEWAL') return { tone: 'success', badge: '갱신 확정', next: `갱신 계약 ${current.endDate} 뒤 시작` };
   const notice = current.renewalNotice;
   const daysToEnd = daysBetween(today, current.endDate);
+  if (current.isEndingEarly) return { tone: 'warning', badge: `중도 해지 ${formatDday(daysToEnd)}`, next: nextKind === 'NEW_TENANT' ? '새 임차인 입주 예정' : '퇴거 준비' };
   if (!notice) return { tone: 'default', badge: `만료 ${formatDday(daysToEnd)}`, next: '할 일 없음' };
   if (notice.hasDeliveredInTime) return { tone: 'success', badge: `만료 ${formatDday(daysToEnd)}`, next: '통지 도달 기록 있음' };
   if (notice.phase === 'OPEN' || notice.phase === 'CLOSING_SOON') {
@@ -399,7 +432,7 @@ export const buildHomeRows = ({ homes = [], ownerships = [], contracts = [], log
     const ownership = pickOwnership(ownerships, property.id);
     const endedOn = ownership?.endedAt ? toDateOnly(ownership.endedAt) : null;
     const own = contracts.filter((contract) => contract.ownershipId === ownership?.id);
-    const { current, next, nextKind, past } = classifyContracts(own, { ownershipEndedOn: endedOn });
+    const { current, next, nextKind, past } = classifyContracts(own, { ownershipEndedOn: endedOn, today });
     // 소유가 끝난 호실은 마지막 계약을 끝난 날까지 그린다.
     const bar = current ?? (endedOn ? past.at(-1) : null) ?? null;
     const homeLogs = logs.filter((log) => (log.propertyId ?? log.property?.id) === property.id);
