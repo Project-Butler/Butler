@@ -80,6 +80,8 @@ export const HouseLogTimeline = ({
   onShowLog,
   onShowContract,
   onRegisterContract,
+  // 인증 전 호실은 계약을 등록할 수 없어 '권리자 인증하기'로 보낸다(C7).
+  canRegisterContract = true,
 }) => {
   const [openKey, setOpenKey] = useState(null);
   const dotRefs = useRef(new Map());
@@ -301,9 +303,9 @@ export const HouseLogTimeline = ({
         {/* 계약 없음 안내 */}
         {showEmpty && (
           <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-line bg-surface py-1 pl-4 pr-1 text-body text-ink-2">
-            진행 중인 계약이 없어요
+            {canRegisterContract ? '진행 중인 계약이 없어요' : '진행 중인 계약이 없어요 · 계약은 권리자 인증 뒤에 등록해요'}
             <button type="button" onClick={onRegisterContract} className="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-accent-strong hover:bg-accent-soft">
-              계약 등록
+              {canRegisterContract ? '계약 등록' : '권리자 인증하기'}
               <ArrowRight size={15} aria-hidden="true" />
             </button>
           </div>

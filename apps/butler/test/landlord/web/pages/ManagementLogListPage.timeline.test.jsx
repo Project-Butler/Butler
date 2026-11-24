@@ -149,14 +149,23 @@ describe('한 호실 (H-22)', () => {
     expect(within(timeline).getByRole('button', { name: '2025-03-01 계약·통지 계약 시작' })).toBeInTheDocument();
   });
 
-  it('계약이 없으면 회색 빈 상태 + [계약 등록], 할 일 카드는 숨긴다(H-39)', async () => {
+  it('계약이 없으면 회색 빈 상태, 할 일 카드는 숨기고 인증 전 호실은 [권리자 인증하기](H-39·C7)', async () => {
     vi.mocked(getContractList).mockResolvedValue(page([]));
     const { onNavigate } = renderPage({ propertyId: 'p1' });
     const timeline = await findTimeline();
-    await within(timeline).findByText('진행 중인 계약이 없어요');
+    await within(timeline).findByText(/진행 중인 계약이 없어요/);
     expect(screen.queryByRole('region', { name: '앞으로 할 일' })).not.toBeInTheDocument();
-    await userEvent.click(within(timeline).getByRole('button', { name: /계약 등록/ }));
-    expect(onNavigate).toHaveBeenCalledWith('propertyDetail', { propertyId: 'p1' });
+    await userEvent.click(within(timeline).getByRole('button', { name: /권리자 인증하기/ }));
+    expect(onNavigate).toHaveBeenCalledWith('propertyVerify', { propertyId: 'p1' });
+  });
+
+  it('인증된 호실의 빈 상태 [계약 등록]은 계약 등록 화면으로(C7)', async () => {
+    vi.mocked(getContractList).mockResolvedValue(page([]));
+    vi.mocked(getPropertyOwnershipList).mockResolvedValue(page([{ ...OWN_A, verificationStatus: 'VERIFIED', verifiedAt: '2026-09-01T01:00:00.000Z' }]));
+    const { onNavigate } = renderPage({ propertyId: 'p1' });
+    const timeline = await findTimeline();
+    await userEvent.click(await within(timeline).findByRole('button', { name: /계약 등록/ }));
+    expect(onNavigate).toHaveBeenCalledWith('contractRegister', { propertyId: 'p1' });
   });
 
   it('작은 카드 [상세 보기]는 카드를 닫고 그 기록을 오른쪽 상세 패널에 연다', async () => {

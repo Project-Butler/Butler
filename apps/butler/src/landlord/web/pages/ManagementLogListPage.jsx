@@ -191,6 +191,7 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
   if (timeline.isLoading && logs.length === 0) return <TimelinePlaceholder />;
 
   const showContract = (contractId) => onNavigate('propertyDetail', { propertyId, contractId });
+  const isVerifiedHome = timeline.ownership?.verificationStatus === 'VERIFIED';
   const handleTodoAction = (action) => {
     if (action.kind === 'RENEW') onNavigate('contractRegister', { propertyId, renewFrom: action.contractId });
     else showContract(action.contractId);
@@ -223,7 +224,8 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
         propertyName={propertyName}
         onShowLog={onShowLog}
         onShowContract={showContract}
-        onRegisterContract={() => onNavigate('propertyDetail', { propertyId })}
+        canRegisterContract={isVerifiedHome}
+        onRegisterContract={() => (isVerifiedHome ? onNavigate('contractRegister', { propertyId }) : onNavigate('propertyVerify', { propertyId }))}
       />
       {!timeline.endedOn && <HouseLogTodo items={todo} onAction={handleTodoAction} />}
     </>
