@@ -93,7 +93,8 @@ const revokePreviews = (photos) => photos.forEach((photo) => URL.revokeObjectURL
 
 // ownershipId: 고른 호실의 소유 관계(없으면 버튼을 막는다). form · onFill(nextForm): 계약 등록 폼 상태
 // PDF 1개는 고르면 바로 읽는다. 사진(최대 5장)은 목록에서 순서를 맞춘 뒤 [N장 읽기]로 PDF 하나로 묶어 읽는다(#181).
-export const ContractOcrFill = ({ ownershipId, form, onFill, disabled = false, onUnauthorized }) => {
+// mobile: 앱 계약 등록 화면용. 폼 위 띠 대신 카드 하나로 두고, 버튼을 손가락으로 누르기 좋게 한 줄 전체·높이 48로 키운다.
+export const ContractOcrFill = ({ ownershipId, form, onFill, disabled = false, mobile = false, onUnauthorized }) => {
   const inputRef = useRef(null);
   // 읽는 동안(수십 초) 사용자가 칸을 고칠 수 있어서, 응답이 온 시점의 최신 폼에 채운다.
   const formRef = useRef(form);
@@ -234,19 +235,26 @@ export const ContractOcrFill = ({ ownershipId, form, onFill, disabled = false, o
   const warnings = ocr.data?.warnings ?? [];
 
   return (
-    <div className="space-y-3 rounded-t-card border-b border-line px-6 py-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <ScanText size={18} className="shrink-0 text-ink-2" aria-hidden="true" />
-        <div className="mr-auto">
-          <p className="text-label font-semibold text-ink">계약서로 채우기</p>
-          <p className="text-sub text-ink-2">
+    <div
+      className={
+        mobile ? 'space-y-3 rounded-card border border-line bg-surface p-4' : 'space-y-3 rounded-t-card border-b border-line px-6 py-4'
+      }
+    >
+      <div className={mobile ? 'flex flex-col gap-3' : 'flex flex-wrap items-center gap-3'}>
+        {!mobile && <ScanText size={18} className="shrink-0 text-ink-2" aria-hidden="true" />}
+        <div className={mobile ? '' : 'mr-auto'}>
+          <p className={`flex items-center gap-2 font-semibold text-ink ${mobile ? 'text-m-card' : 'text-label'}`}>
+            {mobile && <ScanText size={18} className="shrink-0 text-ink-2" aria-hidden="true" />}
+            계약서로 채우기
+          </p>
+          <p className={mobile ? 'mt-1 text-m-sub text-ink-2' : 'text-sub text-ink-2'}>
             {ownershipId
               ? `계약서 PDF나 사진(${MAX_CONTRACT_OCR_PHOTOS}장까지)을 올리면 찾은 값으로 칸을 채워 드려요. 이미 입력한 값도 바뀌니 저장 전에 꼭 확인해 주세요.`
               : '호실을 먼저 골라 주세요.'}
           </p>
         </div>
         {!isConfirming && !isAttaching && (
-          <Button type="button" variant="secondary" size="h44" onClick={startFill} disabled={!canStart}>
+          <Button type="button" variant="secondary" size={mobile ? 'h48' : 'h44'} className={mobile ? 'w-full' : undefined} onClick={startFill} disabled={!canStart}>
             {isBusy ? '계약서 읽는 중' : '계약서로 채우기'}
           </Button>
         )}
@@ -257,10 +265,10 @@ export const ContractOcrFill = ({ ownershipId, form, onFill, disabled = false, o
           <p className="text-label font-semibold text-ink">계약서를 외부 서비스에서 읽어요</p>
           <ConsentNotice />
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={() => setIsConfirming(false)}>
+            <Button type="button" variant="secondary" size={mobile ? 'h48' : 'sm'} onClick={() => setIsConfirming(false)}>
               취소
             </Button>
-            <Button type="button" size="sm" onClick={acceptConsent} disabled={!canStart}>
+            <Button type="button" size={mobile ? 'h48' : 'sm'} className={mobile ? 'flex-1' : undefined} onClick={acceptConsent} disabled={!canStart}>
               동의하고 계약서 선택
             </Button>
           </div>
