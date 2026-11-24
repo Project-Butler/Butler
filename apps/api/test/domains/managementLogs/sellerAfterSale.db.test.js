@@ -250,6 +250,11 @@ describe('매도 뒤 판 사람(H-41)', { skip: dbTestSkip }, () => {
     const afterSaleDoc = await uploadDocument(seller, { resourceType: 'MANAGEMENT_LOG', resourceId: afterSale.id });
     const afterSaleUploadId = await uploadIdOf(afterSaleDoc.id);
     await deleteManagementLog(seller, history.id);
+    const ticket = await prisma.ticket.create({
+      data: { propertyId: property.id, ownershipId: sellerOwnership.id, contractId: contract.id, requesterId: tenant.id, category: 'REPAIR', title: '지움요청 보일러', description: '온수가 안 나와요' },
+    });
+    const ticketIds = async (user) => (await get(user, '/tickets')).body.data.map((item) => item.id);
+    assert.ok((await ticketIds(seller)).includes(ticket.id));
 
     // 지우기 전: 6곳에 모두 보인다.
     const ownershipIds = async () => (await get(seller, '/property-ownerships')).body.data.map((item) => item.id);
@@ -287,6 +292,11 @@ describe('매도 뒤 판 사람(H-41)', { skip: dbTestSkip }, () => {
     assert.equal((await prisma.document.findUnique({ where: { id: contractDoc.id } })).deletedAt, null);
     assert.equal((await prisma.document.findUnique({ where: { id: ownershipDoc.id } })).deletedAt, null);
     assert.deepEqual(await listIds(buyer, property), [history.id]);
+    // 지운 호실의 수리 요청은 판 사람 목록·검색에서 빠지고, 임차인(요청자)에게는 그대로 보인다(C1).
+    assert.equal((await ticketIds(seller)).includes(ticket.id), false);
+    assert.equal((await searchAll(seller, { query: '지움요청', types: ['TICKET'] })).tickets.length, 0);
+    assert.ok((await ticketIds(tenant)).includes(ticket.id));
+    await prisma.ticket.delete({ where: { id: ticket.id } });
 
     // removedAt 영향 목록 6곳
     assert.equal((await ownershipIds()).includes(sellerOwnership.id), false); // 1) 소유 관계 목록
