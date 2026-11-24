@@ -8,6 +8,7 @@ import { DisputeHomePage } from '../web/pages/DisputeHomePage';
 import { DisputeReferenceDetailPage } from '../web/pages/DisputeReferenceDetailPage';
 import { DisputeSearchPage } from '../web/pages/DisputeSearchPage';
 import { DisputeTopicPage } from '../web/pages/DisputeTopicPage';
+import { useHistoryDraft } from '../web/hooks/useHistoryDraft';
 import { AppTabShell } from './components/AppTabShell/AppTabShell';
 import { DisputeAppLayout, DisputeChatAppScreen } from './components/DisputeAppLayout/DisputeAppLayout';
 import { BuildingListPage } from './pages/BuildingListPage';
@@ -127,6 +128,13 @@ const ManagementLogListRoute = ({ onUnauthorized }) => {
   return <ManagementLogListPage propertyId={searchParams.get('propertyId') ?? undefined} onUnauthorized={onUnauthorized} />;
 };
 
+// AI 상담: 사례 상세·상황 안내에서 넘긴 질문(history state draft)을 입력창에 미리 채운다(웹 DisputeChatRoute 와 같다).
+const DisputeChatRoute = () => (
+  <DisputeChatAppScreen>
+    <DisputeChatPage isApp initialDraft={useHistoryDraft()} />
+  </DisputeChatAppScreen>
+);
+
 const TicketListRoute = ({ onUnauthorized }) => {
   const [searchParams] = useSearchParams();
   const propertyId = searchParams.get('propertyId') ?? undefined;
@@ -185,6 +193,11 @@ const toLandlordTarget = (sectionKey, item) => {
   }
 };
 
+// 임대차 분쟁: 첫 화면은 하단 탭 '분쟁 센터'의 첫 화면이라 다른 탭 첫 화면과 같은 홈형 상단 바를 넘긴다.
+const DisputeLayoutRoute = ({ user, onUnauthorized }) => (
+  <DisputeAppLayout topBar={useHomeTopBar(user, onUnauthorized)} onUnauthorized={onUnauthorized} />
+);
+
 const SearchRoute = ({ user, onUnauthorized }) => {
   const goBack = useGoBack('home');
   const goTo = useGoTo();
@@ -236,15 +249,8 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
     <Route path="/schedules" element={<ScheduleRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/search" element={<SearchRoute user={user} onUnauthorized={onUnauthorized} />} />
     {/* 임대차 분쟁(3팀): 웹과 같은 페이지에 앱 틀만 씌운다(DisputeAppLayout). */}
-    <Route
-      path="/disputes/chat"
-      element={
-        <DisputeChatAppScreen>
-          <DisputeChatPage isApp />
-        </DisputeChatAppScreen>
-      }
-    />
-    <Route path="/disputes" element={<DisputeAppLayout onUnauthorized={onUnauthorized} />}>
+    <Route path="/disputes/chat" element={<DisputeChatRoute />} />
+    <Route path="/disputes" element={<DisputeLayoutRoute user={user} onUnauthorized={onUnauthorized} />}>
       <Route index element={<DisputeHomePage />} />
       <Route path="search" element={<DisputeSearchPage />} />
       <Route path="topics/:topicKey" element={<DisputeTopicPage />} />

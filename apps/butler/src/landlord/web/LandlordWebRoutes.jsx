@@ -26,6 +26,7 @@ import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialo
 import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
+import { useHistoryDraft } from './hooks/useHistoryDraft';
 import { useApplyDisplaySettings } from './hooks/useDisplaySettings';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
 import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
@@ -213,6 +214,9 @@ const ContractEditRoute = (pageProps) => {
   return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
 };
 
+// AI 상담: 사례 상세·상황 안내에서 넘긴 질문(history state draft)을 입력창에 미리 채운다.
+const DisputeChatRoute = () => <DisputeChatPage initialDraft={useHistoryDraft()} />;
+
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
 // 계약 메뉴 배지 = 만료 임박 건수. 화면을 옮길 때마다 다시 세어 등록·해지 뒤에도 맞게 한다.
 // 재인증 안내(종 아이콘 목록·만료 팝업)도 여기서 읽는다. 인증을 끝내거나 만료되면 다음 화면 이동 때 맞춰진다.
@@ -307,8 +311,8 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
         <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
         <Route path="/setup" element={<SetupPage {...pageProps} />} />
         <Route path="/settings" element={<SettingsPage />} />
-        {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
-        <Route path="/disputes/chat" element={<DisputeChatPage />} />
+        {/* AI 상담. 사례 상세·상황 안내에서 넘긴 질문(history state draft)을 입력창에 미리 채운다. */}
+        <Route path="/disputes/chat" element={<DisputeChatRoute />} />
         <Route path="/disputes" element={<DisputePage {...pageProps} />}>
           <Route index element={<DisputeHomePage />} />
           <Route path="search" element={<DisputeSearchPage />} />

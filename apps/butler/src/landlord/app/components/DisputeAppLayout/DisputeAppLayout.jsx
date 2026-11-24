@@ -14,13 +14,14 @@ const titleOf = (pathname) => {
   const topic = matchPath(`${DISPUTES_PATH}/topics/:topicKey`, pathname);
   if (topic) return findTopic(topic.params.topicKey)?.label ?? '상황별 안내';
   if (matchPath(`${DISPUTES_PATH}/search`, pathname)) return '자료 찾기';
-  if (matchPath(`${DISPUTES_PATH}/references/:referenceId`, pathname)) return '사례 상세';
-  return '임대차 분쟁 센터';
+  return '사례 상세';
 };
 
 // 임대차 분쟁(3팀 피처)의 앱 화면 틀. 하위 화면은 웹과 같은 페이지(DisputePage의 Outlet)를 쓰고, 틀과 제목 줄만 앱 것으로 바꾼다.
-// 모든 분쟁 화면은 하단 탭이 있는 뒤로 가기 화면(M06·M08과 같은 AppTabShell backBar). 사례 상세의 [AI로 내 상황에 적용해 보기]도 고정이 아니라 맨 아래라 탭과 겹치지 않는다.
-export const DisputeAppLayout = ({ onUnauthorized }) => {
+// 첫 화면(/disputes)은 하단 탭 '분쟁 센터'의 첫 화면이라 다른 탭 첫 화면(홈·내 자산)과 같은 홈형 상단 바(topBar, 라우트가 넘긴다)를 쓰고 제목은 본문에 둔다(DisputeHeader).
+// 하위 화면(상황 안내·자료 찾기·사례 상세)은 하단 탭이 있는 뒤로 가기 화면(M06·M08과 같은 AppTabShell backBar).
+// 사례 상세의 [AI로 내 상황에 적용해 보기]도 고정이 아니라 맨 아래라 탭과 겹치지 않는다.
+export const DisputeAppLayout = ({ topBar, onUnauthorized }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -34,11 +35,12 @@ export const DisputeAppLayout = ({ onUnauthorized }) => {
     [navigate, location.pathname, location.search],
   );
 
-  // 뒤로: 앱 안에서 왔으면 이전 화면, 주소로 바로 들어왔으면 첫 화면은 앱 홈으로, 하위 화면은 분쟁 첫 화면으로.
-  const goBack = useGoBack(location.pathname === DISPUTES_PATH ? 'home' : 'disputes');
+  // 하위 화면의 뒤로: 앱 안에서 왔으면 이전 화면, 주소로 바로 들어왔으면 분쟁 첫 화면으로.
+  const goBack = useGoBack('disputes');
+  const isTabRoot = location.pathname === DISPUTES_PATH;
 
   return (
-    <AppTabShell backBar={{ title: titleOf(location.pathname), onBack: goBack }}>
+    <AppTabShell {...(isTabRoot ? { topBar } : { backBar: { title: titleOf(location.pathname), onBack: goBack } })}>
       <DisputePage isApp onNavigate={onNavigate} onUnauthorized={onUnauthorized} />
     </AppTabShell>
   );
