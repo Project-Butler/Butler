@@ -160,8 +160,9 @@ export const DisputeSearchPage = () => {
         ))}
       </ChipLine>
 
-      {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다. */}
-      <div ref={resultsRef} className="scroll-mt-4">
+      {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다.
+          앱은 위에 고정된 상단 바(h-14)가 있어 그만큼 더 띄운다(scroll-mt-16, AI 상담과 같음). */}
+      <div ref={resultsRef} className={isApp ? 'scroll-mt-16' : 'scroll-mt-4'}>
         <SegmentedControl
           ariaLabel="결과 종류"
           value={tab}

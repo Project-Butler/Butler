@@ -123,6 +123,13 @@ describe('앱 분쟁 화면 틀', () => {
   });
 });
 
+describe('앱 입구·이동(#215)', () => {
+  it('자료 찾기의 결과 탭 줄은 상단 바(h-14)만큼 띄워 스크롤한다', () => {
+    renderAt('/landlord/disputes/search');
+    expect(screen.getByRole('group', { name: '결과 종류' }).closest('.scroll-mt-16')).not.toBeNull();
+  });
+});
+
 describe('주소로 바로 들어왔을 때 뒤로 가기', () => {
   it.each([
     ['/landlord/disputes', '/landlord/home'],
