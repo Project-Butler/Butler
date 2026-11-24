@@ -193,6 +193,11 @@ const toLandlordTarget = (sectionKey, item) => {
   }
 };
 
+// 임대차 분쟁: 첫 화면은 하단 탭 '분쟁 센터'의 첫 화면이라 다른 탭 첫 화면과 같은 홈형 상단 바를 넘긴다.
+const DisputeLayoutRoute = ({ user, onUnauthorized }) => (
+  <DisputeAppLayout topBar={useHomeTopBar(user, onUnauthorized)} onUnauthorized={onUnauthorized} />
+);
+
 const SearchRoute = ({ user, onUnauthorized }) => {
   const goBack = useGoBack('home');
   const goTo = useGoTo();
@@ -245,7 +250,7 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
     <Route path="/search" element={<SearchRoute user={user} onUnauthorized={onUnauthorized} />} />
     {/* 임대차 분쟁(3팀): 웹과 같은 페이지에 앱 틀만 씌운다(DisputeAppLayout). */}
     <Route path="/disputes/chat" element={<DisputeChatRoute />} />
-    <Route path="/disputes" element={<DisputeAppLayout onUnauthorized={onUnauthorized} />}>
+    <Route path="/disputes" element={<DisputeLayoutRoute user={user} onUnauthorized={onUnauthorized} />}>
       <Route index element={<DisputeHomePage />} />
       <Route path="search" element={<DisputeSearchPage />} />
       <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
