@@ -133,8 +133,8 @@ export const TimelinePopover = ({ group, percent, placement = 'center', anchorRe
           {group.items.map((item) => (
             <li key={item.key} className="flex items-center gap-2 rounded-input bg-surface-2 p-2.5">
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  {group.endDate && group.endDate !== group.date && <span className="font-num text-chip tabular-nums text-ink-3">{item.date.slice(5)}</span>}
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  {group.endDate && group.endDate !== group.date && <span className="shrink-0 font-num text-chip tabular-nums text-ink-3">{item.date.slice(5)}</span>}
                   <TypeChip item={item} />
                   {item.kind === 'LOG' && item.log.scope === 'PRIVATE' && <PrivateChip />}
                 </span>
