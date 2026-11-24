@@ -12,7 +12,7 @@ import {
 } from '../../../web/utils/ownershipVerification';
 
 // 앱 부동산 상세(M06)의 권리자 인증 카드. 상태 판단은 웹 호실 상세 카드(VerificationPanel)와 같다.
-// 할 일이 있거나 진행 중일 때만 그린다. 인증 완료·소유 종료는 위 인증 칩과 [기본 정보]의 등기부 대조 카드가 보여 준다.
+// 할 일이 있거나 진행 중일 때만 그린다. 인증 완료·소유 종료는 위 인증 칩과 [기본 정보]의 건축물대장 대조 카드가 보여 준다.
 // - 미인증: [권리자 인증하기] / 갱신 기간·만료: [인증 다시 하기] / 실패: [문의하기][다시 인증하기] / 취소: [문의하기]
 // - 진행 중: 도는 링(ProgressRing) + 안내만(버튼 없음)
 export const VerificationCard = ({ ownership, attempt, isAttemptRunning, renewalNotice, onVerify, onInquiry }) => {
