@@ -1,6 +1,6 @@
 // 문서함(임대인 웹) 표기·판단 도우미. docs/10. 유지보수 요청·문서 개발/문서함 개발 계획.md 3-1·4-2·4-3.
 // 숫자·날짜는 쓰는 쪽에서 font-num tabular-nums로 감싼다.
-import { MAX_ATTACHMENT_BYTES } from './attachment';
+import { MAX_ATTACHMENT_BYTES } from '../../../shared/upload/attachment';
 import { formatUnitLabel } from './unitAddress';
 
 export const OWNERSHIP_TARGET = 'OWNERSHIP';

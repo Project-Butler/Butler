@@ -1,29 +1,11 @@
 // 임대인 앱 수리·점검(M09) 표시 계산. 화면 밖에서 테스트할 수 있게 순수 함수로 둔다.
-import { formatDateKST, formatNumber } from '../../web/utils/format';
+import { getTicketCategoryLabel, getTicketStatusLabel } from '../../../shared/ticketLabels';
+import { formatDateKST, formatNumber } from './format';
 
-// 목록 탭: 진행 중(접수·처리 중) / 완료(완료·취소). value 는 GET /tickets 의 status 필터(쉼표 구분) 그대로다.
-export const TICKET_TABS = [
-  { key: 'active', label: '진행 중', status: 'OPEN,IN_PROGRESS' },
-  { key: 'closed', label: '완료', status: 'DONE,CANCELED' },
-];
+// 상태 칩 색. 글자는 shared/ticketLabels(임대인 문구).
+const STATUS_TONES = { OPEN: 'warning', IN_PROGRESS: 'pending', DONE: 'success', CANCELED: 'default' };
 
-export const TICKET_CATEGORY_OPTIONS = [
-  { value: 'REPAIR', label: '수리' },
-  { value: 'INSPECTION', label: '점검' },
-  { value: 'OTHER', label: '기타' },
-];
-
-const STATUS_BADGES = {
-  OPEN: { label: '확인 필요', tone: 'warning' },
-  IN_PROGRESS: { label: '처리 중', tone: 'pending' },
-  DONE: { label: '완료', tone: 'success' },
-  CANCELED: { label: '취소', tone: 'default' },
-};
-
-export const getTicketStatusBadge = (status) => STATUS_BADGES[status] ?? { label: status, tone: 'default' };
-
-export const getTicketCategoryLabel = (category) =>
-  TICKET_CATEGORY_OPTIONS.find((option) => option.value === category)?.label ?? category;
+export const getTicketStatusBadge = (status) => ({ label: getTicketStatusLabel(status, 'LANDLORD'), tone: STATUS_TONES[status] ?? 'default' });
 
 // 'YYYY-MM-DD HH:mm'(한국 시간). 값이 없으면 null.
 export const formatTicketDateTime = (isoString) =>

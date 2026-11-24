@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, FileVideo,
 import { Button, PageSkeleton } from '@butler/ui';
 import { Modal } from '../Modal/Modal';
 import { isImageDocument, isPdfDocument, isVideoDocument, VIDEO_URL_FRESH_MS } from '../../../../shared/documentViewer/documentFiles';
-import { formatFileSize } from '../../utils/attachment';
+import { formatFileSize } from '../../../../shared/upload/attachment';
 
 // 팝업으로 미리 볼 수 있는 파일: 브라우저가 그리는 사진(JPG·PNG·WEBP·GIF), 동영상(MP4·MOV), PDF. HEIC 등은 새 탭으로 연다.
 export const isPreviewableDocument = (document) => isImageDocument(document) || isVideoDocument(document) || isPdfDocument(document);

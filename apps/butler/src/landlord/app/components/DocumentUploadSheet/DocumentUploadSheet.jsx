@@ -3,7 +3,7 @@ import { Badge, Button, FilterChip } from '@butler/ui';
 import { FileText, FileVideo, Image, Upload, X } from 'lucide-react';
 import { NoticeBox } from '../../../web/components/NoticeBox/NoticeBox';
 import { useDocumentBoxUploads } from '../../../web/hooks/useDocumentBoxUploads';
-import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../../web/utils/attachment';
+import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../../../shared/upload/attachment';
 import {
   CONTRACT_TARGET,
   DOCUMENT_TYPE_LABELS,

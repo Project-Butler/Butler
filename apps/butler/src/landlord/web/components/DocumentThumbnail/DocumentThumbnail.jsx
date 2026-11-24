@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FileText, FileVideo } from 'lucide-react';
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../../../../shared/apiError';
-import { isRenderableImage, isVideoMimeType } from '../../utils/attachment';
+import { isRenderableImage, isVideoMimeType } from '../../../../shared/upload/attachment';
 
 // 붙은 문서 한 건의 썸네일. 사진은 열 때 다운로드 URL(5분 유효, THUMBNAIL)을 받고, 사진이 안 뜨면(만료 등) 한 번만 다시 받는다.
 // 브라우저가 못 그리는 형식(HEIC·PDF·동영상)은 주소를 미리 받지 않고(목록을 본 것만으로 열람 기록이 남지 않게) 아이콘을 보여 주며,

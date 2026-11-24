@@ -31,6 +31,10 @@ const blocked = [
   ['admin → store', 'src/admin/pages/X.jsx', "import { useSessionStore } from '../../store/sessionStore';"],
   ['landlord/web → auth', 'src/landlord/web/pages/X.jsx', "import { roleHome } from '../../../auth/roleHome';"],
   ['tenant → surface', 'src/tenant/X.jsx', "import { getSurface } from '../surface/getSurface';"],
+  // shared 는 여러 역할이 같이 쓰므로 역할 폴더·앱 최상위 모듈을 가져오지 않는다
+  ['shared → landlord', 'src/shared/upload/X.js', "import { format } from '../../landlord/web/utils/format';"],
+  ['shared → tenant (동적 import)', 'src/shared/X.js', "const load = () => import('../tenant/routes');"],
+  ['shared → store', 'src/shared/X.js', "import { useSessionStore } from '../store/sessionStore';"],
   // axios 직접 import: 어느 위치든 금지
   ['admin의 axios', 'src/admin/hooks/X.js', "import axios from 'axios';"],
   ['landlord/web의 axios', 'src/landlord/web/hooks/X.js', "import axios from 'axios';"],
@@ -44,6 +48,7 @@ const allowed = [
   ['admin → shared', 'src/admin/hooks/X.js', "import { toApiError } from '../../shared/apiError';"],
   ['landlord/web → shared', 'src/landlord/web/pages/X.jsx', "import { useGetContract } from '../../../shared/useGetContract';"],
   ['tenant → shared', 'src/tenant/X.jsx', "import { toApiError } from '../shared/apiError';"],
+  ['shared 안끼리', 'src/shared/upload/X.js', "import { toApiError } from '../apiError';"],
   ['패키지(@butler/ui, @butler/api-client)', 'src/admin/pages/X.jsx', "import { Button } from '@butler/ui';\nimport { getMe } from '@butler/api-client';"],
   ['같은 역할 폴더 안', 'src/admin/pages/X.jsx', "import { useCursorList } from '../hooks/useCursorList';"],
   ['임대인 web ↔ app (같은 역할)', 'src/landlord/app/X.jsx', "import { format } from '../web/utils/format';"],

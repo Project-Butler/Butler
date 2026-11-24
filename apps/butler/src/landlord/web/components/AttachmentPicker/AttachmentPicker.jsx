@@ -12,7 +12,7 @@ import {
   formatFileSize,
   isVideoMimeType,
   MAX_LOG_ATTACHMENTS,
-} from '../../utils/attachment';
+} from '../../../../shared/upload/attachment';
 
 const UploadingPreview = ({ item }) => (
   <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">

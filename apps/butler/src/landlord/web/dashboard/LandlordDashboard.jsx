@@ -4,7 +4,7 @@ import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
-import { formatAttachmentCount } from '../utils/attachment';
+import { formatAttachmentCount } from '../../../shared/upload/attachment';
 import { daysBetween, formatDday, formatManwon, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
 import { getRentDueToday, toScheduleEvents } from '../utils/dashboard';
 import { formatNumber, formatUnitSpec } from '../utils/format';
