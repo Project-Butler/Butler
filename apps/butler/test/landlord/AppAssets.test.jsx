@@ -324,13 +324,13 @@ describe('M07 계약 관리', () => {
 });
 
 describe('M08 하우스 로그', () => {
-  it('월별로 묶고, 수정·삭제 안내만 있고 동작은 없다. 행을 누르면 기록 상세', async () => {
+  it('월별로 묶고, 수정·삭제 동작은 없다(안내 문구도 없음, B8). 행을 누르면 기록 상세', async () => {
     renderAt('/landlord/logs');
     const october = await screen.findByRole('region', { name: '2026년 10월' });
     expect(within(october).getByText('101동 101호')).toBeInTheDocument();
     expect(within(october).getByText(/보일러 수리 완료/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '2026년 9월' })).getByText(/수리 요청/)).toBeInTheDocument();
-    expect(screen.getByText(/하우스 로그는 수정·삭제할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/하우스 로그는 수정·삭제할 수 없습니다/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /삭제|수정/ })).not.toBeInTheDocument();
 
     await userEvent.click(within(october).getByRole('button'));

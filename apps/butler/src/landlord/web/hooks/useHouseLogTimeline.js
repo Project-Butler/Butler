@@ -39,8 +39,8 @@ export const useHouseLogTimeline = ({ propertyId, today, reloadKey }, { onUnauth
   const band = useMemo(() => (inherited.data ? computeOwnerBand({ myStart, inheritedLogs: inherited.data }) : null), [inherited.data, myStart]);
 
   const isReady = Boolean(ownerships.data && contracts.data);
-  const baseAxis = useMemo(() => computeAxis({ ...split, today, ownershipEndedOn: endedOn }), [split, today, endedOn]);
-  const axis = useMemo(() => computeAxis({ ...split, band, today, ownershipEndedOn: endedOn }), [split, band, today, endedOn]);
+  const baseAxis = useMemo(() => computeAxis({ ...split, today, ownershipEndedOn: endedOn, ownStart: myStart }), [split, today, endedOn, myStart]);
+  const axis = useMemo(() => computeAxis({ ...split, band, today, ownershipEndedOn: endedOn, ownStart: myStart }), [split, band, today, endedOn, myStart]);
   const main = useGetAllManagementLogList({ propertyId, from: baseAxis.start, enabled: isReady, reloadKey }, hookOptions);
 
   const logs = useMemo(() => {

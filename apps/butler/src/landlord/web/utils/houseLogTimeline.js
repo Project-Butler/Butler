@@ -114,7 +114,9 @@ export const computeOwnerBand = ({ myStart, inheritedLogs = [] }) => {
 // - 없으면 최근 2년(소유가 끝났으면 끝난 날까지 2년).
 // - 지난 계약은 축 시작을 앞으로 늘린다(지금 계약 시작에서 최대 4년). 넘는 계약 수는 hiddenPastCount.
 // - 이전 소유 띠가 있으면 띠 시작까지.
-export const computeAxis = ({ current, next, past = [], band = null, today, ownershipEndedOn = null }) => {
+const VACANCY_MAX_YEARS = 2;
+
+export const computeAxis = ({ current, next, past = [], band = null, today, ownershipEndedOn = null, ownStart = null }) => {
   let start;
   let end;
   if (current) {
@@ -127,8 +129,15 @@ export const computeAxis = ({ current, next, past = [], band = null, today, owne
   const pastLimit = addYears(current?.startDate ?? end, -PAST_CONTRACT_MAX_YEARS);
   const pastInRange = past.filter((contract) => getPastBarEnd(contract) >= pastLimit);
   if (pastInRange.length > 0) start = minDate(start, maxDate(pastInRange[0].startDate, pastLimit));
+  // 공실 기간(B2): 내 소유 시작(처음 인증)부터 첫 계약 시작 전까지. 그 사이 기록도 보이게 축에 넣는다(최대 2년).
+  let vacancy = null;
+  const firstContractStart = current ? minDate(current.startDate, ...pastInRange.map((contract) => contract.startDate)) : null;
+  if (ownStart && firstContractStart && ownStart < firstContractStart && !ownershipEndedOn) {
+    vacancy = { start: maxDate(ownStart, addYears(firstContractStart, -VACANCY_MAX_YEARS)), end: firstContractStart };
+    start = minDate(start, vacancy.start);
+  }
   if (band) start = minDate(start, band.start);
-  return { start, end, hiddenPastCount: past.length - pastInRange.length };
+  return { start, end, hiddenPastCount: past.length - pastInRange.length, vacancy };
 };
 
 // 거르기(유형·방)에 맞는 기록. 방 'NONE'은 방이 없는 기록(H-22: 거르기는 기록 점만 줄인다).

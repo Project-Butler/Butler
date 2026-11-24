@@ -137,7 +137,7 @@ describe('계약 나누기 (H-27·H-34)', () => {
 
 describe('축 범위', () => {
   it('지금 계약 기간이 기본', () => {
-    expect(computeAxis({ current: contract(), today: TODAY })).toEqual({ start: '2025-03-01', end: '2027-02-28', hiddenPastCount: 0 });
+    expect(computeAxis({ current: contract(), today: TODAY })).toEqual({ start: '2025-03-01', end: '2027-02-28', hiddenPastCount: 0, vacancy: null });
   });
 
   it('다음 계약이 있으면 끝에서 최대 6개월 더', () => {
@@ -145,6 +145,13 @@ describe('축 범위', () => {
     expect(computeAxis({ current: contract(), next, today: TODAY }).end).toBe('2027-08-28');
     const short = contract({ id: 'c3', startDate: '2027-03-01', endDate: '2027-05-31' });
     expect(computeAxis({ current: contract(), next: short, today: TODAY }).end).toBe('2027-05-31');
+  });
+
+  it('내 소유 시작이 첫 계약보다 앞이면 공실 기간을 축에 넣는다(B2)', () => {
+    const axis = computeAxis({ current: contract({ startDate: '2026-11-10', endDate: '2028-11-09' }), today: TODAY, ownStart: '2026-11-01' });
+    expect(axis.start).toBe('2026-11-01');
+    expect(axis.vacancy).toEqual({ start: '2026-11-01', end: '2026-11-10' });
+    expect(computeAxis({ current: contract(), today: TODAY, ownStart: '2025-06-01' }).vacancy).toBeNull();
   });
 
   it('지난 계약은 축을 앞으로 늘리되 지금 계약 시작에서 최대 4년, 넘는 계약은 수로 센다', () => {
@@ -156,11 +163,12 @@ describe('축 범위', () => {
       start: '2021-03-01',
       end: '2027-02-28',
       hiddenPastCount: 1,
+      vacancy: null,
     });
   });
 
   it('계약이 없으면 최근 2년, 소유가 끝났으면 끝난 날까지', () => {
-    expect(computeAxis({ current: null, today: TODAY })).toEqual({ start: '2024-11-24', end: TODAY, hiddenPastCount: 0 });
+    expect(computeAxis({ current: null, today: TODAY })).toEqual({ start: '2024-11-24', end: TODAY, hiddenPastCount: 0, vacancy: null });
     expect(computeAxis({ current: null, today: TODAY, ownershipEndedOn: '2026-10-31' }).end).toBe('2026-10-31');
   });
 

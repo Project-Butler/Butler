@@ -232,6 +232,8 @@ const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey,
         onShowLog={onShowLog}
         onShowContract={showContract}
         canRegisterContract={isVerifiedHome}
+        lapsedContract={todo.some((item) => item.id === 'implicit-renewal-lapsed') ? lapsed : null}
+        onRenewLapsed={() => onNavigate('contractRegister', { propertyId, renewFrom: lapsed?.id })}
         onRegisterContract={() => (isVerifiedHome ? onNavigate('contractRegister', { propertyId }) : onNavigate('propertyVerify', { propertyId }))}
       />
       {!timeline.endedOn && <HouseLogTodo items={todo} onAction={handleTodoAction} />}

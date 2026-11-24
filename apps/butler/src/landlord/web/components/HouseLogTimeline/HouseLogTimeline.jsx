@@ -24,6 +24,9 @@ const WINDOW_STYLE = {
   background: 'repeating-linear-gradient(135deg, rgb(var(--color-warn-soft)) 0 6px, rgb(var(--color-warn) / 0.28) 6px 12px)',
 };
 // 이전 소유 띠(회색 세로 줄무늬).
+const VACANCY_STYLE = {
+  background: 'repeating-linear-gradient(90deg, rgb(var(--color-ink-3) / 0.1) 0 6px, transparent 6px 10px)',
+};
 const BAND_STYLE = {
   background: 'repeating-linear-gradient(90deg, rgb(var(--color-ink-3) / 0.22) 0 10px, rgb(var(--color-ink-3) / 0.3) 10px 12px)',
 };
@@ -82,6 +85,9 @@ export const HouseLogTimeline = ({
   onRegisterContract,
   // 인증 전 호실은 계약을 등록할 수 없어 '권리자 인증하기'로 보낸다(C7).
   canRegisterContract = true,
+  // 해지 없이 만료됐고 통지 기록이 없는 계약(B3). 있으면 빈 상태를 '같은 조건 2년 갱신으로 봐요' + [갱신 계약 등록]으로.
+  lapsedContract = null,
+  onRenewLapsed,
 }) => {
   const [openKey, setOpenKey] = useState(null);
   const dotRefs = useRef(new Map());
@@ -90,7 +96,7 @@ export const HouseLogTimeline = ({
   const pct = (date) => toPercent(date, axis);
   const notice = current?.renewalNotice ?? null;
   const isRenewal = nextKind === 'RENEWAL';
-  const status = endedOn ? null : getTimelineStatus({ current, nextKind, renewalNotice: notice });
+  const status = endedOn ? null : lapsedContract ? { tone: 'warning', label: '만료 · 갱신 확인' } : getTimelineStatus({ current, nextKind, renewalNotice: notice });
   const daysToEnd = current ? formatDday(daysBetween(today, current.endDate)) : null;
   const ticks = computeTicks(axis);
   const showEmpty = !current && !endedOn;
@@ -112,7 +118,9 @@ export const HouseLogTimeline = ({
   if (endedOn) {
     subtitle = `${endedOn} ${isSold ? '매도' : '소유 끝남'} · 읽기 전용${past.length > 0 ? ` · 지난 계약 ${past.length}건` : ''}`;
   } else if (!current) {
-    subtitle = `${propertyName ? `${propertyName} · ` : ''}진행 중인 계약 없음${past.length > 0 ? ` · 지난 계약 ${past.length}건` : ''}`;
+    subtitle = lapsedContract
+      ? `${propertyName ? `${propertyName} · ` : ''}계약 만료 ${lapsedContract.endDate}${past.length > 0 ? ` · 지난 계약 ${past.length}건` : ''}`
+      : `${propertyName ? `${propertyName} · ` : ''}진행 중인 계약 없음${past.length > 0 ? ` · 지난 계약 ${past.length}건` : ''}`;
   } else {
     const parts = [];
     if (band) parts.push(`${band.end} 소유 시작`);
@@ -204,6 +212,14 @@ export const HouseLogTimeline = ({
               className="absolute -bottom-1 -top-1 rounded-l-full"
               style={{ ...BAND_STYLE, left: `${pct(band.start)}%`, width: `${pct(band.end) - pct(band.start)}%` }}
               data-testid="owner-band"
+            />
+          )}
+          {/* 공실 기간: 내 소유 시작 ~ 첫 계약 전(B2) */}
+          {axis.vacancy && (
+            <div
+              className="absolute inset-y-0 bg-surface-2"
+              style={{ ...VACANCY_STYLE, left: `${pct(axis.vacancy.start)}%`, width: `${pct(axis.vacancy.end) - pct(axis.vacancy.start)}%` }}
+              data-testid="vacancy-bar"
             />
           )}
           {/* 지난 계약: 회색 막대 */}
@@ -308,7 +324,16 @@ export const HouseLogTimeline = ({
         </div>
 
         {/* 계약 없음 안내 */}
-        {showEmpty && (
+        {showEmpty && lapsedContract && (
+          <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-warn/40 bg-surface py-1 pl-4 pr-1 text-body text-warn-ink">
+            계약 만료일({lapsedContract.endDate})이 지났어요 · 통지 기록이 없으면 같은 조건 2년 갱신으로 봐요
+            <button type="button" onClick={onRenewLapsed} className="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-accent-strong hover:bg-accent-soft">
+              갱신 계약 등록
+              <ArrowRight size={15} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {showEmpty && !lapsedContract && (
           <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-line bg-surface py-1 pl-4 pr-1 text-body text-ink-2">
             {canRegisterContract ? '진행 중인 계약이 없어요' : '진행 중인 계약이 없어요 · 계약은 권리자 인증 뒤에 등록해요'}
             <button type="button" onClick={onRegisterContract} className="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-accent-strong hover:bg-accent-soft">
@@ -372,6 +397,11 @@ export const HouseLogTimeline = ({
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line pt-3 text-sub text-ink-2">
         {band && <LegendBar style={BAND_STYLE}>이전 소유 기간 — 넘겨받은 집 이력만(계약·임차인 정보 없음)</LegendBar>}
+        {axis.vacancy && (
+          <LegendBar className="bg-surface-2" style={VACANCY_STYLE}>
+            공실 기간 — 내 소유 뒤 계약 전
+          </LegendBar>
+        )}
         <LegendDot className="bg-accent">수리</LegendDot>
         <LegendDot className="bg-ink-3">점검</LegendDot>
         <LegendDot className="bg-warn">메모</LegendDot>
