@@ -76,8 +76,8 @@ const Lane = ({ row, axis, today }) => {
           <span className="absolute top-2 whitespace-nowrap font-num text-chip text-ink-3" style={{ left: `${pct(bar.startDate)}%` }}>
             {shortDate(bar.startDate)} 시작
           </span>
-          <span className="absolute bottom-2 -translate-x-full whitespace-nowrap font-num text-chip text-ink-3" style={{ left: `${pct(barEnd)}%` }}>
-            {shortDate(barEnd)} {endedOn ? (row.isSold ? '매도' : '끝남') : '만료'}
+          <span className="absolute bottom-2 z-30 -translate-x-full whitespace-nowrap rounded bg-surface px-1 font-num text-chip text-ink-3" style={{ left: `${pct(barEnd)}%` }}>
+            {shortDate(barEnd)} {endedOn ? (row.isSold ? '매도' : '끝남') : row.current?.isEndingEarly ? '해지' : '만료'}
           </span>
         </>
       )}
@@ -91,7 +91,7 @@ const Lane = ({ row, axis, today }) => {
 export const AllHomesTimeline = ({ axis, rows, today, summaryOf, onOpenHome }) => {
   const todayPercent = toPercent(today, axis);
   // '오늘' 이름표와 겹치는 눈금은 뺀다.
-  const ticks = computeTicks(axis, { edgeGap: 3 }).filter((tick) => Math.abs(tick.percent - todayPercent) > 4);
+  const ticks = computeTicks(axis, { edgeGap: 3 }).filter((tick) => Math.abs(tick.percent - todayPercent) > 6);
   return (
     <section className="overflow-hidden rounded-card border border-line bg-surface" aria-label="전체 호실 계약 타임라인">
       <div className="flex items-center justify-between border-b border-line px-5 py-3">

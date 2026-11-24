@@ -175,11 +175,18 @@ const TimelinePlaceholder = ({ error }) => (
 
 // 한 호실: (소유가 끝났으면 안내 띠) → 계약 타임라인 → 앞으로 할 일(H-22). 유형·방 거르기는 기록 점만 줄인다.
 // 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
+// 축 위에서 이만큼(%) 안에 있는 점은 한 묶음으로(점 16px이 겹치지 않게, B1).
+const DOT_GROUP_GAP_PERCENT = 2.5;
+
 const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onRemoved, onUnauthorized }) => {
   const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
   const { logs, axis, current, next, nextKind, past, notices, lapsed, lapsedNotices } = timeline;
   const groups = useMemo(
-    () => groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)]),
+    () =>
+      groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)], {
+        axis,
+        minGapPercent: DOT_GROUP_GAP_PERCENT,
+      }),
     [logs, axis, types, rooms, current, next, nextKind, past, notices],
   );
   const todo = useMemo(

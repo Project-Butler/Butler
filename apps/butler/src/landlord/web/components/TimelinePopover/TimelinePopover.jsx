@@ -95,7 +95,7 @@ export const TimelinePopover = ({ group, percent, placement = 'center', anchorRe
 
   const isGroup = group.items.length > 1;
   const [only] = group.items;
-  const label = isGroup ? `${group.date} 기록 ${group.items.length}건` : `${group.date} ${only.kind === 'CONTRACT' ? only.title : only.log.title}`;
+  const label = isGroup ? `${group.label ?? group.date} 기록 ${group.items.length}건` : `${group.date} ${only.kind === 'CONTRACT' ? only.title : only.log.title}`;
 
   return (
     <div
@@ -107,7 +107,7 @@ export const TimelinePopover = ({ group, percent, placement = 'center', anchorRe
       className={`absolute top-10 z-30 w-[320px] rounded-card border border-line bg-surface p-4 shadow-[0_12px_32px_rgba(21,32,28,0.16)] outline-none ${PLACEMENT_CLASS[placement]}`}
     >
       <div className="flex items-center gap-2">
-        <span className="font-num text-sub tabular-nums text-ink-3">{group.date}</span>
+        <span className="font-num text-sub tabular-nums text-ink-3">{group.label ?? group.date}</span>
         {isGroup ? (
           <span className="text-sub font-semibold text-ink-2">
             기록 <span className="font-num tabular-nums">{group.items.length}</span>건
@@ -134,6 +134,7 @@ export const TimelinePopover = ({ group, percent, placement = 'center', anchorRe
             <li key={item.key} className="flex items-center gap-2 rounded-input bg-surface-2 p-2.5">
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
+                  {group.endDate && group.endDate !== group.date && <span className="font-num text-chip tabular-nums text-ink-3">{item.date.slice(5)}</span>}
                   <TypeChip item={item} />
                   {item.kind === 'LOG' && item.log.scope === 'PRIVATE' && <PrivateChip />}
                 </span>

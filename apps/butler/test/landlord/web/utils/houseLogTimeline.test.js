@@ -230,6 +230,18 @@ describe('점', () => {
     expect(dots.at(-1)).toMatchObject({ title: '새 임차인 계약 시작 · 2029-02-28까지', description: '임차인 이새집 · 시작 전', contractId: 'c2' });
   });
 
+  it('축에서 가까운 점(첫 점과 minGapPercent 안)은 한 묶음, 라벨은 첫 날 ~ 끝 날(B1)', () => {
+    const axis = { start: '2025-01-01', end: '2026-12-31' };
+    const groups = groupDotsByDate(
+      [{ key: 'a', date: '2026-11-08' }, { key: 'b', date: '2026-11-21' }, { key: 'c', date: '2026-11-24' }, { key: 'd', date: '2026-06-01' }],
+      { axis, minGapPercent: 2.5 },
+    );
+    expect(groups.map((group) => [group.label, group.items.map((item) => item.key)])).toEqual([
+      ['2026-06-01', ['d']],
+      ['2026-11-08 ~ 2026-11-24', ['a', 'b', 'c']],
+    ]);
+  });
+
   it('같은 날 점은 하나로 묶고 날짜 순', () => {
     const groups = groupDotsByDate([{ key: 'b', date: '2026-02-01' }, { key: 'a', date: '2026-01-01' }, { key: 'c', date: '2026-02-01' }]);
     expect(groups.map((group) => [group.date, group.items.map((item) => item.key)])).toEqual([
@@ -391,8 +403,8 @@ describe('전체 호실 (H-28)', () => {
   });
 
   it('줄 요약 칩: 마감·만료 당일과 지난 날은 D-day·D+n 지남(D--1 없음)', () => {
-    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: '2026-11-23' }) }) }, TODAY).badge).toBe('통지 마감 D+1 지남');
-    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: TODAY }) }) }, TODAY).badge).toBe('통지 마감 D-day');
+    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: '2026-11-23' }) }) }, TODAY).badge).toBe('권장 마감 D+1 지남');
+    expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'CLOSING_SOON', safeDeadline: TODAY }) }) }, TODAY).badge).toBe('권장 마감 D-day');
     expect(getHomeRowSummary({ current: contract({ endDate: TODAY, renewalNotice: null }) }, TODAY).badge).toBe('만료 D-day');
   });
 
@@ -400,7 +412,7 @@ describe('전체 호실 (H-28)', () => {
     expect(getHomeRowSummary({ endedOn: '2026-10-31', isSold: true }, TODAY)).toMatchObject({ badge: '2026-10-31 매도' });
     expect(getHomeRowSummary({ current: null }, TODAY).badge).toBe('계약 없음');
     expect(getHomeRowSummary({ current: contract(), nextKind: 'RENEWAL' }, TODAY).badge).toBe('갱신 확정');
-    expect(getHomeRowSummary({ current: contract() }, TODAY)).toEqual({ tone: 'danger', badge: '통지 마감 D-33', next: '갱신 거절 통지 기록 없음' });
+    expect(getHomeRowSummary({ current: contract() }, TODAY)).toEqual({ tone: 'danger', badge: '권장 마감 D-33', next: '갱신 거절 통지 기록 없음' });
     expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'OPEN' }) }) }, TODAY).tone).toBe('warning');
     expect(getHomeRowSummary({ current: contract({ renewalNotice: notice({ phase: 'BEFORE_WINDOW', windowStart: '2027-03-14' }) }) }, TODAY)).toMatchObject({
       badge: '통지 기간 전',

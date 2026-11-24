@@ -75,7 +75,7 @@ export const UnverifiedLogPromoteDialog = ({ ownershipId, onDone, onUnauthorized
           ))}
           {count > MAX_VISIBLE_ITEMS && <li className="text-ink-3">외 {count - Math.min(items.length, MAX_VISIBLE_ITEMS)}건</li>}
         </ul>
-        <p className="text-sub text-ink-3">‘나만 보기’로 체크해 둔 메모는 빠져요. 나중에 기록마다 바꿀 수도 있어요.</p>
+        <p className="text-sub text-ink-3">‘나만 보기’로 체크해 둔 메모는 빠져요.</p>
         {promote.error && promote.error.code !== ALREADY_PROMOTED && <NoticeBox>{promote.error.message}</NoticeBox>}
       </div>
     </Modal>

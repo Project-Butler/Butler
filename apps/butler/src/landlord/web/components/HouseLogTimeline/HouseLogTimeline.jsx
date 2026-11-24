@@ -43,7 +43,7 @@ const LegendBar = ({ className, style, children }) => (
 );
 
 const dotLabel = (group) => {
-  if (group.items.length > 1) return `${group.date} 기록 ${group.items.length}건`;
+  if (group.items.length > 1) return `${group.label ?? group.date} 기록 ${group.items.length}건`;
   const [item] = group.items;
   return item.kind === 'CONTRACT' ? `${group.date} 계약·통지 ${item.title}` : `${group.date} ${getLogTypeLabel(item.logType)} ${item.log.title}`;
 };
@@ -117,7 +117,8 @@ export const HouseLogTimeline = ({
     const parts = [];
     if (band) parts.push(`${band.end} 소유 시작`);
     parts.push(`${past.length > 0 || band ? '지금 계약 ' : ''}${current.startDate} ~ ${current.endDate}${current.isEndingEarly ? ' 중도 해지' : ''}`);
-    if (current.startDate <= today) parts.push(`${getContractYears(current)}년 중 ${getElapsedPercent(current, today)}% 지남`);
+    if (current.startDate <= today)
+      parts.push(current.isEndingEarly ? `해지일까지 ${getElapsedPercent(current, today)}% 지남` : `${getContractYears(current)}년 중 ${getElapsedPercent(current, today)}% 지남`);
     else parts.push('시작 전');
     if (current.tenantName) parts.push(`임차인 ${current.tenantName}`);
     if (past.length > 0) parts.push(`지난 계약 ${past.length}건`);
@@ -130,6 +131,12 @@ export const HouseLogTimeline = ({
   // 오늘이 축 밖이면(매도한 호실·시작 전 계약) 세로선 대신 끝에 방향 표시만 둔다.
   const isTodayInAxis = isInAxis(today, axis);
   const flagTop = '-46px';
+  // 위쪽 이름표(통지 기간·마감·내 소유 시작)가 오늘과 가까우면 '오늘' 이름표를 축 아래로 내린다(B6).
+  const topFlagPercents = [
+    ...(noticeWindow && !isRenewal ? [pct(noticeWindow.windowStart), pct(noticeWindow.deadline)] : []),
+    ...(band ? [pct(band.end)] : []),
+  ];
+  const isTodayLabelBelow = topFlagPercents.some((percent) => Math.abs(percent - todayPercent) < 9);
 
   return (
     <section className="rounded-card border border-line bg-surface p-6" aria-label="계약 타임라인">
@@ -151,7 +158,7 @@ export const HouseLogTimeline = ({
           )}
           {daysToEnd && (
             <Badge className="font-num tabular-nums">
-              {next ? '지금 계약 ' : ''}만료 {daysToEnd}
+              {next ? '지금 계약 ' : ''}{current.isEndingEarly ? '해지' : '만료'} {daysToEnd}
             </Badge>
           )}
         </div>
@@ -281,7 +288,7 @@ export const HouseLogTimeline = ({
           {isTodayInAxis ? (
             <div className="pointer-events-none absolute -bottom-3 -top-3 z-20 w-0.5 bg-ink" style={{ left: `${todayPercent}%` }} data-testid="today-line">
               <span
-                className={`absolute -top-6 whitespace-nowrap rounded-md bg-ink px-2 text-chip font-bold text-surface ${
+                className={`absolute ${isTodayLabelBelow ? '-bottom-6' : '-top-6'} whitespace-nowrap rounded-md bg-ink px-2 text-chip font-bold text-surface ${
                   todayPercent > 94 ? 'right-0' : todayPercent < 6 ? 'left-0' : 'left-1/2 -translate-x-1/2'
                 }`}
               >
@@ -314,6 +321,7 @@ export const HouseLogTimeline = ({
         {/* 축 아래 눈금·계약 시작·만료 이름표 */}
         {ticks
           .filter((tick) => !current || (Math.abs(tick.percent - currentStart) > 6 && Math.abs(tick.percent - currentEnd) > 6))
+          .filter((tick) => !isTodayLabelBelow || Math.abs(tick.percent - todayPercent) > 6)
           .map((tick) => (
             <Flag key={tick.date} percent={tick.percent} top="26px" className="font-num text-chip text-ink-3">
               {tick.label}
@@ -339,7 +347,7 @@ export const HouseLogTimeline = ({
               {current.startDate.slice(0, 7)}
             </Flag>
             <Flag percent={currentEnd} top="26px" align={edgeAlign(currentEnd)} className="font-num text-chip text-ink-3">
-              만료
+              {current.isEndingEarly ? '해지' : '만료'}
               <br />
               {current.endDate.slice(0, 7)}
             </Flag>

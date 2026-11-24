@@ -179,15 +179,21 @@ export const toContractDots = ({ current, next, nextKind, past = [], notices = [
 };
 
 // 같은 날 점은 하나로 묶는다(H-26). 날짜 순.
-export const groupDotsByDate = (dots) => {
-  const groups = new Map();
-  dots.forEach((dot) => {
-    if (!groups.has(dot.date)) groups.set(dot.date, []);
-    groups.get(dot.date).push(dot);
+// axis·minGapPercent를 주면 화면에서 겹칠 만큼 가까운 날짜(첫 점과 minGapPercent% 안)도 한 묶음으로(B1).
+// 묶음의 date는 첫 날짜(점 위치), endDate는 마지막 날짜, label은 '날짜' 또는 '첫 날 ~ 끝 날'.
+export const groupDotsByDate = (dots, { axis = null, minGapPercent = 0 } = {}) => {
+  const sorted = [...dots].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const groups = [];
+  sorted.forEach((dot) => {
+    const last = groups[groups.length - 1];
+    const isNear = last && (dot.date === last.date || (axis && minGapPercent > 0 && toPercent(dot.date, axis) - toPercent(last.date, axis) < minGapPercent));
+    if (isNear) last.items.push(dot);
+    else groups.push({ key: `g-${dot.date}`, date: dot.date, items: [dot] });
   });
-  return [...groups.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([date, items]) => ({ key: `g-${date}`, date, items }));
+  return groups.map((group) => {
+    const endDate = group.items[group.items.length - 1].date;
+    return { ...group, endDate, label: endDate === group.date ? group.date : `${group.date} ~ ${endDate}` };
+  });
 };
 
 // id로 합친다(오프셋 페이지를 읽는 사이 추가·삭제로 겹친 줄, 두 조회의 겹친 줄). 처음 본 것을 남긴다.
@@ -393,7 +399,7 @@ export const getHomeRowSummary = ({ current, nextKind, endedOn, isSold }, today)
   if (notice.phase === 'OPEN' || notice.phase === 'CLOSING_SOON') {
     return {
       tone: notice.phase === 'CLOSING_SOON' ? 'danger' : 'warning',
-      badge: `통지 마감 ${formatDday(daysBetween(today, notice.safeDeadline))}`,
+      badge: `권장 마감 ${formatDday(daysBetween(today, notice.safeDeadline))}`,
       next: notice.latestNotice ? '도달한 통지 기록 없음' : '갱신 거절 통지 기록 없음',
     };
   }

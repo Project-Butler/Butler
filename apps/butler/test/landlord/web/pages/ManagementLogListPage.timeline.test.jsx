@@ -219,7 +219,7 @@ describe('전체 호실 (H-28)', () => {
     await waitFor(() => expect(within(all).getAllByTestId('home-lane')).toHaveLength(2));
     const lanes = within(all).getAllByTestId('home-lane');
     expect(lanes[0]).toHaveTextContent('하늘숲아파트 101동 1203호');
-    expect(lanes[0]).toHaveTextContent('통지 마감 D-33');
+    expect(lanes[0]).toHaveTextContent('권장 마감 D-33');
     expect(lanes[1]).toHaveTextContent('계약 없음');
     expect(getManagementLogList).toHaveBeenCalledWith(expect.objectContaining({ propertyId: undefined, size: 100 }));
     await userEvent.click(within(lanes[1]).getByRole('button', { name: /푸른마을/ }));
