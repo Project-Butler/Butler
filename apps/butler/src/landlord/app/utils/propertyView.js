@@ -27,7 +27,8 @@ export const toSummaryStats = (contract) => {
   };
 };
 
-// ⋯ 더보기: 다른 화면으로 가는 동작만(수정·소유 종료는 웹 상세에서). 지금 소유 중일 때만 연다.
+// ⋯ 더보기: 다른 화면으로 가는 동작만(수정은 웹 상세에서). 지금 소유 중일 때만 연다.
+// 호실 삭제(소유 종료)는 화면 이동이 아니라 확인 시트라서 부동산 상세(PropertyDetailPage)가 맨 아래에 따로 붙인다.
 // 반환: [{ key, label, target: { key, params } }]
 export const getMoreMenuTargets = (property) => {
   const relation = property.myRelation;

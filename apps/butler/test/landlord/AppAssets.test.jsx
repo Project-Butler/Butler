@@ -246,11 +246,11 @@ describe('M06 부동산 상세', () => {
     expect(where()).toBe('/landlord/logs?propertyId=p1');
   });
 
-  it('⋯ 메뉴는 이동형 동작만', async () => {
+  it('⋯ 메뉴는 이동형 동작과 맨 아래 [호실 삭제]', async () => {
     renderAt('/landlord/properties/p1');
     await userEvent.click(await within(banner()).findByRole('button', { name: '더보기' }));
     const menu = screen.getByRole('menu', { name: '더보기' });
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['하우스 로그 기록 추가', '수리·점검']);
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['하우스 로그 기록 추가', '수리·점검', '호실 삭제']);
     await userEvent.click(within(menu).getByRole('menuitem', { name: '하우스 로그 기록 추가' }));
     expect(where()).toBe('/landlord/properties/p1/logs/new');
   });

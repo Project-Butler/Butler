@@ -8,6 +8,7 @@ import { toAreaInput } from '../../web/utils/formValidation';
 import { normalizeBuildingNo } from '../../web/utils/unitAddress';
 import { EQUIPMENT_OPTIONS, MAX_EQUIPMENT_ETC_LENGTH, UNIT_TYPE_OPTIONS } from '../../web/utils/unitListing';
 import searchIcon from '../assets/icon-search.svg';
+import { CheckboxChip } from '../components/CheckboxChip/CheckboxChip';
 
 const REGISTERED_NOTICE = '부동산을 등록했어요';
 const SELECT_CLASS =
@@ -21,17 +22,6 @@ const FieldLabel = ({ children, htmlFor, required = false }) => (
 );
 
 const FieldError = ({ children }) => (children ? <p className="text-m-sub text-crit-ink">{children}</p> : null);
-
-const CheckboxChip = ({ checked, onChange, label, disabled }) => (
-  <label
-    className={`flex h-10 cursor-pointer items-center gap-2 rounded-input border px-3 text-body transition-colors ${
-      checked ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line bg-surface text-ink-2'
-    } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-  >
-    <input type="checkbox" className="accent-accent" checked={checked} onChange={onChange} disabled={disabled} />
-    {label}
-  </label>
-);
 
 // 임대인 앱 부동산 등록 (Figma M04 / 부동산 등록, 3:202). 웹 부동산 등록과 같은 입력 항목·검증·API(usePropertyRegisterForm)이고 모양만 Figma 를 따른다.
 // Figma 의 "유형(아파트·빌라·오피스텔)"은 저장할 곳이 없어 두지 않는다. 등록 완료 화면(M17)은 만들지 않고,
