@@ -83,3 +83,12 @@ test('해지·만료 계약과 끝난 소유 관계는 아무것도 보내지 �
   assert.deepEqual(typesOn('2026-12-25'), []);
   assert.deepEqual(typesOn('2026-09-25', { ownership: { ...contract().ownership, endedAt: new Date() } }), []);
 });
+
+test('갱신 계약이 등록된 계약은 통지 알림을 보내지 않고, 만료 임박·입금일 알림은 그대로(#242)', () => {
+  const typesRenewed = (today) => buildContractReminders(contract(), today, { renewed: true }).map((item) => item.type);
+  assert.deepEqual(typesRenewed('2026-05-30'), []);
+  assert.deepEqual(typesRenewed('2026-09-23'), ['CONTRACT_EXPIRING_SOON']);
+  assert.deepEqual(typesRenewed('2026-09-25'), ['CONTRACT_EXPIRING_SOON', 'RENT_PAYMENT_DUE']);
+  // 갱신 계약이 없으면(새 임차인 계약 포함) 그대로 보낸다
+  assert.equal(typesOn('2026-09-23').includes('RENEWAL_NOTICE_DEADLINE_SOON'), true);
+});

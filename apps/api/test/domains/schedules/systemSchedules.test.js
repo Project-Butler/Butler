@@ -68,3 +68,13 @@ test('id는 같은 일정이면 늘 같고 UUID 모양이다', () => {
   assert.equal(isUuid(endA.id), true);
   assert.notEqual(toSystemScheduleId('a'), toSystemScheduleId('b'));
 });
+
+test('임대인 통지 마감: 갱신 계약이 있거나 기한 안에 도달한 통지가 있으면 빠진다(#242)', () => {
+  const range = { viewer: 'LANDLORD', fromDate: '2026-09-01', toDate: '2026-09-30' };
+  const kinds = (overrides, options = {}) => buildContractSchedules(contract(overrides), { ...range, ...options }).map((item) => item.kind);
+  assert.deepEqual(kinds({}), ['RENT_PAYMENT', 'RENEWAL_NOTICE_DEADLINE']);
+  assert.deepEqual(kinds({}, { renewed: true }), ['RENT_PAYMENT']);
+  assert.deepEqual(kinds({ renewalNotices: [{ deliveredOn: day('2026-07-01') }] }), ['RENT_PAYMENT']);
+  // 늦게 도달한 통지만 있으면 마감은 남는다
+  assert.deepEqual(kinds({ renewalNotices: [{ deliveredOn: day('2026-10-02') }] }), ['RENT_PAYMENT', 'RENEWAL_NOTICE_DEADLINE']);
+});

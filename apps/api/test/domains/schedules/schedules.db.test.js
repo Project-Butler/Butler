@@ -98,6 +98,40 @@ describe('일정 조회 API', { skip: dbTestSkip }, () => {
     assert.deepEqual((await get(landlord, RANGE)).body.data, []);
   });
 
+  test('임대인 통지 마감은 갱신 계약이 있거나 기한 안에 도달한 통지가 있으면 빠진다(#242)', async () => {
+    const SEPTEMBER = { fromDate: '2027-09-01', toDate: '2027-09-30' };
+    const renewedLandlord = await createUser();
+    const renewed = await createContract(renewedLandlord);
+    await prisma.contract.create({
+      data: {
+        ownershipId: renewed.ownership.id,
+        tenantName: '이임차',
+        tenantPhone: '01098765432',
+        leaseType: 'MONTHLY',
+        deposit: 10000000n,
+        monthlyRent: 500000n,
+        startDate: day('2027-12-01'),
+        endDate: day('2029-11-30'),
+        previousContractId: renewed.contract.id,
+      },
+    });
+    assert.deepEqual(kindsDates((await get(renewedLandlord, SEPTEMBER)).body), ['RENT_PAYMENT:2027-09-25']);
+
+    const noticedLandlord = await createUser();
+    const noticed = await createContract(noticedLandlord);
+    await prisma.renewalNotice.create({
+      data: {
+        contractId: noticed.contract.id,
+        authorId: noticedLandlord.id,
+        kind: 'REFUSE_RENEWAL',
+        method: 'CERTIFIED_MAIL',
+        sentOn: day('2027-06-01'),
+        deliveredOn: day('2027-06-02'),
+      },
+    });
+    assert.deepEqual(kindsDates((await get(noticedLandlord, SEPTEMBER)).body), ['RENT_PAYMENT:2027-09-25']);
+  });
+
   test('기간 검사: 빠지거나 틀린 날짜·뒤집힌 기간은 400, 93일 넘으면 422, 로그인 안 하면 401', async () => {
     const user = await createUser();
     assert.equal((await get(user, { fromDate: '2027-09-01' })).body.error.code, 'VALIDATION_ERROR');

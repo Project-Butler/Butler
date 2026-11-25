@@ -4,6 +4,7 @@ import {
   computeRenewalNoticePhase,
   computeRenewalNoticeTiming,
   computeRenewalNoticeWindow,
+  isRenewalNoticeSettled,
   toRenewalNoticeSummary,
 } from '../../src/platform/renewalNotice.js';
 
@@ -93,4 +94,15 @@ test('계약 요약: 해지·만료 계약과 끝난 소유 관계는 null, 시�
   assert.equal(toRenewalNoticeSummary(contract(), { todayKST: '2026-12-01' }), null);
   assert.equal(toRenewalNoticeSummary(contract(), { todayKST: '2026-06-01', ownershipEnded: true }), null);
   assert.equal(toRenewalNoticeSummary(contract(), { todayKST: '2024-11-01' }).phase, 'BEFORE_WINDOW');
+});
+
+test('isRenewalNoticeSettled: 갱신 계약이 있거나 기한 안에 도달한 통지가 있으면 끝난 것(#242)', () => {
+  const settledContract = { endDate: new Date('2026-11-30T00:00:00Z') }; // 구간 2026-05-30~2026-09-30
+  assert.equal(isRenewalNoticeSettled(settledContract), false);
+  assert.equal(isRenewalNoticeSettled(settledContract, { renewed: true }), true);
+  assert.equal(isRenewalNoticeSettled(settledContract, { notices: [{ deliveredOn: new Date('2026-07-01T00:00:00Z') }] }), true);
+  // 늦게 도달·너무 일찍 도달·도달일 없음은 끝나지 않은 것
+  assert.equal(isRenewalNoticeSettled(settledContract, { notices: [{ deliveredOn: new Date('2026-10-02T00:00:00Z') }] }), false);
+  assert.equal(isRenewalNoticeSettled(settledContract, { notices: [{ deliveredOn: new Date('2026-05-01T00:00:00Z') }] }), false);
+  assert.equal(isRenewalNoticeSettled(settledContract, { notices: [{ deliveredOn: null }] }), false);
 });
