@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@butler/api-client', () => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getPropertyList: vi.fn(),
   getTicketList: vi.fn(),
   getTicket: vi.fn(),
@@ -110,7 +111,7 @@ describe('거르기 카드와 표', () => {
     const handlers = { onNavigate: vi.fn(), onOpenRegister: vi.fn(), onCloseRegister: vi.fn(), onUnauthorized: vi.fn() };
     const { rerender } = render(<TicketListPage {...handlers} selectedTicketId="t1" navKey="k1" />);
     const panel = await screen.findByRole('complementary', { name: '요청 상세' });
-    await userEvent.click(within(panel).getByRole('button', { name: '요청 상세 닫기' }));
+    await userEvent.click(await within(panel).findByRole('button', { name: '요청 상세 닫기' }));
     expect(screen.queryByRole('complementary', { name: '요청 상세' })).toBeNull();
     rerender(<TicketListPage {...handlers} selectedTicketId="t1" navKey="k2" />);
     expect(await screen.findByRole('complementary', { name: '요청 상세' })).toBeInTheDocument();

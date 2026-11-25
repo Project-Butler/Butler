@@ -3,7 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@butler/api-client', () => ({ getNotificationList: vi.fn(), postNotificationRead: vi.fn() }));
+vi.mock('@butler/api-client', () => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
+  getNotificationList: vi.fn(),
+  postNotificationRead: vi.fn(),
+}));
 
 import { getNotificationList, postNotificationRead } from '@butler/api-client';
 import { useGetUnreadNotifications } from '../../../../src/landlord/web/hooks/useGetUnreadNotifications';
@@ -32,7 +36,7 @@ describe('PC 종 안 읽은 알림', () => {
     finishRead({});
   });
 
-  it('읽음 저장이 실패하면 다음 불러오기에서 다시 보인다', async () => {
+  it('읽음 저장이 실패하면 그 알림이 다시 안 읽음으로 보인다', async () => {
     vi.mocked(getNotificationList).mockResolvedValue({ data: [n('a')], meta: {} });
     vi.mocked(postNotificationRead).mockRejectedValue(new Error('network'));
     const { result } = renderHook(() => useGetUnreadNotifications(), { wrapper });
@@ -40,8 +44,7 @@ describe('PC 종 안 읽은 알림', () => {
     await act(async () => {
       await result.current.markRead('a');
     });
-    expect(result.current.items).toHaveLength(0);
-    act(() => result.current.refetch());
+    // 저장이 실패했으니 읽은 것으로 기억하지 않는다(다시 보인다).
     await waitFor(() => expect(result.current.items.map((item) => item.id)).toEqual(['a']));
   });
 });
