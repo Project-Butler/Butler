@@ -164,6 +164,18 @@ describe('수리 요청하기(③) → 보낸 뒤(④)', () => {
     expect(where()).toBe('/tenant/tickets/tk-new');
   });
 
+  it('키보드: 분류 칩은 화살표로 옮겨 고르고, 칩 묶음은 위 글자로 이름이 붙는다', async () => {
+    renderAt('/tenant/tickets/new');
+    const group = await screen.findByRole('radiogroup', { name: '무엇을 요청할까요' });
+    const repair = within(group).getByRole('radio', { name: '수리' });
+    expect(repair).toHaveAttribute('tabindex', '0');
+    repair.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(within(group).getByRole('radio', { name: '점검' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: '점검' })).toHaveFocus();
+    expect(screen.getByRole('radiogroup', { name: /어디인가요/ })).toBeInTheDocument();
+  });
+
   it('방은 선택: 고른 방을 다시 누르면 빠지고 room 을 보내지 않는다', async () => {
     api.postTicket.mockResolvedValue(ticket({ id: 'tk-new' }));
     renderAt('/tenant/tickets/new');

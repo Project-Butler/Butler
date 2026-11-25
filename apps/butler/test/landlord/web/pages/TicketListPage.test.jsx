@@ -89,6 +89,33 @@ describe('거르기 카드와 표', () => {
     expect(vi.mocked(getTicketList)).toHaveBeenCalledWith(expect.objectContaining({ size: 1, category: 'INSPECTION', room: 'NONE' }));
   });
 
+  it('키보드: 상태는 화살표로 옮겨 고르고, 표 행은 Space 로 연다', async () => {
+    renderPage();
+    await screen.findByText('싱크대 아래 물이 새요');
+    const todo = screen.getByRole('radio', { name: /처리할 요청/ });
+    expect(todo).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('radio', { name: /전체/ })).toHaveAttribute('tabindex', '-1');
+    todo.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(screen.getByRole('radio', { name: /전체/ })).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.getByRole('radio', { name: /전체/ })).toHaveFocus();
+    const row = (await screen.findByText('욕실 환풍기')).closest('tr');
+    row.focus();
+    await userEvent.keyboard(' ');
+    expect(row).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByRole('complementary', { name: '요청 상세' })).toBeInTheDocument();
+  });
+
+  it('같은 요청 주소로 다시 들어오면(종 알림 등) 닫았던 패널을 다시 연다', async () => {
+    const handlers = { onNavigate: vi.fn(), onOpenRegister: vi.fn(), onCloseRegister: vi.fn(), onUnauthorized: vi.fn() };
+    const { rerender } = render(<TicketListPage {...handlers} selectedTicketId="t1" navKey="k1" />);
+    const panel = await screen.findByRole('complementary', { name: '요청 상세' });
+    await userEvent.click(within(panel).getByRole('button', { name: '요청 상세 닫기' }));
+    expect(screen.queryByRole('complementary', { name: '요청 상세' })).toBeNull();
+    rerender(<TicketListPage {...handlers} selectedTicketId="t1" navKey="k2" />);
+    expect(await screen.findByRole('complementary', { name: '요청 상세' })).toBeInTheDocument();
+  });
+
   it('호실을 고르면 주소(?propertyId=)로 바꾼다', async () => {
     const { onNavigate } = renderPage();
     await screen.findByRole('option', { name: HOME.displayName });

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, MobileFormLayout, TextField } from '@butler/ui';
 import { getContractList, getTicket, patchTicket, postTicket } from '@butler/api-client';
 import { Lock } from 'lucide-react';
 import { isUnauthorizedError, toApiError, toFieldErrors } from '../../shared/apiError';
+import { getRadioTabIndex, handleRadioKeyDown } from '../../shared/radioGroupKeys';
 import { ROOM_OPTIONS } from '../../shared/room';
 import { TICKET_CATEGORY_OPTIONS } from '../../shared/ticketLabels';
 import { useAttachmentUploads } from '../../shared/upload/useAttachmentUploads';
@@ -20,36 +21,58 @@ const TEXTAREA_CLASS =
   'min-h-28 w-full rounded-input border border-line bg-surface px-3.5 py-3 text-body text-ink outline-none focus:border-accent disabled:bg-surface-2';
 const PICK_CLASS = 'flex h-9 items-center rounded-full border px-3.5 text-m-label';
 
-const FieldLabel = ({ children, htmlFor, optional = false }) => (
-  <label htmlFor={htmlFor} className="mb-1.5 block text-m-label font-semibold text-ink-2">
-    {children}
-    {optional && <span className="font-normal text-ink-3"> (선택)</span>}
-  </label>
-);
+// 칸 이름. 입력칸(htmlFor)이 있으면 label, 칩 묶음처럼 연결할 입력칸이 없으면 id 를 가진 글자(묶음이 aria-labelledby 로 가리킨다).
+const FieldLabel = ({ children, htmlFor, id, optional = false }) => {
+  const className = 'mb-1.5 block text-m-label font-semibold text-ink-2';
+  const content = (
+    <>
+      {children}
+      {optional && <span className="font-normal text-ink-3"> (선택)</span>}
+    </>
+  );
+  return htmlFor ? (
+    <label htmlFor={htmlFor} className={className}>
+      {content}
+    </label>
+  ) : (
+    <p id={id} className={className}>
+      {content}
+    </p>
+  );
+};
 
 const FieldError = ({ children }) => (children ? <p className="mt-1 text-m-sub text-crit-ink">{children}</p> : null);
 
 // 칩 하나 고르기(분류·방). allowEmpty 면 고른 칩을 다시 누르면 빠진다(방은 선택).
-const PickGroup = ({ label, options, value, onChange, disabled, allowEmpty = false }) => (
-  <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
-    {options.map((option) => {
-      const selected = value === option.value;
-      return (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={selected}
-          disabled={disabled}
-          onClick={() => onChange(selected && allowEmpty ? '' : option.value)}
-          className={`${PICK_CLASS} ${selected ? 'border-accent bg-accent-soft font-semibold text-accent-strong' : 'border-line bg-surface font-medium text-ink-2'}`}
-        >
-          {option.label}
-        </button>
-      );
-    })}
-  </div>
-);
+// 키보드: Tab 으로는 고른 칩(없으면 첫 칩)에만 들어오고, 화살표·Home·End 로 옮겨 고른다(라디오 그룹 방식).
+const PickGroup = ({ labelledBy, options, value, onChange, disabled, allowEmpty = false }) => {
+  const groupRef = useRef(null);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const handleKeyDown = (event, index) =>
+    handleRadioKeyDown(event, index, [...(groupRef.current?.querySelectorAll('[role="radio"]') ?? [])], (target) => onChange(options[target].value));
+  return (
+    <div ref={groupRef} role="radiogroup" aria-labelledby={labelledBy} className="flex flex-wrap gap-2">
+      {options.map((option, index) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={getRadioTabIndex(index, selectedIndex)}
+            disabled={disabled}
+            onClick={() => onChange(selected && allowEmpty ? '' : option.value)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            className={`${PICK_CLASS} ${selected ? 'border-accent bg-accent-soft font-semibold text-accent-strong' : 'border-line bg-surface font-medium text-ink-2'}`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 // 임차인 수리 요청하기 / 고치기(시안 v2.2 ③). ticketId 가 있으면 고치기: 접수(OPEN)일 때만 제목·설명·방(사진은 그대로).
 // 보내면 '요청을 보냈어요'(④)로, 고치면 상세로 간다.
@@ -95,7 +118,9 @@ export const TicketFormPage = ({ onUnauthorized }) => {
     try {
       if (isEdit) {
         await patchTicket(ticketId, changes);
-        navigate(ticketPath(ticketId), { replace: true });
+        // 상세에서 들어왔으면 뒤로(상세가 다시 그려지며 새로 읽는다). 주소로 바로 들어왔으면 상세로 바꾼다 — 뒤로 가기에 상세가 두 번 쌓이지 않게.
+        if (location.key !== 'default') navigate(-1);
+        else navigate(ticketPath(ticketId), { replace: true });
       } else {
         const created = await postTicket({
           propertyId: form.propertyId,
@@ -187,8 +212,8 @@ export const TicketFormPage = ({ onUnauthorized }) => {
 
       {!isEdit && (
         <div>
-          <FieldLabel>무엇을 요청할까요</FieldLabel>
-          <PickGroup label="분류" options={TICKET_CATEGORY_OPTIONS} value={form.category} onChange={(value) => updateField('category', value)} disabled={busy} />
+          <FieldLabel id="ticket-category-label">무엇을 요청할까요</FieldLabel>
+          <PickGroup labelledBy="ticket-category-label" options={TICKET_CATEGORY_OPTIONS} value={form.category} onChange={(value) => updateField('category', value)} disabled={busy} />
           <FieldError>{serverErrors.category}</FieldError>
         </div>
       )}
@@ -196,8 +221,8 @@ export const TicketFormPage = ({ onUnauthorized }) => {
       {(!isEdit || existing.data) && (
         <>
           <div>
-            <FieldLabel optional>어디인가요</FieldLabel>
-            <PickGroup label="방" options={ROOM_OPTIONS} value={form.room} onChange={(value) => updateField('room', value)} disabled={busy || locked} allowEmpty />
+            <FieldLabel id="ticket-room-label" optional>어디인가요</FieldLabel>
+            <PickGroup labelledBy="ticket-room-label" options={ROOM_OPTIONS} value={form.room} onChange={(value) => updateField('room', value)} disabled={busy || locked} allowEmpty />
             <FieldError>{serverErrors.room}</FieldError>
           </div>
 

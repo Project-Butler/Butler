@@ -182,7 +182,7 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
 const TicketListRoute = ({ isRegisterOpen = false, ...pageProps }) => {
   const { ticketId } = useParams();
   const [searchParams] = useSearchParams();
-  const { state } = useLocation();
+  const { state, key: locationKey } = useLocation();
   const { onNavigate } = pageProps;
   const propertyId = searchParams.get('propertyId') ?? undefined;
   const openRegister = useCallback(() => onNavigate('ticketRegister', { propertyId }), [onNavigate, propertyId]);
@@ -197,6 +197,7 @@ const TicketListRoute = ({ isRegisterOpen = false, ...pageProps }) => {
     <TicketListPage
       propertyId={propertyId}
       selectedTicketId={ticketId}
+      navKey={locationKey}
       completeOnOpen={Boolean(state?.complete)}
       isRegisterOpen={isRegisterOpen}
       onOpenRegister={openRegister}

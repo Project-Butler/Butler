@@ -93,10 +93,14 @@ const TicketTable = ({ propertyId, status, category, room, compactProperty, sele
                 <tr
                   key={ticket.id}
                   tabIndex={0}
-                  aria-selected={isSelected}
+                  // 일반 표의 행이라 aria-selected 대신 aria-current 로 "지금 연 요청"을 알린다. Enter·Space 로 연다.
+                  aria-current={isSelected ? 'true' : undefined}
                   onClick={() => onSelect(ticket.id)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') onSelect(ticket.id);
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelect(ticket.id);
+                    }
                   }}
                   className={`cursor-pointer border-b border-line outline-none last:border-b-0 focus-visible:bg-surface-2 ${isSelected ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
                 >
@@ -141,9 +145,9 @@ const TicketTable = ({ propertyId, status, category, room, compactProperty, sele
 
 // PC 유지보수 요청(시안 v2.2, docs/10 D4·D17, HL U-10). 하우스 로그 PC와 같은 틀: 거르기 카드 아래 표 7 : 상세 패널 3.
 // - propertyId: 주소의 ?propertyId=(호실 거르기). 상태·분류·방은 화면 안에서만.
-// - selectedTicketId: /tickets/:ticketId 로 들어온 요청(오른쪽 패널). completeOnOpen: 앱 목록처럼 완료 팝업을 바로 연다.
+// - selectedTicketId: /tickets/:ticketId 로 들어온 요청(오른쪽 패널). navKey: 주소 이동마다 바뀌는 값(같은 주소 재진입 감지). completeOnOpen: 앱 목록처럼 완료 팝업을 바로 연다.
 // - isRegisterOpen: /tickets/new(요청 등록 팝업). onOpenRegister·onCloseRegister 로 주소를 바꾼다.
-export const TicketListPage = ({ propertyId, selectedTicketId, completeOnOpen = false, isRegisterOpen = false, onOpenRegister, onCloseRegister, onNavigate, onUnauthorized }) => {
+export const TicketListPage = ({ propertyId, selectedTicketId, navKey, completeOnOpen = false, isRegisterOpen = false, onOpenRegister, onCloseRegister, onNavigate, onUnauthorized }) => {
   const owned = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, { onUnauthorized });
   const properties = owned.data?.items ?? [];
   const activePropertyIds = toActivePropertyIds(owned.data?.items);
@@ -155,9 +159,10 @@ export const TicketListPage = ({ propertyId, selectedTicketId, completeOnOpen = 
   const [reloadKey, setReloadKey] = useState(0);
   const { updateTicket } = usePatchTicket({ onUnauthorized });
 
+  // 주소의 요청을 패널에 연다. 같은 주소로 다시 들어와도(종 알림 등, navKey 가 바뀜) 다시 연다 — 표에서 고르거나 닫은 것은 주소를 바꾸지 않는다.
   useEffect(() => {
     if (selectedTicketId) setSelectedId(selectedTicketId);
-  }, [selectedTicketId]);
+  }, [selectedTicketId, navKey]);
 
   const segment = findTicketSegment(segmentKey);
   const category = toFilterParam(TICKET_CATEGORY_OPTIONS, categories);
