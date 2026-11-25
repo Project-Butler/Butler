@@ -4,11 +4,13 @@ import { AppError } from '../../platform/AppError.js';
 import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { compareUnits } from '../../platform/naturalSort.js';
 import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
+import { shareBuildingVerificationOnRegisterInTx } from '../../platform/ownershipVerification.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { resolveMyRelation, toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
 import { computePropertyStatus } from '../../platform/propertyStatus.js';
 import { LISTING_FIELDS, toListing } from '../../platform/unitListing.js';
 import { countDocumentBoxDocuments } from '../documents/documentBox.js';
+import { removeStoredObjects } from '../documents/storage/index.js';
 import { countActiveUnitsInComplex, lockLandlordBuilding } from '../landlordBuildings/unitCounts.js';
 
 // 호실 상태 계산(computePropertyStatus)에 필요한 계약 칸.
@@ -109,7 +111,7 @@ export const createPropertyWithOwnership = async (user, input) => {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let stage = 'start';
     try {
-      const { property, ownership } = await prisma.$transaction(async (tx) => {
+      const { property, ownership, removedPaths } = await prisma.$transaction(async (tx) => {
         const complex = await tx.complex.findUnique({ where: { id: input.complexId } });
         if (!complex) throw new AppError('COMPLEX_NOT_FOUND', 404, '단지를 찾을 수 없습니다.');
 
@@ -198,8 +200,14 @@ export const createPropertyWithOwnership = async (user, input) => {
           params: { buildingName: building.name, buildingNo: filled.buildingNo, unitNo: filled.unitNo },
         });
 
-        return { property: filled, ownership: created };
+        // 같은 건물(단지·동)에 일반건축물대장으로 인증된 내 방이 있으면(다가구 등) 그 인증을 이 방에도 적용한다.
+        stage = 'verificationShare';
+        const shared = await shareBuildingVerificationOnRegisterInTx(tx, { ownershipId: created.id });
+        const ownershipRow = shared.shared ? await tx.ownership.findUnique({ where: { id: created.id } }) : created;
+
+        return { property: filled, ownership: ownershipRow, removedPaths: shared.removedPaths };
       });
+      await removeStoredObjects(removedPaths);
 
       // TODO(audit): OWNERSHIP_CREATED — audit.record()가 생기면 여기서 기록한다.
       const now = getNow();
