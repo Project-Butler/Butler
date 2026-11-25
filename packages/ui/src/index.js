@@ -23,3 +23,4 @@ export { RequiredMark, TextField } from './TextField/TextField';
 export { SegmentedControl } from './SegmentedControl/SegmentedControl';
 export { FilterChip } from './FilterChip/FilterChip';
 export { Pagination } from './Pagination/Pagination';
+export { PageSkeleton, Skeleton, SkeletonLines, SkeletonStatus } from './Skeleton/Skeleton';

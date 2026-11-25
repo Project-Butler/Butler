@@ -10,6 +10,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getMe: vi.fn(),
   postLogin: vi.fn(),
   postLogout: vi.fn(),

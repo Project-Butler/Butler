@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@butler/api-client', () => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getPropertyList: vi.fn(),
   getManagementLog: vi.fn(),
   postManagementLog: vi.fn(),

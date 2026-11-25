@@ -17,9 +17,12 @@ const AXIOS_PATH = {
 // import 문자열의 경로 조각이 폴더 이름과 정확히 같을 때만 걸린다(AuthBadge·useAdminLike 같은 이름은 통과).
 const folderPattern = (folders) => `(^|/)(${folders.join('|')})(/|$)`;
 
-const boundaryConfig = (role) => {
-  const forbidden = [...ROLES.filter((other) => other !== role), ...APP_LEVEL];
-  const message = `${role}/ 는 다른 역할 폴더나 auth·store·surface 를 import할 수 없다. shared/ 와 packages/* 만 쓰고, 필요한 값은 props로 받는다.`;
+// role: 역할 폴더 이름. shared/ 도 같은 모양으로 쓰되 막는 목록·문구만 다르게 넘긴다.
+const boundaryConfig = (
+  role,
+  forbidden = [...ROLES.filter((other) => other !== role), ...APP_LEVEL],
+  message = `${role}/ 는 다른 역할 폴더나 auth·store·surface 를 import할 수 없다. shared/ 와 packages/* 만 쓰고, 필요한 값은 props로 받는다.`,
+) => {
   return {
     files: [`src/${role}/**/*.{js,jsx}`],
     rules: {
@@ -37,5 +40,11 @@ export default [
   ...baseConfig,
   // 앱 전체: axios 직접 import 금지. 아래 역할 폴더 설정이 같은 규칙을 덮어쓰므로 거기에도 axios를 다시 넣는다.
   { files: ['src/**/*.{js,jsx}'], rules: { 'no-restricted-imports': ['error', { paths: [AXIOS_PATH] }] } },
-  ...ROLES.map(boundaryConfig),
+  ...ROLES.map((role) => boundaryConfig(role)),
+  // shared/ 는 여러 역할이 같이 쓰므로 역할 폴더와 auth·store·surface 를 import하지 않는다(axios 금지도 이 블록에 같이 들어 있다).
+  boundaryConfig(
+    'shared',
+    [...ROLES, ...APP_LEVEL],
+    'shared/ 는 여러 역할이 같이 쓴다. 역할 폴더(admin·landlord·tenant)나 auth·store·surface 를 import하지 않고, 필요한 값은 인자·props로 받는다.',
+  ),
 ];

@@ -43,7 +43,7 @@ const NavItem = ({ icon: Icon, label, badge, active, onClick, style }) => (
     title={label}
     aria-label={label}
     className={`group relative flex w-full items-center rounded-btn py-2.5 text-left text-body transition-colors ${style.navRow} ${
-      active ? 'bg-accent-soft font-semibold text-accent-strong' : 'font-medium text-ink-2 hover:bg-surface-2 hover:text-ink'
+      active ? 'bg-accent-soft font-medium text-accent-strong' : 'font-medium text-ink-2 hover:bg-surface-2 hover:text-ink'
     }`}
   >
     {Icon && (

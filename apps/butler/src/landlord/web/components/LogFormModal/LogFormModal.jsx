@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, RequiredMark } from '@butler/ui';
+import { Badge, Button, PageSkeleton, RequiredMark } from '@butler/ui';
 import { History, Pencil, ShieldCheck } from 'lucide-react';
 import { PrivateChip } from '../ManagementLogBadges/ManagementLogBadges';
 import { Modal } from '../Modal/Modal';
@@ -12,7 +12,7 @@ import {
   toLogForm,
   validateLogForm,
 } from '../ManagementLogForm/ManagementLogForm';
-import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
+import { useAttachmentUploads } from '../../../../shared/upload/useAttachmentUploads';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
 import { useGetPropertyList } from '../../hooks/useGetPropertyList';
 import { usePatchManagementLog } from '../../hooks/usePatchManagementLog';
@@ -279,7 +279,7 @@ const EditLogModal = ({ logId, onClose, onSaved, onUnauthorized }) => {
   return (
     <Modal size="lg" title="기록 수정" icon={Pencil} onClose={onClose}>
       {error && <NoticeBox>{error.message}</NoticeBox>}
-      {!log && !error && <p className="py-6 text-center text-body text-ink-3">불러오는 중입니다</p>}
+      {!log && !error && <PageSkeleton variant="text" rows={5} />}
       {log?.isReadOnly && <NoticeBox>이 기록은 수정할 수 없어요.</NoticeBox>}
     </Modal>
   );

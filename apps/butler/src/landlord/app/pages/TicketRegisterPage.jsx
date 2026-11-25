@@ -3,11 +3,11 @@ import { Button, MobileFormLayout, RequiredMark, TextField } from '@butler/ui';
 import { toFieldErrors } from '../../../shared/apiError';
 import { AttachmentPicker } from '../../web/components/AttachmentPicker/AttachmentPicker';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
-import { useAttachmentUploads } from '../../web/hooks/useAttachmentUploads';
+import { useAttachmentUploads } from '../../../shared/upload/useAttachmentUploads';
 import { useGetPropertyList } from '../../web/hooks/useGetPropertyList';
 import { usePostTicket } from '../../web/hooks/usePostTicket';
 import { useGoBack, useGoTo } from '../utils/navigation';
-import { TICKET_CATEGORY_OPTIONS } from '../utils/ticketView';
+import { TICKET_CATEGORY_OPTIONS } from '../../../shared/ticketLabels';
 
 const PROPERTY_PICKER_SIZE = 100;
 const MAX_TITLE_LENGTH = 100;

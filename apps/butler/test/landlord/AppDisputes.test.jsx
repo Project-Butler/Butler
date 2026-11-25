@@ -1,7 +1,7 @@
 // 임대인 앱 임대차 분쟁(3팀). 실패 조건: 앱에서 /disputes 가 '준비 중'으로 감 · 웹 제목 줄(PageHeader)이 상단 바와 겹쳐 제목이 둘 ·
 // 상단 바 제목이 화면과 다름 · 사례 상세의 AI 버튼이 화면에 고정돼 따라다님 · AI 상담에 하단 탭이 남아 입력창과 겹침 · AI 상담 제목이 둘이거나 입력창이 대화를 따라 떠다님 · 주소로 바로 들어온 화면에서 뒤로 가기가 앱 밖으로 나감.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,10 +86,14 @@ beforeEach(() => {
 });
 
 describe('앱 분쟁 화면 틀', () => {
-  it('첫 화면은 뒤로 가기 상단 바 + 하단 탭이고, 제목은 상단 바 하나뿐이다', async () => {
+  it('첫 화면은 다른 탭 첫 화면처럼 홈형 상단 바(검색·알림·내 계정, 뒤로 가기 없음) + 하단 탭이고, 제목은 본문에 하나', async () => {
     renderAt('/landlord/disputes');
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(topBarTitle()).toHaveTextContent('임대차 분쟁 센터');
+    expect(screen.queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '통합 검색' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '내 계정' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '알림' })).toBeInTheDocument();
     expect(tabBar()).toBeInTheDocument();
     expect(screen.queryByText('준비 중인 화면')).not.toBeInTheDocument();
   });
@@ -123,9 +127,44 @@ describe('앱 분쟁 화면 틀', () => {
   });
 });
 
+describe('앱 입구·이동(#215)', () => {
+  it('하단 탭은 홈 · 커뮤니티 · 내 자산(가운데) · 분쟁 센터 · 내 정보 순서다', () => {
+    renderAt('/landlord/disputes');
+    const labels = within(tabBar()).getAllByRole('button').map((button) => button.textContent);
+    expect(labels).toEqual(['홈', '커뮤니티', '내 자산', '분쟁 센터', '내 정보']);
+  });
+
+  it.each(['/landlord/disputes', '/landlord/disputes/search', '/landlord/disputes/topics/deposit'])('%s 에서는 [분쟁 센터] 탭이 켜진다', (entry) => {
+    renderAt(entry);
+    expect(within(tabBar()).getByRole('button', { name: '분쟁 센터' })).toHaveAttribute('aria-current', 'page');
+    expect(within(tabBar()).getByRole('button', { name: '홈' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('다른 화면에서 [분쟁 센터] 탭을 누르면 임대차 분쟁 센터로 간다', async () => {
+    renderAt('/landlord/disputes/search');
+    await userEvent.click(within(tabBar()).getByRole('button', { name: '분쟁 센터' }));
+    expect(where()).toBe('/landlord/disputes');
+  });
+
+  it('자료 찾기의 결과 탭 줄은 상단 바(h-14)만큼 띄워 스크롤한다', () => {
+    renderAt('/landlord/disputes/search');
+    expect(screen.getByRole('group', { name: '결과 종류' }).closest('.scroll-mt-16')).not.toBeNull();
+  });
+
+  it('사례 상세의 [AI로 내 상황에 적용해 보기]는 AI 상담 입력창에 질문을 채우고, 기록 state 는 비운다', async () => {
+    renderAt('/landlord/disputes/references/ref-case');
+    await userEvent.click(await screen.findByRole('button', { name: /AI로 내 상황에 적용해 보기/ }));
+    expect(where()).toBe('/landlord/disputes/chat');
+    expect(screen.getByLabelText('상담 질문')).toHaveValue(
+      '"퇴거 후 벽지·장판 손상, 원상복구 비용은 어디까지?" 사례가 제 상황에도 해당하는지 알고 싶어요.\n제 상황: ',
+    );
+    expect(api.postDisputeChat).not.toHaveBeenCalled();
+  });
+});
+
+// 첫 화면(/landlord/disputes)은 탭 첫 화면이라 뒤로 가기가 없다(위 '앱 분쟁 화면 틀').
 describe('주소로 바로 들어왔을 때 뒤로 가기', () => {
   it.each([
-    ['/landlord/disputes', '/landlord/home'],
     ['/landlord/disputes/search', '/landlord/disputes'],
     ['/landlord/disputes/references/ref-case', '/landlord/disputes'],
     ['/landlord/disputes/chat', '/landlord/disputes'],

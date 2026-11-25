@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX, Send } from 'lucide-react';
-import { Badge, Button } from '@butler/ui';
+import { Badge, Button, PageSkeleton } from '@butler/ui';
 import { AllHomesTimeline } from '../components/AllHomesTimeline/AllHomesTimeline';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { HouseLogTimeline } from '../components/HouseLogTimeline/HouseLogTimeline';
@@ -21,7 +21,7 @@ import { useHouseLogTimeline } from '../hooks/useHouseLogTimeline';
 import { formatWon, getTodayKST } from '../utils/contract';
 import { buildTodoItems, getHomeRowSummary, groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
-import { ROOM_FILTER_OPTIONS } from '../utils/room';
+import { ROOM_FILTER_OPTIONS } from '../../../shared/room';
 import { formatUnitLabel } from '../utils/unitAddress';
 
 const PAGE_SIZE = 20;
@@ -62,11 +62,7 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
 
   if (error && !data) return <NoticeBox className="m-5">{error.message}</NoticeBox>;
   if (isLoading && !data) {
-    return (
-      <p role="status" className="py-10 text-center text-body text-ink-3">
-        불러오는 중입니다
-      </p>
-    );
+    return <PageSkeleton variant="list" />;
   }
   if (items.length === 0) {
     // 호실만 고른 것은 조건이 아니다(그 집에 기록이 아직 없는 것). 초기화 버튼은 두지 않는다(U-05).
@@ -363,11 +359,7 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
 
   let body;
   if (isDecidingView) {
-    body = (
-      <p role="status" className="py-10 text-center text-body text-ink-3">
-        불러오는 중입니다
-      </p>
-    );
+    body = <PageSkeleton variant="list" />;
   } else if (isHomeSelect) {
     body = (
       <LogHomeSelect

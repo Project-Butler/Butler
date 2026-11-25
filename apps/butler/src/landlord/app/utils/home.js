@@ -1,16 +1,19 @@
 // 앱 홈(M03) 숫자 계산. 웹 대시보드(LandlordDashboard)와 같은 API 응답을 받아 Figma 칸에 맞게 묶는다. 화면 밖에서 테스트할 수 있게 순수 함수로 둔다.
 // 입력이 아직 없으면(불러오는 중·오류) 그 칸은 null 이다 — 0 과 구분해 '—'로 보여 준다.
 import { getRentDueToday } from '../../web/utils/dashboard';
+import { filterActionableTickets, toActivePropertyIds } from '../../web/utils/ticketView';
 
 const sumDeposit = (contracts) => contracts.reduce((sum, contract) => sum + contract.deposit, 0);
 
 // contracts: 시작 전·진행 중 계약 목록({ items }), properties: 내 소유 호실 목록({ items, meta }), ownerships: 활성 소유 관계 목록({ items, meta }).
-export const toHomeSummary = ({ contracts = null, properties = null, ownerships = null, today }) => {
+// openTickets: 확인 필요(접수) 수리 요청 목록(배열, D18). 지금 처리할 수 없는 요청(소유가 끝난 호실)은 할 일에서 뺀다 — 처리 가능 판단은 properties(지금 소유 중인 호실)로.
+export const toHomeSummary = ({ contracts = null, properties = null, ownerships = null, openTickets = [], today }) => {
   // 보증금·계약 수·오늘 할 일은 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다(웹 대시보드와 같음).
   const inProgress = contracts ? contracts.items.filter((contract) => contract.status !== 'UPCOMING') : null;
   const expiring = inProgress ? inProgress.filter((contract) => contract.status === 'EXPIRING_SOON') : [];
   const rentDue = inProgress ? getRentDueToday(inProgress, today) : [];
   const tasks = [
+    ...filterActionableTickets(openTickets, toActivePropertyIds(properties?.items)).map((ticket) => ({ kind: 'ticket', ticket })),
     ...rentDue.map((contract) => ({ kind: 'rent', contract })),
     ...expiring.map((contract) => ({ kind: 'expiring', contract })),
   ];

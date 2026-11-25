@@ -1,5 +1,5 @@
 // 임차인 앱(#109): 항상 앱 화면(PC 에서는 가운데 모바일 폭). 하단 탭은 홈 · 수리 요청 · 내 정보 세 칸이다.
-// 홈은 내 계약 카드(E1), 계약서 화면(E2)은 공유받은 계약서를 보기만 한다. 수리 요청은 티켓 기능 전까지 준비 중.
+// 홈은 내 계약 카드(E1), 계약서 화면(E2)은 공유받은 계약서를 보기만 한다. 수리 요청 화면은 TenantTickets.test.jsx.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -7,10 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_PATH, HOME_PATH, TICKETS_PATH } from '../../src/tenant/routes';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getContractList: vi.fn(),
   getContract: vi.fn(),
   getDocumentList: vi.fn(),
   postDocumentDownloadUrl: vi.fn(),
+  getTicketList: vi.fn(),
+  getNotificationUnreadCount: vi.fn(),
 }));
 vi.mock('@butler/api-client', () => api);
 
@@ -40,6 +43,8 @@ beforeEach(() => {
   api.getContractList.mockResolvedValue({ data: [], meta: {} });
   api.getContract.mockResolvedValue(CONTRACT);
   api.getDocumentList.mockResolvedValue({ data: [], meta: {} });
+  api.getTicketList.mockResolvedValue({ data: [], meta: { total: 0 } });
+  api.getNotificationUnreadCount.mockResolvedValue({ count: 0 });
 });
 
 const renderAt = (path, { onLogout = vi.fn() } = {}) => {
@@ -104,14 +109,15 @@ describe('임차인 앱 틀', () => {
 });
 
 describe('임차인 앱: 준비 중 자리 · 내 정보', () => {
-  it.each(['/tenant/tickets', '/tenant/settings', '/tenant/no-such-page'])('%s 은 앱 셸 안의 "준비 중"이다', (path) => {
+  it.each(['/tenant/settings', '/tenant/no-such-page'])('%s 은 앱 셸 안의 "준비 중"이다', (path) => {
     renderAt(path);
     expect(within(screen.getByRole('main')).getByRole('region', { name: '준비 중' })).toBeInTheDocument();
   });
 
-  it('수리 요청 자리는 [수리 요청] 제목이다', () => {
+  it('수리 요청 탭은 준비 중이 아니라 수리 요청 목록이다', async () => {
     renderAt(TICKETS_PATH);
-    expect(within(screen.getByRole('region', { name: '준비 중' })).getByRole('heading', { name: '수리 요청' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '수리 요청' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
   });
 
   it('내 정보 자리에는 계정 정보와 [로그아웃]이 있고, 누르면 onLogout 이 불린다', async () => {
@@ -138,7 +144,7 @@ describe('임차인 홈(E1)', () => {
     expect(screen.getByRole('heading', { name: '이세입 님, 안녕하세요' })).toBeInTheDocument();
     expect(await screen.findByText('아직 연결된 계약이 없어요')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /수리 요청하기/ }));
-    expect(where()).toBe('/tenant/tickets');
+    expect(where()).toBe('/tenant/tickets/new');
   });
 
   it('계약 카드: 기간 · 상태 · 다음 월세 · 임대인, [계약서 보기]로 계약서 화면', async () => {

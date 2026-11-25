@@ -10,14 +10,16 @@ import { useGetDisputeChatList } from '../hooks/useGetDisputeChatList';
 import { usePostDisputeChat } from '../hooks/usePostDisputeChat';
 import { usePostDisputeChatMessage } from '../hooks/usePostDisputeChatMessage';
 import { getErrorMessage } from '../utils/getErrorMessage';
+import { PageSkeleton } from '@butler/ui';
 
 // AI 분쟁 상담(임대차 분쟁 해결사). 질문하면 서버가 비슷한 조정사례·판례를 검색해서(RAG)
 // 그 자료를 근거로 답한다. QueryClientProvider 안에서 렌더링해야 한다.
 // 입력창은 항상 화면 아래에 둔다. 웹은 화면 높이에 맞춘 틀 안에서 대화만 스크롤하고(AppShell 헤더 h-16 + main p-6 위아래 = 7rem),
 // 앱(isApp, 상단 바 'AI 상담')은 페이지가 스크롤되고 입력창이 아래에 붙는다. 앱에서는 제목이 상단 바와 겹쳐 안쪽 제목과 그 위 한 줄을 숨기고, '법률 자문이 아니에요' 설명만 남긴다.
-export const DisputeChatPage = ({ isApp = false }) => {
+// initialDraft: 사례 상세·상황 안내에서 넘긴 질문. 입력창에 미리 넣기만 하고 보내지는 않는다(경로가 history state 에서 꺼내 준다 — useHistoryDraft).
+export const DisputeChatPage = ({ isApp = false, initialDraft = '' }) => {
   const [selectedChatId, setSelectedChatId] = useState(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(initialDraft);
   // 답변을 기다리는 동안 화면에 먼저 보여줄 질문
   const [pendingQuestion, setPendingQuestion] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -118,7 +120,7 @@ export const DisputeChatPage = ({ isApp = false }) => {
 
         <section className={`${isListOpen ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col gap-3 lg:flex`}>
           <div className={`flex-1 space-y-3 ${isApp ? '' : 'min-h-0 overflow-y-auto'}`} aria-live="polite">
-            {selectedChatId && chat.isLoading && <p className="text-sub text-ink-3">상담 내용을 불러오는 중…</p>}
+            {selectedChatId && chat.isLoading && <PageSkeleton variant="text" rows={4} label="상담 내용을 불러오는 중…" />}
             {!selectedChatId && !isPending && <EmptyChat onPick={ask} disabled={isPending} compact={isApp} />}
 
             {messages.map((message, index) => (

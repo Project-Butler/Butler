@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, FileVideo, Image as ImageIcon } from 'lucide-react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { Modal } from '../Modal/Modal';
 import { isImageDocument, isPdfDocument, isVideoDocument, VIDEO_URL_FRESH_MS } from '../../../../shared/documentViewer/documentFiles';
-import { formatFileSize } from '../../utils/attachment';
+import { formatFileSize } from '../../../../shared/upload/attachment';
 
 // 팝업으로 미리 볼 수 있는 파일: 브라우저가 그리는 사진(JPG·PNG·WEBP·GIF), 동영상(MP4·MOV), PDF. HEIC 등은 새 탭으로 연다.
 export const isPreviewableDocument = (document) => isImageDocument(document) || isVideoDocument(document) || isPdfDocument(document);
@@ -120,7 +120,7 @@ export const DocumentPreviewModal = ({ document, documents, startIndex = 0, urls
         )}
         {/* 팝업 머리·버튼 줄·여백을 뺀 높이(최대 70vh). 1440×900에서도 팝업 안에 스크롤이 생기지 않게 한다. */}
         <div className="flex h-[min(70vh,calc(100vh-17rem))] items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">
-          {!ready && !failed && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+          {!ready && !failed && <PageSkeleton variant="detail" className="w-full p-4" />}
           {failed && <p className="text-body text-ink-3">파일을 열지 못했어요</p>}
           {ready && kind === 'image' &&
             (isActualSize ? (

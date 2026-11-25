@@ -143,6 +143,8 @@ describe('하우스 로그 방·검색', { skip: dbTestSkip }, () => {
     const log = await prisma.propertyLog.findUnique({ where: { id: done.historyLogId } });
     assert.equal(log.type, 'TICKET_SUMMARY');
     assert.equal(log.room, 'BATHROOM');
+    // 바뀐 방이 완료 요약 제목에도 들어간다(임차인이 쓴 요청 제목 대신 중립 문구)
+    assert.equal(log.title, '욕실·화장실 수리 완료');
   });
 
   test('수리 요청 방: 임차인 요청자는 처리가 시작되면 못 바꾼다', async () => {

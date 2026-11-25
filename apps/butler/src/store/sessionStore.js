@@ -4,6 +4,7 @@
 // clearSession 참조가 바뀌면 요청이 무한 반복된다.
 import { create } from 'zustand';
 import { getMe, postLogout } from '@butler/api-client';
+import { queryClient } from '../queryClient';
 
 export const useSessionStore = create((set, get) => ({
   user: null,
@@ -31,7 +32,10 @@ export const useSessionStore = create((set, get) => ({
     get().clearSession();
   },
 
-  clearSession: () => set({ user: null, verifiedLegalDongCodes: [], isRestoring: false }),
+  clearSession: () => {
+    queryClient.clear();
+    set({ user: null, verifiedLegalDongCodes: [], isRestoring: false });
+  },
 
   // 인증 완료·만료가 바로 보이게 법정동 권한을 다시 읽는다. 실패해도 지금 화면을 막지 않는다.
   refreshMe: async () => {

@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Lock } from 'lucide-react';
-import { Badge, Button, Card } from '@butler/ui';
+import { Badge, Button, Card, PageSkeleton } from '@butler/ui';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetActivityList } from '../hooks/useGetActivityList';
@@ -89,11 +89,7 @@ export const SetupPage = ({ onNavigate, onUnauthorized }) => {
           ))}
         </div>
       )}
-      {setup.isLoading && !data && (
-        <p role="status" className="py-6 text-center text-body text-ink-3">
-          불러오는 중입니다
-        </p>
-      )}
+      {setup.isLoading && !data && <PageSkeleton variant="cards" rows={3} />}
 
       <Card className="space-y-3 p-6">
         <h2 className="text-section font-semibold text-ink">최근 활동</h2>

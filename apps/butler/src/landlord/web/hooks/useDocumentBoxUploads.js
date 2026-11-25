@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { postDocument, postUploadSession, putUploadContent } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
-import { allowedFileKinds, checkAttachmentFile, resolveFileMimeType } from '../utils/attachment';
+import { allowedFileKinds, checkAttachmentFile, resolveFileMimeType } from '../../../shared/upload/attachment';
 import { CONTRACT_TARGET, MAX_FILES_PER_BATCH, OWNERSHIP_TARGET } from '../utils/documentBox';
-import { useGetUploadRules } from './useGetUploadRules';
+import { useGetUploadRules } from '../../../shared/upload/useGetUploadRules';
 
 // 문서함이 받는 형식: 내 소유 문서·계약 문서 중 한 곳이라도 받는 묶음(파일은 보관할 곳을 고르기 전에 담을 수 있다).
 // 실제로 그 곳이 받는지는 저장할 때 서버가 세션(targetResourceType)에서 다시 본다.

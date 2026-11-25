@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getContractList: vi.fn(),
   getPropertyList: vi.fn(),
   getPropertyOwnershipList: vi.fn(),
@@ -15,6 +16,7 @@ const api = vi.hoisted(() => ({
   getContract: vi.fn(),
   getManagementLogList: vi.fn(),
   getLatestOwnershipVerification: vi.fn(),
+  getPropertyOwnership: vi.fn(),
   postThread: vi.fn(),
   getThreadList: vi.fn(),
   getPropertyDocumentBox: vi.fn(),
@@ -97,7 +99,7 @@ const renderAt = (entry, onUnauthorized = vi.fn()) => {
 };
 
 beforeEach(() => {
-  Object.values(api).forEach((fn) => fn.mockReset());
+  Object.values(api).filter((fn) => typeof fn === 'function').forEach((fn) => fn.mockReset());
   api.getPropertyList.mockImplementation(({ relation }) => Promise.resolve(page(relation === 'OWNER' ? [PROPERTY, VACANT] : [])));
   api.getContractList.mockResolvedValue(page([CONTRACT]));
   api.getProperty.mockResolvedValue(PROPERTY);
@@ -110,6 +112,7 @@ beforeEach(() => {
   api.getContract.mockResolvedValue(CONTRACT);
   api.getManagementLogList.mockResolvedValue(page([LOG(), LOG({ id: 'l2', occurredOn: '2026-09-03', title: '누수 점검', type: 'INSPECTION', attachments: [], source: { resourceType: 'TICKET' } })]));
   api.getLatestOwnershipVerification.mockResolvedValue({ id: 'a1', ownershipId: 'o1', status: 'VERIFIED', createdAt: '2026-09-02T00:00:00.000Z', finishedAt: '2026-09-02T01:00:00.000Z' });
+  api.getPropertyOwnership.mockResolvedValue({ id: 'o1', verificationStatus: 'VERIFIED', verifiedAt: '2026-09-05T01:00:00.000Z', verificationExpiresAt: '2027-09-05T01:00:00.000Z', isActive: true });
 });
 
 describe('M05 내 자산', () => {
@@ -174,7 +177,7 @@ describe('M06 부동산 상세', () => {
     expect(within(summary).getByText('D-7')).toHaveClass('text-crit-ink');
   });
 
-  it('[기본 정보]: 주소·법정동·동호·면적·등록일, 등기부 대조 카드는 인증 완료일만, 등기 고유번호 없음', async () => {
+  it('[기본 정보]: 주소·법정동·동호·면적·등록일, 건축물대장 대조 카드는 소유 관계 인증일만, 등기 고유번호 없음', async () => {
     renderAt('/landlord/properties/p1');
     const panel = await screen.findByRole('tabpanel');
     // 법정동은 주소 바로 아래 줄이다
@@ -183,10 +186,19 @@ describe('M06 부동산 상세', () => {
     expect(await within(panel).findByText('서울특별시 강남구 역삼동')).toBeInTheDocument();
     expect(within(panel).getByText('101동 101호')).toBeInTheDocument();
     expect(within(panel).getByText('2026-09-02')).toBeInTheDocument();
-    const sealed = await within(panel).findByRole('region', { name: '등기부 대조 완료' });
-    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-02');
+    const sealed = await within(panel).findByRole('region', { name: '건축물대장 대조 완료' });
+    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-05');
     expect(sealed).not.toHaveTextContent('SHA-256');
     expect(screen.queryByText(/고유번호/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/등기부 대조/)).not.toBeInTheDocument();
+  });
+
+  it('[기본 정보] 인증 시도 기록 없이 인증된 호실(운영자 처리·시드)도 대조 카드를 보여 준다', async () => {
+    api.getLatestOwnershipVerification.mockResolvedValue(null);
+    renderAt('/landlord/properties/p1');
+    const panel = await screen.findByRole('tabpanel');
+    const sealed = await within(panel).findByRole('region', { name: '건축물대장 대조 완료' });
+    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-05');
   });
 
   it('[기본 정보]의 임차인 대화 버튼은 지금 계약으로 대화를 연다', async () => {

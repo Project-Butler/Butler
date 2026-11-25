@@ -23,8 +23,8 @@ const OptionCheck = ({ label, checked, onToggle }) => (
   </button>
 );
 
-// 왼쪽 회색 이름 칸 + 오른쪽 고를 것.
-const FilterRow = ({ label, children }) => (
+// 왼쪽 회색 이름 칸 + 오른쪽 고를 것. 수리 요청 거르기 카드도 같은 줄을 쓴다.
+export const FilterRow = ({ label, children }) => (
   <div className="grid grid-cols-[132px_1fr] border-b border-line last:border-b-0">
     <div className="flex items-center bg-surface-2 px-5 py-3 text-card-sm font-semibold text-ink">{label}</div>
     <div className="flex min-w-0 flex-wrap items-center gap-2 px-4 py-2">{children}</div>
@@ -32,7 +32,7 @@ const FilterRow = ({ label, children }) => (
 );
 
 // 체크 줄: 맨 앞 '전체' + options. 아무것도 안 고르면 '전체'에 체크, '전체'를 누르면 그 줄이 풀린다.
-const CheckRow = ({ label, options, values, onChange }) => {
+export const CheckRow = ({ label, options, values, onChange }) => {
   const toggle = (value) => onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
   return (
     <FilterRow label={label}>

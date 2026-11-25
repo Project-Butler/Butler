@@ -56,16 +56,6 @@ export const isToggleOn = (mutedTypes, types) => types.every((type) => !mutedTyp
 export const setToggle = (mutedTypes, types, on) =>
   on ? mutedTypes.filter((type) => !types.includes(type)) : [...mutedTypes.filter((type) => !types.includes(type)), ...types];
 
-// 알림 시각: 1분 안 '방금', 1시간 안 'n분 전', 하루 안 'n시간 전', 그 밖은 'M월 D일'(KST)
-export const formatNotificationTime = (createdAt, now = new Date()) => {
-  const diffMinutes = Math.floor((now.getTime() - new Date(createdAt).getTime()) / 60000);
-  if (diffMinutes < 1) return '방금';
-  if (diffMinutes < 60) return `${diffMinutes}분 전`;
-  if (diffMinutes < 60 * 24) return `${Math.floor(diffMinutes / 60)}시간 전`;
-  const kst = new Date(new Date(createdAt).getTime() + 9 * 3600000);
-  return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
-};
-
 // 알림 link('/contracts/:id')는 역할 접두어 없는 앱 경로다. 임대인 화면 주소로 바꾼다. 앱 밖 주소·'//'는 열지 않는다(null).
 export const toLandlordPath = (link) => {
   if (typeof link !== 'string' || !link.startsWith('/') || link.startsWith('//')) return null;

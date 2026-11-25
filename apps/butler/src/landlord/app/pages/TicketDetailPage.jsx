@@ -7,7 +7,7 @@ import { isVideoDocument } from '../../../shared/documentViewer/documentFiles';
 import { useDocumentUrls } from '../../../shared/documentViewer/useDocumentUrls';
 import { DocumentThumbnail } from '../../web/components/DocumentThumbnail/DocumentThumbnail';
 import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
-import { formatAttachmentCount } from '../../web/utils/attachment';
+import { formatAttachmentCount } from '../../../shared/upload/attachment';
 import { useGetTicket } from '../../web/hooks/useGetTicket';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { usePatchTicket } from '../../web/hooks/usePatchTicket';
@@ -21,7 +21,7 @@ import {
   getTicketStatusBadge,
   toCompleteBody,
   toTicketRows,
-} from '../utils/ticketView';
+} from '../../web/utils/ticketView';
 
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
 const TEXTAREA_CLASS =

@@ -1,10 +1,10 @@
 import { Badge } from '@butler/ui';
 import { TriangleAlert } from 'lucide-react';
-import { getTicketStatusBadge } from '../../../app/utils/ticketView';
+import { getTicketStatusBadge } from '../../utils/ticketView';
 import { useGetTicketList } from '../../hooks/useGetTicketList';
 import { formatDateKST } from '../../utils/format';
 import { UNVERIFIED_LOG_WARNING } from '../../utils/managementLog';
-import { getRoomLabel } from '../../utils/room';
+import { getRoomLabel } from '../../../shared/room';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
 const IN_PROGRESS_STATUS = 'OPEN,IN_PROGRESS';

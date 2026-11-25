@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Badge, Button } from '@butler/ui';
+import { Badge, Button, PageSkeleton } from '@butler/ui';
 import {
   CalendarClock,
   CalendarDays,
@@ -141,7 +141,7 @@ const PastContractRow = ({ contract, defaultOpen, onUnauthorized }) => {
       {isOpen && (
         <dl className="mb-3 ml-7 grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-input bg-surface-2 p-4 text-sub">
           {detail.error && <NoticeBox className="col-span-2">{detail.error.message}</NoticeBox>}
-          {!full && !detail.error && <p className="col-span-2 text-ink-3">불러오는 중입니다</p>}
+          {!full && !detail.error && <PageSkeleton variant="text" rows={2} className="col-span-2" />}
           {full && (
             <>
               <dt className="text-ink-3">연락처</dt>
@@ -265,7 +265,7 @@ export const PropertyContractArea = ({
       </div>
       {currentList.error && <NoticeBox className="mx-5 mb-4">{currentList.error.message}</NoticeBox>}
       {currentQuery.error && <NoticeBox className="mx-5 mb-4">{currentQuery.error.message}</NoticeBox>}
-      {isLoading && <p className="px-5 pb-5 text-body text-ink-3">불러오는 중입니다</p>}
+      {isLoading && <PageSkeleton variant="text" rows={3} className="px-5 pb-5" />}
 
       {!isLoading && !contract && currentList.data && (
         <div className="mx-5 mb-5 flex items-center gap-4 rounded-input bg-surface-2 p-5">
