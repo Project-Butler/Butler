@@ -153,6 +153,24 @@ test('parseRunnerResult: 허용한 모양만 받는다', () => {
   }
 });
 
+test('parseRunnerResult: unit(전유부 면적·층)은 보냈을 때만 받고, 범위 밖 값은 그 칸만 null', () => {
+  const base = { kind: 'OK', ledgerKind: 'UNIT_EXCLUSIVE', owners: [] };
+  assert.deepEqual(parseRunnerResult({ ...base, unit: { exclusiveArea: '84.97', floor: 5 } }).unit, { exclusiveArea: '84.97', floor: 5 });
+  assert.deepEqual(parseRunnerResult({ ...base, unit: { floor: -1 } }).unit, { exclusiveArea: null, floor: -1 });
+  assert.equal('unit' in parseRunnerResult(base), false);
+  assert.equal('unit' in parseRunnerResult({ ...base, unit: null }), false);
+  for (const [unit, expected] of [
+    [{ exclusiveArea: '84.975', floor: 0 }, { exclusiveArea: null, floor: null }],
+    [{ exclusiveArea: '0', floor: 201 }, { exclusiveArea: null, floor: null }],
+    [{ exclusiveArea: '1000000', floor: -11 }, { exclusiveArea: null, floor: null }],
+  ]) {
+    assert.deepEqual(parseRunnerResult({ ...base, unit }).unit, expected);
+  }
+  for (const unit of ['x', [], { exclusiveArea: 84.97 }, { floor: '5' }, { floor: 1.5 }, { exclusiveArea: '84', areaText: '84' }]) {
+    assert.equal(parseRunnerResult({ ...base, unit }), null);
+  }
+});
+
 test('유효기간: 1 이상 정수, 저장값이 잘못되면 null', () => {
   assert.equal(parseValidityYears('3'), 3);
   assert.equal(parseValidityYears(1), 1);

@@ -74,7 +74,8 @@ export const receiveRunnerResult = async (attemptId, result, deps = {}) => {
     const judged = matchOwner(identity, result.owners);
     if (judged !== 'VERIFIED') return { accepted: await failRunningAttempt(attemptId, judged, extra) };
 
-    const applied = await applyOwnershipVerification({ attemptId, ledgerKind, ownerCount }, deps);
+    // 전유부면 대장의 전용면적·층(result.unit)으로 호실 값을 덮어쓴다(인증에 성공했을 때만).
+    const applied = await applyOwnershipVerification({ attemptId, ledgerKind, ownerCount, unit: result.unit ?? null }, deps);
     return { accepted: applied.outcome !== 'IGNORED' };
   } catch (error) {
     logFailure('결과 반영 실패', attemptId, error);

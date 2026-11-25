@@ -121,10 +121,32 @@ const MAX_RUNNER_OWNERS = 10;
 const MAX_OWNER_NAME_LENGTH = 100;
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+// 대장(전유부)에서 읽은 호실 값의 범위. 호실 입력 검사(domains/properties/controller.js)와 같다.
+const LEDGER_AREA_PATTERN = /^\d+(\.\d{1,2})?$/;
+const MAX_LEDGER_AREA = 999999.99; // Decimal(8,2)
+const MIN_LEDGER_FLOOR = -10;
+const MAX_LEDGER_FLOOR = 200;
+
+// 결과의 unit(전유부 전용면적·층, 2026-11-26) 검사. 없으면 undefined, 모양(타입)이 틀리면 null.
+// 값이 범위를 벗어나면 그 칸만 null로 바꾼다(호실 값 때문에 인증까지 버리지 않는다).
+const parseLedgerUnit = (unit) => {
+  if (unit === undefined || unit === null) return undefined;
+  if (!isPlainObject(unit) || Object.keys(unit).some((key) => key !== 'exclusiveArea' && key !== 'floor')) return null;
+  const { exclusiveArea = null, floor = null } = unit;
+  if (exclusiveArea !== null && typeof exclusiveArea !== 'string') return null;
+  if (floor !== null && !Number.isInteger(floor)) return null;
+  const areaOk = exclusiveArea !== null && LEDGER_AREA_PATTERN.test(exclusiveArea) && Number(exclusiveArea) > 0 && Number(exclusiveArea) <= MAX_LEDGER_AREA;
+  const floorOk = floor !== null && floor !== 0 && floor >= MIN_LEDGER_FLOOR && floor <= MAX_LEDGER_FLOOR;
+  return { exclusiveArea: areaOk ? exclusiveArea : null, floor: floorOk ? floor : null };
+};
+
 // 실행 서버가 보낸 결과 검사. 모양이 틀리면 null(값을 오류에 담지 않는다). 허용한 칸만 돌려준다.
+// unit은 보냈을 때만 돌려준다({ exclusiveArea(문자열|null), floor(정수|null) }).
 export const parseRunnerResult = (body) => {
   if (!isPlainObject(body)) return null;
   const { kind, ledgerKind = null, owners = [] } = body;
+  const unit = parseLedgerUnit(body.unit);
+  if (unit === null) return null;
   if (kind !== 'OK' && !RUNNER_FAILURE_KINDS.includes(kind)) return null;
   if (ledgerKind !== null && !LEDGER_KINDS.includes(ledgerKind)) return null;
   if (!Array.isArray(owners) || owners.length > MAX_RUNNER_OWNERS) return null;
@@ -137,7 +159,7 @@ export const parseRunnerResult = (body) => {
     if (birthDate !== null && (typeof birthDate !== 'string' || !BIRTH_DATE_PATTERN.test(birthDate))) return null;
     parsed.push({ name, birthDate });
   }
-  return { kind, ledgerKind, owners: parsed };
+  return unit ? { kind, ledgerKind, owners: parsed, unit } : { kind, ledgerKind, owners: parsed };
 };
 
 // 저장값(문자열)·입력값(숫자) 공용. 1 이상 정수가 아니면 null.
