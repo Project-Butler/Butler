@@ -16,11 +16,14 @@ import { COMMUNITY_PATH } from '../../web/routes';
 import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../../web/utils/contract';
 import { formatDateKST } from '../../web/utils/format';
 import { getLogTypeLabel } from '../../web/utils/managementLog';
-import { formatUnitLabel } from '../../web/utils/unitAddress';
 import { getPropertyStatusBadge } from '../../web/utils/unitListing';
 import { getVerificationBadge } from '../../web/utils/verificationBadge';
 import { AppTabShell } from '../components/AppTabShell/AppTabShell';
+import { ListingCard } from '../components/ListingCard/ListingCard';
 import { MoreMenu } from '../components/MoreMenu/MoreMenu';
+import { OwnershipInfoCard } from '../components/OwnershipInfoCard/OwnershipInfoCard';
+import { PropertyInfoCard } from '../components/PropertyInfoCard/PropertyInfoCard';
+import { OwnershipEndSheet } from '../components/OwnershipEndSheet/OwnershipEndSheet';
 import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
 import { VerificationCard } from '../components/VerificationCard/VerificationCard';
@@ -53,13 +56,6 @@ const Stat = ({ label, value, tone }) => (
   <div className="flex min-w-0 flex-1 flex-col gap-1">
     <span className="text-m-sub text-ink-3">{label}</span>
     <span className={`font-num text-num-lg font-bold tabular-nums ${tone === 'danger' ? 'text-crit-ink' : 'text-ink'}`}>{value}</span>
-  </div>
-);
-
-const InfoRow = ({ label, value, numeric = false }) => (
-  <div className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-b-0">
-    <dt className="shrink-0 text-m-label text-ink-3">{label}</dt>
-    <dd className={`min-w-0 text-right text-body text-ink ${numeric ? 'font-num tabular-nums' : ''}`}>{value ?? '—'}</dd>
   </div>
 );
 
@@ -101,18 +97,15 @@ const TenantChatButton = ({ contract, isOpening, error, onOpen, onInvite }) => {
 
 // [기본 정보] 권리자 인증은 건축물대장의 소유자와 대조한다(등기부는 대조하지 않는다).
 // 대조 카드 날짜는 소유 관계의 인증일(verifiedAt)을 쓴다. 인증 시도 없이 인증된 호실(운영자 처리·시드)도 보이게 웹과 맞춘다.
-const InfoTab = ({ property, complex, ownership, chat, onCommunity }) => {
+// ownershipCards: 기본 정보 카드 아래에 두는 임대 조건·내 소유 정보 카드(내 소유 관계가 있을 때). 대조 카드는 지금 소유 중일 때만 보인다.
+// 호실 정보 카드(면적·층 수정)는 저장하면 onPropertySaved 로 호실을 다시 읽는다.
+const InfoTab = ({ property, complex, ownership, ownershipCards, chat, onCommunity, onPropertySaved, onUnauthorized }) => {
   const isVerified = property.myRelation?.verificationStatus === 'VERIFIED';
-  const verifiedOn = ownership?.verificationStatus === 'VERIFIED' ? formatDateKST(ownership.verifiedAt) : null;
+  const verifiedOn = ownership?.isActive && ownership.verificationStatus === 'VERIFIED' ? formatDateKST(ownership.verifiedAt) : null;
   return (
     <div className="flex flex-col gap-3">
-      <dl className={`${CARD_CLASS} px-4`}>
-        <InfoRow label="주소" value={complex?.roadAddress ?? complex?.jibunAddress ?? property.complex.roadAddress} />
-        <InfoRow label="법정동" value={complex?.region?.fullName} />
-        <InfoRow label="동·호" value={formatUnitLabel(property.buildingNo, property.unitNo)} />
-        <InfoRow label="전용면적" value={property.exclusiveArea != null ? `${property.exclusiveArea}m²` : null} numeric />
-        <InfoRow label="등록일" value={formatDateKST(property.createdAt)} numeric />
-      </dl>
+      <PropertyInfoCard property={property} complex={complex} onSaved={onPropertySaved} onUnauthorized={onUnauthorized} />
+      {ownershipCards}
       {isVerified && verifiedOn && (
         <section aria-label="건축물대장 대조 완료" className="rounded-card border border-seal bg-seal-box px-4 py-3.5">
           <h3 className="text-m-label font-semibold text-seal-ink">건축물대장 대조 완료</h3>
@@ -242,13 +235,16 @@ const DocumentsTab = ({ propertyId, onOpenBox, onUnauthorized }) => {
   );
 };
 
-// 임대인 앱 부동산 상세 (Figma M06). 웹 호실 상세와 같은 API를 쓰고, 수정·소유 종료처럼 폼이 필요한 동작은 웹 상세에서 한다.
+// 임대인 앱 부동산 상세 (Figma M06). 웹 호실 상세와 같은 API를 쓴다. 호실 정보(면적·층)·임대 조건·내 소유 정보는
+// [기본 정보]의 카드에서 하단 시트로 고친다.
 // 권리자 인증 카드(VerificationCard)는 요약 카드 아래에 둔다. 인증을 마치면 onVerified 로 내 정보(커뮤니티 권한)를 다시 읽는다.
+// 호실 삭제(소유 종료)는 지금 소유 중일 때 ⋯ 메뉴 맨 아래에서 확인 시트로 하고, 끝나면 웹처럼 이전 화면으로 돌아간다.
 export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerified, onUnauthorized }) => {
   const navigate = useNavigate();
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
   const [tab, setTab] = useState('info');
+  const [isEndSheetOpen, setIsEndSheetOpen] = useState(false);
 
   const hookOptions = { onUnauthorized };
   const propertyQuery = useGetProperty(propertyId, hookOptions);
@@ -256,7 +252,9 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipId = property?.myRelation?.ownershipId;
   const activeOwnershipId = property?.myRelation?.type === 'OWNER' ? ownershipId : undefined;
-  const ownershipQuery = useGetPropertyOwnership(activeOwnershipId, hookOptions);
+  // 내 소유 관계는 끝난 것(예전 소유)도 불러온다. 임대 조건·내 소유 정보 카드를 웹처럼 조회만 되게 보여 준다.
+  // 권리자 인증 카드·진행 상태·지금 계약·호실 삭제는 지금 소유 중(activeOwnershipId)일 때만이다.
+  const ownershipQuery = useGetPropertyOwnership(ownershipId, hookOptions);
   const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, hookOptions);
   const { refetch: refetchProperty } = propertyQuery;
   const { refetch: refetchOwnership } = ownershipQuery;
@@ -301,6 +299,9 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
     label,
     onSelect: () => goTo(target.key, target.params),
   }));
+  if (activeOwnershipId) {
+    menuItems.push({ key: 'end', label: '호실 삭제', tone: 'danger', onSelect: () => setIsEndSheetOpen(true) });
+  }
 
   // current: 지금 계약 조회 결과(소유 중이 아니면 null). 요약 숫자와 [기본 정보]의 임차인 대화 버튼이 같이 쓴다.
   // 조회 래퍼는 AppTabShell 안쪽에 둔다(바깥에 두면 로딩이 끝날 때 상단 바까지 새로 그려진다).
@@ -326,7 +327,7 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
           <SummaryStats contract={currentContract} />
         </section>
 
-        {ownershipQuery.data && (
+        {activeOwnershipId && ownershipQuery.data && (
           <VerificationCard
             ownership={ownershipQuery.data}
             attempt={latestAttempt.data}
@@ -345,6 +346,16 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
               property={property}
               complex={complexQuery.data}
               ownership={ownershipQuery.data}
+              onPropertySaved={refetchProperty}
+              onUnauthorized={onUnauthorized}
+              ownershipCards={
+                ownershipQuery.data && (
+                  <>
+                    <ListingCard ownership={ownershipQuery.data} onSaved={refetchOwnership} onUnauthorized={onUnauthorized} />
+                    <OwnershipInfoCard ownership={ownershipQuery.data} onSaved={refetchOwnership} onUnauthorized={onUnauthorized} />
+                  </>
+                )
+              }
               chat={
                 <TenantChatButton
                   contract={currentContract}
@@ -395,6 +406,14 @@ export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerif
         </CurrentContractLoader>
       ) : (
         renderContent(null)
+      )}
+      {isEndSheetOpen && activeOwnershipId && (
+        <OwnershipEndSheet
+          ownershipId={activeOwnershipId}
+          onEnded={goBack}
+          onClose={() => setIsEndSheetOpen(false)}
+          onUnauthorized={onUnauthorized}
+        />
       )}
     </AppTabShell>
   );

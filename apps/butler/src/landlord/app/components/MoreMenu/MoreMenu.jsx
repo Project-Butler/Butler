@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ellipsis } from 'lucide-react';
 
-// 상단 바 오른쪽 ⋯ 더보기. items: [{ key, label, onSelect }]. 항목이 없으면 버튼을 두지 않는다.
+// 상단 바 오른쪽 ⋯ 더보기. items: [{ key, label, onSelect, tone? }]. 항목이 없으면 버튼을 두지 않는다.
+// tone 'danger'(호실 삭제처럼 되돌릴 수 없는 동작)는 빨간 글자이고 위에 구분선을 둔다. 맨 아래에 놓는다.
 // 바깥을 누르거나 Esc 를 누르면 닫힌다.
 export const MoreMenu = ({ items, label = '더보기' }) => {
   const [open, setOpen] = useState(false);
@@ -40,7 +41,7 @@ export const MoreMenu = ({ items, label = '더보기' }) => {
       {open && (
         <ul role="menu" aria-label={label} className="absolute right-0 top-full z-20 min-w-40 rounded-input border border-line bg-surface py-1 shadow-md">
           {items.map((item) => (
-            <li key={item.key} role="none">
+            <li key={item.key} role="none" className={item.tone === 'danger' ? 'mt-1 border-t border-line pt-1' : undefined}>
               <button
                 type="button"
                 role="menuitem"
@@ -48,7 +49,7 @@ export const MoreMenu = ({ items, label = '더보기' }) => {
                   setOpen(false);
                   item.onSelect();
                 }}
-                className="block w-full px-4 py-2.5 text-left text-body text-ink hover:bg-surface-2"
+                className={`block w-full px-4 py-2.5 text-left text-body hover:bg-surface-2 ${item.tone === 'danger' ? 'text-crit-ink' : 'text-ink'}`}
               >
                 {item.label}
               </button>
