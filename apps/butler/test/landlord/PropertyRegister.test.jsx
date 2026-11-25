@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   postProperty: vi.fn(),
   getContractList: vi.fn(),
   getPropertyList: vi.fn(),

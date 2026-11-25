@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PropertyDocumentBoxCard } from '../../src/landlord/web/components/PropertyDocumentBoxCard/PropertyDocumentBoxCard';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getPropertyDocumentBox: vi.fn(),
   postUploadSession: vi.fn(),
   putUploadContent: vi.fn(),

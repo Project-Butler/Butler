@@ -42,6 +42,18 @@ export const queryKey = {
   TENANT_INVITATION_CONTRACT: 'tenant_invitation_contract',
   NOTIFICATIONS: 'notifications',
   NOTIFICATION_UNREAD_COUNT: 'notification_unread_count',
+  ACTIVITIES: 'activities',
+  LANDLORD_SETUP: 'landlord_setup',
+  COMPLEX_DETAIL: 'complex',
+  CONTRACTS: 'contracts',
+  CONTRACT_DETAIL: 'contract',
+  CONTRACT_DOCUMENTS: 'contract_documents',
+  CONTRACT_THREAD: 'contract_thread',
+  MANAGEMENT_LOGS: 'management_logs',
+  MANAGEMENT_LOG_DETAIL: 'management_log',
+  PROPERTY_DOCUMENT_BOX: 'property_document_box',
+  PROPERTIES_ALL: 'properties_all',
+  OWNERSHIP_RENEWAL_NOTICES: 'ownership_renewal_notices',
   // 시세(국토교통부 실거래가, GET /market-prices/…). 커뮤니티 시세 · 브리핑이 쓴다
   MARKET_PRICES: 'market_prices',
 };

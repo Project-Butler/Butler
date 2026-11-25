@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { Phone, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Modal } from '../Modal/Modal';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
@@ -93,7 +93,7 @@ export const VerifyModal = ({ propertyName, ownership, isNotOwner, latest, notic
   if (isNotOwner) {
     view = { icon: Shield, tone: 'mute', body: <NoticeBox>지금 소유 중인 호실만 인증할 수 있어요.</NoticeBox>, footer: closeButton() };
   } else if (!ownership || (latest.isLoading && !latest.data)) {
-    view = { icon: Shield, tone: 'seal', body: <p className="py-6 text-center text-body text-ink-3">불러오는 중입니다</p>, footer: closeButton() };
+    view = { icon: Shield, tone: 'seal', body: <PageSkeleton variant="text" rows={3} />, footer: closeButton() };
   } else if (isRunning) {
     view = {
       icon: Shield,

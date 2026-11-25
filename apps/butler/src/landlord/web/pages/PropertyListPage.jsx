@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Archive, Plus } from 'lucide-react';
-import { Badge, Button } from '@butler/ui';
+import { Badge, Button, PageSkeleton } from '@butler/ui';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { IconTile } from '../components/IconTile/IconTile';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
@@ -23,11 +23,7 @@ const FormerOwnerTable = ({ onNavigate, onUnauthorized, onTotal }) => {
 
   if (error && !data) return <NoticeBox>{error.message}</NoticeBox>;
   if (isLoading && !data) {
-    return (
-      <p role="status" className="py-10 text-center text-body text-ink-3">
-        불러오는 중입니다
-      </p>
-    );
+    return <PageSkeleton variant="list" />;
   }
 
   return (

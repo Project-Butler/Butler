@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Building2, Plus } from 'lucide-react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { IconTile } from '../components/IconTile/IconTile';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
@@ -68,11 +68,7 @@ export const BuildingListPage = ({ params, onNavigate, onUnauthorized }) => {
 
       {params.notice && <NoticeBox tone="info">{params.notice}</NoticeBox>}
       {units.error && !isReady && <NoticeBox>{units.error.message}</NoticeBox>}
-      {!units.error && !isReady && (
-        <p role="status" className="py-10 text-center text-body text-ink-3">
-          불러오는 중입니다
-        </p>
-      )}
+      {!units.error && !isReady && <PageSkeleton variant="cards" rows={6} />}
 
       {isReady && unitItems.length === 0 && (
         <div className="rounded-card border border-line bg-surface">

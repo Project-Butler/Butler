@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, FileText } from 'lucide-react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { Modal } from '../Modal/Modal';
 import { DocumentViewer } from '../../../../shared/documentViewer/DocumentViewer';
 import { isImageDocument, isPdfDocument } from '../../../../shared/documentViewer/documentFiles';
@@ -60,7 +60,7 @@ export const DocumentPreviewModal = ({ document, urls, onClose }) => {
         </>
       }
     >
-      {preview.status === 'loading' && <p className="py-16 text-center text-body text-ink-3">불러오는 중입니다</p>}
+      {preview.status === 'loading' && <PageSkeleton variant="detail" className="py-4" />}
       {preview.status === 'error' && <p className="py-16 text-center text-body text-ink-3">파일을 열지 못했어요</p>}
       {preview.status === 'ready' && (
         <iframe title={`${document.fileName} 미리보기`} src={preview.url} className="h-[70vh] w-full rounded-input border border-line bg-surface-2" />

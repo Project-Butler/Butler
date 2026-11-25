@@ -28,7 +28,9 @@ import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
 import { useApplyDisplaySettings } from './hooks/useDisplaySettings';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
-import { buildLocation, HOME_PATH, resolveViewKey } from './routes';
+import { ReadyGate } from './components/ReadyGate/ReadyGate';
+import { buildLocation, HOME_PATH, resolvePageGroup, resolveViewKey } from './routes';
+import { PageSkeleton } from '@butler/ui';
 
 // 화면 전환은 react-router로 하고, 경로 표는 routes.js에 있다. 이 컴포넌트는 앱의 /landlord/* 아래에 놓인다(주소 접두어는 routes.js).
 // 화면 컴포넌트는 그대로 onNavigate(key, params, { replace })로 이동한다. navigate가 key를 경로로 바꿔 준다.
@@ -177,11 +179,7 @@ const ContractDetailRoute = ({ onNavigate, onUnauthorized }) => {
     if (propertyId) onNavigate('propertyDetail', { propertyId, contractId }, { replace: true });
   }, [propertyId, contractId, onNavigate]);
   if (contractQuery.error) return <NoticeBox>{contractQuery.error.message}</NoticeBox>;
-  return (
-    <p role="status" className="py-10 text-center text-body text-ink-3">
-      불러오는 중입니다
-    </p>
-  );
+  return <PageSkeleton variant="detail" />;
 };
 
 // 임차인 초대 주소(/contracts/:id/invite, 앱 M15)는 웹에선 그 계약의 호실 상세로 보내 초대 팝업(A1)을 띄운다.
@@ -193,11 +191,7 @@ const ContractInviteRoute = ({ onNavigate, onUnauthorized }) => {
     if (propertyId) onNavigate('propertyDetail', { propertyId, inviteContractId: contractId }, { replace: true });
   }, [propertyId, contractId, onNavigate]);
   if (contractQuery.error) return <NoticeBox>{contractQuery.error.message}</NoticeBox>;
-  return (
-    <p role="status" className="py-10 text-center text-body text-ink-3">
-      불러오는 중입니다
-    </p>
-  );
+  return <PageSkeleton variant="detail" />;
 };
 
 // 서류함: 고른 호실은 주소(?propertyId)에 남는다. 없거나 내 호실이 아니면 화면이 첫 호실로 바꾼다.
@@ -283,40 +277,42 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
       subTitle={SUB_TITLE_BY_VIEW[viewKey]}
       onNavigate={navigate}
     >
-      <Routes>
-        <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
-        <Route path="/home" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
-        <Route path="/buildings" element={<BuildingListRoute {...pageProps} />} />
-        <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
-        <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
-        <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
-        <Route path="/properties/:propertyId/verify" element={<PropertyDetailRoute isVerifyOpen {...pageProps} />} />
-        <Route path="/support/inquiry" element={<SupportInquiryPage />} />
-        <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
-        <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
-        <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
-        <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
-        <Route path="/contracts/:contractId/invite" element={<ContractInviteRoute {...pageProps} />} />
-        <Route path="/logs" element={<ManagementLogListRoute {...pageProps} />} />
-        <Route path="/logs/new" element={<ManagementLogListRoute modalMode="create" {...pageProps} />} />
-        <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />
-        <Route path="/logs/:logId/edit" element={<ManagementLogListRoute modalMode="edit" {...pageProps} />} />
-        <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
-        <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
-        <Route path="/setup" element={<SetupPage {...pageProps} />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
-        <Route path="/disputes/chat" element={<DisputeChatPage />} />
-        <Route path="/disputes" element={<DisputePage {...pageProps} />}>
-          <Route index element={<DisputeHomePage />} />
-          <Route path="search" element={<DisputeSearchPage />} />
-          <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
-          <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
-        </Route>
-        <Route path="/community/*" element={<CommunityPage {...pageProps} />} />
-        {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
-        <Route path="*" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
-      </Routes>
+      <ReadyGate location={location} group={resolvePageGroup(location.pathname)}>
+        <Routes>
+          <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
+          <Route path="/home" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
+          <Route path="/buildings" element={<BuildingListRoute {...pageProps} />} />
+          <Route path="/properties" element={<PropertyListRoute {...pageProps} />} />
+          <Route path="/properties/new" element={<PropertyRegisterPage {...pageProps} />} />
+          <Route path="/properties/:propertyId" element={<PropertyDetailRoute {...pageProps} />} />
+          <Route path="/properties/:propertyId/verify" element={<PropertyDetailRoute isVerifyOpen {...pageProps} />} />
+          <Route path="/support/inquiry" element={<SupportInquiryPage />} />
+          <Route path="/contracts" element={<ContractListPage {...pageProps} />} />
+          <Route path="/contracts/new" element={<ContractRegisterRoute {...pageProps} />} />
+          <Route path="/contracts/:contractId" element={<ContractDetailRoute {...pageProps} />} />
+          <Route path="/contracts/:contractId/edit" element={<ContractEditRoute {...pageProps} />} />
+          <Route path="/contracts/:contractId/invite" element={<ContractInviteRoute {...pageProps} />} />
+          <Route path="/logs" element={<ManagementLogListRoute {...pageProps} />} />
+          <Route path="/logs/new" element={<ManagementLogListRoute modalMode="create" {...pageProps} />} />
+          <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />
+          <Route path="/logs/:logId/edit" element={<ManagementLogListRoute modalMode="edit" {...pageProps} />} />
+          <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
+          <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
+          <Route path="/setup" element={<SetupPage {...pageProps} />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
+          <Route path="/disputes/chat" element={<DisputeChatPage />} />
+          <Route path="/disputes" element={<DisputePage {...pageProps} />}>
+            <Route index element={<DisputeHomePage />} />
+            <Route path="search" element={<DisputeSearchPage />} />
+            <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
+            <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
+          </Route>
+          <Route path="/community/*" element={<CommunityPage {...pageProps} />} />
+          {/* 아직 화면이 없는 메뉴는 대시보드를 보여 준다(자리). */}
+          <Route path="*" element={<LandlordDashboard userName={user.name} {...pageProps} />} />
+        </Routes>
+      </ReadyGate>
     </LayoutWithBadges>
   );
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { FileSignature, FolderOpen, ShieldCheck } from 'lucide-react';
 import { useGetPropertyDocumentBox } from '../../hooks/useGetPropertyDocumentBox';
 import { getUploadTargets, hasUploadTarget, splitContracts, summarizeDocuments } from '../../utils/documentBox';
@@ -65,7 +65,7 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
         </span>
       </div>
       {error && <NoticeBox>{error.message}</NoticeBox>}
-      {isLoading && !box && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+      {isLoading && !box && <PageSkeleton variant="text" rows={3} />}
       {needsVerification && <p className="text-sub text-ink-3">권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요</p>}
       {box && (
         <div className="grid grid-cols-2 gap-3">

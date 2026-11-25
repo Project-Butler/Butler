@@ -1,7 +1,8 @@
 // 세션 스토어(zustand): user, verifiedLegalDongCodes, login, logout, clearSession
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const api = vi.hoisted(() => ({ getMe: vi.fn(), postLogout: vi.fn() }));
+const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }), getMe: vi.fn(), postLogout: vi.fn() }));
 vi.mock('@butler/api-client', () => api);
 
 const { useSessionStore } = await import('../../src/store/sessionStore');

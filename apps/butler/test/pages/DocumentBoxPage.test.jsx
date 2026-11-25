@@ -5,6 +5,7 @@ import { DocumentBoxPage } from '../../src/landlord/web/pages/DocumentBoxPage';
 import { isPreviewableDocument } from '../../src/landlord/web/components/DocumentPreviewModal/DocumentPreviewModal';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getPropertyList: vi.fn(),
   getPropertyDocumentBox: vi.fn(),
   postDocumentDownloadUrl: vi.fn(),

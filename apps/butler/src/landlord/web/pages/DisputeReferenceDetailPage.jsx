@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import { Bot, ChevronRight, ExternalLink, FileText } from 'lucide-react';
-import { Badge, Button } from '@butler/ui';
+import { Badge, Button, PageSkeleton } from '@butler/ui';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetDisputeReference } from '../hooks/useGetDisputeReference';
@@ -45,7 +45,7 @@ export const DisputeReferenceDetailPage = () => {
     <div className="flex flex-col gap-4">
       <PageHeader title="사례 상세" onBack={goBack} />
 
-      {detail.isLoading && <p className="py-6 text-center text-body text-ink-3">자료를 불러오는 중…</p>}
+      {detail.isLoading && <PageSkeleton variant="detail" label="자료를 불러오는 중…" />}
 
       {detail.error && !isUnauthorizedError(detail.error) && (
         <p role="alert" className="rounded-card border border-crit bg-crit-soft px-4 py-3 text-body text-crit-ink">

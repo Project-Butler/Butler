@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { formatShortDateTime } from '../../utils/formatDateTime';
 
 // pendingTitle: 새 대화의 첫 질문을 보내고 답변을 기다리는 중이면 그 질문(아직 서버에 없는 대화)
@@ -12,7 +12,7 @@ export const ChatSidebar = ({ chats, isLoading, selectedChatId, pendingTitle, on
     </div>
 
     <div className="flex-1 overflow-y-auto p-2">
-      {isLoading && <p className="px-2 py-3 text-sub text-ink-3">상담 목록을 불러오는 중…</p>}
+      {isLoading && <PageSkeleton variant="text" rows={4} label="상담 목록을 불러오는 중…" className="px-2 py-3" />}
       {!isLoading && chats.length === 0 && !pendingTitle && (
         <p className="px-2 py-3 text-sub text-ink-3">아직 상담 기록이 없어요.</p>
       )}

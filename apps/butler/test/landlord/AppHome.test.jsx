@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getContractList: vi.fn(),
   getPropertyList: vi.fn(),
   getPropertyOwnershipList: vi.fn(),
@@ -120,7 +121,7 @@ describe('M03 홈: 데이터', () => {
     renderAt('/landlord/home');
     const tasks = within(await screen.findByRole('region', { name: '오늘 할 일' }));
 
-    expect(tasks.getByText('오피스텔 301호 월세 입금일')).toBeInTheDocument();
+    expect(await tasks.findByText('오피스텔 301호 월세 입금일')).toBeInTheDocument();
     expect(tasks.getByText('오늘')).toBeInTheDocument();
     expect(tasks.getByText('빌라 202호 계약 종료')).toBeInTheDocument();
     expect(tasks.getByText('D-7')).toBeInTheDocument();

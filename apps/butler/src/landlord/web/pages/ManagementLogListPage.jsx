@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Building2, History, Image, Plus } from 'lucide-react';
-import { Badge, Button, SegmentedControl } from '@butler/ui';
+import { Badge, Button, PageSkeleton, SegmentedControl } from '@butler/ui';
 import { EmptyState } from '../components/EmptyState/EmptyState';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { LogInspector } from '../components/LogInspector/LogInspector';
@@ -30,11 +30,7 @@ const ManagementLogTable = ({ propertyId, type, selectedId, onSelect, onReset, o
 
   if (error && !data) return <NoticeBox className="m-5">{error.message}</NoticeBox>;
   if (isLoading && !data) {
-    return (
-      <p role="status" className="py-10 text-center text-body text-ink-3">
-        불러오는 중입니다
-      </p>
-    );
+    return <PageSkeleton variant="list" />;
   }
   if (items.length === 0) {
     const hasFilter = Boolean(propertyId || type);

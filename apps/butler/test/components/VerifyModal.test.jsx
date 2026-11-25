@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@butler/api-client', () => ({ postOwnershipVerification: vi.fn() }));
+vi.mock('@butler/api-client', () => ({ queryKey: new Proxy({}, { get: (_, name) => String(name) }), postOwnershipVerification: vi.fn() }));
 
 import { postOwnershipVerification } from '@butler/api-client';
 import { VerifyModal } from '../../src/landlord/web/components/VerifyModal/VerifyModal';

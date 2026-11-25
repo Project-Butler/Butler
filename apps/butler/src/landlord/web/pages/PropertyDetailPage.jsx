@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Badge, Button, Card, TextField } from '@butler/ui';
+import { Badge, Button, Card, PageSkeleton, TextField } from '@butler/ui';
 import { Archive, Building2, History, MapPin, Pencil, Plus } from 'lucide-react';
 import { DateTile } from '../components/DateTile/DateTile';
 import { IconTile } from '../components/IconTile/IconTile';
@@ -516,7 +516,7 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
         </span>
       </div>
       {logList.error && <NoticeBox>{logList.error.message}</NoticeBox>}
-      {logList.isLoading && !logList.data && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+      {logList.isLoading && !logList.data && <PageSkeleton variant="text" rows={3} />}
       {logList.data && logs.length === 0 && <p className="text-body text-ink-3">아직 관리 로그가 없어요</p>}
       <ol className="space-y-3">
         {logs.map((log) => (
@@ -599,7 +599,7 @@ export const PropertyDetailPage = ({
         {propertyQuery.error ? (
           <NoticeBox>{propertyQuery.error.message}</NoticeBox>
         ) : (
-          <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>
+          <PageSkeleton variant="detail" />
         )}
       </div>
     );

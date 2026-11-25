@@ -15,6 +15,7 @@ import {
 import { buildLocation } from '../../src/landlord/web/routes';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getPropertyDocumentBox: vi.fn(),
   postDocumentDownloadUrl: vi.fn(),
   postUploadSession: vi.fn(),
@@ -88,7 +89,7 @@ const renderAt = (entry, onUnauthorized = vi.fn()) => {
 };
 
 beforeEach(() => {
-  Object.values(api).forEach((fn) => fn.mockReset());
+  Object.values(api).filter((fn) => typeof fn === 'function').forEach((fn) => fn.mockReset());
   api.getPropertyDocumentBox.mockResolvedValue(BOX);
 });
 

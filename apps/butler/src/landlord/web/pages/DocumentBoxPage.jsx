@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button } from '@butler/ui';
+import { Badge, Button, PageSkeleton } from '@butler/ui';
 import { Building2, ChevronDown, ChevronRight, FileSignature, Lock, Plus, ShieldCheck, Upload } from 'lucide-react';
 import { deleteDocument, postDocumentDownloadUrl } from '@butler/api-client';
 import { DocumentBoxTable } from '../components/DocumentBoxTable/DocumentBoxTable';
@@ -351,7 +351,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
     return (
       <div className="w-full space-y-6">
         <PageHeader title="문서함" />
-        {error ? <NoticeBox>{error.message}</NoticeBox> : <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>}
+        {error ? <NoticeBox>{error.message}</NoticeBox> : <PageSkeleton variant="table" />}
       </div>
     );
   }
@@ -437,9 +437,7 @@ export const DocumentBoxPage = ({ propertyId, userId, onNavigate, onUnauthorized
         <div className="col-span-7 space-y-5">
           {/* 아직 내 호실인지 모르는 주소의 호실(예전 호실 목록 대기 중)은 오류를 보이지 않는다 */}
           {selected && boxQuery.error && <NoticeBox>{boxQuery.error.message}</NoticeBox>}
-          {((boxQuery.isLoading && !box) || (!selected && !isAllListed)) && (
-            <p className="py-10 text-center text-body text-ink-3">불러오는 중입니다</p>
-          )}
+          {((boxQuery.isLoading && !box) || (!selected && !isAllListed)) && <PageSkeleton variant="table" />}
           {box && selected && (
             <>
               <OwnershipCard key={`ownership-${selected.id}`} {...cardProps} />

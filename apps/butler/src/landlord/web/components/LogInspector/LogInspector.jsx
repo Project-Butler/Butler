@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { Building2, CalendarDays, ClipboardCheck, Coins, History, Pencil, Search, StickyNote, Wrench, X } from 'lucide-react';
 import { DocumentThumbnail } from '../DocumentThumbnail/DocumentThumbnail';
 import { EmptyState } from '../EmptyState/EmptyState';
@@ -70,7 +70,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
   }
   if (!log) {
     return frame(
-      <div className="p-5">{error ? <NoticeBox>{error.message}</NoticeBox> : <p className="py-6 text-center text-body text-ink-3">불러오는 중입니다</p>}</div>,
+      <div className="p-5">{error ? <NoticeBox>{error.message}</NoticeBox> : <PageSkeleton variant="text" rows={4} />}</div>,
     );
   }
 
