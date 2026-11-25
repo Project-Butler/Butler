@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getNotificationList, postNotificationRead } from '@butler/api-client';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { getNotificationList, postNotificationRead, queryKey } from '@butler/api-client';
 import { isUnauthorizedError } from '../../../shared/apiError';
+import { useApiQuery } from '../../../shared/useApiQuery';
 
 const SIZE = 20;
 
@@ -8,40 +9,36 @@ const SIZE = 20;
 // markRead(id): 화면에서 먼저 빼고 저장한다. 저장보다 다시 불러오기가 먼저 끝나도 다시 보이지 않게, 이 화면에서 읽은 id 는 기억해서 거른다.
 // 저장이 실패하면 기억에서 지워 다음 refetch 때 다시 보이게 한다. 401이면 onUnauthorized.
 export const useGetUnreadNotifications = ({ onUnauthorized } = {}) => {
-  const [items, setItems] = useState([]);
-  const [reloadCount, setReloadCount] = useState(0);
+  const query = useApiQuery({
+    queryKey: [queryKey.NOTIFICATIONS, { unreadOnly: true, size: SIZE }],
+    queryFn: async () => (await getNotificationList({ size: SIZE, unreadOnly: true })).data ?? [],
+    onUnauthorized,
+  });
   const readIdsRef = useRef(new Set());
+  // 읽은 id 묶음이 바뀌면 목록을 다시 거르게 하는 값(ref 는 바뀌어도 다시 그리지 않으므로).
+  const [readVersion, setReadVersion] = useState(0);
 
-  useEffect(() => {
-    let ignore = false;
-    const load = async () => {
-      try {
-        const { data } = await getNotificationList({ size: SIZE, unreadOnly: true });
-        if (!ignore) setItems((data ?? []).filter((item) => !readIdsRef.current.has(item.id)));
-      } catch (error) {
-        if (!ignore && isUnauthorizedError(error)) onUnauthorized?.();
-      }
-    };
-    load();
-    return () => {
-      ignore = true;
-    };
-  }, [reloadCount, onUnauthorized]);
+  const items = useMemo(
+    () => (query.data ?? []).filter((item) => !readIdsRef.current.has(item.id)),
+    // readVersion 은 readIdsRef 가 바뀐 것을 알린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [query.data, readVersion],
+  );
 
-  const refetch = useCallback(() => setReloadCount((count) => count + 1), []);
   const markRead = useCallback(
     async (notificationId) => {
       readIdsRef.current.add(notificationId);
-      setItems((prev) => prev.filter((item) => item.id !== notificationId));
+      setReadVersion((version) => version + 1);
       try {
         await postNotificationRead(notificationId);
       } catch (error) {
         readIdsRef.current.delete(notificationId);
+        setReadVersion((version) => version + 1);
         if (isUnauthorizedError(error)) onUnauthorized?.();
       }
     },
     [onUnauthorized],
   );
 
-  return { items, refetch, markRead };
+  return { items, refetch: query.refetch, markRead };
 };

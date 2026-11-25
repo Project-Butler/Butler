@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +8,8 @@ vi.mock('@butler/api-client', () => ({ getNotificationList: vi.fn(), postNotific
 import { getNotificationList, postNotificationRead } from '@butler/api-client';
 import { useGetUnreadNotifications } from '../../../../src/landlord/web/hooks/useGetUnreadNotifications';
 
+// react-query 훅이라 테스트마다 새 QueryClient(재시도·캐시 없음)로 감싼다.
+const wrapper = ({ children }) => createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }) }, children);
 const n = (id) => ({ id, title: `알림 ${id}`, link: `/tickets/${id}`, readAt: null, createdAt: '2026-11-25T03:00:00Z' });
 
 describe('PC 종 안 읽은 알림', () => {
@@ -15,7 +19,7 @@ describe('PC 종 안 읽은 알림', () => {
     vi.mocked(getNotificationList).mockResolvedValue({ data: [n('a'), n('b')], meta: {} });
     let finishRead;
     vi.mocked(postNotificationRead).mockReturnValue(new Promise((resolve) => (finishRead = resolve)));
-    const { result } = renderHook(() => useGetUnreadNotifications());
+    const { result } = renderHook(() => useGetUnreadNotifications(), { wrapper });
     await waitFor(() => expect(result.current.items.map((item) => item.id)).toEqual(['a', 'b']));
 
     act(() => {
@@ -31,7 +35,7 @@ describe('PC 종 안 읽은 알림', () => {
   it('읽음 저장이 실패하면 다음 불러오기에서 다시 보인다', async () => {
     vi.mocked(getNotificationList).mockResolvedValue({ data: [n('a')], meta: {} });
     vi.mocked(postNotificationRead).mockRejectedValue(new Error('network'));
-    const { result } = renderHook(() => useGetUnreadNotifications());
+    const { result } = renderHook(() => useGetUnreadNotifications(), { wrapper });
     await waitFor(() => expect(result.current.items).toHaveLength(1));
     await act(async () => {
       await result.current.markRead('a');
