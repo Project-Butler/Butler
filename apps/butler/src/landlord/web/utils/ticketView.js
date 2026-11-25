@@ -1,4 +1,5 @@
 // 임대인 앱 수리·점검(M09) 표시 계산. 화면 밖에서 테스트할 수 있게 순수 함수로 둔다.
+import { getRoomLabel } from '../../../shared/room';
 import { getTicketCategoryLabel, getTicketStatusLabel } from '../../../shared/ticketLabels';
 import { formatDateKST, formatNumber } from './format';
 
@@ -47,4 +48,30 @@ export const toCompleteBody = ({ resolutionNote, cost }) => {
   const digits = String(cost ?? '').replace(/[^0-9]/g, '');
   if (digits) body.cost = Number(digits);
   return body;
+};
+
+// ── PC 수리 요청 화면(docs/10 v2.2 D4·D17) ──
+
+// 상태 세그먼트. status 는 GET /tickets 의 status 필터(없으면 전체). 처리할 요청 = 접수 + 처리 중.
+export const TICKET_STATUS_SEGMENTS = [
+  { key: 'todo', label: '처리할 요청', status: 'OPEN,IN_PROGRESS' },
+  { key: 'all', label: '전체', status: undefined },
+  { key: 'done', label: '완료', status: 'DONE' },
+  { key: 'canceled', label: '취소', status: 'CANCELED' },
+];
+export const findTicketSegment = (key) => TICKET_STATUS_SEGMENTS.find((segment) => segment.key === key) ?? TICKET_STATUS_SEGMENTS[0];
+
+// 고른 값을 보기 순서대로 쉼표로 잇는다. 아무것도 안 골랐으면 undefined(조건 없음).
+export const toFilterParam = (options, values) =>
+  options
+    .filter((option) => values.includes(option.value))
+    .map((option) => option.value)
+    .join(',') || undefined;
+
+// 완료하면 하우스 로그에 남는 제목(서버 platform/ticketRules.js buildTicketSummaryTitle 과 같은 규칙):
+// '[방 ]유형 완료'. 방이 없거나 OTHER 면 방을 빼고, 유형 OTHER 는 '요청 처리 완료'.
+export const buildTicketSummaryTitle = ({ room, category }) => {
+  const roomLabel = room && room !== 'OTHER' ? getRoomLabel(room) : null;
+  const action = category === 'OTHER' ? '요청 처리 완료' : `${getTicketCategoryLabel(category)} 완료`;
+  return roomLabel ? `${roomLabel} ${action}` : action;
 };

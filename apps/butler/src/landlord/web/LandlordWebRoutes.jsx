@@ -8,6 +8,10 @@ import { ContractListPage } from './pages/ContractListPage';
 import { ContractRegisterPage } from './pages/ContractRegisterPage';
 import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
+import { TicketListPage } from './pages/TicketListPage';
+import { useGetTicketList } from './hooks/useGetTicketList';
+import { useGetUnreadNotifications } from './hooks/useGetUnreadNotifications';
+import { buildNotificationMenu } from './utils/notificationMenu';
 import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
@@ -52,6 +56,8 @@ const NAV_KEY_BY_VIEW = {
   logRegister: 'log',
   logEdit: 'log',
   logDetail: 'log',
+  ticketRegister: 'tickets',
+  ticketDetail: 'tickets',
   propertyLogRegister: 'buildingList',
   setup: 'home',
   disputeReference: 'disputes',
@@ -74,6 +80,9 @@ const SUB_TITLE_BY_VIEW = {
   logRegister: '기록 추가',
   logEdit: '기록 수정',
   logDetail: '기록 상세',
+  tickets: '요청 목록',
+  ticketRegister: '요청 등록',
+  ticketDetail: '요청 상세',
   propertyLogRegister: '기록 추가',
   setup: '초기 세팅',
   disputeSearch: '자료 찾기',
@@ -165,6 +174,35 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   );
 };
 
+// 유지보수 요청 목록·요청 상세(/tickets/:ticketId)·요청 등록(/tickets/new)은 같은 화면이다(docs/10 D4).
+// 상세는 오른쪽 패널, 등록은 가운데 팝업. 앱 목록이 넘기는 state.complete 면 완료 팝업을 바로 연다.
+const TicketListRoute = ({ isRegisterOpen = false, ...pageProps }) => {
+  const { ticketId } = useParams();
+  const [searchParams] = useSearchParams();
+  const { state } = useLocation();
+  const { onNavigate } = pageProps;
+  const propertyId = searchParams.get('propertyId') ?? undefined;
+  const openRegister = useCallback(() => onNavigate('ticketRegister', { propertyId }), [onNavigate, propertyId]);
+  const closeRegister = useCallback(
+    (created) =>
+      created?.ticketId
+        ? onNavigate('ticketDetail', { ticketId: created.ticketId }, { replace: true })
+        : onNavigate('tickets', { propertyId }, { replace: true }),
+    [onNavigate, propertyId],
+  );
+  return (
+    <TicketListPage
+      propertyId={propertyId}
+      selectedTicketId={ticketId}
+      completeOnOpen={Boolean(state?.complete)}
+      isRegisterOpen={isRegisterOpen}
+      onOpenRegister={openRegister}
+      onCloseRegister={closeRegister}
+      {...pageProps}
+    />
+  );
+};
+
 const ContractRegisterRoute = (pageProps) => {
   const [searchParams] = useSearchParams();
   const propertyId = searchParams.get('propertyId') ?? undefined;
@@ -218,8 +256,14 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
   const { pathname } = useLocation();
   const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1, activeOwnership: 'true' }, { onUnauthorized });
   const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, { onUnauthorized });
+  // 사이드바 '유지보수 요청' 옆 숫자 = 확인 필요(접수) 요청 수(D17). 종 = 안 읽은 서버 알림 + 갱신 거절 통지.
+  const openTickets = useGetTicketList({ status: 'OPEN', size: 1 }, { onUnauthorized });
+  const unread = useGetUnreadNotifications({ onUnauthorized });
+  const routerNavigate = useNavigate();
   const { refetch } = expiringSoon;
   const { refetch: refetchRenewal } = renewal;
+  const { refetch: refetchTickets } = openTickets;
+  const { refetch: refetchUnread } = unread;
   const visitedPathRef = useRef(pathname);
   useEffect(() => {
     // 처음 그릴 때는 훅이 이미 불러오므로 경로가 바뀔 때만 다시 센다.
@@ -227,14 +271,21 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
     visitedPathRef.current = pathname;
     refetch();
     refetchRenewal();
+    refetchTickets();
+    refetchUnread();
     onRefreshAuthMe();
-  }, [pathname, refetch, refetchRenewal, onRefreshAuthMe]);
+  }, [pathname, refetch, refetchRenewal, refetchTickets, refetchUnread, onRefreshAuthMe]);
 
   const { onNavigate, user } = layoutProps;
   return (
     <LandlordLayout
-      navBadges={{ leases: expiringSoon.data?.meta.total ?? 0 }}
-      notifications={toRenewalNotifications(renewal.notices, onNavigate)}
+      navBadges={{ leases: expiringSoon.data?.meta.total ?? 0, tickets: openTickets.data?.meta.total ?? 0 }}
+      notifications={buildNotificationMenu({
+        unread: unread.items,
+        renewal: toRenewalNotifications(renewal.notices, onNavigate),
+        onRead: unread.markRead,
+        onOpenPath: (path) => routerNavigate(path),
+      })}
       {...layoutProps}
     >
       {children}
@@ -302,6 +353,9 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
           <Route path="/logs/new" element={<ManagementLogListRoute modalMode="create" {...pageProps} />} />
           <Route path="/logs/:logId" element={<ManagementLogListRoute {...pageProps} />} />
           <Route path="/logs/:logId/edit" element={<ManagementLogListRoute modalMode="edit" {...pageProps} />} />
+          <Route path="/tickets" element={<TicketListRoute {...pageProps} />} />
+          <Route path="/tickets/new" element={<TicketListRoute isRegisterOpen {...pageProps} />} />
+          <Route path="/tickets/:ticketId" element={<TicketListRoute {...pageProps} />} />
           <Route path="/properties/:propertyId/logs/new" element={<PropertyDetailRoute isLogModalOpen {...pageProps} />} />
           <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
           <Route path="/setup" element={<SetupPage {...pageProps} />} />
