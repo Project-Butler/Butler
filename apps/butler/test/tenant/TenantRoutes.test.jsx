@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_PATH, HOME_PATH, TICKETS_PATH } from '../../src/tenant/routes';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getContractList: vi.fn(),
   getContract: vi.fn(),
   getDocumentList: vi.fn(),

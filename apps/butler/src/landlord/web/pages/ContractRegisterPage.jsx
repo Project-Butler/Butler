@@ -1,5 +1,5 @@
 import { FileText } from 'lucide-react';
-import { Badge, Button, RequiredMark } from '@butler/ui';
+import { Badge, Button, PageSkeleton, RequiredMark } from '@butler/ui';
 import { ContractForm, toContractFields } from '../components/ContractForm/ContractForm';
 import { ContractOcrFill } from '../components/ContractOcrFill/ContractOcrFill';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
@@ -153,9 +153,7 @@ export const ContractRegisterPage = ({ params, onNavigate, onUnauthorized }) => 
         {renewQuery.error ? (
           <NoticeBox>{renewQuery.error.message}</NoticeBox>
         ) : (
-          <p role="status" className="py-10 text-center text-body text-ink-3">
-            불러오는 중입니다
-          </p>
+          <PageSkeleton variant="detail" />
         )}
       </div>
     );

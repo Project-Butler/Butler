@@ -11,6 +11,7 @@ vi.mock('@butler/api-client', () => {
   const empty = () => Promise.resolve({ data: [], meta: { page: 1, size: 100, total: 0, hasNext: false } });
   const notFound = () => Promise.reject(Object.assign(new Error('없음'), { response: { status: 404, data: { error: { code: 'NOT_FOUND', message: '찾을 수 없습니다.' } } } }));
   return {
+    queryKey: new Proxy({}, { get: (_, name) => String(name) }),
     getContractList: vi.fn(empty),
     getPropertyList: vi.fn(empty),
     getPropertyOwnershipList: vi.fn(empty),

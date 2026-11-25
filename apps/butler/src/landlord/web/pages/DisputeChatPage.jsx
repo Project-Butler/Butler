@@ -10,6 +10,7 @@ import { useGetDisputeChatList } from '../hooks/useGetDisputeChatList';
 import { usePostDisputeChat } from '../hooks/usePostDisputeChat';
 import { usePostDisputeChatMessage } from '../hooks/usePostDisputeChatMessage';
 import { getErrorMessage } from '../utils/getErrorMessage';
+import { PageSkeleton } from '@butler/ui';
 
 // AI 분쟁 상담(임대차 분쟁 해결사). 질문하면 서버가 비슷한 조정사례·판례를 검색해서(RAG)
 // 그 자료를 근거로 답한다. QueryClientProvider 안에서 렌더링해야 한다.
@@ -119,7 +120,7 @@ export const DisputeChatPage = ({ isApp = false, initialDraft = '' }) => {
 
         <section className={`${isListOpen ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col gap-3 lg:flex`}>
           <div className={`flex-1 space-y-3 ${isApp ? '' : 'min-h-0 overflow-y-auto'}`} aria-live="polite">
-            {selectedChatId && chat.isLoading && <p className="text-sub text-ink-3">상담 내용을 불러오는 중…</p>}
+            {selectedChatId && chat.isLoading && <PageSkeleton variant="text" rows={4} label="상담 내용을 불러오는 중…" />}
             {!selectedChatId && !isPending && <EmptyChat onPick={ask} disabled={isPending} compact={isApp} />}
 
             {messages.map((message, index) => (

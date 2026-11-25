@@ -162,3 +162,27 @@ export const buildLocation = (key, params = {}) => {
   const location = build ? build(params) : { pathname: `/${key}` };
   return { ...location, pathname: `${BASE_PATH}${location.pathname}` };
 };
+
+// 같은 화면 안에서 주소만 바뀌는 묶음(팝업·패널·내부 탭). 묶음이 같으면 화면을 다시 만들지 않고 그대로 갱신한다.
+// 묶음이 바뀌어야(다른 메뉴·다른 호실로 이동) 새 화면을 준비하는 동안 지금 화면을 둔다(ReadyGate).
+const PAGE_GROUP_BY_VIEW = {
+  propertyDetail: 'property',
+  propertyVerify: 'property',
+  propertyLogRegister: 'property',
+  logs: 'logs',
+  logRegister: 'logs',
+  logEdit: 'logs',
+  logDetail: 'logs',
+  disputes: 'disputes',
+  disputeSearch: 'disputes',
+  disputeTopic: 'disputes',
+  disputeReference: 'disputes',
+};
+
+export const resolvePageGroup = (pathname) => {
+  const viewKey = resolveViewKey(pathname);
+  const group = PAGE_GROUP_BY_VIEW[viewKey] ?? viewKey;
+  if (group !== 'property') return group;
+  const relative = stripBase(pathname) ?? pathname;
+  return `property:${matchPath({ path: '/properties/:propertyId/*', end: false }, relative)?.params.propertyId}`;
+};

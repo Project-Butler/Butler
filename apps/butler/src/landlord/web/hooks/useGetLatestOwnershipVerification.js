@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getLatestOwnershipVerification } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
+import { useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getLatestOwnershipVerification, queryKey } from '@butler/api-client';
+import { useApiQuery } from '../../../shared/useApiQuery';
 import { isAttemptActive } from '../utils/ownershipVerification';
 
 const POLL_INTERVAL_MS = 3000;
@@ -10,73 +11,25 @@ const POLL_INTERVAL_MS = 3000;
 // trackAttempt(attempt): POST 응답을 넘겨 바로 추적한다. 진행 중이던 시도가 끝나면 onFinished(attempt)를 부른다.
 // ownershipId가 없으면 호출하지 않는다. 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.
 export const useGetLatestOwnershipVerification = (ownershipId, { onFinished, onUnauthorized } = {}) => {
-  const [state, setState] = useState({ data: null, error: null, isLoading: Boolean(ownershipId) });
+  const queryClient = useQueryClient();
+  const cacheKey = [queryKey.OWNERSHIP_VERIFICATION_LATEST, ownershipId];
   const wasActiveRef = useRef(false);
   const onFinishedRef = useRef(onFinished);
   useEffect(() => {
     onFinishedRef.current = onFinished;
   }, [onFinished]);
 
-  useEffect(() => {
-    if (!ownershipId) {
-      setState({ data: null, error: null, isLoading: false });
-      return undefined;
-    }
+  const query = useApiQuery({
+    queryKey: cacheKey,
+    queryFn: () => getLatestOwnershipVerification(ownershipId),
+    enabled: Boolean(ownershipId),
+    // 진행 중이면 3초마다 다시 읽는다. 잠깐의 네트워크 오류가 나도 다음 차례에 다시 읽는다.
+    refetchInterval: (current) => (isAttemptActive(current.state.data) ? POLL_INTERVAL_MS : false),
+    onUnauthorized,
+  });
 
-    let ignore = false;
-    setState((prev) => ({ ...prev, error: null, isLoading: true }));
-
-    const load = async () => {
-      try {
-        const data = await getLatestOwnershipVerification(ownershipId);
-        if (!ignore) setState({ data, error: null, isLoading: false });
-      } catch (error) {
-        if (ignore) return;
-        if (isUnauthorizedError(error)) {
-          onUnauthorized?.();
-          return;
-        }
-        setState((prev) => ({ ...prev, error: toApiError(error), isLoading: false }));
-      }
-    };
-    load();
-
-    return () => {
-      ignore = true;
-    };
-  }, [ownershipId, onUnauthorized]);
-
-  const attempt = state.data;
+  const attempt = query.data;
   const isActive = isAttemptActive(attempt);
-
-  useEffect(() => {
-    if (!ownershipId || !isActive) return undefined;
-
-    let ignore = false;
-    let timer;
-    const poll = async () => {
-      try {
-        const data = await getLatestOwnershipVerification(ownershipId);
-        if (ignore) return;
-        setState({ data, error: null, isLoading: false });
-      } catch (error) {
-        if (ignore) return;
-        if (isUnauthorizedError(error)) {
-          onUnauthorized?.();
-          return;
-        }
-        // 잠깐의 네트워크 오류로 추적을 놓치지 않게 다음 차례에 다시 읽는다.
-        setState((prev) => ({ ...prev, error: toApiError(error) }));
-      }
-      if (!ignore) timer = setTimeout(poll, POLL_INTERVAL_MS);
-    };
-    timer = setTimeout(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      ignore = true;
-      clearTimeout(timer);
-    };
-  }, [ownershipId, isActive, onUnauthorized]);
 
   useEffect(() => {
     if (!attempt) return;
@@ -85,10 +38,13 @@ export const useGetLatestOwnershipVerification = (ownershipId, { onFinished, onU
     if (wasActive && !wasActiveRef.current) onFinishedRef.current?.(attempt);
   }, [attempt]);
 
-  const trackAttempt = useCallback((next) => {
-    wasActiveRef.current = true;
-    setState({ data: next, error: null, isLoading: false });
-  }, []);
+  const trackAttempt = useCallback(
+    (next) => {
+      wasActiveRef.current = true;
+      queryClient.setQueryData([queryKey.OWNERSHIP_VERIFICATION_LATEST, ownershipId], next);
+    },
+    [queryClient, ownershipId],
+  );
 
-  return { ...state, isActive, trackAttempt };
+  return { data: query.data, error: query.error, isLoading: query.isLoading, isActive, trackAttempt };
 };

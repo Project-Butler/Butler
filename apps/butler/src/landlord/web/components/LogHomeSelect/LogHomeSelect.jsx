@@ -1,4 +1,4 @@
-import { Badge } from '@butler/ui';
+import { Badge, PageSkeleton } from '@butler/ui';
 import { Building2, Check, Wrench } from 'lucide-react';
 import { IconTile } from '../IconTile/IconTile';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
@@ -131,9 +131,7 @@ export const LogHomeSelect = ({ homes, onSelectHome, onUnauthorized }) => {
         {ticketList.error && !ticketList.data ? (
           <NoticeBox className="m-5">{ticketList.error.message}</NoticeBox>
         ) : !ticketList.data ? (
-          <p role="status" className="py-8 text-center text-body text-ink-3">
-            불러오는 중입니다
-          </p>
+          <PageSkeleton variant="list" rows={3} />
         ) : openTickets.length === 0 ? (
           <p className="py-8 text-center text-body text-ink-3">진행 중인 수리 요청이 없어요.</p>
         ) : (

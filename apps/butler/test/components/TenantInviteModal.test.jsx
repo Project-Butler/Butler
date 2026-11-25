@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TenantInviteModal } from '../../src/landlord/web/components/TenantInviteModal/TenantInviteModal';
 
 const api = vi.hoisted(() => ({
+  queryKey: new Proxy({}, { get: (_, name) => String(name) }),
   getDocumentList: vi.fn(),
   postTenantInvitation: vi.fn(),
   postUploadSession: vi.fn(),

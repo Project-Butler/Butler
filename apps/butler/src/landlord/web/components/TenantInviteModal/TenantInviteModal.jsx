@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '@butler/ui';
+import { Button, PageSkeleton } from '@butler/ui';
 import { Check, CheckCircle2, Copy, Files, FileText, ImagePlus, Info, Send, Upload } from 'lucide-react';
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { Modal } from '../Modal/Modal';
@@ -135,7 +135,7 @@ const DocumentsStep = ({ documentList, uploads, documents, selectedIds, imageUrl
     <div className="space-y-3">
       <p className="text-body text-ink-2">임차인이 링크를 열면 이 계약서를 먼저 봐요.</p>
       {documentList.error && <NoticeBox>{documentList.error.message}</NoticeBox>}
-      {documentList.isLoading && !documentList.data && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+      {documentList.isLoading && !documentList.data && <PageSkeleton variant="text" rows={2} />}
 
       <ul className="space-y-2" aria-label="계약서 파일">
         {files.map((document) => {

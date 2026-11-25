@@ -1,4 +1,4 @@
-import { Badge, Button, Card, StatCard } from '@butler/ui';
+import { Badge, Button, Card, PageSkeleton, StatCard } from '@butler/ui';
 import { useGetContractList } from '../hooks/useGetContractList';
 import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
@@ -41,7 +41,7 @@ const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
       </div>
       <div className="mt-4 space-y-4">
         {error && <p className="text-body text-crit-ink">{error.message}</p>}
-        {isLoading && !data && <p className="text-body text-ink-3">불러오는 중입니다</p>}
+        {isLoading && !data && <PageSkeleton variant="text" rows={3} />}
         {data && logs.length === 0 && (
           <div className="space-y-3">
             <p className="text-body text-ink-3">아직 하우스 로그가 없어요</p>
