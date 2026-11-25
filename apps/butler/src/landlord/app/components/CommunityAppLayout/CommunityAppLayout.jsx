@@ -15,6 +15,7 @@ import { CommunityAppPollDetailPage } from '../../pages/CommunityAppPollDetailPa
 import { CommunityAppPollsPage } from '../../pages/CommunityAppPollsPage';
 import { CommunityAppPostDetailPage } from '../../pages/CommunityAppPostDetailPage';
 import { AppTabShell } from '../AppTabShell/AppTabShell';
+import { useBottomSheet } from '../BottomSheet/BottomSheet';
 import { CommunityAppTopBarContext } from '../CommunityApp/CommunityAppFrame';
 import { CommunityAppSheet } from './CommunityAppSheet';
 
@@ -25,7 +26,8 @@ import { CommunityAppSheet } from './CommunityAppSheet';
 //   하위 화면(글 상세 · 글쓰기 · 글 수정 · 투표 상세 · 투표 만들기 · 건물 선택): 뒤로 가기 바(backBar) — PC 의 "← 목록으로" 대신.
 //     제목은 그 화면이 속한 PC 탭 이름(게시판 · 투표), 건물 선택은 하단 탭 이름(커뮤니티).
 //     뒤로 가기는 PC 와 같은 규칙 · 같은 fallback(web utils/communityNavigation — 주소로 바로 들어왔으면 그 탭 목록으로)
-// 대화상자(신고 · 닉네임 · 건물 바꾸기)는 아래 시트(CommunityAppSheet)로 — 컨텍스트로 넘겨 web 파일이 app/ 를 import 하지 않게 한다.
+// 대화상자(신고 · 닉네임 · 건물 바꾸기)는 아래 시트(CommunityAppSheet)로, 닫기는 다른 앱 시트와 같은 useBottomSheet(내려간 뒤 닫힘)로 —
+// 둘 다 컨텍스트로 넘겨 web 파일이 app/ 를 import 하지 않게 한다.
 const APP_PAGES = {
   briefing: CommunityAppBriefingPage,
   news: CommunityAppNewsPage,
@@ -70,7 +72,7 @@ export const CommunityAppLayout = ({ user, onUnauthorized }) => {
   return (
     <AppTabShell {...shellBar}>
       <CommunityAppTopBarContext.Provider value={topBarSlot}>
-        <CommunityPage isApp Sheet={CommunityAppSheet} pages={APP_PAGES} onNavigate={onNavigate} />
+        <CommunityPage isApp Sheet={CommunityAppSheet} useSheet={useBottomSheet} pages={APP_PAGES} onNavigate={onNavigate} />
       </CommunityAppTopBarContext.Provider>
     </AppTabShell>
   );

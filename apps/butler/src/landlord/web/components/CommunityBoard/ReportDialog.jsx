@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@butler/ui';
-import { CommunityDialogFrame } from '../CommunityLayout/CommunityDialogFrame';
+import { CommunityDialogFrame, useCommunityDialogSheet } from '../CommunityLayout/CommunityDialogFrame';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { usePostCommunityReport } from '../../hooks/usePostCommunityReport';
 import { getErrorMessage } from '../../utils/getErrorMessage';
@@ -22,6 +22,9 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
   const [reason, setReason] = useState(null);
   const [detail, setDetail] = useState('');
   const dialogRef = useRef(null);
+  // 닫기(X · [취소] · Esc) · 성공 뒤 — 앱 시트는 내려가는 애니메이션 뒤에, 웹은 바로(CommunityDialogFrame useCommunityDialogSheet)
+  const sheet = useCommunityDialogSheet();
+  const close = useCallback(() => sheet.close(onClose), [sheet, onClose]);
 
   useEffect(() => {
     const opener = document.activeElement;
@@ -32,7 +35,7 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        close();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -50,19 +53,19 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [close]);
 
   const submit = async () => {
     try {
       await report.mutateAsync({ postId, reason, detail: detail.trim() || undefined });
-      onDone();
+      sheet.close(onDone);
     } catch {
       // 오류는 report.error 로 아래에 보여 준다(이미 신고한 글 409 포함).
     }
   };
 
   return (
-    <CommunityDialogFrame dialogRef={dialogRef} labelledBy="community-report-title" onClose={onClose}>
+    <CommunityDialogFrame dialogRef={dialogRef} labelledBy="community-report-title" onClose={onClose} sheet={sheet} closeDisabled={report.isPending}>
       <div className="flex items-center justify-between gap-4">
         <h2 id="community-report-title" className="text-section font-semibold text-ink">
           신고
@@ -70,7 +73,7 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
         <button
           type="button"
           aria-label="닫기"
-          onClick={onClose}
+          onClick={close}
           className="-mr-3 flex h-11 w-11 items-center justify-center rounded-input text-ink-2 hover:bg-surface-2 hover:text-ink"
         >
           <X size={20} aria-hidden="true" />
@@ -99,7 +102,7 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
       {report.isError && <NoticeBox>{getErrorMessage(report.error)}</NoticeBox>}
 
       <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={close}>
           취소
         </Button>
         <Button onClick={submit} disabled={!reason || report.isPending}>

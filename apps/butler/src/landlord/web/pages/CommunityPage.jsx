@@ -190,8 +190,8 @@ const CommunityRoutes = ({ onNavigate, pages }) => {
 // isApp: 임대인 앱(app CommunityAppLayout)이 그릴 때 — 틀 · 대화상자가 앱 배치(CommunitySurface).
 // Sheet: 앱에서 대화상자 대신 쓰는 아래 시트. pages: 앱 화면으로 바꿔 끼울 화면(WEB_PAGES 와 같은 이름).
 // 둘 다 앱 틀이 넘긴다 — web 은 app/ 를 import 하지 않는다. 웹(LandlordWebRoutes)은 아무것도 넘기지 않는다(지금 웹 그대로).
-export const CommunityPage = ({ onNavigate, isApp = false, Sheet = null, pages }) => (
-  <CommunitySurfaceProvider isApp={isApp} Sheet={Sheet}>
+export const CommunityPage = ({ onNavigate, isApp = false, Sheet = null, useSheet = null, pages }) => (
+  <CommunitySurfaceProvider isApp={isApp} Sheet={Sheet} useSheet={useSheet}>
     <CommunityRoutes onNavigate={onNavigate} pages={pages} />
   </CommunitySurfaceProvider>
 );

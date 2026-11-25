@@ -2,11 +2,12 @@
 // 실패 조건: 앱에서 /community 가 '준비 중' · 상단 바 왼쪽이 단지 이름이 아님 · PC 머리(건물 바꾸기 드롭다운) · 탭 줄 · "← 목록으로"가 앱에 남음 ·
 // 칩 줄 목록/주소가 PC 탭과 다름 · 하위 화면에 뒤로 가기 바가 없거나 주소로 바로 들어온 화면의 뒤로가 앱 밖으로 나감 · 미리보기 안내가 없음 ·
 // 마감 전 투표에 득표가 보임 · [글쓰기]가 떠 있지 않음 · 게시판이 표로 나옴 · 좁은 폭에서 목록 제목이 사라질 수 있는 배치(한 줄 말줄임 ·
-// 옆 칸과 폭 다툼 · 창 폭 클래스) · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름.
-import { render, screen, waitFor, within } from '@testing-library/react';
+// 옆 칸과 폭 다툼 · 창 폭 클래스) · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름 ·
+// 그 시트가 다른 앱 시트(BottomSheet)와 달리 X · [취소] · Esc · 바깥 · 저장(신고 · 건물 고르기) 뒤에 내려가지 않고 바로 사라지거나, 보내는 중 바깥을 누르면 닫힘.
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   getMyBuildings: vi.fn(),
@@ -394,5 +395,125 @@ describe('앱 커뮤니티: 신고 · 닉네임은 아래 시트(문구는 PC �
     expect(sheet).toHaveTextContent("글과 댓글에 '닉네임 (단지명 동 임대인)' 으로 보입니다");
     expect(sheet).toHaveTextContent('2~12자 · 한글 · 영문 · 숫자 · 30일에 한 번 바꿀 수 있어요');
     expect(within(sheet).getByRole('button', { name: '저장' })).toBeInTheDocument();
+  });
+});
+
+describe('앱 커뮤니티: 시트는 다른 앱 시트처럼 내려간 뒤 닫힌다(BottomSheet useBottomSheet)', () => {
+  // AppBottomSheet.test.jsx 와 같은 방식 — element.animate 를 흉내 내고, 끝내기 전 · 뒤를 본다
+  let finishers;
+  let animateSpy;
+  const originalAnimate = Element.prototype.animate;
+  const originalMatchMedia = window.matchMedia;
+  const transforms = () => animateSpy.mock.calls.filter(([keyframes]) => 'transform' in keyframes[0]).map(([keyframes]) => keyframes);
+  const SLIDE_UP = [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }];
+  const SLIDE_DOWN = [{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }];
+  const finishAll = async () => {
+    await act(async () => {
+      finishers.forEach((resolve) => resolve());
+    });
+  };
+  // 내려가는 중: 시트는 아직 있고 마지막 움직임이 내려가기. 끝나면 사라진다
+  const expectSlidesDownThenCloses = async (name) => {
+    await waitFor(() => expect(transforms().at(-1)).toEqual(SLIDE_DOWN));
+    expect(screen.getByRole('dialog', { name })).toBeInTheDocument();
+    await finishAll();
+    expect(screen.queryByRole('dialog', { name })).not.toBeInTheDocument();
+  };
+
+  beforeEach(() => {
+    finishers = [];
+    animateSpy = vi.fn(() => {
+      let resolve;
+      const finished = new Promise((done) => {
+        resolve = done;
+      });
+      finishers.push(resolve);
+      return { finished, cancel: vi.fn() };
+    });
+    Element.prototype.animate = animateSpy;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+  });
+
+  afterEach(() => {
+    Element.prototype.animate = originalAnimate;
+    window.matchMedia = originalMatchMedia;
+  });
+
+  const openReport = async () => {
+    await userEvent.click(await screen.findByRole('button', { name: '신고' }, FIRST_RENDER));
+    return screen.getByRole('dialog', { name: '신고' });
+  };
+
+  it('신고: 열리면 올라오고, [취소] · X · Esc 는 내려간 뒤 닫힌다', async () => {
+    renderAt('/landlord/community/posts/post-1');
+    let sheet = await openReport();
+    expect(transforms()).toEqual([SLIDE_UP]);
+    await userEvent.click(within(sheet).getByRole('button', { name: '취소' }));
+    await expectSlidesDownThenCloses('신고');
+
+    sheet = await openReport();
+    await userEvent.click(within(sheet).getByRole('button', { name: '닫기' }));
+    await expectSlidesDownThenCloses('신고');
+
+    await openReport();
+    await userEvent.keyboard('{Escape}');
+    await expectSlidesDownThenCloses('신고');
+  });
+
+  it('신고: [신고하기] 성공 뒤 내려가고, 다 내려간 다음에 "신고가 접수되었습니다"', async () => {
+    api.postCommunityReport.mockResolvedValue({ id: 'report-1' });
+    renderAt('/landlord/community/posts/post-1');
+    const sheet = await openReport();
+    await userEvent.click(within(sheet).getByRole('radio', { name: '도배·스팸' }));
+    await userEvent.click(within(sheet).getByRole('button', { name: '신고하기' }));
+    expect(api.postCommunityReport).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(transforms().at(-1)).toEqual(SLIDE_DOWN));
+    expect(screen.queryByText('신고가 접수되었습니다.')).not.toBeInTheDocument();
+    await finishAll();
+    expect(screen.queryByRole('dialog', { name: '신고' })).not.toBeInTheDocument();
+    expect(screen.getByText('신고가 접수되었습니다.')).toBeInTheDocument();
+  });
+
+  it('신고: 바깥을 누르면 내려간 뒤 닫히고, 보내는 중에는 바깥을 눌러도 닫히지 않는다', async () => {
+    renderAt('/landlord/community/posts/post-1');
+    let sheet = await openReport();
+    await userEvent.click(sheet.parentElement);
+    await expectSlidesDownThenCloses('신고');
+
+    api.postCommunityReport.mockReturnValue(new Promise(() => {}));
+    sheet = await openReport();
+    await userEvent.click(within(sheet).getByRole('radio', { name: '도배·스팸' }));
+    await userEvent.click(within(sheet).getByRole('button', { name: '신고하기' }));
+    await waitFor(() => expect(within(sheet).getByRole('button', { name: '신고하기' })).toBeDisabled());
+    const before = transforms().length;
+    await userEvent.click(sheet.parentElement);
+    expect(transforms()).toHaveLength(before);
+    expect(screen.getByRole('dialog', { name: '신고' })).toBeInTheDocument();
+  });
+
+  it('닉네임: [저장] 성공 뒤 내려간 다음 닫힌다', async () => {
+    api.putCommunityProfile.mockResolvedValue({ nickname: '호수뷰', nextChangeAt: null, previewLabel: '잠실한빛아파트 103동 임대인' });
+    renderAt('/landlord/community/briefing');
+    await userEvent.click(await screen.findByRole('button', { name: '닉네임 · 석촌호수뷰' }, FIRST_RENDER));
+    const sheet = screen.getByRole('dialog', { name: '커뮤니티 닉네임' });
+    const input = within(sheet).getByLabelText('닉네임');
+    await userEvent.clear(input);
+    await userEvent.type(input, '호수뷰');
+    await userEvent.click(within(sheet).getByRole('button', { name: '저장' }));
+    expect(api.putCommunityProfile).toHaveBeenCalledTimes(1);
+    await expectSlidesDownThenCloses('커뮤니티 닉네임');
+  });
+
+  it('건물 바꾸기: 건물을 고르면 내려간 다음에 그 건물로 바뀐다', async () => {
+    api.getMyBuildings.mockResolvedValue([building(), SECOND]);
+    renderAt('/landlord/community/briefing');
+    await userEvent.click(await screen.findByRole('button', { name: /잠실한빛아파트.*건물 바꾸기/ }, FIRST_RENDER));
+    const sheet = screen.getByRole('dialog', { name: '건물 바꾸기' });
+    await userEvent.click(within(sheet).getAllByRole('radio')[1]);
+    await waitFor(() => expect(transforms().at(-1)).toEqual(SLIDE_DOWN));
+    expect(screen.getByRole('heading', { level: 1, name: /잠실한빛아파트/ })).toBeInTheDocument();
+    await finishAll();
+    expect(screen.queryByRole('dialog', { name: '건물 바꾸기' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /해운대서강아파트/ })).toBeInTheDocument();
   });
 });

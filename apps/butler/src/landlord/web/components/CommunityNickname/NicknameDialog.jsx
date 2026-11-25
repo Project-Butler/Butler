@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button, TextField } from '@butler/ui';
-import { CommunityDialogFrame } from '../CommunityLayout/CommunityDialogFrame';
+import { CommunityDialogFrame, useCommunityDialogSheet } from '../CommunityLayout/CommunityDialogFrame';
 import { useCommunitySurface } from '../CommunityLayout/CommunitySurface';
 import { usePutCommunityProfile } from '../../hooks/usePutCommunityProfile';
 import { getErrorMessage } from '../../utils/getErrorMessage';
@@ -22,6 +22,9 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
   const save = usePutCommunityProfile();
   const [value, setValue] = useState(profile?.nickname ?? '');
   const dialogRef = useRef(null);
+  // 닫기(X · [취소] · Esc) · 성공 뒤 — 앱 시트는 내려가는 애니메이션 뒤에, 웹은 바로(CommunityDialogFrame useCommunityDialogSheet)
+  const sheet = useCommunityDialogSheet();
+  const close = useCallback(() => sheet.close(onClose), [sheet, onClose]);
 
   useEffect(() => {
     const opener = document.activeElement;
@@ -32,7 +35,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        close();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -50,7 +53,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [close]);
 
   const trimmed = value.trim();
   const current = profile?.nickname ?? null;
@@ -63,7 +66,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
     if (!canSave) return;
     try {
       await save.mutateAsync({ nickname: trimmed, complexId });
-      onSaved();
+      sheet.close(onSaved);
     } catch {
       // 오류는 save.error 로 칸 아래에 보여 준다(형식 · 금지 낱말 · 이미 쓰는 닉네임 · 아직 바꿀 수 없음)
     }
@@ -79,6 +82,8 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
       describedBy="community-nickname-description"
       onClose={onClose}
       onSubmit={submit}
+      sheet={sheet}
+      closeDisabled={save.isPending}
     >
       <div className="flex items-center justify-between gap-4">
         <h2 id="community-nickname-title" className="text-section font-semibold text-ink">
@@ -87,7 +92,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
         <button
           type="button"
           aria-label="닫기"
-          onClick={onClose}
+          onClick={close}
           className="-mr-3 flex h-11 w-11 items-center justify-center rounded-input text-ink-2 hover:bg-surface-2 hover:text-ink"
         >
           <X size={20} aria-hidden="true" />
@@ -120,7 +125,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={close}>
           취소
         </Button>
         <Button type="submit" disabled={!canSave}>

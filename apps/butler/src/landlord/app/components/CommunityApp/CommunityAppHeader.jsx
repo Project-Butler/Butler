@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { BuildingSwitcherRow } from '../../../web/components/CommunityBuildingSwitcher/BuildingSwitcher';
-import { CommunityDialogFrame } from '../../../web/components/CommunityLayout/CommunityDialogFrame';
+import { CommunityDialogFrame, useCommunityDialogSheet } from '../../../web/components/CommunityLayout/CommunityDialogFrame';
 import { COMMUNITY_SECTIONS } from '../../../web/components/CommunityLayout/SectionTabs';
 import { VerificationBadge } from '../../../web/components/CommunityLayout/VerificationBadge';
 import { nicknameButtonText } from '../../../web/components/CommunityNickname/NicknameButton';
@@ -89,24 +89,28 @@ export const SectionChips = ({ activeSection, top }) => {
 
 // 건물 바꾸기 시트. 제목은 PC 버튼 이름 "건물 바꾸기", 줄은 PC 드롭다운과 같은 줄(BuildingSwitcherRow — 이름 · 배지 · 호실 · 지역 · 인원).
 // Esc 로 닫고, 열리면 지금 건물 줄로 포커스(닫으면 열기 전 자리로).
+// X · Esc · 바깥 · 건물을 고른 뒤 모두 시트가 내려간 다음에 닫힌다(다른 앱 시트와 같다) — 고른 건물로 바꾸는 것도 내려간 뒤에
 const BuildingSwitchSheet = ({ buildings, activeComplexId, onPick, onClose }) => {
   const dialogRef = useRef(null);
+  const sheet = useCommunityDialogSheet();
+  const close = useCallback(() => sheet.close(onClose), [sheet, onClose]);
 
   useEffect(() => {
     const opener = document.activeElement;
     (dialogRef.current?.querySelector('[aria-checked="true"]') ?? dialogRef.current?.querySelector('button'))?.focus();
+    return () => opener?.focus?.();
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') close();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      opener?.focus?.();
-    };
-  }, [onClose]);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [close]);
 
   return (
-    <CommunityDialogFrame dialogRef={dialogRef} labelledBy="community-building-switch-title" onClose={onClose}>
+    <CommunityDialogFrame dialogRef={dialogRef} labelledBy="community-building-switch-title" onClose={onClose} sheet={sheet}>
       <div className="flex items-center justify-between gap-4">
         <h2 id="community-building-switch-title" className="text-section font-semibold text-ink">
           건물 바꾸기
@@ -114,7 +118,7 @@ const BuildingSwitchSheet = ({ buildings, activeComplexId, onPick, onClose }) =>
         <button
           type="button"
           aria-label="닫기"
-          onClick={onClose}
+          onClick={close}
           className="-mr-3 flex h-11 w-11 items-center justify-center rounded-input text-ink-2 hover:bg-surface-2 hover:text-ink"
         >
           <X size={20} aria-hidden="true" />
@@ -128,7 +132,7 @@ const BuildingSwitchSheet = ({ buildings, activeComplexId, onPick, onClose }) =>
             isActive={item.complexId === activeComplexId}
             role="radio"
             stacked
-            onPick={() => onPick(item.complexId)}
+            onPick={() => sheet.close(() => onPick(item.complexId))}
           />
         ))}
       </div>
