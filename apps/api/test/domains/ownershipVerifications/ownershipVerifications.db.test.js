@@ -871,6 +871,61 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
     });
   });
 
+  describe('대장(전유부) 전용면적·층 반영', () => {
+    const withUnit = (unit, extra = {}) => ({ ...matched, unit, ...extra });
+    const getProperty = (id) => prisma.property.findUnique({ where: { id } });
+
+    test('인증에 성공하면 입력해 둔 값이 있어도 대장 값으로 덮어쓰고, 감사에 쓴 값을 남긴다', async () => {
+      const user = await createUser();
+      const property = await createProperty();
+      await prisma.property.update({ where: { id: property.id }, data: { exclusiveArea: '59.00', floor: 3 } });
+      const ownership = await own(user, property);
+
+      const attempt = await runningAttempt(user, ownership);
+      assert.deepEqual(await receiveRunnerResult(attempt.id, withUnit({ exclusiveArea: '84.97', floor: -1 })), { accepted: true });
+
+      const saved = await getProperty(property.id);
+      assert.equal(saved.exclusiveArea.toString(), '84.97');
+      assert.equal(saved.floor, -1);
+      const [applied] = await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_APPLIED');
+      assert.deepEqual(applied.after.ledgerUnit, { exclusiveArea: '84.97', floor: -1 });
+    });
+
+    test('읽지 못한 칸(null)은 기존 값을 그대로 둔다', async () => {
+      const user = await createUser();
+      const property = await createProperty();
+      await prisma.property.update({ where: { id: property.id }, data: { exclusiveArea: '59.00', floor: 3 } });
+      const ownership = await own(user, property);
+
+      await receiveRunnerResult((await runningAttempt(user, ownership)).id, withUnit({ exclusiveArea: null, floor: 7 }));
+      const saved = await getProperty(property.id);
+      assert.equal(saved.exclusiveArea.toString(), '59');
+      assert.equal(saved.floor, 7);
+    });
+
+    test('인증 실패·일반건축물대장이면 호실 값을 바꾸지 않는다', async () => {
+      const user = await createUser();
+      const unit = { exclusiveArea: '84.97', floor: 5 };
+
+      const notMatchedProperty = await createProperty();
+      const notMatched = await own(user, notMatchedProperty);
+      const otherOwner = { owners: [{ name: '김다른사람', birthDate: '1970-01-01' }] };
+      await receiveRunnerResult((await runningAttempt(user, notMatched)).id, withUnit(unit, otherOwner));
+      assert.equal((await getOwnership(notMatched.id)).verificationStatus, 'UNVERIFIED');
+
+      const generalProperty = await createProperty();
+      const general = await own(user, generalProperty);
+      await receiveRunnerResult((await runningAttempt(user, general)).id, withUnit(unit, { ledgerKind: 'GENERAL' }));
+      assert.equal((await getOwnership(general.id)).verificationStatus, 'VERIFIED');
+
+      for (const id of [notMatchedProperty.id, generalProperty.id]) {
+        const saved = await getProperty(id);
+        assert.equal(saved.exclusiveArea, null);
+        assert.equal(saved.floor, null);
+      }
+    });
+  });
+
   describe('같은 건물 인증 공유(일반건축물대장)', () => {
     const general = { ...matched, ledgerKind: 'GENERAL' };
     const unitIn = (complex, unitNo, buildingNo = '') => prisma.property.create({ data: { complexId: complex.id, buildingNo, unitNo } });

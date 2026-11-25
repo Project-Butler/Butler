@@ -18,7 +18,8 @@ import {
 
 // testMode: [임시·시연용] 본인인증 인적사항 대조를 건너뛴다. 운영 배포 전 제거.
 const START_FIELDS = ['ownershipId', 'consent', 'identityVerificationId', 'testMode'];
-const RESULT_FIELDS = ['attemptId', 'kind', 'ledgerKind', 'owners'];
+// unit: 전유부 전용면적·층(2026-11-26 추가, 발급 서버가 전유부를 읽었을 때만 보낸다).
+const RESULT_FIELDS = ['attemptId', 'kind', 'ledgerKind', 'owners', 'unit'];
 
 // 400 details에 입력값을 담지 않는다.
 export const parseStartBody = (body) => {

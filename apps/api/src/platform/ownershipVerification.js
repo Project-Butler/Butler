@@ -175,7 +175,11 @@ const checkVerifiable = (rows, ownershipId, now) => {
 // 인증을 저장한다: 먼저 인증한 사람이 소유자라 만료·미인증인 다른 행을 자동 종료하고(REVOKED는 관리자 처리까지 남긴다)
 // 내 행을 VERIFIED로 저장한 뒤 감사·활동을 남긴다. 인증한 적 없는 행의 기록 첨부 파일 경로를 돌려준다(커밋 뒤 지운다, H-37).
 // sharedFromOwnershipId: 같은 건물의 다른 방 인증을 이어받은 경우 그 소유 관계 id(감사에만 남긴다).
-const saveVerifiedInTx = async (tx, { mine, others, property, attemptId, now, expiresAt, saveVerified, sharedFromOwnershipId = null }) => {
+// ledgerUnit: 대장(전유부) 값으로 호실 면적·층을 덮어쓴 경우 쓴 값(감사에만 남긴다).
+const saveVerifiedInTx = async (
+  tx,
+  { mine, others, property, attemptId, now, expiresAt, saveVerified, sharedFromOwnershipId = null, ledgerUnit = null },
+) => {
   const removedPaths = [];
   for (const row of others) {
     if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) {
@@ -197,6 +201,7 @@ const saveVerifiedInTx = async (tx, { mine, others, property, attemptId, now, ex
       verificationStatus: 'VERIFIED',
       verificationExpiresAt: expiresAt,
       ...(sharedFromOwnershipId ? { sharedFromOwnershipId } : {}),
+      ...(ledgerUnit ? { ledgerUnit } : {}),
     },
     client: tx,
   });
@@ -291,7 +296,19 @@ export const shareBuildingVerificationOnRegisterInTx = async (tx, { ownershipId,
   return { shared: after.verificationStatus === 'VERIFIED', removedPaths };
 };
 
-const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }) => {
+// 대장(전유부)에서 읽은 전용면적·층으로 호실 값을 덮어쓴다(2026-11-26 사용자 결정: 입력해 둔 값이 있어도 대장 값이 우선).
+// 읽지 못한 칸(null)은 건드리지 않는다. 일반건축물대장은 건물 전체 대장이라 호실 값이 없어 쓰지 않는다. 쓴 값을 돌려준다(없으면 null).
+const applyLedgerUnitInTx = async (tx, propertyId, { ledgerKind, unit }) => {
+  if (ledgerKind !== 'UNIT_EXCLUSIVE' || !unit) return null;
+  const data = {};
+  if (unit.exclusiveArea !== null) data.exclusiveArea = unit.exclusiveArea;
+  if (unit.floor !== null) data.floor = unit.floor;
+  if (Object.keys(data).length === 0) return null;
+  await tx.property.update({ where: { id: propertyId }, data });
+  return data;
+};
+
+const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, unit, saveVerified }) => {
   const now = getNow();
   const fail = async (reasonCode) => {
     await failAttemptInTx(tx, attemptId, 'RUNNING', reasonCode, { ledgerKind, ownerCount });
@@ -315,7 +332,8 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
   const { validityYears } = await readValiditySetting(tx);
   const expiresAt = computeVerificationExpiry(now, validityYears);
   const property = attempt.ownership.property;
-  const removedPaths = await saveVerifiedInTx(tx, { ...checked, property, attemptId, now, expiresAt, saveVerified });
+  const ledgerUnit = await applyLedgerUnitInTx(tx, attempt.ownership.propertyId, { ledgerKind, unit });
+  const removedPaths = await saveVerifiedInTx(tx, { ...checked, property, attemptId, now, expiresAt, saveVerified, ledgerUnit });
   await finishAttempt(tx, attemptId, 'RUNNING', { status: 'VERIFIED', ledgerKind, ownerCount });
 
   // 5. 일반건축물대장이면 같은 건물의 내 다른 방에도 적용한다.
@@ -329,10 +347,11 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
 // 돌려주는 값: { outcome: 'VERIFIED', expiresAt } | { outcome: 'FAILED', reasonCode } | { outcome: 'IGNORED' }(늦은 결과).
 // 판정 실패는 throw하지 않고 같은 트랜잭션에서 실패 기록을 커밋한다.
 // uq_ownership_verified 충돌은 롤백 후 별도 트랜잭션에서 VERIFIED_OWNER_EXISTS로 끝낸다.
-export const applyOwnershipVerification = async ({ attemptId, ledgerKind, ownerCount }, { saveVerified = defaultSaveVerified } = {}) => {
+// unit: 러너 결과의 전유부 전용면적·층(parseRunnerResult), 없으면 생략.
+export const applyOwnershipVerification = async ({ attemptId, ledgerKind, ownerCount, unit = null }, { saveVerified = defaultSaveVerified } = {}) => {
   try {
     const { removedPaths = [], ...result } = await prisma.$transaction(
-      (tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, saveVerified }),
+      (tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, unit, saveVerified }),
       TX_OPTIONS,
     );
     await removeStoredObjects(removedPaths);
