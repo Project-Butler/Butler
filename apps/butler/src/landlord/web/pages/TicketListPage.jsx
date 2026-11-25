@@ -30,7 +30,7 @@ const EMPTY_TEXT = {
 };
 
 // 상태별 개수(GET /tickets?status=…&size=1 의 meta.total). 호실·분류·방 거르기는 같이 건다.
-const useTicketCounts = ({ propertyId, category, room, reloadKey }, { onUnauthorized }) => {
+const useGetTicketCounts = ({ propertyId, category, room, reloadKey }, { onUnauthorized }) => {
   const options = { onUnauthorized };
   const base = { propertyId, category, room, size: 1 };
   const lists = {
@@ -167,7 +167,7 @@ export const TicketListPage = ({ propertyId, selectedTicketId, navKey, completeO
   const segment = findTicketSegment(segmentKey);
   const category = toFilterParam(TICKET_CATEGORY_OPTIONS, categories);
   const room = toFilterParam(ROOM_FILTER_OPTIONS, rooms);
-  const counts = useTicketCounts({ propertyId, category, room, reloadKey }, { onUnauthorized });
+  const counts = useGetTicketCounts({ propertyId, category, room, reloadKey }, { onUnauthorized });
   // 표·개수를 다시 받고, 사이드바 숫자·종도 다시 세게 한다(주소가 그대로라 레이아웃이 모른다).
   const refreshBadges = useBadgeRefresh();
   const reload = useCallback(() => {

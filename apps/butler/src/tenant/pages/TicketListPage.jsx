@@ -142,10 +142,11 @@ export const TicketListPage = ({ onUnauthorized }) => {
           </Button>
         </Card>
       )}
-      {tickets.data && tickets.data.length === 0 && (canRequest || totalCount > 0) && (
+      {/* 탭을 바꾸는 동안에는 앞 탭 목록을 보이지 않는다(useLoad 는 새 값을 받기 전까지 앞 값을 들고 있다). */}
+      {!tickets.isLoading && tickets.data && tickets.data.length === 0 && (canRequest || totalCount > 0) && (
         <p className="py-8 text-center text-body text-ink-3">{tab.key === 'active' ? '진행 중인 요청이 없어요' : '완료된 요청이 없어요'}</p>
       )}
-      {tickets.data && tickets.data.length > 0 && (
+      {!tickets.isLoading && tickets.data && tickets.data.length > 0 && (
         <ul className="space-y-3">
           {tickets.data.map((ticket) => (
             <TicketCard key={ticket.id} ticket={ticket} onOpen={() => navigate(ticketPath(ticket.id))} />
