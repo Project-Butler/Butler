@@ -12,6 +12,7 @@ import { TicketListPage } from './pages/TicketListPage';
 import { useGetTicketList } from './hooks/useGetTicketList';
 import { useGetUnreadNotifications } from './hooks/useGetUnreadNotifications';
 import { buildNotificationMenu } from './utils/notificationMenu';
+import { filterActionableTickets } from './utils/ticketView';
 import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
@@ -256,8 +257,10 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
   const { pathname } = useLocation();
   const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1, activeOwnership: 'true' }, { onUnauthorized });
   const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, { onUnauthorized });
-  // 사이드바 '유지보수 요청' 옆 숫자 = 확인 필요(접수) 요청 수(D17). 종 = 안 읽은 서버 알림 + 갱신 거절 통지.
-  const openTickets = useGetTicketList({ status: 'OPEN', size: 1 }, { onUnauthorized });
+  // 사이드바 '유지보수 요청' 옆 숫자 = 처리할 수 있는 확인 필요(접수) 요청 수(D17). 소유가 끝난 호실에 남은 요청은 뺀다(오늘 할 일과 같은 기준).
+  // 목록 API 최대 100건을 받아 센다. 종 = 안 읽은 서버 알림 + 갱신 거절 통지.
+  const openTickets = useGetTicketList({ status: 'OPEN', size: 100 }, { onUnauthorized });
+  const openTicketCount = filterActionableTickets(openTickets.data?.items).length;
   const unread = useGetUnreadNotifications({ onUnauthorized });
   const routerNavigate = useNavigate();
   const { refetch } = expiringSoon;
@@ -279,7 +282,7 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
   const { onNavigate, user } = layoutProps;
   return (
     <LandlordLayout
-      navBadges={{ leases: expiringSoon.data?.meta.total ?? 0, tickets: openTickets.data?.meta.total ?? 0 }}
+      navBadges={{ leases: expiringSoon.data?.meta.total ?? 0, tickets: openTicketCount }}
       notifications={buildNotificationMenu({
         unread: unread.items,
         renewal: toRenewalNotifications(renewal.notices, onNavigate),

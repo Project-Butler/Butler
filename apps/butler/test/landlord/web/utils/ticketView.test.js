@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildTicketSummaryTitle, findTicketSegment, TICKET_STATUS_SEGMENTS, toFilterParam } from '../../../../src/landlord/web/utils/ticketView';
+import { buildTicketSummaryTitle, filterActionableTickets, findTicketSegment, TICKET_STATUS_SEGMENTS, toFilterParam } from '../../../../src/landlord/web/utils/ticketView';
 import { buildNotificationMenu, toLandlordWebPath } from '../../../../src/landlord/web/utils/notificationMenu';
 
 describe('PC 수리 요청 표시 계산', () => {
@@ -11,6 +11,11 @@ describe('PC 수리 요청 표시 계산', () => {
       ['canceled', 'CANCELED'],
     ]);
     expect(findTicketSegment('nope').key).toBe('todo');
+  });
+
+  it('처리할 수 있는 요청만 센다 — 소유가 끝난 호실에 남은 요청(isReadOnly)은 뺀다(사이드바 개수·오늘 할 일)', () => {
+    expect(filterActionableTickets([{ id: 'a', isReadOnly: false }, { id: 'b', isReadOnly: true }, { id: 'c' }]).map((t) => t.id)).toEqual(['a', 'c']);
+    expect(filterActionableTickets(undefined)).toEqual([]);
   });
 
   it('거르기 값은 보기 순서대로 쉼표로, 없으면 undefined', () => {

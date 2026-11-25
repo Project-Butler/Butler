@@ -105,8 +105,8 @@ export const HomePage = ({ user, onUnauthorized }) => {
   const ownerships = useGetPropertyOwnershipList({ active: 'true', size: LIST_SIZE }, hookOptions);
 
   const today = getTodayKST();
-  // 확인 필요(접수) 수리 요청(D18). 할 일 칸에만 쓰므로 앞 20건만.
-  const openTickets = useGetTicketList({ status: 'OPEN', size: 20 }, { onUnauthorized });
+  // 확인 필요(접수) 수리 요청(D18). 웹 사이드바 개수와 같은 크기(최대 100건)로 받는다.
+  const openTickets = useGetTicketList({ status: 'OPEN', size: 100 }, { onUnauthorized });
   const summary = toHomeSummary({
     contracts: contracts.data,
     properties: properties.data,

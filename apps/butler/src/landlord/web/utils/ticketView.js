@@ -61,6 +61,10 @@ export const TICKET_STATUS_SEGMENTS = [
 ];
 export const findTicketSegment = (key) => TICKET_STATUS_SEGMENTS.find((segment) => segment.key === key) ?? TICKET_STATUS_SEGMENTS[0];
 
+// 처리할 수 있는 요청만 고른다. 소유가 끝난 호실에 남은 요청(isReadOnly)은 처리할 사람이 없으므로
+// 사이드바 개수·오늘 할 일에서 뺀다(서버 목록은 예전 소유 관계의 요청도 돌려준다).
+export const filterActionableTickets = (tickets = []) => tickets.filter((ticket) => !ticket.isReadOnly);
+
 // 고른 값을 보기 순서대로 쉼표로 잇는다. 아무것도 안 골랐으면 undefined(조건 없음).
 export const toFilterParam = (options, values) =>
   options
