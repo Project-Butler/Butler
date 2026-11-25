@@ -270,7 +270,7 @@ export const buildTodoItems = ({ current, next, nextKind, today, lapsed = null, 
         tone: 'mute',
         icon: 'moveOut',
         title: `퇴거 점검 · ${current.endDate} 중도 해지${current.tenantName ? ` (${current.tenantName})` : ''}`,
-        description: '집 상태 사진, 열쇠·출입카드 돌려받기, 공과금 정산 · 알림만(점검 목록 기능은 나중에)',
+        description: '집 상태 사진, 열쇠·출입카드 돌려받기, 공과금 정산 · 알림만',
         dday: daysBetween(today, current.endDate),
       },
     ];
@@ -362,7 +362,7 @@ export const buildTodoItems = ({ current, next, nextKind, today, lapsed = null, 
       tone: 'mute',
       icon: 'moveOut',
       title: `퇴거 점검 · ${current.endDate}${current.tenantName ? ` (${current.tenantName})` : ''}`,
-      description: '집 상태 사진, 열쇠·출입카드 돌려받기, 공과금 정산 · 알림만(점검 목록 기능은 나중에)',
+      description: '집 상태 사진, 열쇠·출입카드 돌려받기, 공과금 정산 · 알림만',
       dday: daysToEnd,
     });
     items.push({
@@ -390,7 +390,7 @@ export const buildTodoItems = ({ current, next, nextKind, today, lapsed = null, 
     tone: 'later',
     icon: 'checklist',
     title: '퇴거 점검 리스트 · 만료 1개월 전부터',
-    description: '열쇠·출입카드 돌려받기, 집 상태 사진 남기기 (4단계 입주·퇴거에서) · 알림만',
+    description: '열쇠·출입카드 돌려받기, 집 상태 사진 남기기 · 알림만',
   });
   return items;
 };
