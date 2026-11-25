@@ -15,6 +15,8 @@ import {
   UNVERIFIED_RETENTION_DAYS,
 } from './ownershipVerificationRules.js';
 import { prisma } from './prismaClient.js';
+// 인증 전 기록의 첨부 파일 삭제(H-37). storage/index.js는 service를 import하지 않아 순환이 없다.
+import { removeStoredObjects } from '../domains/documents/storage/index.js';
 
 export const VALIDITY_SETTING_KEY = 'OWNERSHIP_VERIFICATION_VALIDITY_YEARS';
 const TX_OPTIONS = { maxWait: 10_000, timeout: 20_000 };
@@ -110,8 +112,9 @@ const defaultSaveVerified = (tx, { ownershipId, attemptId, verifiedAt, expiresAt
     data: { verificationStatus: 'VERIFIED', verifiedAt, verificationExpiresAt: expiresAt, checkId: attemptId },
   });
 
+// 지울 파일 경로(인증 전 기록의 첨부, H-37)를 돌려준다. 호출하는 쪽이 커밋 뒤 removeStoredObjects로 지운다.
 const endOwnerAutomatically = async (tx, row, endReason) => {
-  const ended = await endOwnershipInTx(tx, row, { endReason, note: null, checkActiveContracts: false });
+  const { ownership: ended, removedPaths } = await endOwnershipInTx(tx, row, { endReason, note: null, checkActiveContracts: false });
   await audit.record({
     action: 'OWNERSHIP_ENDED',
     resourceType: 'OWNERSHIP',
@@ -127,6 +130,7 @@ const endOwnerAutomatically = async (tx, row, endReason) => {
     propertyId: ended.propertyId,
     params: { ...toUnitParams(ended.property), endReason },
   });
+  return removedPaths;
 };
 
 // 기간 안에 인증하지 않은 등록을 끝낸다(cron). 진행 중 시도가 있으면 이번에는 건너뛴다.
@@ -142,15 +146,17 @@ export const endAbandonedUnverifiedOwnerships = async ({ now = getNow() } = {}) 
 
   let ended = 0;
   for (const { id } of candidates) {
-    const didEnd = await prisma.$transaction(async (tx) => {
+    const removedPaths = await prisma.$transaction(async (tx) => {
       const row = await lockOwnershipRow(tx, id);
-      if (!row || row.endedAt || row.verificationStatus !== 'UNVERIFIED') return false;
+      if (!row || row.endedAt || row.verificationStatus !== 'UNVERIFIED') return null;
       const active = await tx.ownershipVerificationAttempt.count({ where: { ownershipId: id, status: { in: [...ACTIVE_ATTEMPT_STATUSES] } } });
-      if (active > 0) return false;
-      await endOwnerAutomatically(tx, row, 'UNVERIFIED_EXPIRED');
-      return true;
+      if (active > 0) return null;
+      return endOwnerAutomatically(tx, row, 'UNVERIFIED_EXPIRED');
     });
-    if (didEnd) ended += 1;
+    if (removedPaths) {
+      ended += 1;
+      await removeStoredObjects(removedPaths);
+    }
   }
   return { ended };
 };
@@ -183,14 +189,20 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
   if (mine.verificationStatus !== 'VERIFIED' && hasEarlierRevokedOwner(rows, mine)) return fail('NOT_FIRST_REGISTRANT');
 
   // 5. 먼저 인증한 사람이 소유자다. 만료·미인증인 다른 행을 자동 종료한다(REVOKED는 관리자 처리까지 남긴다).
+  // 인증한 적 없는 행의 기록 첨부 파일 경로는 모아서 커밋 뒤 지운다(H-37).
+  const removedPaths = [];
   for (const row of others) {
-    if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) await endOwnerAutomatically(tx, row, 'SUPERSEDED');
+    if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) {
+      removedPaths.push(...(await endOwnerAutomatically(tx, row, 'SUPERSEDED')));
+    }
   }
 
   // 6. 내 행을 인증으로 저장하고 시도를 끝낸다. 유효기간은 지금 값으로 계산해 저장한다.
   const { validityYears } = await readValiditySetting(tx);
   const expiresAt = computeVerificationExpiry(now, validityYears);
   await saveVerified(tx, { ownershipId: mine.id, attemptId, verifiedAt: now, expiresAt });
+  // 처음 인증 시각은 한 번만 채운다(재인증으로 덮어써지는 verifiedAt과 별개, 하우스 로그 H-37·H-44).
+  await tx.ownership.updateMany({ where: { id: mine.id, firstVerifiedAt: null }, data: { firstVerifiedAt: now } });
   await finishAttempt(tx, attemptId, 'RUNNING', { status: 'VERIFIED', ledgerKind, ownerCount });
 
   await audit.record({
@@ -208,7 +220,7 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
     propertyId: attempt.ownership.propertyId,
     params: { attemptId, expiresAt: expiresAt.toISOString(), ...toUnitParams(attempt.ownership.property) },
   });
-  return { outcome: 'VERIFIED', expiresAt };
+  return { outcome: 'VERIFIED', expiresAt, removedPaths };
 };
 
 // 돌려주는 값: { outcome: 'VERIFIED', expiresAt } | { outcome: 'FAILED', reasonCode } | { outcome: 'IGNORED' }(늦은 결과).
@@ -216,7 +228,12 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
 // uq_ownership_verified 충돌은 롤백 후 별도 트랜잭션에서 VERIFIED_OWNER_EXISTS로 끝낸다.
 export const applyOwnershipVerification = async ({ attemptId, ledgerKind, ownerCount }, { saveVerified = defaultSaveVerified } = {}) => {
   try {
-    return await prisma.$transaction((tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, saveVerified }), TX_OPTIONS);
+    const { removedPaths = [], ...result } = await prisma.$transaction(
+      (tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, saveVerified }),
+      TX_OPTIONS,
+    );
+    await removeStoredObjects(removedPaths);
+    return result;
   } catch (error) {
     if (error?.code !== 'P2002') throw error;
     await prisma.$transaction((tx) => failAttemptInTx(tx, attemptId, 'RUNNING', 'VERIFIED_OWNER_EXISTS', { ledgerKind, ownerCount }));

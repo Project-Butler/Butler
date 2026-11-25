@@ -10,7 +10,7 @@ import {
 import { sendData, sendList } from '../../platform/respond.js';
 import { LISTING_FIELDS, parseListingFields } from '../../platform/unitListing.js';
 import { isUuid } from '../../platform/uuid.js';
-import { endOwnership, findMyOwnerships, findOwnershipForUser, updateOwnership } from './service.js';
+import { endOwnership, findMyOwnerships, findOwnershipForUser, removeOwnership, updateOwnership } from './service.js';
 
 // 방 구성·설비(unitType·equipment·equipmentEtc)는 명세 변경 C9
 const UPDATE_FIELDS = ['acquiredYearMonth', 'purchasePrice', ...LISTING_FIELDS];
@@ -121,6 +121,20 @@ export const postOwnershipEnd = async (req, res, next) => {
 
     const ownership = await endOwnership(req.user, ownershipId, parseEndBody(req.body), req);
     sendData(res, ownership);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /property-ownerships/:ownershipId/remove — 바디 없음, 204.
+export const postOwnershipRemove = async (req, res, next) => {
+  try {
+    const { ownershipId } = req.params;
+    if (!isUuid(ownershipId)) throwOwnershipNotFound();
+    assertAllowedBody(req.body ?? {}, []);
+
+    await removeOwnership(req.user, ownershipId, req);
+    res.status(204).end();
   } catch (error) {
     next(error);
   }

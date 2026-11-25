@@ -8,7 +8,12 @@ export const lockOwnershipRow = async (tx, ownershipId) => {
            property_id::text AS "propertyId",
            ended_at AS "endedAt",
            verification_status::text AS "verificationStatus",
-           verification_expires_at AS "verificationExpiresAt"
+           verification_expires_at AS "verificationExpiresAt",
+           verified_at AS "verifiedAt",
+           first_verified_at AS "firstVerifiedAt",
+           logs_promoted_at AS "logsPromotedAt",
+           end_reason::text AS "endReason",
+           removed_at AS "removedAt"
     FROM ownerships
     WHERE id = ${ownershipId}::uuid
     FOR UPDATE`;
@@ -24,7 +29,10 @@ export const lockActiveOwnershipRows = (tx, propertyId) =>
            started_at AS "startedAt",
            ended_at AS "endedAt",
            verification_status::text AS "verificationStatus",
-           verification_expires_at AS "verificationExpiresAt"
+           verification_expires_at AS "verificationExpiresAt",
+           verified_at AS "verifiedAt",
+           first_verified_at AS "firstVerifiedAt",
+           logs_promoted_at AS "logsPromotedAt"
     FROM ownerships
     WHERE property_id = ${propertyId}::uuid AND ended_at IS NULL
     ORDER BY id

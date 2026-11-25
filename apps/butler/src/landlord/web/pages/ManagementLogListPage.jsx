@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
-import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Building2, ChevronDown, History, Image, LayoutList, Plus, SearchX, Send } from 'lucide-react';
 import { Badge, Button, PageSkeleton } from '@butler/ui';
+import { AllHomesTimeline } from '../components/AllHomesTimeline/AllHomesTimeline';
 import { EmptyState } from '../components/EmptyState/EmptyState';
+import { HouseLogTimeline } from '../components/HouseLogTimeline/HouseLogTimeline';
+import { HouseLogTodo } from '../components/HouseLogTodo/HouseLogTodo';
 import { LogFilterCard, MAX_QUERY_LENGTH } from '../components/LogFilterCard/LogFilterCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
 import { LogHomeSelect } from '../components/LogHomeSelect/LogHomeSelect';
 import { LogInspector } from '../components/LogInspector/LogInspector';
+import { PrivateChip } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { RoomChip } from '../components/RoomChip/RoomChip';
+import { SoldHomeBanner } from '../components/SoldHomeBanner/SoldHomeBanner';
+import { useAllHomesTimeline } from '../hooks/useAllHomesTimeline';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
-import { formatWon } from '../utils/contract';
+import { useHouseLogTimeline } from '../hooks/useHouseLogTimeline';
+import { formatWon, getTodayKST } from '../utils/contract';
+import { buildTodoItems, getHomeRowSummary, groupDotsByDate, toContractDots, toRecordDots } from '../utils/houseLogTimeline';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
 import { ROOM_FILTER_OPTIONS } from '../../../shared/room';
 import { formatUnitLabel } from '../utils/unitAddress';
@@ -119,6 +127,13 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
                   <td className={TD}>
                     <span className="flex gap-1.5">
                       <Badge>{getLogTypeLabel(log.type)}</Badge>
+                      {log.scope === 'PRIVATE' && <PrivateChip />}
+                      {log.isHideOnly && (
+                        <Badge tone="verified" className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <Send size={12} aria-hidden="true" />
+                          넘어간 이력
+                        </Badge>
+                      )}
                       {isFutureLog(log) && <Badge tone="warning">예정</Badge>}
                     </span>
                   </td>
@@ -139,6 +154,104 @@ const ManagementLogTable = ({ propertyId, type, room, q, showProperty, compactPr
         </div>
       )}
     </>
+  );
+};
+
+const TimelinePlaceholder = ({ error }) => (
+  <section className="rounded-card border border-line bg-surface p-6" aria-label="계약 타임라인">
+    {error ? (
+      <NoticeBox>{error.message}</NoticeBox>
+    ) : (
+      <p role="status" className="py-6 text-center text-body text-ink-3">
+        불러오는 중입니다
+      </p>
+    )}
+  </section>
+);
+
+// 한 호실: (소유가 끝났으면 안내 띠) → 계약 타임라인 → 앞으로 할 일(H-22). 유형·방 거르기는 기록 점만 줄인다.
+// 계약·통지 쪽 일은 호실 상세 계약 칸으로 보낸다(H-23·H-38).
+// 축 위에서 이만큼(%) 안에 있는 점은 한 묶음으로(점 16px이 겹치지 않게, B1).
+const DOT_GROUP_GAP_PERCENT = 3;
+
+const SingleHomeOverview = ({ propertyId, propertyName, types, rooms, reloadKey, today, onShowLog, onNavigate, onRemoved, onUnauthorized }) => {
+  const timeline = useHouseLogTimeline({ propertyId, today, reloadKey }, { onUnauthorized });
+  const { logs, axis, current, next, nextKind, past, notices, lapsed, lapsedNotices } = timeline;
+  const groups = useMemo(
+    () =>
+      groupDotsByDate([...toRecordDots(logs, axis, { types, rooms }), ...toContractDots({ current, next, nextKind, past, notices }, axis)], {
+        axis,
+        minGapPercent: DOT_GROUP_GAP_PERCENT,
+      }),
+    [logs, axis, types, rooms, current, next, nextKind, past, notices],
+  );
+  const todo = useMemo(
+    () => buildTodoItems({ current, next, nextKind, today, lapsed, lapsedNotices }),
+    [current, next, nextKind, today, lapsed, lapsedNotices],
+  );
+
+  if (timeline.error && logs.length === 0) return <TimelinePlaceholder error={timeline.error} />;
+  if (timeline.isLoading && logs.length === 0) return <TimelinePlaceholder />;
+
+  const showContract = (contractId) => onNavigate('propertyDetail', { propertyId, contractId });
+  const isVerifiedHome = timeline.ownership?.verificationStatus === 'VERIFIED';
+  const handleTodoAction = (action) => {
+    if (action.kind === 'RENEW') onNavigate('contractRegister', { propertyId, renewFrom: action.contractId });
+    else showContract(action.contractId);
+  };
+
+  return (
+    <>
+      {timeline.endedOn && timeline.ownership && (
+        <SoldHomeBanner
+          ownershipId={timeline.ownership.id}
+          endedOn={timeline.endedOn}
+          isSold={timeline.isSold}
+          onRemoved={onRemoved}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
+      {timeline.error && <NoticeBox>{timeline.error.message}</NoticeBox>}
+      <HouseLogTimeline
+        axis={axis}
+        groups={groups}
+        current={current}
+        next={next}
+        nextKind={nextKind}
+        past={past}
+        band={timeline.band}
+        today={today}
+        endedOn={timeline.endedOn}
+        isSold={timeline.isSold}
+        hiddenPastCount={timeline.hiddenPastCount}
+        propertyName={propertyName}
+        onShowLog={onShowLog}
+        onShowContract={showContract}
+        canRegisterContract={isVerifiedHome}
+        lapsedContract={todo.some((item) => item.id === 'implicit-renewal-lapsed') ? lapsed : null}
+        onRenewLapsed={() => onNavigate('contractRegister', { propertyId, renewFrom: lapsed?.id })}
+        onRegisterContract={() => (isVerifiedHome ? onNavigate('contractRegister', { propertyId }) : onNavigate('propertyVerify', { propertyId }))}
+      />
+      {!timeline.endedOn && <HouseLogTodo items={todo} onAction={handleTodoAction} />}
+    </>
+  );
+};
+
+// 전체 호실: 같은 달력 위 호실별 줄(H-28). 지금 소유 + 예전 소유(매도) 호실.
+const AllHomesOverview = ({ homes, isHomesLoading, types, rooms, reloadKey, today, onNavigate, onUnauthorized }) => {
+  const filter = useMemo(() => ({ types, rooms }), [types, rooms]);
+  const { isLoading, error, axis, rows } = useAllHomesTimeline({ homes, filter, today, reloadKey }, { onUnauthorized });
+  if (error) return <TimelinePlaceholder error={error} />;
+  // 호실 목록을 받기 전에는 "호실이 없어요" 대신 불러오는 중(C8).
+  if (isHomesLoading || (isLoading && rows.every((row) => row.logs.length === 0))) return <TimelinePlaceholder />;
+  return (
+    <AllHomesTimeline
+      axis={axis}
+      rows={rows}
+      today={today}
+      summaryOf={(row) => getHomeRowSummary(row, today)}
+      onOpenHome={(id) => onNavigate('logs', { propertyId: id })}
+    />
   );
 };
 
@@ -164,6 +277,8 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
   const [selectedId, setSelectedId] = useState(selectedLogId ?? null);
   const [reloadKey, setReloadKey] = useState(0);
   const [total, setTotal] = useState();
+  // 오늘(KST)은 화면을 여는 동안 한 번만 정한다(자정을 넘겨도 계산이 흔들리지 않게).
+  const [today] = useState(getTodayKST);
 
   // 수정 팝업 주소(/logs/:logId/edit)로 바로 들어오면 그 기록을 패널에도 연다.
   const editingLogId = modal?.logId;
@@ -205,6 +320,12 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
   const handleDeleted = () => {
     setSelectedId(null);
     setReloadKey((prev) => prev + 1);
+  };
+  // 목록에서 지우기(H-41) 뒤: 호실 목록을 다시 읽고 하우스 로그 첫 화면으로.
+  const handleOwnershipRemoved = () => {
+    owned.refetch();
+    formerlyOwned.refetch();
+    onNavigate('logs', {});
   };
 
   const addButton = (
@@ -262,6 +383,34 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
           rooms={rooms}
           onRoomsChange={setRooms}
         />
+        {propertyId ? (
+          <SingleHomeOverview
+            key={propertyId}
+            propertyId={propertyId}
+            propertyName={properties.find((property) => property.id === propertyId)?.displayName}
+            types={types}
+            rooms={rooms}
+            reloadKey={reloadKey}
+            today={today}
+            onShowLog={setSelectedId}
+            onNavigate={onNavigate}
+            onRemoved={handleOwnershipRemoved}
+            onUnauthorized={onUnauthorized}
+          />
+        ) : (
+          showAll && (
+            <AllHomesOverview
+              homes={properties}
+              isHomesLoading={(!owned.data && !owned.error) || (!formerlyOwned.data && !formerlyOwned.error)}
+              types={types}
+              rooms={rooms}
+              reloadKey={reloadKey}
+              today={today}
+              onNavigate={onNavigate}
+              onUnauthorized={onUnauthorized}
+            />
+          )
+        )}
         <div className="grid grid-cols-10 items-start gap-5">
           <section className="logs-page__table-wrap col-span-7 min-w-0 overflow-hidden rounded-card border border-line bg-surface">
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
@@ -312,7 +461,7 @@ export const ManagementLogListPage = ({ propertyId, showAll = false, selectedLog
         description={
           isHomeSelect
             ? `집 ${activeHomes.length}채 · 진행 중인 수리 요청이 많은 집부터 보여요.`
-            : '내 호실의 수리·점검·메모를 날짜 순서로 모아 봐요.'
+            : '이 집에서 있었던 일(계약·수리·점검·통지)을 한곳에서 봐요.'
         }
         actions={
           <>

@@ -7,7 +7,7 @@ export const toDbDate = (dateString) => new Date(`${dateString}T00:00:00Z`);
 // 직접 작성(POST)과 시스템 기록이 같이 쓰는 삽입. client: prisma 또는 트랜잭션의 tx.
 export const insertPropertyLog = (
   client,
-  { propertyId, ownershipId, authorId = null, scope, type, title, content = null, occurredOn, cost = null, room = null, source = {}, include },
+  { propertyId, ownershipId, authorId = null, scope, keepPrivate = false, type, title, content = null, occurredOn, cost = null, room = null, source = {}, include },
 ) =>
   client.propertyLog.create({
     data: {
@@ -15,6 +15,7 @@ export const insertPropertyLog = (
       ownershipId,
       authorId,
       scope,
+      keepPrivate,
       type,
       title,
       content,

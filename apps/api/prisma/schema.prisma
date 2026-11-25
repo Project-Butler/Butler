@@ -127,6 +127,7 @@ model User {
   uploads           Upload[]
   uploadedDocuments Document[]    @relation("UploadedDocuments")
   authoredLogs      PropertyLog[] @relation("AuthoredPropertyLogs")
+  propertyLogHides  PropertyLogHide[]
   threadParticipations ThreadParticipant[]
   sentThreadMessages   ThreadMessage[] @relation("SentThreadMessages")
 
@@ -475,6 +476,12 @@ model Ownership {
   verificationStatus    VerificationStatus @default(UNVERIFIED) @map("verification_status")
   verifiedAt            DateTime?          @map("verified_at") @db.Timestamptz(3)
   verificationExpiresAt DateTime?          @map("verification_expires_at") @db.Timestamptz(3)
+  // 처음 인증한 시각. 재인증으로 덮어써지는 verifiedAt과 달리 한 번만 채운다(하우스 로그 H-37·H-44).
+  firstVerifiedAt       DateTime?          @map("first_verified_at") @db.Timestamptz(3)
+  // 인증 전 기록 올리기(H-44)를 처리한 시각(올리기·나만 보기로 두기 모두). 소유 관계당 한 번.
+  logsPromotedAt        DateTime?          @map("logs_promoted_at") @db.Timestamptz(3)
+  // 판 사람이 [목록에서 지우기]한 시각(H-41). 계약·서류는 지우지 않고 목록·검색·하우스 로그에서만 뺀다.
+  removedAt             DateTime?          @map("removed_at") @db.Timestamptz(3)
 
   // 등기부 증빙 문서
   evidenceDocumentId String?   @map("evidence_document_id") @db.Uuid
@@ -496,6 +503,7 @@ model Ownership {
   contracts Contract[]
   tickets   Ticket[]
   logs      PropertyLog[]
+  logHides  PropertyLogHide[]
 
   verificationAttempts OwnershipVerificationAttempt[]
 
@@ -607,6 +615,8 @@ model PropertyLog {
   author      User?     @relation("AuthoredPropertyLogs", fields: [authorId], references: [id])
 
   scope      PropertyLogScope
+  // 작성자가 고른 나만 보기(메모 체크). 인증 전 기록 올리기(H-44)에서 뺀다. 공개 범위 표시는 scope 기준.
+  keepPrivate Boolean          @default(false) @map("keep_private")
   type       String           @db.VarChar(30) // REPAIR, INSPECTION, NOTE, TICKET_SUMMARY(등록형)
   title      String           @db.VarChar(100)
   content    String?
@@ -627,11 +637,30 @@ model PropertyLog {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tickets Ticket[]
+  // 판 사람이 "내 화면에서 삭제"한 넘어간 기록(H-41). 그 사람에게만 안 보인다.
+  hides   PropertyLogHide[]
 
   @@index([propertyId, scope, occurredOn(sort: Desc)])
   @@index([ownershipId, occurredOn(sort: Desc)])
   @@index([authorId, occurredOn(sort: Desc)])
   @@map("property_logs")
+}
+
+// 하우스 로그 숨김(H-41). 매도 뒤 판 사람이 넘어간 호실 이력·수리 요청 요약을 자기 화면에서만 지운다.
+// ownershipId: 어느 끝난 소유 관계에서 숨겼는지([목록에서 지우기] 때 그 관계의 숨김만 지운다).
+model PropertyLogHide {
+  userId      String      @map("user_id") @db.Uuid
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logId       String      @map("log_id") @db.Uuid
+  log         PropertyLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  ownershipId String      @map("ownership_id") @db.Uuid
+  ownership   Ownership   @relation(fields: [ownershipId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([userId, logId])
+  @@index([logId])
+  @@index([ownershipId])
+  @@map("property_log_hides")
 }
 
 model Ticket {

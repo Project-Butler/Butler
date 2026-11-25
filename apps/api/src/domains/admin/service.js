@@ -15,6 +15,7 @@ import { ImportAlreadyRunningError } from '../../referenceData/referenceImports.
 import { revokeAllSessions, toPublicUser } from '../auth/service.js';
 import { createComplexByAdmin } from '../complexes/service.js';
 import { JusoRefreshBusyError, runJusoRefreshNow } from '../cron/referenceData.js';
+import { removeStoredObjects } from '../documents/storage/index.js';
 import { toJobResponse } from '../jobs/service.js';
 import { toResponse as toOwnershipResponse } from '../propertyOwnerships/service.js';
 import { splitExpiredOwnerships, sumCounts, toCountMap } from './dashboardCounts.js';
@@ -283,13 +284,15 @@ export const revokeOwnership = (actor, ownershipId, { reason }, req) =>
 
 // POST /admin/property-ownerships/:ownershipId/end. 사용자 종료와 같은 종료 로직을 쓰되,
 // 운영자 종료는 계약이 있어도 진행한다(api-contract.md 3장). 계약은 이전 소유자·임차인에게 읽기 전용으로 남는다.
-export const endOwnershipByAdmin = (actor, ownershipId, { reason }, req) =>
-  prisma.$transaction(async (tx) => {
+// 인증한 적 없는 소유 관계면 하우스 로그가 지워지고(H-37) 첨부 파일은 커밋 뒤 지운다.
+export const endOwnershipByAdmin = async (actor, ownershipId, { reason }, req) => {
+  let removedPaths = [];
+  const response = await prisma.$transaction(async (tx) => {
     // 사용자 종료·계약 쓰기와 같은 행 잠금으로 줄을 세운다.
     const ownership = await lockOwnershipRow(tx, ownershipId);
     if (!ownership) throwOwnershipNotFound();
 
-    await endOwnershipInTx(tx, ownership, { endReason: 'ADMIN_ENDED', note: reason, checkActiveContracts: false });
+    ({ removedPaths } = await endOwnershipInTx(tx, ownership, { endReason: 'ADMIN_ENDED', note: reason, checkActiveContracts: false }));
     await audit.record({
       actor,
       action: 'OWNERSHIP_ENDED',
@@ -303,6 +306,9 @@ export const endOwnershipByAdmin = (actor, ownershipId, { reason }, req) =>
     const ended = await tx.ownership.findUnique({ where: { id: ownershipId }, include: OWNERSHIP_INCLUDE });
     return toAdminOwnership(ended, getNow());
   });
+  await removeStoredObjects(removedPaths);
+  return response;
+};
 
 const toValiditySetting = ({ validityYears, updatedAt }) => ({ validityYears, updatedAt: updatedAt?.toISOString() ?? null });
 

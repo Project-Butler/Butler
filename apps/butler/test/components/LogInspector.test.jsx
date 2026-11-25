@@ -27,6 +27,7 @@ const log = {
   author: { id: 'me' },
   source: null,
   isReadOnly: false,
+  isDeletable: true,
 };
 
 const renderInspector = (logId) => {
@@ -69,7 +70,7 @@ describe('LogInspector (하우스 로그 오른쪽 기록 상세)', () => {
   });
 
   it('읽기 전용 기록은 [수정]이 없다', async () => {
-    vi.mocked(getManagementLog).mockResolvedValue({ ...log, isReadOnly: true, author: null });
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, isReadOnly: true, isDeletable: false, author: null });
     renderInspector('log-1');
     await screen.findByRole('heading', { name: '욕실 배수구 교체' });
     expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument();
@@ -84,5 +85,35 @@ describe('LogInspector (하우스 로그 오른쪽 기록 상세)', () => {
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
     expect(deleteManagementLog).toHaveBeenCalledWith('log-1');
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it('삭제 버튼은 서버가 준 isDeletable을 따른다(호실 이력도 지울 수 있다, H-36)', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, scope: 'PROPERTY_HISTORY', isDeletable: true });
+    renderInspector('log-1');
+    expect(await screen.findByRole('button', { name: '기록 삭제' })).toBeInTheDocument();
+  });
+
+  it('매도 뒤 넘어간 기록(isHideOnly)은 [내 화면에서 삭제]이고 새 임대인에게는 그대로라고 묻는다(H-41)', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, scope: 'PROPERTY_HISTORY', isReadOnly: true, isDeletable: true, isHideOnly: true });
+    vi.mocked(deleteManagementLog).mockResolvedValue({ id: 'log-1' });
+    const { onDeleted } = renderInspector('log-1');
+    await userEvent.click(await screen.findByRole('button', { name: '내 화면에서 삭제' }));
+    expect(screen.getByText('내 화면에서만 지워요. 새 임대인에게는 그대로 보여요.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    expect(deleteManagementLog).toHaveBeenCalledWith('log-1');
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it('isDeletable이 false면 나만 보기라도 삭제 버튼이 없다', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, isDeletable: false });
+    renderInspector('log-1');
+    await screen.findByRole('heading', { name: '욕실 배수구 교체' });
+    expect(screen.queryByRole('button', { name: '기록 삭제' })).not.toBeInTheDocument();
+  });
+
+  it('나만 보기 기록은 자물쇠 "나만 보기" 칩, 호실 이력은 칩 없음', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue(log);
+    renderInspector('log-1');
+    expect(await screen.findByText('나만 보기')).toBeInTheDocument();
   });
 });

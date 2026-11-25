@@ -5,10 +5,12 @@ import { DateTile } from '../components/DateTile/DateTile';
 import { IconTile } from '../components/IconTile/IconTile';
 import { ManagementLogBadges } from '../components/ManagementLogBadges/ManagementLogBadges';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
+import { OwnershipEndNotices } from '../components/OwnershipEndNotices/OwnershipEndNotices';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { PropertyContractArea } from '../components/PropertyContractArea/PropertyContractArea';
 import { PropertyDocumentBoxCard } from '../components/PropertyDocumentBoxCard/PropertyDocumentBoxCard';
 import { LogFormModal } from '../components/LogFormModal/LogFormModal';
+import { UnverifiedLogPromoteDialog } from '../components/UnverifiedLogPromoteDialog/UnverifiedLogPromoteDialog';
 import { VerifyModal } from '../components/VerifyModal/VerifyModal';
 import { VerificationPanel } from '../components/VerificationPanel/VerificationPanel';
 import { useGetComplex } from '../hooks/useGetComplex';
@@ -176,7 +178,7 @@ const BasicInfoSection = ({ property, complex, onSaved, onUnauthorized }) => {
 
 // 내 소유 정보: 취득 연월·매입가 수정, 호실 삭제(= 소유 관계 종료, 확인 패널). 종료된 소유 관계는 조회만.
 // 권리자 인증 상태·버튼은 오른쪽 위 VerificationPanel이 맡는다.
-const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
+const OwnershipSection = ({ propertyId, ownership, onSaved, onEnded, onUnauthorized }) => {
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const end = usePostPropertyOwnershipEnd({ onUnauthorized });
   const [mode, setMode] = useState('view'); // view | edit | end
@@ -341,6 +343,12 @@ const OwnershipSection = ({ ownership, onSaved, onEnded, onUnauthorized }) => {
               })}
             </div>
           </div>
+          <OwnershipEndNotices
+            propertyId={propertyId}
+            isSold={isSoldReason(endReason)}
+            isUnverified={(ownership.firstVerifiedAt ?? ownership.verifiedAt) == null}
+            onUnauthorized={onUnauthorized}
+          />
           {end.error && <NoticeBox>{end.error.message}</NoticeBox>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setMode('view')} disabled={end.isLoading}>
@@ -680,6 +688,7 @@ export const PropertyDetailPage = ({
           {ownership && (
             <OwnershipSection
               key={ownership.id}
+              propertyId={property.id}
               ownership={ownership}
               onSaved={ownershipQuery.refetch}
               // 들어온 화면(내 부동산·홈 등)으로 돌아간다. 그 화면은 다시 열리면서 새 목록을 불러온다.
@@ -715,6 +724,12 @@ export const PropertyDetailPage = ({
           onUnauthorized={onUnauthorized}
         />
       )}
+      {/* 권리자 인증을 마치면 인증 전 기록을 호실 이력으로 남길지 한 번 묻는다(H-44). 인증 팝업이 닫힌 뒤에. */}
+      <UnverifiedLogPromoteDialog
+        ownershipId={!isVerifyOpen && ownership?.id === activeOwnershipId && ownership?.verificationStatus === 'VERIFIED' ? ownership.id : undefined}
+        onDone={() => setLogReloadKey((prev) => prev + 1)}
+        onUnauthorized={onUnauthorized}
+      />
     </div>
   );
 };

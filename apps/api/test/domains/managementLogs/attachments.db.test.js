@@ -77,9 +77,12 @@ describe('하우스 로그 첨부', { skip: dbTestSkip }, () => {
     return prisma.property.create({ data: { complexId: complex.id, buildingNo: '103', unitNo: `${4000 + unitSeq}` } });
   };
   const own = (user, property, data = {}) => prisma.ownership.create({ data: { propertyId: property.id, userId: user.id, ...data } });
-  const verified = { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE_EXPIRY };
-  const logInput = (overrides = {}) => ({ scope: 'PRIVATE', type: 'REPAIR', title: '사진 기록', occurredOn: getTodayKST(), ...overrides });
-  const writeLog = (user, property, scope = 'PRIVATE') => createManagementLog(user, property.id, logInput({ scope }));
+  // 인증한 적 있는 소유 관계(firstVerifiedAt). 없으면 소유 종료 때 기록이 지워진다(H-37).
+  const verified = { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE_EXPIRY, firstVerifiedAt: new Date() };
+  const logInput = (overrides = {}) => ({ type: 'REPAIR', title: '사진 기록', occurredOn: getTodayKST(), ...overrides });
+  // 인증 소유자: 수리 = 호실 이력, 나만 보기 메모 = PRIVATE(H-29).
+  const writeLog = (user, property, scope = 'PRIVATE') =>
+    createManagementLog(user, property.id, logInput(scope === 'PRIVATE' ? { type: 'NOTE', keepPrivate: true } : {}));
 
   const api = (user, pathname, init = {}) =>
     fetch(`${origin}/api/v1${pathname}`, {
@@ -171,7 +174,7 @@ describe('하우스 로그 첨부', { skip: dbTestSkip }, () => {
     const property = await createProperty();
     await own(user, property, verified);
     const [keep, drop] = await uploadMany(user, 2);
-    const log = await createManagementLog(user, property.id, logInput({ scope: 'PROPERTY_HISTORY', attachmentDocumentIds: [keep.id, drop.id] }));
+    const log = await createManagementLog(user, property.id, logInput({ attachmentDocumentIds: [keep.id, drop.id] }));
     const added = await uploadDocument(user);
     const dropUploadId = await uploadIdOf(drop.id);
 
@@ -204,7 +207,21 @@ describe('하우스 로그 첨부', { skip: dbTestSkip }, () => {
     assert.equal((await api(user, `/documents/${doc.id}`)).status, 404);
   });
 
-  test('소유 종료: 호실 이력 문서는 잠기고, 끝난 소유의 기록은 첨부를 바꿀 수 없으며, 다음 소유자는 보기만 한다', async () => {
+  test('H-36: 작성자가 호실 이력을 지우면 붙은 문서도 숨기고 파일을 지운다', async () => {
+    const user = await landlord();
+    const property = await createProperty();
+    await own(user, property, verified);
+    const doc = await uploadDocument(user);
+    const log = await createManagementLog(user, property.id, logInput({ attachmentDocumentIds: [doc.id] }));
+    assert.equal(log.scope, 'PROPERTY_HISTORY');
+    const uploadId = await uploadIdOf(doc.id);
+
+    await deleteManagementLog(user, log.id);
+    assert.ok((await prisma.document.findUnique({ where: { id: doc.id } })).deletedAt);
+    assert.equal((await storedFiles()).includes(uploadId), false);
+  });
+
+  test('소유 종료: 호실 이력 문서는 잠기고, 끝난 소유의 나만 보기 기록만 첨부를 바꾸며(H-41), 다음 소유자는 보기만 한다', async () => {
     const seller = await landlord();
     const buyer = await landlord();
     const property = await createProperty();
@@ -221,13 +238,28 @@ describe('하우스 로그 첨부', { skip: dbTestSkip }, () => {
     const locked = await json(await api(seller, `/documents/${historyDoc.id}`, { method: 'DELETE' }));
     assert.equal(locked.status, 422);
     assert.equal(locked.body.error.code, 'DOCUMENT_NOT_DELETABLE');
-    // 끝난 소유의 기록은 첨부를 지울 수도 붙일 수도 없다
-    assert.equal((await json(await api(seller, `/documents/${privateDoc.id}`, { method: 'DELETE' }))).body.error.code, 'MANAGEMENT_LOG_READ_ONLY');
+    // 넘어간 호실 이력에는 첨부를 붙일 수 없다(422).
+    const historySession = await createSession(seller);
+    await putContent(historySession.body.data.uploadUrl);
+    const historyAttach = await postJson(seller, '/documents', {
+      uploadSessionId: historySession.body.data.id,
+      resourceType: 'MANAGEMENT_LOG',
+      resourceId: historyLog.id,
+    });
+    assert.equal(historyAttach.body.error.code, 'MANAGEMENT_LOG_READ_ONLY');
+    await rejectsWith(updateManagementLog(seller, historyLog.id, { attachmentDocumentIds: [] }), 'MANAGEMENT_LOG_READ_ONLY');
+    // 끝난 소유의 나만 보기 기록은 첨부를 지우고 붙일 수 있다(H-41).
+    assert.equal((await api(seller, `/documents/${privateDoc.id}`, { method: 'DELETE' })).status, 204);
     const lateSession = await createSession(seller);
     await putContent(lateSession.body.data.uploadUrl);
     const lateAttach = await postJson(seller, '/documents', { uploadSessionId: lateSession.body.data.id, resourceType: 'MANAGEMENT_LOG', resourceId: privateLog.id });
-    assert.equal(lateAttach.body.error.code, 'MANAGEMENT_LOG_READ_ONLY');
-    await rejectsWith(updateManagementLog(seller, privateLog.id, { attachmentDocumentIds: [] }), 'MANAGEMENT_LOG_READ_ONLY');
+    assert.equal(lateAttach.status, 201);
+    // 끝난 소유의 호실 이력은 지우면 숨김이라 잠긴 첨부는 그대로다.
+    await deleteManagementLog(seller, historyLog.id);
+    assert.equal((await prisma.document.findUnique({ where: { id: historyDoc.id } })).deletedAt, null);
+    // 숨긴 기록의 문서는 판 사람에게 404다.
+    assert.equal((await api(seller, `/documents/${historyDoc.id}`)).status, 404);
+    assert.equal((await postJson(seller, `/documents/${historyDoc.id}/download-url`, {})).status, 404);
 
     await own(buyer, property, verified);
     const seen = await findManagementLogForUser(buyer, historyLog.id);

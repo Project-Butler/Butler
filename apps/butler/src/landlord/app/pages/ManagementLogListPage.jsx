@@ -16,7 +16,6 @@ const PAGE_SIZE = 20;
 // 호실 필터는 지금 소유한 호실과 소유가 끝난 호실 전부(목록 API 최대 크기, 웹과 같음)
 const PROPERTY_PICKER_SIZE = 100;
 const CARD_CLASS = 'rounded-card border border-line bg-surface';
-const IMMUTABLE_NOTICE = '하우스 로그는 수정·삭제할 수 없습니다. 바뀐 내용은 새 기록으로 쌓이고 감사 로그에 남습니다.';
 
 const CHIP_ROW_CLASS = '-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
@@ -178,8 +177,6 @@ export const ManagementLogListPage = ({ propertyId, onUnauthorized }) => {
             </span>
           ))}
         </div>
-
-        <p className="rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">{IMMUTABLE_NOTICE}</p>
 
         <LogListSection
           key={`${propertyId}-${type}-${room}`}

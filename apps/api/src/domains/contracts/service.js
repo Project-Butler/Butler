@@ -220,10 +220,10 @@ export const createContract = async (user, input, req) => {
 
 const SORT_FIELDS = { endDate: 'endDate', startDate: 'startDate', createdAt: 'createdAt' };
 
-// GET /contracts — 내 소유 관계(활성·종료)의 계약 + 내가 임차인인 계약.
+// GET /contracts — 내 소유 관계(활성·종료)의 계약 + 내가 임차인인 계약. 목록에서 지운 내 소유 관계(H-41)의 계약은 뺀다(지우지는 않음).
 export const findContracts = async (user, { propertyId, ownershipId, activeOwnership, includeEndedOwnership, statuses, sort, page, size }) => {
   const todayKST = getTodayKST();
-  const filters = [{ OR: [{ ownership: { userId: user.id } }, { tenantId: user.id }] }];
+  const filters = [{ OR: [{ ownership: { userId: user.id, removedAt: null } }, { tenantId: user.id }] }];
   if (propertyId) filters.push({ ownership: { propertyId } });
   if (ownershipId) filters.push({ ownershipId });
   // 매도 등으로 끝난 소유 관계의 계약은 읽기 전용이라 만료 임박 배지에서 뺀다.

@@ -39,6 +39,8 @@ export const toOwnershipResponse = (ownership, propertySummary, now = new Date()
     purchasePrice: toMoney(ownership.purchasePrice) ?? null,
     verificationStatus: computeOwnershipVerificationStatus(ownership, now),
     verifiedAt: toIsoOrNull(ownership.verifiedAt),
+    // 처음 인증 시각(재인증해도 바뀌지 않음). 하우스 로그 타임라인의 '내 소유 시작'(#203 H-30).
+    firstVerifiedAt: toIsoOrNull(ownership.firstVerifiedAt),
     verificationExpiresAt: toIsoOrNull(ownership.verificationExpiresAt),
     startedAt: toIsoOrNull(ownership.startedAt),
     endedAt: toIsoOrNull(ownership.endedAt),

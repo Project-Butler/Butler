@@ -25,12 +25,12 @@ const EMPTY_RESULT = { properties: [], contracts: [], tickets: [], managementLog
 const propertyScopeWhere = (scopedPropertyIds, field = 'propertyId') => (scopedPropertyIds ? { [field]: { in: scopedPropertyIds } } : {});
 
 // 본인이 볼 수 있는 호실과 그 바탕(소유 관계·계약). 검색어 해석과 유형별 범위에 같이 쓴다.
-//   임대인: 내 소유 관계 전부(끝난 것 포함)와 그 계약. 호실 결과는 활성 소유 관계의 호실만.
+//   임대인: 내 소유 관계 전부(끝난 것 포함, 목록에서 지운 것 제외 — H-41)와 그 계약. 호실 결과는 활성 소유 관계의 호실만.
 //   임차인: 내가 임차인인 계약 전부. 호실 결과는 해지되지 않은 계약의 호실만.
 const loadViewerContext = async (user) => {
   if (user.role === 'LANDLORD') {
     const ownerships = await prisma.ownership.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, removedAt: null },
       include: { property: { include: PROPERTY_INCLUDE }, contracts: { select: CONTRACT_FIELDS } },
     });
     return {
@@ -87,7 +87,7 @@ const searchContracts = async (user, { keywords, scopedPropertyIds }, todayKST) 
   const rows = await prisma.contract.findMany({
     where: {
       AND: [
-        { ownership: { userId: user.id, ...propertyScopeWhere(scopedPropertyIds) } },
+        { ownership: { userId: user.id, removedAt: null, ...propertyScopeWhere(scopedPropertyIds) } },
         keywordsWhere(keywords, ['tenantName']),
       ],
     },

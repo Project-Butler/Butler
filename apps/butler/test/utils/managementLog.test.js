@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canDeleteLog, formatLogDate, getLogOriginLabel, getLogScopeBadge, getLogTypeLabel, isFutureLog } from '../../src/landlord/web/utils/managementLog';
+import { formatLogDate, getLogOriginLabel, getLogScopeBadge, getLogTypeLabel, isFutureLog } from '../../src/landlord/web/utils/managementLog';
 
 describe('getLogOriginLabel', () => {
   it('내가 쓴 기록은 표시하지 않는다', () => {
@@ -11,14 +11,6 @@ describe('getLogOriginLabel', () => {
   });
   it('작성자가 없고 직접 쓴 표식이면 이전 소유자', () => {
     expect(getLogOriginLabel({ author: null, source: { feature: 'platform', resourceType: null } })).toBe('이전 소유자');
-  });
-});
-
-describe('canDeleteLog', () => {
-  it('내가 쓴 나만 보기만 지울 수 있다', () => {
-    expect(canDeleteLog({ author: { id: 'me' }, scope: 'PRIVATE' })).toBe(true);
-    expect(canDeleteLog({ author: { id: 'me' }, scope: 'PROPERTY_HISTORY' })).toBe(false);
-    expect(canDeleteLog({ author: null, scope: 'PRIVATE' })).toBe(false);
   });
 });
 

@@ -61,6 +61,9 @@ export { getManagementLog } from './apis/managementLogs/getManagementLog';
 export { postManagementLog } from './apis/managementLogs/postManagementLog';
 export { patchManagementLog } from './apis/managementLogs/patchManagementLog';
 export { deleteManagementLog } from './apis/managementLogs/deleteManagementLog';
+export { getUnverifiedLogPromotePreview } from './apis/propertyOwnerships/getUnverifiedLogPromotePreview';
+export { postUnverifiedLogPromote } from './apis/propertyOwnerships/postUnverifiedLogPromote';
+export { postOwnershipRemove } from './apis/propertyOwnerships/postOwnershipRemove';
 
 export { getTicketList } from './apis/tickets/getTicketList';
 export { getTicket } from './apis/tickets/getTicket';

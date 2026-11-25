@@ -11,7 +11,6 @@ import { useDeleteManagementLog } from '../../hooks/useDeleteManagementLog';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
 import { formatWon } from '../../utils/contract';
-import { canDeleteLog } from '../../utils/managementLog';
 
 export const LOG_TYPE_ICON = { REPAIR: Wrench, INSPECTION: Search, NOTE: StickyNote, TICKET_SUMMARY: ClipboardCheck };
 
@@ -23,7 +22,8 @@ const InfoRow = ({ icon: Icon, label, children }) => (
   </div>
 );
 
-// 삭제: [삭제] → 안내 → [취소]·[삭제] 2단계(빨강 없음). 내가 쓴 나만 보기 기록만.
+// 삭제: [삭제] → 안내 → [취소]·[삭제] 2단계(빨강 없음). 지울 수 있는지는 서버가 준 isDeletable(H-36·H-47).
+// isHideOnly(매도 뒤 판 사람의 넘어간 기록)는 내 화면에서만 지운다(H-41).
 const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   const remove = useDeleteManagementLog({ onUnauthorized });
   const [isConfirming, setIsConfirming] = useState(false);
@@ -36,13 +36,15 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
   if (!isConfirming) {
     return (
       <button type="button" onClick={() => setIsConfirming(true)} className="text-sub font-medium text-ink-3 hover:text-ink">
-        기록 삭제
+        {log.isHideOnly ? '내 화면에서 삭제' : '기록 삭제'}
       </button>
     );
   }
   return (
     <div className="space-y-2 rounded-input bg-surface-2 p-3">
-      <p className="text-sub text-ink-2">이 기록을 삭제할까요? 삭제하면 되돌릴 수 없어요.</p>
+      <p className="text-sub text-ink-2">
+        {log.isHideOnly ? '내 화면에서만 지워요. 새 임대인에게는 그대로 보여요.' : '이 기록을 삭제할까요? 삭제하면 되돌릴 수 없어요.'}
+      </p>
       {remove.error && <NoticeBox>{remove.error.message}</NoticeBox>}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={() => setIsConfirming(false)} disabled={remove.isLoading}>
@@ -57,7 +59,7 @@ const DeleteRow = ({ log, onDeleted, onUnauthorized }) => {
 };
 
 // 하우스 로그 오른쪽 기록 상세 패널(표 7 : 패널 3). 기록 상세 페이지를 대신한다.
-// 수정은 isReadOnly가 아닐 때, 삭제는 내가 쓴 나만 보기만.
+// 수정은 isReadOnly가 아닐 때, 삭제는 isDeletable일 때.
 export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, onUnauthorized }) => {
   const { data: log, error } = useGetManagementLog(logId, { onUnauthorized });
   // 사진·동영상·PDF는 새 탭 대신 미리보기 팝업으로 연다.
@@ -134,7 +136,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
       </div>
       {log.isReadOnly && (
         <p className="px-5 pb-4 text-sub text-ink-3">
-          소유가 끝난 호실의 기록, 다른 소유자의 기록, 자동 기록, 인증이 끊긴 호실 이력은 수정할 수 없어요.
+          소유가 끝난 호실의 기록, 다른 소유자의 기록, 인증이 끊긴 호실의 호실 이력·자동 기록은 수정할 수 없어요.
         </p>
       )}
       <div className="space-y-3 border-t border-line px-5 py-4">
@@ -150,7 +152,7 @@ export const LogInspector = ({ logId, onClose, onEdit, onDeleted, onNavigate, on
             </Button>
           )}
         </div>
-        {canDeleteLog(log) && <DeleteRow key={log.id} log={log} onDeleted={onDeleted} onUnauthorized={onUnauthorized} />}
+        {log.isDeletable && <DeleteRow key={log.id} log={log} onDeleted={onDeleted} onUnauthorized={onUnauthorized} />}
       </div>
       {preview}
     </>,

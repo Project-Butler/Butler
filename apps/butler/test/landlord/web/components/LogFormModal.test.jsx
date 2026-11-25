@@ -86,3 +86,83 @@ describe('LogFormModal 방 고르기', () => {
     expect(patchManagementLog).toHaveBeenCalledWith('log-1', expect.objectContaining({ room: null }));
   });
 });
+
+const VERIFIED_PROPERTY = { ...PROPERTY, myRelation: { verificationStatus: 'VERIFIED' } };
+const HISTORY_NOTICE = '집 이력으로 남아요 — 이 집을 넘기면 다음 임대인도 봐요';
+const UNVERIFIED_WARNING = '권리자 인증 전에 남긴 기록은 호실이 목록에서 빠지면(삭제·자동 종료) 모두 사라져요';
+
+describe('LogFormModal 공개 범위(H-29)', () => {
+  const useProperty = (property) =>
+    vi.mocked(getPropertyList).mockReset().mockResolvedValue({ data: [property], meta: { page: 1, size: 100, total: 1, hasNext: false } });
+  const typeTitle = (title) => userEvent.type(screen.getByLabelText(/제목/), title);
+  beforeEach(() => {
+    vi.mocked(postManagementLog).mockReset().mockResolvedValue(LOG);
+    vi.mocked(patchManagementLog).mockReset();
+    vi.mocked(getManagementLog).mockReset();
+  });
+
+  it('공개 범위 고르기가 없고, 인증 호실의 수리는 집 이력 안내만 보이며 scope를 보내지 않는다', async () => {
+    useProperty(VERIFIED_PROPERTY);
+    renderModal({ fixedPropertyId: 'p1' });
+    await screen.findByText(HISTORY_NOTICE);
+    expect(screen.queryByRole('button', { name: '호실 이력' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '나만 보기' })).not.toBeInTheDocument();
+    expect(screen.queryByText(UNVERIFIED_WARNING)).not.toBeInTheDocument();
+
+    await typeTitle('욕실 수전 교체');
+    await userEvent.click(screen.getByRole('button', { name: '기록 저장' }));
+    const body = vi.mocked(postManagementLog).mock.calls[0][1];
+    expect(body.type).toBe('REPAIR');
+    expect(body).not.toHaveProperty('scope');
+    expect(body).not.toHaveProperty('keepPrivate');
+  });
+
+  it('메모는 [나만 보기] 체크(기본 해제), 체크하면 keepPrivate: true', async () => {
+    useProperty(VERIFIED_PROPERTY);
+    renderModal({ fixedPropertyId: 'p1' });
+    await screen.findByText(HISTORY_NOTICE);
+    await userEvent.click(screen.getByRole('button', { name: '메모' }));
+    const checkbox = screen.getByRole('checkbox', { name: '나만 보기' });
+    expect(checkbox).not.toBeChecked();
+    await userEvent.click(checkbox);
+    await typeTitle('관리실 연락처');
+    await userEvent.click(screen.getByRole('button', { name: '기록 저장' }));
+    expect(postManagementLog).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'NOTE', keepPrivate: true }));
+  });
+
+  it('인증 전 호실은 나만 보기로 저장된다는 안내와 사라짐 경고(H-37)', async () => {
+    useProperty(PROPERTY);
+    renderModal({ fixedPropertyId: 'p1' });
+    expect(await screen.findByText(UNVERIFIED_WARNING)).toBeInTheDocument();
+    expect(screen.getByText('권리자 인증 전이라 나만 보기로 저장돼요')).toBeInTheDocument();
+    expect(screen.queryByText(HISTORY_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it('매도한 호실도 고를 수 있고, 나만 보기 안내만 보이며 keepPrivate를 보내지 않는다(H-41)', async () => {
+    const sold = { ...VERIFIED_PROPERTY, id: 'p9', displayName: '매도한 호실' };
+    vi.mocked(getPropertyList)
+      .mockReset()
+      .mockImplementation(async ({ relation }) => ({ data: relation === 'FORMER_OWNER' ? [sold] : [], meta: { page: 1, size: 100, total: 1, hasNext: false } }));
+    renderModal({ initialPropertyId: 'p9' });
+    expect(await screen.findByText(/매도한 호실이라 나만 보기로 저장돼요/)).toBeInTheDocument();
+    expect(screen.queryByText(HISTORY_NOTICE)).not.toBeInTheDocument();
+    expect(screen.queryByText('내 호실 중에 없어요.')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '매도한 호실 (매도)' })).toBeInTheDocument();
+    await typeTitle('매도 후 관리비 정산');
+    await userEvent.click(screen.getByRole('button', { name: '기록 저장' }));
+    const body = vi.mocked(postManagementLog).mock.calls[0];
+    expect(body[0]).toBe('p9');
+    expect(body[1]).not.toHaveProperty('keepPrivate');
+  });
+
+  it('수정: 수리 요청 완료 기록은 유형을 바꿀 수 없고 type을 보내지 않는다(H-47)', async () => {
+    useProperty(VERIFIED_PROPERTY);
+    vi.mocked(getManagementLog).mockResolvedValue({ ...LOG, type: 'TICKET_SUMMARY', scope: 'PROPERTY_HISTORY', author: null });
+    vi.mocked(patchManagementLog).mockResolvedValue(LOG);
+    renderModal({ logId: 'log-1' });
+    expect(await screen.findByText('수리 요청 완료')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '수리' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(vi.mocked(patchManagementLog).mock.calls[0][1]).not.toHaveProperty('type');
+  });
+});

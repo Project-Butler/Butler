@@ -1,7 +1,7 @@
-import { SegmentedControl, TextField } from '@butler/ui';
+import { Badge, SegmentedControl, TextField } from '@butler/ui';
 import { AttachmentPicker } from '../AttachmentPicker/AttachmentPicker';
 import { formatNumber } from '../../utils/format';
-import { WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
+import { getLogTypeLabel, WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
 import { ROOM_OPTIONS } from '../../../../shared/room';
 
 // 서버 검증(apps/api managementLogs controller)과 같은 범위
@@ -73,6 +73,7 @@ const RoomPicker = ({ value, onChange, disabled }) => {
 // 유형·방·제목·내용·날짜·비용·사진 입력. 호실·공개 범위 칸은 쓰는 화면이 propertyField·scopeField로 넘긴다(없으면 생략).
 // 팝업 배치(가로 2칸): 호실 / 날짜 · 비용 / 유형 · 공개 범위 / 방 / 제목 / 내용 / 사진.
 // uploads: useAttachmentUploads() 반환값. 저장할 때 uploads.documentIds를 attachmentDocumentIds로 보낸다.
+// isTypeLocked: 유형을 바꿀 수 없는 기록(수리 요청 완료, H-47) — 유형을 보기만 한다.
 export const ManagementLogForm = ({
   form,
   onChange,
@@ -82,6 +83,7 @@ export const ManagementLogForm = ({
   disabled = false,
   propertyField = null,
   scopeField = null,
+  isTypeLocked = false,
 }) => (
   <>
     {propertyField}
@@ -109,12 +111,20 @@ export const ManagementLogForm = ({
       />
       <div className="flex flex-col gap-1.5">
         <span className="text-label font-semibold text-ink">유형</span>
-        <SegmentedControl
-          ariaLabel="유형"
-          options={WRITABLE_TYPE_OPTIONS}
-          value={form.type}
-          onChange={(value) => onChange('type', value)}
-        />
+        {isTypeLocked ? (
+          <p className="flex h-12 items-center gap-2 rounded-input bg-surface-2 px-3.5 text-body text-ink-3">
+            <Badge>{getLogTypeLabel(form.type)}</Badge>
+            바꿀 수 없어요
+          </p>
+        ) : (
+          <SegmentedControl
+            ariaLabel="유형"
+            options={WRITABLE_TYPE_OPTIONS}
+            value={form.type}
+            onChange={(value) => onChange('type', value)}
+          />
+        )}
+        {fieldError('type') && <p className="text-chip text-crit-ink">{fieldError('type')}</p>}
       </div>
       {scopeField}
     </div>
