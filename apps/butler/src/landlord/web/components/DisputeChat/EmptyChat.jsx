@@ -23,7 +23,7 @@ export const EmptyChat = ({ onPick, disabled, compact = false }) => (
           type="button"
           disabled={disabled}
           onClick={() => onPick(question)}
-          className={`min-h-11 rounded-btn border border-line bg-surface px-4 text-left ${compact ? 'py-2.5' : 'py-3'} text-body text-ink transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:text-ink-3`}
+          className={`min-h-11 rounded-btn border border-line bg-surface px-4 text-left ${compact ? 'py-2.5' : 'py-3'} text-body text-ink transition-colors [@media(hover:hover)]:hover:bg-surface-2 disabled:cursor-not-allowed disabled:text-ink-3`}
         >
           {question}
         </button>

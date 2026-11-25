@@ -19,7 +19,7 @@ const MARKDOWN_COMPONENTS = {
       <a
         href={href}
         aria-label={`근거 자료 ${children}`}
-        className="mx-0.5 rounded-chip bg-accent-soft px-1.5 py-0.5 align-middle font-num text-chip font-semibold tabular-nums text-accent-strong no-underline hover:bg-surface-2"
+        className="mx-0.5 rounded-chip bg-accent-soft px-1.5 py-0.5 align-middle font-num text-chip font-semibold tabular-nums text-accent-strong no-underline [@media(hover:hover)]:hover:bg-surface-2"
       >
         {children}
       </a>

@@ -30,7 +30,18 @@ const objectParticle = (text) => {
   if (code === undefined || code < 0xac00 || code > 0xd7a3) return '을(를)';
   return (code - 0xac00) % 28 === 0 ? '를' : '을';
 };
-const REFERENCE_TYPE_VALUES = REFERENCE_TYPES.map(({ value }) => value);
+
+// 제안 문구에 보일 말. 고친 검색어가 길면(긴 문장 질문) 문장 전체 대신 고친 말(조사를 뗀 word)만 보여 휴대폰에서도 한 줄에 들어가게 한다
+// (360px 폭에서 "혹시 ○○을 찾으셨나요?"가 한 줄에 들어가는 길이가 열두 자 남짓). 누르면 고친 검색어 전체로 찾는다.
+const SUGGESTION_MAX_LENGTH = 12;
+const toSuggestionLabel = ({ query, corrections = [] }) =>
+  query.length > SUGGESTION_MAX_LENGTH && corrections.length > 0
+    ? corrections.map(({ word, to }) => word ?? to).join(', ')
+    : query;
+// 앱 결과 탭 줄: 화면 끝까지(본문 여백 px-5만큼 양옆으로 넓힘), 스크롤바 숨김. 공용 클래스(rounded-btn·border·p-1)를 덮어야 해서 !를 붙인다.
+const APP_TAB_LINE =
+  '-mx-5 w-[calc(100%+2.5rem)] !rounded-none !border-x-0 !px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+const REFERENCE_TYPE_VALUES =REFERENCE_TYPES.map(({ value }) => value);
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
@@ -106,6 +117,10 @@ export const DisputeSearchPage = () => {
   const countsByType = meta?.countsByType;
   const referenceTotal = countsByType ? sum(Object.values(countsByType)) : undefined;
   const isCounting = countsByType === undefined || faqs.data === undefined;
+  // 검색어·칩을 바꾸면 새 결과가 올 때까지 이전 결과를 그대로 두는데(keepPreviousData), 질문과 자료는 따로 와서
+  // 잠깐 한쪽만 새 숫자가 된다("질문 4"인데 탭은 이전 "전체 7,945"). 둘 다 올 때까지 탭·결과를 흐리게 해서 바뀌는 중임을 보인다.
+  const isRefreshing = list.isPlaceholderData || faqs.isPlaceholderData;
+  const refreshingClass = `transition-opacity ${isRefreshing ? 'opacity-50' : ''}`;
 
   const tabs = [
     { value: ALL_TAB, label: '전체', count: isCounting ? undefined : faqItems.length + referenceTotal },
@@ -161,13 +176,16 @@ export const DisputeSearchPage = () => {
       </ChipLine>
 
       {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다.
-          앱은 위에 고정된 상단 바(h-14)가 있어 그만큼 더 띄운다(scroll-mt-16, AI 상담과 같음). */}
-      <div ref={resultsRef} className={isApp ? 'scroll-mt-16' : 'scroll-mt-4'}>
+          앱은 위에 고정된 상단 바(h-14)가 있어 그만큼 더 띄운다(scroll-mt-16, AI 상담과 같음).
+          앱은 탭이 다 안 들어가서 가로로 밀어 보는데, 상자 안에서 글자 중간이 잘리면 어색해서 위 상황 칩 줄처럼 화면 끝까지 닿게 한다
+          (상자 양옆 테두리·모서리를 없애고 안쪽 여백으로 첫 탭을 본문 줄에 맞춘다). 공용 SegmentedControl은 그대로 두고 className만 넘긴다. */}
+      <div ref={resultsRef} aria-busy={isRefreshing} className={`${isApp ? 'scroll-mt-16' : 'scroll-mt-4'} ${refreshingClass}`}>
         <SegmentedControl
           ariaLabel="결과 종류"
           value={tab}
           onChange={(value) => updateParams({ tab: value === ALL_TAB ? null : value })}
           options={tabs}
+          className={isApp ? APP_TAB_LINE : ''}
         />
       </div>
 
@@ -195,9 +213,9 @@ export const DisputeSearchPage = () => {
             onClick={searchSuggestion}
             className="min-h-11 font-semibold text-accent underline hover:text-accent-strong"
           >
-            {suggestion.query}
+            {toSuggestionLabel(suggestion)}
           </button>
-          {objectParticle(suggestion.query)} 찾으셨나요?
+          {objectParticle(toSuggestionLabel(suggestion))} 찾으셨나요?
         </p>
       )}
 
@@ -213,7 +231,7 @@ export const DisputeSearchPage = () => {
       )}
 
       {shownFaqs.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section aria-busy={isRefreshing} className={`flex flex-col gap-2 ${refreshingClass}`}>
           {tab === ALL_TAB && (
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-label font-semibold text-ink-2">
@@ -254,7 +272,7 @@ export const DisputeSearchPage = () => {
       )}
 
       {showReferences && references.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section aria-busy={isRefreshing} className={`flex flex-col gap-2 ${refreshingClass}`}>
           {tab === ALL_TAB && (
             <h3 className="pt-2 text-label font-semibold text-ink-2">
               사례·판례·가이드라인 <span className="font-num tabular-nums">{referenceTotal}</span>

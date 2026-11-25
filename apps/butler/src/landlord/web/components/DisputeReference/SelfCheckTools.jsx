@@ -21,7 +21,7 @@ export const SelfCheckTools = ({ tools }) => {
             )}
           </>
         );
-        const rowClass = 'flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2';
+        const rowClass = 'flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors [@media(hover:hover)]:hover:bg-surface-2';
         return (
           <li key={tool.key}>
             {tool.href ? (

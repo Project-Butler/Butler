@@ -14,5 +14,11 @@ export const DisputePage = ({ onNavigate, onUnauthorized, isApp = false }) => {
   // 하위 화면의 뒤로: 앱 안에서 왔으면 보던 화면(검색 조건 그대로)으로, 주소로 바로 들어왔으면 첫 화면으로.
   const goBack = () => (location.key !== 'default' ? routerNavigate(-1) : onNavigate('disputes'));
 
-  return <Outlet context={{ askAi, openReference, goBack, onNavigate, onUnauthorized, isApp }} />;
+  // 한글이 단어 중간에서 줄이 바뀌지 않게("드/려요", "보/증금") 띄어쓰기에서만 줄을 바꾼다(break-keep, 아래 화면에 이어짐).
+  // 한 단어가 줄보다 길면 그때만 끊는다(break-words). contents라 틀의 배치는 바뀌지 않는다.
+  return (
+    <div className="contents break-keep break-words">
+      <Outlet context={{ askAi, openReference, goBack, onNavigate, onUnauthorized, isApp }} />
+    </div>
+  );
 };

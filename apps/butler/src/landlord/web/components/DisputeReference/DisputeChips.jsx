@@ -9,7 +9,7 @@ export const DisputeChip = ({ selected, onClick, children }) => (
     aria-pressed={selected}
     onClick={onClick}
     className={`min-h-9 whitespace-nowrap rounded-full border px-3 text-sub transition-colors ${
-      selected ? 'border-accent bg-accent-soft font-semibold text-accent-strong' : 'border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink'
+      selected ? 'border-accent bg-accent-soft font-semibold text-accent-strong' : 'border-line bg-surface text-ink-2 [@media(hover:hover)]:hover:bg-surface-2 hover:text-ink'
     }`}
   >
     {children}

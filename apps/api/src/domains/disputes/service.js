@@ -13,6 +13,7 @@ import {
 import { findLegalReferences, normalizeLegalReferences, toLawTitlePatterns, toLegalReferencePattern } from './legalReferences.js';
 import { findClosestWord, latinToHangul, toJamo } from './searchSuggestion.js';
 import { toSourceUrl } from './sourceLinks.js';
+import { pickRelated, rankByWeightedOverlap, toRelatedQuery } from './related.js';
 
 export const SORTABLE_FIELDS = ['createdAt', 'title', 'sourcePage'];
 // 관련도 순은 컬럼이 아니라 검색어로 계산한 점수라 검색어가 있을 때만 쓴다(controller.js).
@@ -199,10 +200,11 @@ const toKeywordMatchSql = (text) =>
     : Prisma.sql`${text} = ANY(keywords)`;
 
 // 단어 하나(조사·끝말·동의어 포함)가 제목·요약·본문·결과 중 한 곳에 있거나 키워드와 같으면 참.
-const toTermMatchSql = (term) =>
+// columns: 찾을 칸. 기본은 검색과 같은 다섯 칸, 관련 자료는 본문을 빼고 가볍게 찾는다(RELATED_COLUMNS).
+const toTermMatchSql = (term, columns = SEARCH_COLUMNS) =>
   Prisma.join(
     toTermVariants(term).flatMap((text) => [
-      ...SEARCH_COLUMNS.map((column) => toColumnMatchSql(column, text)),
+      ...columns.map((column) => toColumnMatchSql(column, text)),
       toKeywordMatchSql(text),
     ]),
     ' OR ',
@@ -610,8 +612,13 @@ const toSuggestedWord = (word, corrections) => {
   return hangul && isStopWord(hangul) ? hangul : word;
 };
 
+// 문장 끝말(~요·~죠·~까)로 끝나는 말은 고치지 않는다. 자료는 "받아요"처럼 말하는 꼴로 쓰지 않아서 드물 뿐 오타가 아니고,
+// 가까운 낱말로 고치면 "안 받아요"→"안 받아야"처럼 활용만 바뀐 어색한 제안이 된다(긴 문장 질문에서 자주 생김).
+const SENTENCE_ENDINGS = ['요', '죠', '까'];
+const isSentenceEnding = (term) => SENTENCE_ENDINGS.some((ending) => term.endsWith(ending));
+
 // { query: 고친 검색어 전체, corrections: [{ from, to }] } 또는 null. 조사는 고친 말 뒤에 그대로 붙인다("보증굼을" → "보증금을").
-// 불용어("싶어요")는 고치지 않고 검색어에 그대로 둔다.
+// 불용어("싶어요")와 문장 끝말("받아요")은 고치지 않고 검색어에 그대로 둔다.
 const buildSuggestion = async (keyword) => {
   const terms = toSearchTerms(keyword);
   await countTermDocs(terms);
@@ -629,6 +636,7 @@ const buildSuggestion = async (keyword) => {
       if (fixed) corrections.set(term, fixed);
       continue;
     }
+    if (isSentenceEnding(term)) continue;
     // 붙여 쓴 말을 먼저 본다 — "전세사기"가 거리 2인 다른 낱말로 고쳐지지 않게
     const spaced = await findSpacedSplit(term, docCount, vocabulary);
     if (spaced) {
@@ -649,7 +657,8 @@ const buildSuggestion = async (keyword) => {
       .filter(Boolean)
       .map((word) => toSuggestedWord(word, corrections))
       .join(' '),
-    corrections: [...corrections].map(([from, to]) => ({ from, to })),
+    // word: 조사를 뗀 고친 말("보증금을"→"보증금"). 화면이 긴 검색어 대신 고친 말만 보일 때 쓴다.
+    corrections: [...corrections].map(([from, to]) => ({ from, to, word: toVocabularyWord(to) })),
   };
 };
 
@@ -712,7 +721,7 @@ export const findReferenceSummariesBySourceKeys = async (sourceKeys) => {
 export const findReferenceForRelated = async (referenceId) => {
   const reference = await prisma.disputeReference.findUnique({
     where: { id: referenceId },
-    select: { id: true, category: true },
+    select: { id: true, category: true, title: true, keywords: true },
   });
   if (!reference) return null;
 
@@ -736,6 +745,37 @@ export const findRelatedCandidates = async (excludeId) => {
     select: LIST_SELECT,
   });
   return candidates.map((candidate) => toListItem({ ...candidate, embedding: embeddingById.get(candidate.id) }));
+};
+
+// 임베딩이 없는 자료의 관련 자료: 기준 자료의 키워드·제목 낱말(related.js toRelatedQuery)이 많이, 드문 말일수록 겹치는 자료 순으로 고르고,
+// 모자라면 같은 분쟁 유형 최근 자료로 채운다(pickRelated). 낱말이 전부 든 자료는 대개 기준 자료 자신뿐이라 일부만 겹쳐도 후보로 본다.
+// 자기 자신·같은 제목은 빼야 해서 넉넉히(RELATED_SEARCH_SIZE) 받는다.
+// 낱말은 제목·요약·키워드에서만 본다 — 자료의 요지가 그 칸에 있고, 긴 본문·결과까지 훑거나 자료 찾기 관련도 점수(낱말마다 전체 자료 수를 다시 셈)를 쓰면
+// 자료 하나에 1~3초 걸렸다. 한 번 훑어 자료마다 낱말이 있는지 받고, 같은 결과로 드문 낱말 가중치를 계산해 줄 세운다(related.js rankByWeightedOverlap).
+const RELATED_SEARCH_SIZE = 15;
+const RELATED_COLUMNS = ['title', 'summary'];
+const rankByTermOverlap = async (reference) => {
+  const keyword = toRelatedQuery(reference, { clean: cleanSearchKeyword, skip: isStopWord });
+  const terms = keyword ? toSearchTerms(keyword).filter((term) => term.length >= MIN_STEM_LENGTH) : [];
+  if (terms.length === 0) return [];
+  const flags = terms.map((term) => Prisma.sql`(CASE WHEN ${toTermMatchSql(term, RELATED_COLUMNS)} THEN 1 ELSE 0 END)`);
+  const rows = await prisma.$queryRaw`
+    SELECT id, flags, total FROM (
+      SELECT id, ARRAY[${Prisma.join(flags, ', ')}]::int[] AS flags, (count(*) OVER ())::int AS total FROM dispute_references
+    ) checked
+    WHERE 1 = ANY(flags)`;
+  if (rows.length === 0) return [];
+  const ids = rankByWeightedOverlap({ rows, total: rows[0].total, excludeId: reference.id, size: RELATED_SEARCH_SIZE });
+  const items = await prisma.disputeReference.findMany({ where: { id: { in: ids } }, select: LIST_SELECT });
+  return ids.map((id) => toListItem(items.find((item) => item.id === id)));
+};
+
+export const findRelatedByKeyword = async ({ reference, limit }) => {
+  const ranked = await rankByTermOverlap(reference);
+  const enough = pickRelated({ target: reference, ranked, fallback: [], limit });
+  if (enough.length >= limit) return enough;
+  const fallback = await findSameCategoryReferences({ excludeId: reference.id, category: reference.category, limit: limit * 3 });
+  return pickRelated({ target: reference, ranked, fallback, limit });
 };
 
 // 임베딩이 아직 없을 때(embed:disputes 실행 전) 쓰는 대체: 같은 분쟁 유형의 최근 자료.
