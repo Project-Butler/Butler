@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { retentionMonths } from '../../../../src/domains/marketPrices/months.js';
-import { parseMarketQuery, summarizeCollectionProgress, toMonthly } from '../../../../src/domains/marketPrices/service/prices.js';
+import { parseMarketQuery, summarizeCollectionProgress, toMonthly, withKeyShape } from '../../../../src/domains/marketPrices/service/prices.js';
 
 const NOW = new Date('2026-11-17T03:00:00Z');
 const row = (yearMonth, values) => ({ contractYearMonth: yearMonth, price: null, deposit: null, monthlyRent: null, ...values });
@@ -106,5 +106,39 @@ describe('모으기 진행(COLLECTING 의 collectionProgress) — 보관 13개�
     assert.deepEqual(summarizeCollectionProgress([refreshFailed, old, odd], MONTHS), {
       requiredMonths: 13, collectedMonths: 1, failedMonths: 1, notTriedMonths: 11, lastAttemptedAt: '2026-11-16T17:30:00.000Z', lastErrorCode: 'UNKNOWN',
     });
+  });
+});
+
+describe('키 모양(collectionProgress.keyShape) — 키 오류(30 · NO_KEY)일 때만, 길이 · 참/거짓만 (#233)', () => {
+  // 가짜 16진수 키 — 실제 키가 아니다
+  const HEX = '0123456789abcdef'.repeat(4);
+  const base = { requiredMonths: 13, collectedMonths: 0, failedMonths: 13, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:32:00.000Z' };
+
+  test('30: 그 순간의 키 값으로 계산 — 따옴표 + 줄바꿈이 붙은 16진수 키', () => {
+    assert.deepEqual(withKeyShape({ ...base, lastErrorCode: '30' }, `"${HEX}"\n`), {
+      ...base,
+      lastErrorCode: '30',
+      keyShape: { rawLength: 67, cleanedLength: 64, hadWhitespace: true, hadQuotes: true, hadPercent: false, cleanedIsHex: true },
+    });
+  });
+
+  test('NO_KEY: 키가 비었으면 길이 0 · 모두 false', () => {
+    assert.deepEqual(withKeyShape({ ...base, lastErrorCode: 'NO_KEY' }, '').keyShape, {
+      rawLength: 0, cleanedLength: 0, hadWhitespace: false, hadQuotes: false, hadPercent: false, cleanedIsHex: false,
+    });
+  });
+
+  test('다른 실패 코드(TIMEOUT · 23 · UNKNOWN) · 실패 없음(null)은 그대로 — keyShape 칸이 없다', () => {
+    for (const code of ['TIMEOUT', '23', 'UNKNOWN', 'HTTP_502', null]) {
+      const progress = { ...base, lastErrorCode: code };
+      const result = withKeyShape(progress, HEX);
+      assert.equal(result, progress, String(code));
+      assert.ok(!('keyShape' in result), String(code));
+    }
+  });
+
+  test('응답에 키 글자가 없다(8글자씩 잘라 찾아봐도)', () => {
+    const text = JSON.stringify(withKeyShape({ ...base, lastErrorCode: '30' }, `"${HEX}"\n`));
+    for (let index = 0; index + 8 <= HEX.length; index += 4) assert.ok(!text.includes(HEX.slice(index, index + 8)), HEX.slice(index, index + 8));
   });
 });
