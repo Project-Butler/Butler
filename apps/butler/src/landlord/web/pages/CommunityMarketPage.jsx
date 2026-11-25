@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
+import { CollectingDescription } from '../components/CommunityMarket/CollectingDescription';
 import { MarketSource } from '../components/CommunityMarket/MarketSource';
 import { ChartLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
 import { Segment } from '../components/CommunitySegment/Segment';
@@ -20,6 +21,7 @@ import {
   pickAreaBands,
   recentSummary,
 } from '../utils/communityMarketSummary';
+import { collectingNotice } from '../utils/communityMarketCollecting';
 
 // 시세 화면.
 // 데이터는 useGetMarketPrices(시세 API — 국토교통부 실거래가, 연동 규격 2장 모양). 거래 유형 · 면적대를 바꾸면 그 조합으로 다시 가져온다.
@@ -161,6 +163,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 
   const data = prices.data;
   const isCollecting = data?.collectionStatus === 'COLLECTING';
+  const collecting = isCollecting ? collectingNotice(data) : null;
   const isEmpty = Boolean(data) && !isCollecting && data.recentDeals.length === 0 && data.monthly.length === 0;
   const source = data?.source && data.asOf ? <MarketSource source={data.source} asOf={data.asOf} /> : null;
 
@@ -177,8 +180,9 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 
       {prices.isPending && <LoadingStatus />}
       {prices.isError && <NoticeBox>{getErrorMessage(prices.error)}</NoticeBox>}
-      {/* 아직 모으지 못한 시군구(처음 보는 단지). 정기 실행이 하루 한 번 채운다 — 빈 상태(거래 없음)와 다른 문구 */}
-      {isCollecting && <EmptyState title="이 단지의 실거래를 모으는 중이에요" description="하루 안에 채워집니다. 그때 다시 열어 주세요." />}
+      {/* 아직 모으지 못한 시군구(처음 보는 단지). 정기 실행이 하루 한 번 채운다 — 빈 상태(거래 없음)와 다른 문구.
+          받기가 실패한 달이 있으면 "하루 안에" 대신 "아직 못 불러옴 · 매일 새벽 다시 시도 · 마지막 시도 날짜"(문구 · 이유는 utils/communityMarketCollecting) */}
+      {collecting && <EmptyState title={collecting.title} description={<CollectingDescription notice={collecting} />} />}
       {isEmpty && <EmptyState title={`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`} />}
       {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다. 차트 카드 바로 아래(스크롤 없이 보이게) */}
       {isEmpty && source}

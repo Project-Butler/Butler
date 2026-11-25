@@ -58,6 +58,17 @@ export const RETRY_DELAY_MS = 1500;
 // 실행 시간 한도 안에 "쉬기 + 요청 하나" 가 들어갈 때만 다시 한다(45초 한도를 넘기지 않게)
 export const RETRY_LIMIT = 1;
 
+// ===== 실패 코드 =====
+// 왜: 실패 코드(market_collections.lastErrorCode)는 수집 요약 · 정기 실행 로그 한 줄 · 시세 응답(COLLECTING 의 collectionProgress)으로 밖에 보인다.
+// 코드는 원천 결과 코드("30") · 우리가 붙인 이름(TIMEOUT · NETWORK · NO_KEY · HTTP_502) · 오류 이름(P2021 · TypeError)뿐이라 영문 · 숫자 · 밑줄이다.
+// 그 밖의 글자(요청 주소의 : / ? = &, 키의 + / = %)가 하나라도 섞이면 통째로 UNKNOWN 으로 바꾼다 — 요청 주소 · 키가 새어 나갈 길을 막는다.
+// 30자는 표의 칸 길이(VarChar(30)) — 긴 오류 이름은 앞 30자만(예: PrismaClientInitializationError → …Erro)
+export const ERROR_CODE_MAX = 30;
+export const safeErrorCode = (raw) => {
+  const code = String(raw ?? '').slice(0, ERROR_CODE_MAX);
+  return /^[A-Za-z0-9_]+$/.test(code) ? code : 'UNKNOWN';
+};
+
 // ===== 기간 =====
 // 왜 13개월: 이번 달은 신고 기한(계약 후 30일) 때문에 거래가 반쪽이라 화면이 빼고 보인다 — 완성된 12개월을 보이려면 이번 달까지 13개월이 필요하다.
 // 연동 규격의 "기본 최근 12개월" 은 "완성된 달 12개 + 이번 달" 로 읽었다(기본 조회 기간도 같다 — service/prices.js)

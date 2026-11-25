@@ -13,6 +13,7 @@ import {
   SCHEDULE,
   areaRange,
   rentDealType,
+  safeErrorCode,
 } from '../../../src/domains/marketPrices/marketPriceRules.js';
 
 describe('시세 규칙 파일', () => {
@@ -49,5 +50,21 @@ describe('시세 규칙 파일', () => {
     assert.equal(RETRY_LIMIT, 1);
     assert.ok(RETRY_DELAY_MS >= 1000 && RETRY_DELAY_MS <= 2000);
     assert.ok(REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS < RUN_BUDGET_MS);
+  });
+
+  test('실패 코드: 영문 · 숫자 · 밑줄 30자만 그대로, 주소 · 키 글자가 섞이면 UNKNOWN', () => {
+    for (const code of ['30', '23', 'NO_KEY', 'TIMEOUT', 'NETWORK', 'HTTP_502', 'TOO_MANY_PAGES', 'P2021', 'TypeError']) assert.equal(safeErrorCode(code), code);
+    assert.equal(safeErrorCode('PrismaClientInitializationError'), 'PrismaClientInitializationErro'); // 칸 길이 30
+    for (const leak of [
+      'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent?serviceKey=abc',
+      'serviceKey=abc%2Bdef',
+      'abc+def/ghi==',
+      'SERVICE ERROR',
+      '',
+      null,
+      undefined,
+    ]) {
+      assert.equal(safeErrorCode(leak), 'UNKNOWN', String(leak));
+    }
   });
 });
