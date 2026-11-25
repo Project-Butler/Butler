@@ -5,6 +5,16 @@ import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
 import { useGetTicketList } from '../hooks/useGetTicketList';
+
+// 인사 아래 한 줄: 할 일이 한 종류뿐이면 무엇을 볼지 덧붙인다(여러 종류면 건수만).
+const getTaskHint = ({ openTickets, rentDueContracts, expiringContracts }) => {
+  const kinds = [
+    openTickets.length > 0 && ' 들어온 수리 요청을 확인해 주세요.',
+    rentDueContracts.length > 0 && ' 오늘 월세 입금일인 계약을 확인해 주세요.',
+    expiringContracts.length > 0 && ' 종료가 가까운 계약을 확인해 주세요.',
+  ].filter(Boolean);
+  return kinds.length === 1 ? kinds[0] : '';
+};
 import { formatAttachmentCount } from '../../../shared/upload/attachment';
 import { daysBetween, formatDday, formatManwon, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
 import { getRentDueToday, toScheduleEvents } from '../utils/dashboard';
@@ -163,13 +173,7 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         </p>
         <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, {userName}님</h2>
         <p className="mt-1 text-body text-ink-2">
-          {taskCount === 0
-            ? '오늘 확인할 일이 없습니다.'
-            : expiringContracts.length > 0 && rentDueContracts.length > 0
-              ? `오늘 확인할 일이 ${taskCount}건 있습니다.`
-              : expiringContracts.length > 0
-                ? `오늘 확인할 일이 ${taskCount}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
-                : `오늘 확인할 일이 ${taskCount}건 있습니다. 오늘 월세 입금일인 계약을 확인해 주세요.`}
+          {taskCount === 0 ? '오늘 확인할 일이 없습니다.' : `오늘 확인할 일이 ${taskCount}건 있습니다.${getTaskHint({ openTickets, rentDueContracts, expiringContracts })}`}
         </p>
       </div>
 
