@@ -33,7 +33,7 @@ export const ChatSidebar = ({ chats, isLoading, selectedChatId, pendingTitle, on
                 onClick={() => onSelect(chat.id)}
                 aria-current={isActive ? 'true' : undefined}
                 className={`min-h-11 min-w-0 flex-1 rounded-input px-3 py-2 text-left transition-colors ${
-                  isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'
+                  isActive ? 'bg-accent-soft' : '[@media(hover:hover)]:hover:bg-surface-2'
                 }`}
               >
                 <p className={`truncate text-body ${isActive ? 'font-semibold text-accent-strong' : 'font-medium text-ink'}`}>
@@ -45,7 +45,7 @@ export const ChatSidebar = ({ chats, isLoading, selectedChatId, pendingTitle, on
                 type="button"
                 onClick={() => onDelete(chat)}
                 aria-label={`${chat.title} 상담 삭제`}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-input text-ink-3 transition-colors hover:bg-surface-2 hover:text-crit-ink"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-input text-ink-3 transition-colors [@media(hover:hover)]:hover:bg-surface-2 hover:text-crit-ink"
               >
                 <Trash2 size={16} />
               </button>

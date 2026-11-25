@@ -4,7 +4,7 @@ import { dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { prisma } from '../../../src/platform/prismaClient.js';
-import { findReferences } from '../../../src/domains/disputes/service.js';
+import { findReferences, findRelatedByKeyword } from '../../../src/domains/disputes/service.js';
 
 const KEY_PREFIX = 'dbtest-dispute-';
 const WORD_A = '가나다테스트어';
@@ -35,6 +35,7 @@ const NEAR_B = '훼휘훠테스트어';
 // 자료 종류 가산 확인용
 const TYPE_WORD = '쮀쮜쭤테스트어';
 const COMMON_WORD = '노도로테스트어';
+const REL_WORD = '뤠뤼뤄테스트어';
 // 흔한 단어 가중치 확인용: COMMON_WORD만 든 자료를 많이 넣어 그 단어를 흔하게 만든다(로컬 DB가 비어 있어도 같은 결과).
 const COMMON_FILLER_COUNT = 200;
 
@@ -138,6 +139,11 @@ ${SPACE_B} 본문` }),
   // 흔한 단어 가중치 확인용: 가중치가 없으면 idf-common-title이 앞섬(제목 3 + 요약 2 = 10 > 제목 3 + 본문 1 = 8, 둘 다 ×2)
   reference('idf-rare-title', { title: `${RARE_WORD} 사례`, content: `${COMMON_WORD} 본문` }),
   reference('idf-common-title', { title: `${COMMON_WORD} 사례`, summary: `${RARE_WORD} 요약` }),
+  // 관련 자료(임베딩 없음): 기준 자료의 키워드로 찾은 자료가 먼저, 같은 제목은 빼고, 모자라면 같은 유형 최근 자료
+  reference('rel-target', { category: 'DEPOSIT_RETURN', title: '뤠뤼기준점테스트어', keywords: [REL_WORD] }),
+  reference('rel-same-title', { category: 'DEPOSIT_RETURN', title: '뤠뤼기준점테스트어', keywords: [REL_WORD] }),
+  reference('rel-match-1', { category: 'REPAIR_DUTY', title: `${REL_WORD} 하나` }),
+  reference('rel-match-2', { category: 'LEASE_TERM', summary: `${REL_WORD} 요약` }),
   ...Array.from({ length: COMMON_FILLER_COUNT }, (_, index) =>
     reference(`idf-filler-${index}`, { content: `${COMMON_WORD} 채움 ${index}` }),
   ),
@@ -265,10 +271,21 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     const { meta } = await search(`${typo}를 ${WORD_B}`);
     assert.deepEqual(meta.suggestion, {
       query: `${WORD_A}를 ${WORD_B}`,
-      corrections: [{ from: `${typo}를`, to: `${WORD_A}를` }],
+      corrections: [{ from: `${typo}를`, to: `${WORD_A}를`, word: WORD_A }],
     });
 
     assert.equal((await search(`${WORD_A} ${WORD_B}`)).meta.suggestion, null);
+  });
+
+  test('오타 제안: 문장 끝말(~요·~죠·~까)로 끝나는 말은 가까운 낱말이 있어도 고치지 않는다', async () => {
+    // "가나다테스트아요"는 0건이지만 말하는 꼴이라 WORD_A로 고치지 않는다("안 받아요"→"안 받아야"를 막는다)
+    const typo = `${WORD_A.slice(0, -1)}아`;
+    for (const ending of ['요', '죠', '까']) {
+      assert.equal((await search(`${typo}${ending} ${WORD_B}`)).meta.suggestion, null);
+    }
+    // 같은 문장의 다른 오타는 그대로 고친다
+    const { meta } = await search(`${typo}를 ${WORD_B} ${typo}요`);
+    assert.deepEqual(meta.suggestion?.corrections, [{ from: `${typo}를`, to: `${WORD_A}를`, word: WORD_A }]);
   });
 
   test('한/영 전환 오타: 영문 자판으로 친 말을 자료에 있는 한글로 제안한다', async () => {
@@ -277,7 +294,7 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     const { meta } = await search(`rkskekxptmxmdj ${WORD_B}`);
     assert.deepEqual(meta.suggestion, {
       query: `${WORD_A} ${WORD_B}`,
-      corrections: [{ from: 'rkskekxptmxmdj', to: WORD_A }],
+      corrections: [{ from: 'rkskekxptmxmdj', to: WORD_A, word: WORD_A }],
     });
 
     // 바꿔도 음절이 안 되거나(hug) 자료에 없는 말이면 제안하지 않는다
@@ -360,7 +377,7 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     assert.equal(joined.meta.total, 0);
     assert.deepEqual(joined.meta.suggestion, {
       query: `${SPLIT_A} ${SPLIT_B}을`,
-      corrections: [{ from: `${SPLIT_A}${SPLIT_B}을`, to: `${SPLIT_A} ${SPLIT_B}을` }],
+      corrections: [{ from: `${SPLIT_A}${SPLIT_B}을`, to: `${SPLIT_A} ${SPLIT_B}을`, word: `${SPLIT_A} ${SPLIT_B}` }],
     });
     assert.equal((await search(`${SPLIT_A} ${SPLIT_B}`)).meta.total, SPLIT_COUNT);
   });
@@ -419,4 +436,17 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     assert.deepEqual(keys, ['percent-title', 'percent-summary']);
   });
 
+  test('관련 자료(임베딩 없음): 키워드로 찾은 자료가 분쟁 유형이 달라도 먼저 오고, 자기 자신·같은 제목은 빼고, 모자라면 같은 유형 최근 자료로 채운다', async () => {
+    const rows = await prisma.disputeReference.findMany({
+      where: { sourceKey: { startsWith: `${KEY_PREFIX}rel-` } },
+      select: { id: true, sourceKey: true, title: true, keywords: true, category: true },
+    });
+    const byKey = Object.fromEntries(rows.map((row) => [row.sourceKey.slice(KEY_PREFIX.length), row]));
+    const related = await findRelatedByKeyword({ reference: byKey['rel-target'], limit: 3 });
+
+    assert.equal(related.length, 3);
+    assert.deepEqual(new Set(related.slice(0, 2).map(({ id }) => id)), new Set([byKey['rel-match-1'].id, byKey['rel-match-2'].id]));
+    assert.ok(!related.some(({ id }) => id === byKey['rel-target'].id || id === byKey['rel-same-title'].id));
+    assert.equal(related[2].category, 'DEPOSIT_RETURN'); // 채운 자료는 같은 유형
+  });
 });

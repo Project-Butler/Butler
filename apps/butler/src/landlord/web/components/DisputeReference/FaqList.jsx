@@ -44,7 +44,7 @@ export const FaqList = ({ faqs, onOpenReference }) => {
                         <button
                           type="button"
                           onClick={() => onOpenReference(reference.id)}
-                          className="flex min-h-9 w-full items-center gap-2 rounded-input bg-surface-2 px-3 py-2 text-left transition-colors hover:bg-accent-soft"
+                          className="flex min-h-9 w-full items-center gap-2 rounded-input bg-surface-2 px-3 py-2 text-left transition-colors [@media(hover:hover)]:hover:bg-accent-soft"
                         >
                           <span className="shrink-0 text-chip font-semibold text-ink-3">
                             {TYPE_LABELS[reference.type] ?? '자료'}

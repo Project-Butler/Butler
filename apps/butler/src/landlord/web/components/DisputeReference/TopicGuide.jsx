@@ -190,7 +190,7 @@ export const TopicGuide = ({ guide, helpRoutes, cases, precedents, basisRefs, on
                   <button
                     type="button"
                     onClick={() => onOpenReference(reference.id)}
-                    className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 lg:px-5"
+                    className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors [@media(hover:hover)]:hover:bg-surface-2 lg:px-5"
                   >
                     <Scale size={18} className="shrink-0 text-ink-3" />
                     <span className="min-w-0 flex-1">

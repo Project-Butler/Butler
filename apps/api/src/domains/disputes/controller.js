@@ -19,7 +19,7 @@ import {
   cleanSearchKeyword,
   findReferences,
   findRelatedCandidates,
-  findSameCategoryReferences,
+  findRelatedByKeyword,
   MAX_CHAT_MESSAGES,
   RELEVANCE_SORT_FIELD,
   SORTABLE_FIELDS,
@@ -166,7 +166,7 @@ export const getReference = async (req, res, next) => {
   }
 };
 
-// 사례 상세 아래 "관련 자료". 본문 임베딩이 가까운 자료를 고른다(종류 상관없음).
+// 사례 상세 아래 "관련 자료". 본문 임베딩이 가까운 자료를 고른다(종류 상관없음). 임베딩이 없으면 키워드·제목 검색 점수로.
 const RELATED_LIMIT = 3;
 
 export const getRelatedReferences = async (req, res, next) => {
@@ -180,7 +180,8 @@ export const getRelatedReferences = async (req, res, next) => {
       // 화면에 유사도 숫자를 보여주지 않기로 해서 응답에도 넣지 않는다.
       items = rankBySimilarity(target.embedding, await findRelatedCandidates(target.id), RELATED_LIMIT);
     } else {
-      items = await findSameCategoryReferences({ excludeId: target.id, category: target.category, limit: RELATED_LIMIT });
+      // 임베딩이 없으면 키워드·제목 검색 점수로 고른다(모자라면 같은 유형 최근 자료로 채움).
+      items = await findRelatedByKeyword({ reference: target, limit: RELATED_LIMIT });
     }
 
     sendData(res, items);

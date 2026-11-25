@@ -24,7 +24,7 @@ export const TopicTile = ({ topic, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="flex h-full min-h-11 w-full items-center gap-3 rounded-card border border-line bg-surface p-4 text-left transition-colors hover:bg-surface-2"
+    className="flex h-full min-h-11 w-full items-center gap-3 rounded-card border border-line bg-surface p-4 text-left transition-colors [@media(hover:hover)]:hover:bg-surface-2"
   >
     <TopicIcon topicKey={topic.key} />
     <span className="min-w-0 flex-1">

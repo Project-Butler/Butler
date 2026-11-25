@@ -263,6 +263,49 @@ describe('분쟁 해결사', () => {
     expect(button.closest('p')).toHaveTextContent(sentence);
   });
 
+  it('고친 검색어가 길면 문장 전체 대신 고친 말만 보이고, 누르면 고친 검색어 전체로 찾는다', async () => {
+    const user = userEvent.setup();
+    const typed = '계약이 끝났는데 집주인이 보증굼을 안 돌려줘요';
+    const fixed = '계약이 끝났는데 집주인이 보증금을 안 돌려줘요';
+    api.getDisputeReferenceList.mockImplementation(async ({ q } = {}) => {
+      const response = listResponse([]);
+      const suggestion = q === typed ? { query: fixed, corrections: [{ from: '보증굼을', to: '보증금을', word: '보증금' }] } : null;
+      return { ...response, meta: { ...response.meta, suggestion } };
+    });
+    renderAt(`/disputes/search?q=${encodeURIComponent(typed)}`);
+
+    const button = await screen.findByRole('button', { name: '보증금' });
+    expect(button.closest('p')).toHaveTextContent('혹시 보증금을 찾으셨나요?');
+    await user.click(button);
+
+    await waitFor(() => expect(lastListParams()).toMatchObject({ q: fixed }));
+    expect(screen.getByLabelText('분쟁 질문·사례 검색')).toHaveValue(fixed);
+  });
+
+  it('새 검색어의 자료가 오는 동안 이전 결과를 남겨 두되 탭 줄을 흐리게(aria-busy) 하고, 오면 되돌린다', async () => {
+    const user = userEvent.setup();
+    renderAt('/disputes/search?q=도배비');
+    await screen.findByText(CASE_ITEM.summary);
+    const tabLine = () => screen.getByRole('group', { name: '결과 종류' }).parentElement;
+    expect(tabLine()).toHaveAttribute('aria-busy', 'false');
+
+    let resolveList;
+    api.getDisputeReferenceList.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = () => resolve(listResponse([CASE_ITEM]));
+        }),
+    );
+    const input = screen.getByLabelText('분쟁 질문·사례 검색');
+    await user.clear(input);
+    await user.type(input, '누수');
+
+    await waitFor(() => expect(tabLine()).toHaveAttribute('aria-busy', 'true'));
+    expect(screen.getByText(CASE_ITEM.summary)).toBeInTheDocument(); // 이전 결과는 그대로
+    resolveList();
+    await waitFor(() => expect(tabLine()).toHaveAttribute('aria-busy', 'false'));
+  });
+
   it('조건을 완화하지 않은 결과에는 일부 단어 안내를 보이지 않는다', async () => {
     renderAt('/disputes/search?q=도배비');
 
