@@ -10,6 +10,8 @@ import { ContractLookupPage } from './pages/ContractLookupPage';
 import { JobListPage } from './pages/JobListPage';
 import { OwnershipListPage } from './pages/OwnershipListPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { TicketDetailPage } from './pages/TicketDetailPage';
+import { TicketListPage } from './pages/TicketListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { UserListPage } from './pages/UserListPage';
 import { VerificationAttemptListPage } from './pages/VerificationAttemptListPage';
@@ -29,6 +31,8 @@ const PAGE_BY_KEY = {
   auditLogs: AuditLogPage,
   contracts: ContractLookupPage,
   contractDetail: ContractDetailPage,
+  tickets: TicketListPage,
+  ticketDetail: TicketDetailPage,
   verificationAttempts: VerificationAttemptListPage,
   settings: SettingsPage,
 };

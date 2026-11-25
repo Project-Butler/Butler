@@ -16,6 +16,8 @@ describe('관리자 routes', () => {
     expect(buildLocation('userDetail', { userId: 'u-1' }).pathname).toBe('/admin/users/u-1');
     expect(buildLocation('contractDetail', { contractId: 'c-1' }).pathname).toBe('/admin/contracts/c-1');
     expect(buildLocation('verificationAttempts').pathname).toBe('/admin/ownership-verification-attempts');
+    expect(buildLocation('tickets', undefined, '?status=OPEN')).toEqual({ pathname: '/admin/tickets', search: '?status=OPEN' });
+    expect(buildLocation('ticketDetail', { ticketId: 't-1' }).pathname).toBe('/admin/tickets/t-1');
   });
 
   it('쿼리 문자열을 그대로 넘긴다', () => {
@@ -32,6 +34,8 @@ describe('관리자 routes', () => {
     expect(resolveViewKey('/admin/users/u-1')).toBe('users');
     expect(resolveViewKey('/admin/contracts/c-1')).toBe('contracts');
     expect(resolveViewKey('/admin/ownership-verification-attempts')).toBe('verificationAttempts');
+    expect(resolveViewKey('/admin/tickets')).toBe('tickets');
+    expect(resolveViewKey('/admin/tickets/t-1')).toBe('tickets');
   });
 
   it('경로 표에 없는 주소와, 접두어 밖의 주소는 null (우연히 맞지 않는다)', () => {

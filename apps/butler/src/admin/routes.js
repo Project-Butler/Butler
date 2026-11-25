@@ -24,6 +24,7 @@ export const ROUTE_TABLE = [
   { key: 'contracts', path: '/contracts' },
   { key: 'contractDetail', path: '/contracts/:contractId', navKey: 'contracts' },
   { key: 'tickets', path: '/tickets' },
+  { key: 'ticketDetail', path: '/tickets/:ticketId', navKey: 'tickets' },
   { key: 'documents', path: '/documents' },
   { key: 'settings', path: '/settings' },
 ];

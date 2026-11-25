@@ -158,3 +158,11 @@ export const LEDGER_KIND_LABEL = {
   GENERAL: '일반건축물대장',
   UNIT_EXCLUSIVE: '집합건축물대장(전유부)',
 };
+
+// 수리·점검 요청 상태 Badge tone. 라벨은 shared/ticketLabels.js(getTicketStatusLabel(status, 'ADMIN'))를 쓴다.
+export const TICKET_STATUS_TONE = {
+  OPEN: 'warning',
+  IN_PROGRESS: 'pending',
+  DONE: 'success',
+  CANCELED: 'default',
+};

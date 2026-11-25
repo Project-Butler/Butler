@@ -5,15 +5,16 @@ export const TICKET_CATEGORY_LABELS = { REPAIR: '수리', INSPECTION: '점검', 
 
 export const TICKET_CATEGORY_OPTIONS = Object.entries(TICKET_CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
-// 상태 라벨. 접수(OPEN)만 역할마다 다르다 — 임대인은 처리할 일이라 '확인 필요', 임차인은 보낸 요청이라 '접수됨'.
+// 상태 라벨. 접수(OPEN)만 역할마다 다르다 — 임대인은 처리할 일이라 '확인 필요', 임차인은 보낸 요청이라 '접수됨',
+// 운영자는 지켜보기만 하므로 '접수'.
 const STATUS_LABELS = {
-  OPEN: { LANDLORD: '확인 필요', TENANT: '접수됨' },
+  OPEN: { LANDLORD: '확인 필요', TENANT: '접수됨', ADMIN: '접수' },
   IN_PROGRESS: '처리 중',
   DONE: '완료',
   CANCELED: '취소',
 };
 
-// role: 'LANDLORD' | 'TENANT'. 모르는 상태는 그대로 돌려준다.
+// role: 'LANDLORD' | 'TENANT' | 'ADMIN'. 모르는 상태는 그대로 돌려준다.
 export const getTicketStatusLabel = (status, role) => {
   const label = STATUS_LABELS[status];
   if (!label) return status;
