@@ -2,12 +2,13 @@
 // 계약을 고치면 같이 바뀌고 해지하면 사라진다. 순수 함수, DB 의존 없음.
 //   CONTRACT_END             계약 종료일(임대인·연결된 임차인)
 //   RENT_PAYMENT             월세 입금일(임대인, 조회 기간 안의 매달)
-//   RENEWAL_NOTICE_DEADLINE  갱신 거절 통지 마감일(임대인, 만료 2개월 전 — platform/renewalNotice.js)
+//   RENEWAL_NOTICE_DEADLINE  갱신 거절 통지 마감일(임대인, 만료 2개월 전 — platform/renewalNotice.js).
+//                            갱신 계약이 등록됐거나 기한 안에 도달한 통지 기록이 있으면 넣지 않는다(isRenewalNoticeSettled, #242).
 import { createHash } from 'node:crypto';
 import { compareDateStrings, toDateOnlyString } from '../../platform/dateUtils.js';
 import { toMoney } from '../../platform/money.js';
 import { toPropertySummary } from '../../platform/propertySerializer.js';
-import { computeRenewalNoticeWindow } from '../../platform/renewalNotice.js';
+import { computeRenewalNoticeWindow, isRenewalNoticeSettled } from '../../platform/renewalNotice.js';
 import { listRentPaymentDates } from '../../platform/rentPayment.js';
 
 // 같은 종류는 이 순서로 정렬한다(같은 날짜일 때).
@@ -30,9 +31,10 @@ export const toSystemScheduleId = (key) => {
 
 const inRange = (date, { fromDate, toDate }) => compareDateStrings(date, fromDate) >= 0 && compareDateStrings(date, toDate) <= 0;
 
-// contract: Prisma Contract + ownership.property(+complex). viewer: 'LANDLORD' | 'TENANT'.
+// contract: Prisma Contract + ownership.property(+complex) + (임대인) renewalNotices(deliveredOn). viewer: 'LANDLORD' | 'TENANT'.
+// renewed: 이 계약을 이어 가는 갱신 계약이 등록됐는지(platform/renewedContracts.js).
 // 해지 계약·끝난 소유 관계는 호출하는 쪽이 조회에서 뺀다.
-export const buildContractSchedules = (contract, { viewer, fromDate, toDate }) => {
+export const buildContractSchedules = (contract, { viewer, fromDate, toDate, renewed = false }) => {
   const range = { fromDate, toDate };
   const property = toPropertySummary(contract.ownership.property);
   const item = (kind, date, amount = null) => ({
@@ -56,7 +58,8 @@ export const buildContractSchedules = (contract, { viewer, fromDate, toDate }) =
 
   for (const date of listRentPaymentDates(contract, range)) items.push(item('RENT_PAYMENT', date, toMoney(contract.monthlyRent)));
   const { deadline } = computeRenewalNoticeWindow(endDate);
-  if (inRange(deadline, range)) items.push(item('RENEWAL_NOTICE_DEADLINE', deadline));
+  const settled = isRenewalNoticeSettled(contract, { notices: contract.renewalNotices ?? [], renewed });
+  if (inRange(deadline, range) && !settled) items.push(item('RENEWAL_NOTICE_DEADLINE', deadline));
   return items;
 };
 

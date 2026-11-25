@@ -42,6 +42,17 @@ export const computeRenewalNoticeTiming = (notice, window) => {
   return 'IN_TIME';
 };
 
+// 갱신 거절 통지를 더 챙길 필요가 없는지(알림·일정 공통, #242). 하우스 로그 타임라인과 같은 기준이다.
+//   1) 이 계약을 이어 가는 갱신 계약이 등록됨(renewed — platform/renewedContracts.js findRenewedContractIds)
+//   2) 기한 안에 도달한 통지 기록이 있음
+// 새 임차인 계약은 1)이 아니다 — 지금 임차인에게는 통지가 여전히 필요하다.
+// 계약 응답의 renewalNotice 요약(toRenewalNoticeSummary)은 이 판단으로 숨기지 않는다(화면이 갱신 확정 표시에 쓴다).
+export const isRenewalNoticeSettled = (contract, { notices = [], renewed = false } = {}) => {
+  if (renewed) return true;
+  const window = computeRenewalNoticeWindow(contract.endDate);
+  return notices.some((notice) => computeRenewalNoticeTiming(notice, window) === 'IN_TIME');
+};
+
 // 통지 기록 응답. attachments는 호출하는 쪽이 붙인 문서 응답 목록이다.
 export const toRenewalNoticeResponse = (notice, window, attachments = []) => ({
   id: notice.id,
