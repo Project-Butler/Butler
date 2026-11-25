@@ -4,7 +4,7 @@ import { getTicketStatusBadge } from '../../utils/ticketView';
 import { useGetTicketList } from '../../hooks/useGetTicketList';
 import { formatDateKST } from '../../utils/format';
 import { UNVERIFIED_LOG_WARNING } from '../../utils/managementLog';
-import { getRoomLabel } from '../../../shared/room';
+import { getRoomLabel } from '../../../../shared/room';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
 const IN_PROGRESS_STATUS = 'OPEN,IN_PROGRESS';

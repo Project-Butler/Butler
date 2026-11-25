@@ -51,6 +51,11 @@ export const queryKey = {
   CONTRACT_THREAD: 'contract_thread',
   MANAGEMENT_LOGS: 'management_logs',
   MANAGEMENT_LOG_DETAIL: 'management_log',
+  // 하우스 로그 타임라인: 모든 페이지를 합친 기록, 인증 전 기록 올리기 미리보기
+  MANAGEMENT_LOGS_ALL: 'management_logs_all',
+  MANAGEMENT_LOG_PROMOTE_PREVIEW: 'management_log_promote_preview',
+  // 계약별 갱신 거절 통지 기록(GET /contracts/:contractId/renewal-notices)
+  CONTRACT_RENEWAL_NOTICES: 'contract_renewal_notices',
   PROPERTY_DOCUMENT_BOX: 'property_document_box',
   PROPERTIES_ALL: 'properties_all',
   OWNERSHIP_RENEWAL_NOTICES: 'ownership_renewal_notices',

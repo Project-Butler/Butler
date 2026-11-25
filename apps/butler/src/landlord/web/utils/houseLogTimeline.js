@@ -3,7 +3,7 @@
 // 계약·통지는 계약 쪽 데이터를 읽어서 보여 주기만 한다(H-23). 저장하거나 바꾸지 않는다.
 import { addDays, addYears, daysBetween, formatDday } from './contract';
 import { formatDateKST } from './format';
-import { ROOM_FILTER_NONE } from './room';
+import { ROOM_FILTER_NONE } from '../../../shared/room';
 
 // 지난 계약은 지금 계약 시작부터 최대 4년 앞까지, 이전 소유 띠는 내 소유 시작부터 최대 2년 앞까지(7장 가정).
 export const PAST_CONTRACT_MAX_YEARS = 4;
