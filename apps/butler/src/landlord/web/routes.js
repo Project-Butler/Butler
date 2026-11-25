@@ -173,6 +173,10 @@ const PAGE_GROUP_BY_VIEW = {
   logRegister: 'logs',
   logEdit: 'logs',
   logDetail: 'logs',
+  // 유지보수 요청 목록·상세·등록은 같은 화면(표 + 패널, 등록 팝업)이라 한 묶음.
+  tickets: 'tickets',
+  ticketRegister: 'tickets',
+  ticketDetail: 'tickets',
   disputes: 'disputes',
   disputeSearch: 'disputes',
   disputeTopic: 'disputes',

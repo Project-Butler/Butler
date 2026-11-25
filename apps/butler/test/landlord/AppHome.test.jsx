@@ -1,5 +1,6 @@
 // M03 임대인 앱 홈(Figma 3:111). 웹 대시보드와 같은 API(계약·호실·소유 관계 목록)로 Figma 칸을 채운다.
-// 실패 조건: 숫자가 API 와 다름 · API 없는 칸(검색·알림·수리 요청·전체 보기)이 생김 · 버튼이 엉뚱한 곳으로 감 · 등록 안내가 두 번 보임.
+// 실패 조건: 숫자가 API 와 다름 · API 없는 칸(검색·전체 보기)이 생김 · 버튼이 엉뚱한 곳으로 감 · 등록 안내가 두 번 보임.
+// 확인 필요(접수) 수리 요청은 오늘 할 일에 들어간다(docs/10 D18).
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -11,6 +12,9 @@ const api = vi.hoisted(() => ({
   getPropertyList: vi.fn(),
   getPropertyOwnershipList: vi.fn(),
   getNotificationUnreadCount: vi.fn(),
+  getTicketList: vi.fn(),
+  getTicket: vi.fn(),
+  postDocumentDownloadUrl: vi.fn(),
 }));
 vi.mock('@butler/api-client', () => api);
 
@@ -77,6 +81,7 @@ const withEmptyAccount = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   api.getNotificationUnreadCount.mockResolvedValue({ count: 0 });
+  api.getTicketList.mockResolvedValue(page([]));
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-07T03:00:00Z'));
 });
@@ -160,13 +165,35 @@ describe('M03 홈: 데이터', () => {
 });
 
 describe('M03 홈: API 가 없는 Figma 칸은 두지 않는다', () => {
-  it('수리 요청 항목, 오늘 할 일 [전체 보기]가 없다', async () => {
+  it('오늘 할 일 [전체 보기]가 없고, 확인 필요 수리 요청이 없으면 수리 요청 줄도 없다', async () => {
     withData();
     renderAt('/landlord/home');
     await screen.findByText('80,000,000원');
 
     expect(screen.queryByText('전체 보기')).toBeNull();
-    expect(screen.queryByText(/보일러|수리 요청/)).toBeNull();
+    expect(screen.queryByText('수리 요청 확인')).toBeNull();
+  });
+});
+
+describe('M03 홈: 오늘 할 일의 수리 요청(D18)', () => {
+  it('확인 필요(접수) 수리 요청을 오늘 할 일 맨 위에 넣고, 누르면 그 요청 상세로 간다. 처리할 수 없는 요청은 뺀다', async () => {
+    withData();
+    api.getTicketList.mockResolvedValue(
+      page([
+        { id: 't1', propertyId: 'p1', title: '싱크대 누수', status: 'OPEN', isReadOnly: false, property: { id: 'p1', displayName: '래미안 101동 1001호' } },
+        { id: 't9', propertyId: 'p9', title: '예전 집 요청', status: 'OPEN', isReadOnly: false, property: { id: 'p9', displayName: '예전 101동 1호' } },
+      ]),
+    );
+    api.getTicket.mockReturnValue(new Promise(() => {}));
+    renderAt('/landlord/home');
+
+    const tasks = within(await screen.findByRole('region', { name: '오늘 할 일' }));
+    const item = await tasks.findByRole('button', { name: /수리 요청 확인/ });
+    expect(item).toHaveTextContent('래미안 101동 1001호 · 싱크대 누수');
+    expect(tasks.queryByText(/예전 집 요청/)).toBeNull();
+    expect(api.getTicketList).toHaveBeenCalledWith(expect.objectContaining({ status: 'OPEN' }));
+    await userEvent.click(item);
+    expect(where()).toBe('/landlord/tickets/t1');
   });
 });
 

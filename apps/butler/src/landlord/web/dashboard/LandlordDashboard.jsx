@@ -4,9 +4,21 @@ import { useGetLandlordSetup } from '../hooks/useGetLandlordSetup';
 import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../hooks/useGetPropertyOwnershipList';
+import { useGetTicketList } from '../hooks/useGetTicketList';
+
+// 인사 아래 한 줄: 할 일이 한 종류뿐이면 무엇을 볼지 덧붙인다(여러 종류면 건수만).
+const getTaskHint = ({ openTickets, rentDueContracts, expiringContracts }) => {
+  const kinds = [
+    openTickets.length > 0 && ' 들어온 수리 요청을 확인해 주세요.',
+    rentDueContracts.length > 0 && ' 오늘 월세 입금일인 계약을 확인해 주세요.',
+    expiringContracts.length > 0 && ' 종료가 가까운 계약을 확인해 주세요.',
+  ].filter(Boolean);
+  return kinds.length === 1 ? kinds[0] : '';
+};
 import { formatAttachmentCount } from '../../../shared/upload/attachment';
 import { daysBetween, formatDday, formatManwon, formatPeriod, formatWon, getDdayTone, getTodayKST } from '../utils/contract';
 import { getRentDueToday, toScheduleEvents } from '../utils/dashboard';
+import { filterActionableTickets, toActivePropertyIds } from '../utils/ticketView';
 import { formatNumber, formatUnitSpec } from '../utils/format';
 import { formatLogDate } from '../utils/managementLog';
 import { getUnitTypeLabel } from '../utils/unitListing';
@@ -140,7 +152,12 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
   const expiringContracts = contracts.filter((contract) => contract.status === 'EXPIRING_SOON');
   // 오늘이 월세 입금일인 계약(당일에만, #76)
   const rentDueContracts = getRentDueToday(contracts, today);
-  const taskCount = rentDueContracts.length + expiringContracts.length;
+  // 확인 필요(접수) 수리 요청도 오늘 할 일(docs/10 D18). 처리할 수 없는 요청(소유가 끝난 호실)은 뺀다. 사이드바 개수와 같은 크기(최대 100건)로 받는다.
+  const openTicketList = useGetTicketList({ status: 'OPEN', size: 100 }, { onUnauthorized });
+  // 처리할 수 있는지는 지금 소유 중인 호실로 판단한다(아래 내 부동산 표는 5건만 받으므로 따로 받는다).
+  const activeProperties = useGetPropertyList({ relation: 'OWNER', size: 100 }, { onUnauthorized });
+  const openTickets = filterActionableTickets(openTicketList.data?.items, toActivePropertyIds(activeProperties.data?.items));
+  const taskCount = openTickets.length + rentDueContracts.length + expiringContracts.length;
   const contractByPropertyId = new Map(contracts.map((contract) => [contract.property.id, contract]));
   const schedules = toScheduleEvents(liveItems, today);
   const depositHint = liveContracts.error
@@ -159,13 +176,7 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
         </p>
         <h2 className="mt-1 text-h1 font-bold text-ink">안녕하세요, {userName}님</h2>
         <p className="mt-1 text-body text-ink-2">
-          {taskCount === 0
-            ? '오늘 확인할 일이 없습니다.'
-            : expiringContracts.length > 0 && rentDueContracts.length > 0
-              ? `오늘 확인할 일이 ${taskCount}건 있습니다.`
-              : expiringContracts.length > 0
-                ? `오늘 확인할 일이 ${taskCount}건 있습니다. 종료가 가까운 계약을 확인해 주세요.`
-                : `오늘 확인할 일이 ${taskCount}건 있습니다. 오늘 월세 입금일인 계약을 확인해 주세요.`}
+          {taskCount === 0 ? '오늘 확인할 일이 없습니다.' : `오늘 확인할 일이 ${taskCount}건 있습니다.${getTaskHint({ openTickets, rentDueContracts, expiringContracts })}`}
         </p>
       </div>
 
@@ -223,6 +234,25 @@ export const LandlordDashboard = ({ userName, onNavigate, onUnauthorized }) => {
             {liveContracts.data && taskCount === 0 && (
               <p className="py-4 text-center text-body text-ink-3">오늘 할 일이 없습니다</p>
             )}
+            {openTickets.map((ticket) => (
+              <div key={`${ticket.id}-ticket`} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">
+                <div className="min-w-0">
+                  <Badge tone="warning">확인 필요</Badge>
+                  <p className="mt-1.5 text-body font-semibold text-ink">수리 요청이 들어왔어요</p>
+                  <p className="mt-0.5 text-chip text-ink-3">
+                    {ticket.property?.displayName} · {ticket.title}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0 whitespace-nowrap"
+                  onClick={() => onNavigate('ticketDetail', { ticketId: ticket.id })}
+                >
+                  요청 보기
+                </Button>
+              </div>
+            ))}
             {rentDueContracts.map((contract) => (
               <div key={`${contract.id}-rent`} className="flex items-start justify-between gap-4 rounded-btn border border-line p-3">
                 <div className="min-w-0">

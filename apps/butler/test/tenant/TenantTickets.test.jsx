@@ -116,6 +116,20 @@ describe('수리 요청 탭(①②⑧)', () => {
     expect(where()).toBe('/tenant/tickets?tab=closed');
   });
 
+  it('탭을 바꾸는 동안에는 앞 탭 카드가 보이지 않는다', async () => {
+    renderAt('/tenant/tickets');
+    expect(await screen.findByText('싱크대 아래 물이 새요')).toBeInTheDocument();
+    let finish;
+    vi.mocked(api.getTicketList).mockImplementation((params) =>
+      params.size === 1 ? Promise.resolve({ data: [], meta: { total: 1 } }) : new Promise((resolve) => (finish = resolve)),
+    );
+    await userEvent.click(screen.getByRole('tab', { name: /완료/ }));
+    expect(screen.queryByText('싱크대 아래 물이 새요')).toBeNull();
+    expect(screen.getByText('요청을 불러오는 중이에요')).toBeInTheDocument();
+    finish({ data: [ticket({ id: 'tk-3', title: '베란다 창문', status: 'DONE' })], meta: {} });
+    expect(await screen.findByText('베란다 창문')).toBeInTheDocument();
+  });
+
   it('카드를 누르면 상세, [요청하기]는 요청하기 화면', async () => {
     renderAt('/tenant/tickets');
     await userEvent.click(await screen.findByRole('button', { name: /싱크대 아래 물이 새요/ }));
@@ -162,6 +176,18 @@ describe('수리 요청하기(③) → 보낸 뒤(④)', () => {
     expect(where()).toBe('/tenant/tickets/tk-new/sent');
     await userEvent.click(screen.getByRole('button', { name: '요청 보기' }));
     expect(where()).toBe('/tenant/tickets/tk-new');
+  });
+
+  it('키보드: 분류 칩은 화살표로 옮겨 고르고, 칩 묶음은 위 글자로 이름이 붙는다', async () => {
+    renderAt('/tenant/tickets/new');
+    const group = await screen.findByRole('radiogroup', { name: '무엇을 요청할까요' });
+    const repair = within(group).getByRole('radio', { name: '수리' });
+    expect(repair).toHaveAttribute('tabindex', '0');
+    repair.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(within(group).getByRole('radio', { name: '점검' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: '점검' })).toHaveFocus();
+    expect(screen.getByRole('radiogroup', { name: /어디인가요/ })).toBeInTheDocument();
   });
 
   it('방은 선택: 고른 방을 다시 누르면 빠지고 room 을 보내지 않는다', async () => {

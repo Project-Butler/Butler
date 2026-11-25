@@ -1,4 +1,5 @@
 // 임대인 앱 수리·점검(M09) 표시 계산. 화면 밖에서 테스트할 수 있게 순수 함수로 둔다.
+import { getRoomLabel } from '../../../shared/room';
 import { getTicketCategoryLabel, getTicketStatusLabel } from '../../../shared/ticketLabels';
 import { formatDateKST, formatNumber } from './format';
 
@@ -47,4 +48,43 @@ export const toCompleteBody = ({ resolutionNote, cost }) => {
   const digits = String(cost ?? '').replace(/[^0-9]/g, '');
   if (digits) body.cost = Number(digits);
   return body;
+};
+
+// ── PC 수리 요청 화면(docs/10 v2.2 D4·D17) ──
+
+// 상태 세그먼트. status 는 GET /tickets 의 status 필터(없으면 전체). 처리할 요청 = 접수 + 처리 중.
+export const TICKET_STATUS_SEGMENTS = [
+  { key: 'todo', label: '처리할 요청', status: 'OPEN,IN_PROGRESS' },
+  { key: 'all', label: '전체', status: undefined },
+  { key: 'done', label: '완료', status: 'DONE' },
+  { key: 'canceled', label: '취소', status: 'CANCELED' },
+];
+export const findTicketSegment = (key) => TICKET_STATUS_SEGMENTS.find((segment) => segment.key === key) ?? TICKET_STATUS_SEGMENTS[0];
+
+// 지금 소유 중인 호실 id 묶음(GET /properties?relation=OWNER 결과). 모르면(불러오는 중) 빈 묶음.
+export const toActivePropertyIds = (properties) => new Set((properties ?? []).map((property) => property.id));
+
+// 이 임대인이 지금 처리(처리 시작·완료)할 수 있는 요청인지. 읽기 전용이 아니고 지금 소유 중인 호실이어야 한다.
+// 서버는 임대인이 직접 등록한 요청을 소유가 끝난 뒤에도 '요청자'라서 읽기 전용으로 두지 않는다(취소만 할 수 있다).
+// 그래서 isReadOnly 만으로는 모자라 지금 소유 중인 호실인지 같이 본다(소유 목록을 모르면 처리할 수 없다고 본다).
+export const canProcessTicket = (ticket, activePropertyIds) => !ticket.isReadOnly && Boolean(activePropertyIds?.has(ticket.propertyId));
+
+// 처리할 수 있는 요청만 고른다. 소유가 끝난 호실에 남은 요청은 처리할 사람이 없으므로
+// 사이드바 개수·오늘 할 일에서 뺀다(서버 목록은 예전 소유 관계의 요청도 돌려준다).
+export const filterActionableTickets = (tickets = [], activePropertyIds) =>
+  (tickets ?? []).filter((ticket) => canProcessTicket(ticket, activePropertyIds));
+
+// 고른 값을 보기 순서대로 쉼표로 잇는다. 아무것도 안 골랐으면 undefined(조건 없음).
+export const toFilterParam = (options, values) =>
+  options
+    .filter((option) => values.includes(option.value))
+    .map((option) => option.value)
+    .join(',') || undefined;
+
+// 완료하면 하우스 로그에 남는 제목(서버 platform/ticketRules.js buildTicketSummaryTitle 과 같은 규칙):
+// '[방 ]유형 완료'. 방이 없거나 OTHER 면 방을 빼고, 유형 OTHER 는 '요청 처리 완료'.
+export const buildTicketSummaryTitle = ({ room, category }) => {
+  const roomLabel = room && room !== 'OTHER' ? getRoomLabel(room) : null;
+  const action = category === 'OTHER' ? '요청 처리 완료' : `${getTicketCategoryLabel(category)} 완료`;
+  return roomLabel ? `${roomLabel} ${action}` : action;
 };
