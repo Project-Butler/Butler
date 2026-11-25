@@ -150,6 +150,14 @@ describe('상세 패널과 처리', () => {
     expect(onNavigate).toHaveBeenCalledWith('logDetail', { logId: 'log-9' });
   });
 
+  it('소유가 끝난 호실에 내가 직접 등록한 요청: [처리 시작]은 없고 [요청 취소]만(서버는 요청자라 읽기 전용으로 두지 않는다)', async () => {
+    vi.mocked(getTicket).mockResolvedValue(ticket({ id: 't8', propertyId: 'p9', property: { ...HOME, id: 'p9' }, requester: { role: 'LANDLORD' }, isReadOnly: false }));
+    renderPage({ selectedTicketId: 't8' });
+    const panel = await screen.findByRole('complementary', { name: '요청 상세' });
+    expect(await within(panel).findByRole('button', { name: '요청 취소' })).toBeInTheDocument();
+    expect(within(panel).queryByRole('button', { name: '처리 시작' })).toBeNull();
+  });
+
   it('completeOnOpen(앱 목록의 [완료 처리])이면 처리 중 요청의 완료 팝업을 바로 연다', async () => {
     renderPage({ selectedTicketId: 't2', completeOnOpen: true });
     expect(await screen.findByRole('dialog', { name: '완료 처리' })).toBeInTheDocument();

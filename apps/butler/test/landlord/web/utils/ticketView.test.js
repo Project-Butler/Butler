@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildTicketSummaryTitle, filterActionableTickets, findTicketSegment, TICKET_STATUS_SEGMENTS, toFilterParam } from '../../../../src/landlord/web/utils/ticketView';
+import { buildTicketSummaryTitle, canProcessTicket, filterActionableTickets, findTicketSegment, TICKET_STATUS_SEGMENTS, toActivePropertyIds, toFilterParam } from '../../../../src/landlord/web/utils/ticketView';
 import { buildNotificationMenu, toLandlordWebPath } from '../../../../src/landlord/web/utils/notificationMenu';
 
 describe('PC 수리 요청 표시 계산', () => {
@@ -13,9 +13,17 @@ describe('PC 수리 요청 표시 계산', () => {
     expect(findTicketSegment('nope').key).toBe('todo');
   });
 
-  it('처리할 수 있는 요청만 센다 — 소유가 끝난 호실에 남은 요청(isReadOnly)은 뺀다(사이드바 개수·오늘 할 일)', () => {
-    expect(filterActionableTickets([{ id: 'a', isReadOnly: false }, { id: 'b', isReadOnly: true }, { id: 'c' }]).map((t) => t.id)).toEqual(['a', 'c']);
-    expect(filterActionableTickets(undefined)).toEqual([]);
+  it('처리할 수 있는 요청 = 읽기 전용이 아니고 지금 소유 중인 호실 — 소유가 끝난 호실의 직접 등록 요청(isReadOnly=false)도 뺀다', () => {
+    const owned = toActivePropertyIds([{ id: 'p1' }]);
+    const tickets = [
+      { id: 'a', propertyId: 'p1', isReadOnly: false },
+      { id: 'b', propertyId: 'p1', isReadOnly: true },
+      { id: 'c', propertyId: 'p9', isReadOnly: false },
+    ];
+    expect(filterActionableTickets(tickets, owned).map((t) => t.id)).toEqual(['a']);
+    expect(canProcessTicket(tickets[2], owned)).toBe(false);
+    expect(filterActionableTickets(tickets, undefined)).toEqual([]);
+    expect(filterActionableTickets(undefined, owned)).toEqual([]);
   });
 
   it('거르기 값은 보기 순서대로 쉼표로, 없으면 undefined', () => {

@@ -180,8 +180,8 @@ describe('M03 홈: 오늘 할 일의 수리 요청(D18)', () => {
     withData();
     api.getTicketList.mockResolvedValue(
       page([
-        { id: 't1', title: '싱크대 누수', status: 'OPEN', isReadOnly: false, property: { id: 'p1', displayName: '래미안 101동 1001호' } },
-        { id: 't9', title: '예전 집 요청', status: 'OPEN', isReadOnly: true, property: { id: 'p9', displayName: '예전 101동 1호' } },
+        { id: 't1', propertyId: 'p1', title: '싱크대 누수', status: 'OPEN', isReadOnly: false, property: { id: 'p1', displayName: '래미안 101동 1001호' } },
+        { id: 't9', propertyId: 'p9', title: '예전 집 요청', status: 'OPEN', isReadOnly: false, property: { id: 'p9', displayName: '예전 101동 1호' } },
       ]),
     );
     api.getTicket.mockReturnValue(new Promise(() => {}));

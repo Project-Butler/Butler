@@ -49,8 +49,9 @@ const CancelRow = ({ busy, onCancel }) => {
 // PC 수리 요청 상세 패널(시안 v2.2 ①~③). 표 오른쪽 3칸.
 // - 확인 필요: [요청 취소][처리 시작](바로 처리 중으로) · 처리 중: [요청 취소][완료 처리](onComplete 로 팝업) · 완료: [하우스 로그 보기].
 // - 대화는 개수·조회 없이 안내 한 줄(HL H-16). 첨부는 미리보기 팝업(사진·동영상·PDF).
+// - canProcess(ticket): 처리 시작·완료 버튼을 보일지(지금 소유 중인 호실인지).
 // - onChanged(ticket): 상태가 바뀌면 표·개수를 새로 고치게 알린다. onLoaded(ticket): 처음 불러왔을 때.
-export const TicketInspector = ({ ticketId, onClose, onComplete, onChanged, onLoaded, onNavigate, onUnauthorized }) => {
+export const TicketInspector = ({ ticketId, canProcess = () => false, onClose, onComplete, onChanged, onLoaded, onNavigate, onUnauthorized }) => {
   const { data: ticket, error, setData } = useGetTicket(ticketId, { onUnauthorized });
   const loadedId = ticket?.id;
   // 처음 불러왔을 때 한 번 알린다(완료 팝업을 바로 열라는 주소 처리용).
@@ -79,7 +80,8 @@ export const TicketInspector = ({ ticketId, onClose, onComplete, onChanged, onLo
   }
 
   const badge = getTicketStatusBadge(ticket.status);
-  const action = getPrimaryTicketAction(ticket);
+  // 처리 시작·완료는 지금 소유 중인 호실의 요청만(직접 등록한 요청은 소유가 끝나도 취소만 할 수 있다).
+  const action = canProcess(ticket) ? getPrimaryTicketAction(ticket) : null;
   const isDone = ticket.status === 'DONE';
   const change = async (body) => {
     const result = await updateTicket(ticket.id, body);

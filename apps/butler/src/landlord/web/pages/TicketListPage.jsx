@@ -11,10 +11,11 @@ import { TicketCompleteModal } from '../components/TicketCompleteModal/TicketCom
 import { TicketFilterCard } from '../components/TicketFilterCard/TicketFilterCard';
 import { TicketInspector } from '../components/TicketInspector/TicketInspector';
 import { TicketRegisterModal } from '../components/TicketRegisterModal/TicketRegisterModal';
+import { useBadgeRefresh } from '../hooks/useBadgeRefresh';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { useGetTicketList } from '../hooks/useGetTicketList';
 import { usePatchTicket } from '../hooks/usePatchTicket';
-import { findTicketSegment, formatTicketDateTime, getTicketStatusBadge, TICKET_STATUS_SEGMENTS, toFilterParam } from '../utils/ticketView';
+import { canProcessTicket, findTicketSegment, formatTicketDateTime, getTicketStatusBadge, TICKET_STATUS_SEGMENTS, toActivePropertyIds, toFilterParam } from '../utils/ticketView';
 import { formatUnitLabel } from '../utils/unitAddress';
 
 const PAGE_SIZE = 20;
@@ -145,6 +146,7 @@ const TicketTable = ({ propertyId, status, category, room, compactProperty, sele
 export const TicketListPage = ({ propertyId, selectedTicketId, completeOnOpen = false, isRegisterOpen = false, onOpenRegister, onCloseRegister, onNavigate, onUnauthorized }) => {
   const owned = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, { onUnauthorized });
   const properties = owned.data?.items ?? [];
+  const activePropertyIds = toActivePropertyIds(owned.data?.items);
   const [segmentKey, setSegmentKey] = useState('todo');
   const [categories, setCategories] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -161,10 +163,24 @@ export const TicketListPage = ({ propertyId, selectedTicketId, completeOnOpen = 
   const category = toFilterParam(TICKET_CATEGORY_OPTIONS, categories);
   const room = toFilterParam(ROOM_FILTER_OPTIONS, rooms);
   const counts = useTicketCounts({ propertyId, category, room, reloadKey }, { onUnauthorized });
-  const reload = useCallback(() => setReloadKey((prev) => prev + 1), []);
+  // 표·개수를 다시 받고, 사이드바 숫자·종도 다시 세게 한다(주소가 그대로라 레이아웃이 모른다).
+  const refreshBadges = useBadgeRefresh();
+  const reload = useCallback(() => {
+    setReloadKey((prev) => prev + 1);
+    refreshBadges();
+  }, [refreshBadges]);
 
-  // 완료 팝업을 바로 열라는 주소(state.complete)로 들어오면 그 요청을 받아 연다.
+  // 완료 팝업을 바로 열라는 주소(state.complete)로 들어오면, 그 요청과 소유 호실 목록을 둘 다 받은 뒤 한 번만 판단한다.
   const [pendingComplete, setPendingComplete] = useState(completeOnOpen);
+  const [loadedTicket, setLoadedTicket] = useState(null);
+  const isOwnedLoaded = Boolean(owned.data);
+  useEffect(() => {
+    if (!pendingComplete || !loadedTicket || !isOwnedLoaded) return;
+    if (loadedTicket.status === 'IN_PROGRESS' && canProcessTicket(loadedTicket, toActivePropertyIds(owned.data?.items))) setCompleting(loadedTicket);
+    setPendingComplete(false);
+    // owned.data 는 isOwnedLoaded 로 대신 본다(목록이 다시 와도 한 번만 판단).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingComplete, loadedTicket, isOwnedLoaded]);
   const isVerified = (ticket) =>
     properties.find((property) => property.id === ticket?.propertyId)?.myRelation?.verificationStatus === 'VERIFIED';
 
@@ -255,13 +271,11 @@ export const TicketListPage = ({ propertyId, selectedTicketId, completeOnOpen = 
           <TicketInspector
             key={`${selectedId}-${reloadKey}`}
             ticketId={selectedId}
+            canProcess={(ticket) => canProcessTicket(ticket, activePropertyIds)}
             onClose={() => setSelectedId(null)}
             onComplete={setCompleting}
             onChanged={reload}
-            onLoaded={(ticket) => {
-              if (pendingComplete && ticket.status === 'IN_PROGRESS' && !ticket.isReadOnly) setCompleting(ticket);
-              setPendingComplete(false);
-            }}
+            onLoaded={setLoadedTicket}
             onNavigate={onNavigate}
             onUnauthorized={onUnauthorized}
           />

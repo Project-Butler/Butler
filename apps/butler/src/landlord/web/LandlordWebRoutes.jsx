@@ -10,9 +10,11 @@ import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
 import { TicketListPage } from './pages/TicketListPage';
 import { useGetTicketList } from './hooks/useGetTicketList';
+import { useGetPropertyList } from './hooks/useGetPropertyList';
 import { useGetUnreadNotifications } from './hooks/useGetUnreadNotifications';
+import { BadgeRefreshContext } from './hooks/useBadgeRefresh';
 import { buildNotificationMenu } from './utils/notificationMenu';
-import { filterActionableTickets } from './utils/ticketView';
+import { filterActionableTickets, toActivePropertyIds } from './utils/ticketView';
 import { CommunityPage } from './pages/CommunityPage';
 import { PropertyListPage } from './pages/PropertyListPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
@@ -260,7 +262,8 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
   // 사이드바 '유지보수 요청' 옆 숫자 = 처리할 수 있는 확인 필요(접수) 요청 수(D17). 소유가 끝난 호실에 남은 요청은 뺀다(오늘 할 일과 같은 기준).
   // 목록 API 최대 100건을 받아 센다. 종 = 안 읽은 서버 알림 + 갱신 거절 통지.
   const openTickets = useGetTicketList({ status: 'OPEN', size: 100 }, { onUnauthorized });
-  const openTicketCount = filterActionableTickets(openTickets.data?.items).length;
+  const ownedProperties = useGetPropertyList({ relation: 'OWNER', size: 100 }, { onUnauthorized });
+  const openTicketCount = filterActionableTickets(openTickets.data?.items, toActivePropertyIds(ownedProperties.data?.items)).length;
   const unread = useGetUnreadNotifications({ onUnauthorized });
   const routerNavigate = useNavigate();
   const { refetch } = expiringSoon;
@@ -279,6 +282,12 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
     onRefreshAuthMe();
   }, [pathname, refetch, refetchRenewal, refetchTickets, refetchUnread, onRefreshAuthMe]);
 
+  // 주소가 그대로인 처리(처리 시작·완료·취소·등록) 뒤에 화면이 부른다.
+  const refreshBadges = useCallback(() => {
+    refetchTickets();
+    refetchUnread();
+  }, [refetchTickets, refetchUnread]);
+
   const { onNavigate, user } = layoutProps;
   return (
     <LandlordLayout
@@ -291,7 +300,7 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
       })}
       {...layoutProps}
     >
-      {children}
+      <BadgeRefreshContext.Provider value={refreshBadges}>{children}</BadgeRefreshContext.Provider>
       <RenewalDialog userId={user.id} notices={renewal.notices} onNavigate={onNavigate} />
       {/* 권리자 인증 진행 표시(오른쪽 아래). 보고 있는 호실 상세에서는 그 호실 것을 숨긴다. */}
       <VerificationProgressDock

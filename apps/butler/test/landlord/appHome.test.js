@@ -54,10 +54,15 @@ describe('toHomeSummary: 계약', () => {
     expect(summary.taskCount).toBe(2);
   });
 
-  it('확인 필요 수리 요청이 오늘 할 일 맨 앞에 온다 — 처리할 수 없는(isReadOnly) 요청은 뺀다(D18)', () => {
+  it('확인 필요 수리 요청이 오늘 할 일 맨 앞에 온다 — 처리할 수 없는 요청(읽기 전용·지금 소유하지 않은 호실)은 뺀다(D18)', () => {
     const summary = toHomeSummary({
       contracts: list([contract({ id: 'rent', nextRentPaymentDate: TODAY })]),
-      openTickets: [{ id: 't1', isReadOnly: false }, { id: 't2', isReadOnly: true }],
+      properties: { items: [{ id: 'p1' }], meta: { total: 1 } },
+      openTickets: [
+        { id: 't1', propertyId: 'p1', isReadOnly: false },
+        { id: 't2', propertyId: 'p1', isReadOnly: true },
+        { id: 't3', propertyId: 'p9', isReadOnly: false },
+      ],
       today: TODAY,
     });
     expect(summary.tasks.map((task) => `${task.kind}:${(task.ticket ?? task.contract).id}`)).toEqual(['ticket:t1', 'rent:rent']);
