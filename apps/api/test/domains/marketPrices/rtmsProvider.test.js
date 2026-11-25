@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS, RETRY_DELAY_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
-import { fetchRtmsMonth, fetchRtmsPage, normalizeItem, parseRtmsXml, RtmsError, toNumber } from '../../../src/domains/marketPrices/rtmsProvider.js';
+import {
+  fetchRtmsMonth,
+  fetchRtmsPage,
+  normalizeItem,
+  normalizeServiceKey,
+  parseRtmsXml,
+  RtmsError,
+  serviceKeyShape,
+  toNumber,
+} from '../../../src/domains/marketPrices/rtmsProvider.js';
 import { EMPTY_XML, KEY_ERROR_XML, RENT_ITEMS, RENT_XML, TRADE_ITEMS, TRADE_XML, wrapResponse } from './fixtures/rtmsResponses.js';
 
 // 테스트용 가짜 키 — 실제 키가 아니다. 오류 메시지에 이 값이 새지 않는지 본다
@@ -257,5 +266,105 @@ describe('실거래가 다시 시도(시간 초과 · 23 만 한 번 더)', () =
     const result = await fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep, pageSize: 4 });
     assert.equal(result.deals.length, 6);
     assert.equal(result.calls, 3);
+  });
+});
+
+describe('서비스 키 정리(normalizeServiceKey) · 키 모양(serviceKeyShape) — #233', () => {
+  // 가짜 키 둘 — 실제 키가 아니다. 옛 모양(base64: + / = 가 있어 인코딩 키 · 디코딩 키가 다르다)과 요즘 모양(64자리 16진수)
+  const B64 = 'Fake+Key/ForTest0123456789==';
+  const HEX = '0123456789abcdef'.repeat(4);
+  const page = { kind: 'TRADE', sigunguCode: '11350', yearMonth: '2026-10' };
+  // 그 키 값으로 한 페이지를 부를 때의 요청 주소(테스트 안에서만 본다)
+  const urlFor = async (rawKey) => {
+    process.env.DATA_GO_KR_SERVICE_KEY = rawKey;
+    let requested;
+    try {
+      await fetchRtmsPage(page, {
+        fetchImpl: async (url) => {
+          requested = url;
+          return respond(EMPTY_XML);
+        },
+      });
+    } finally {
+      process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
+    }
+    return requested;
+  };
+  const variants = (key) => [
+    ['디코딩 키(원문)', key],
+    ['인코딩 키', encodeURIComponent(key)],
+    ['앞뒤 공백 · 줄바꿈', `  ${key}\n`],
+    ['탭 · CRLF', `\t${key}\r\n`],
+    ['큰따옴표', `"${key}"`],
+    ['작은따옴표', `'${key}'`],
+    ['BOM', `﻿${key}`],
+    ['따옴표 + 줄바꿈(붙여 넣은 모양)', `"${key}"\n`],
+    ['줄바꿈이 따옴표 안에', `"${key}\n"`],
+    ['공백 + 따옴표로 감싼 인코딩 키', ` "${encodeURIComponent(key)}" `],
+  ];
+
+  for (const [label, key] of [
+    ['base64 모양', B64],
+    ['16진수 모양', HEX],
+  ]) {
+    test(`${label}: 디코딩 키 · 인코딩 키 · 공백 · 줄바꿈 · 따옴표 · BOM 이 모두 같은 요청 주소(원문을 한 번 인코딩)`, async () => {
+      const expected = await urlFor(key);
+      assert.equal(new URL(expected).searchParams.get('serviceKey'), key);
+      assert.ok(expected.includes(`serviceKey=${encodeURIComponent(key)}&`));
+      for (const [name, raw] of variants(key)) {
+        assert.equal(normalizeServiceKey(raw), key, name);
+        assert.equal(await urlFor(raw), expected, name);
+      }
+    });
+  }
+
+  test('잘못된 % 모양은 그대로(디코딩 실패) · 비었거나 공백 · 따옴표뿐이면 NO_KEY(부르지 않음)', async () => {
+    assert.equal(normalizeServiceKey('abc%E0%A4%A'), 'abc%E0%A4%A');
+    for (const raw of ['', '   ', '\n', '﻿', '""', "' '"]) {
+      process.env.DATA_GO_KR_SERVICE_KEY = raw;
+      let called = false;
+      await assert.rejects(
+        fetchRtmsPage(page, {
+          fetchImpl: async () => {
+            called = true;
+            return respond(EMPTY_XML);
+          },
+        }),
+        (error) => error.code === 'NO_KEY',
+      );
+      assert.equal(called, false, JSON.stringify(raw));
+    }
+    process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
+  });
+
+  test('키 모양: 길이와 참/거짓만 — 경우마다 맞는 값', () => {
+    const none = { hadWhitespace: false, hadQuotes: false, hadPercent: false };
+    const encoded = encodeURIComponent(B64);
+    assert.deepEqual(serviceKeyShape(HEX), { rawLength: 64, cleanedLength: 64, ...none, cleanedIsHex: true });
+    assert.deepEqual(serviceKeyShape(`"${HEX}"\n`), { rawLength: 67, cleanedLength: 64, hadWhitespace: true, hadQuotes: true, hadPercent: false, cleanedIsHex: true });
+    assert.deepEqual(serviceKeyShape(`'${HEX}'`), { rawLength: 66, cleanedLength: 64, hadWhitespace: false, hadQuotes: true, hadPercent: false, cleanedIsHex: true });
+    assert.deepEqual(serviceKeyShape(`﻿${HEX}`), { rawLength: 65, cleanedLength: 64, hadWhitespace: true, hadQuotes: false, hadPercent: false, cleanedIsHex: true });
+    assert.deepEqual(serviceKeyShape(` ${HEX}\r\n`), { rawLength: 67, cleanedLength: 64, hadWhitespace: true, hadQuotes: false, hadPercent: false, cleanedIsHex: true });
+    assert.deepEqual(serviceKeyShape(encoded), { rawLength: encoded.length, cleanedLength: B64.length, hadWhitespace: false, hadQuotes: false, hadPercent: true, cleanedIsHex: false });
+    assert.deepEqual(serviceKeyShape(B64), { rawLength: B64.length, cleanedLength: B64.length, ...none, cleanedIsHex: false });
+    for (const empty of [undefined, '']) assert.deepEqual(serviceKeyShape(empty), { rawLength: 0, cleanedLength: 0, ...none, cleanedIsHex: false });
+    // 칸은 여섯 개, 값은 숫자 · 참/거짓뿐 — 키 글자 · 앞뒤 몇 글자 · 해시가 들어갈 자리가 없다
+    for (const raw of [HEX, `"${HEX}"\n`, B64, encoded]) {
+      const shape = serviceKeyShape(raw);
+      assert.deepEqual(Object.keys(shape), ['rawLength', 'cleanedLength', 'hadWhitespace', 'hadQuotes', 'hadPercent', 'cleanedIsHex']);
+      assert.ok(Object.values(shape).every((value) => typeof value === 'number' || typeof value === 'boolean'));
+    }
+  });
+
+  test('키 오류(30)의 오류 메시지에 키 글자 · 요청 주소가 없다(어떤 모양으로 넣어도)', async () => {
+    for (const [name, raw] of variants(B64)) {
+      process.env.DATA_GO_KR_SERVICE_KEY = raw;
+      await assert.rejects(fetchRtmsPage(page, { fetchImpl: async () => respond(KEY_ERROR_XML) }), (error) => {
+        assert.equal(error.code, '30', name);
+        for (const word of [B64, encodeURIComponent(B64), 'Fake', 'serviceKey', 'http']) assert.ok(!error.message.includes(word), `${name} ${word}: ${error.message}`);
+        return true;
+      });
+    }
+    process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
   });
 });

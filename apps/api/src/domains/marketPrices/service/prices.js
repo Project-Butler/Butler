@@ -5,8 +5,10 @@
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { isUuid } from '../../../platform/uuid.js';
-import { DEAL_TYPES, KEEP_MONTHS, RECENT_DEALS, SOURCE, areaRange, safeErrorCode } from '../marketPriceRules.js';
+import { DEAL_TYPES, KEEP_MONTHS, KEY_SHAPE_ERROR_CODES, RECENT_DEALS, SOURCE, areaRange, safeErrorCode } from '../marketPriceRules.js';
 import { firstDayOf, isYearMonth, kstDate, kstYearMonth, lastDayOf, retentionMonths, shiftYearMonth, yearMonthsBetween } from '../months.js';
+// 키 모양(길이 · 참/거짓)만 계산하는 순수 함수 — 요청 경로에서 원천을 부르지는 않는다
+import { serviceKeyShape } from '../rtmsProvider.js';
 import { ensureBackfillJob } from './backfillJobs.js';
 import { loadLinkIndex, relinkSigungu } from './collect.js';
 
@@ -80,12 +82,18 @@ export const summarizeCollectionProgress = (rows, months) => {
   return progress;
 };
 
+// 실패 코드가 키 오류(30 · NO_KEY — 규칙 파일 KEY_SHAPE_ERROR_CODES)일 때만 keyShape { rawLength, cleanedLength, hadWhitespace, hadQuotes,
+// hadPercent, cleanedIsHex } 를 붙인다(11/26, #233 — 배포 키가 모양 문제인지 다른 키인지 가리게). 길이 · 참/거짓만, 키 글자는 없다.
+// 응답하는 순간의 환경 변수로 계산한다(표에 적지 않음 — 배포 환경 변수를 바꾸면 다음 응답부터 바로 반영). 그 밖의 코드 · 실패 없음은 그대로
+export const withKeyShape = (progress, rawKey = process.env.DATA_GO_KR_SERVICE_KEY) =>
+  KEY_SHAPE_ERROR_CODES.includes(progress.lastErrorCode) ? { ...progress, keyShape: serviceKeyShape(rawKey) } : progress;
+
 const loadCollectionProgress = async (sigunguCode, kind, months) => {
   const rows = await prisma.marketCollection.findMany({
     where: { sigunguCode, dealKind: kind, yearMonth: { in: months } },
     select: { yearMonth: true, collectedAt: true, attemptedAt: true, lastErrorCode: true },
   });
-  return summarizeCollectionProgress(rows, months);
+  return withKeyShape(summarizeCollectionProgress(rows, months));
 };
 
 // 매달 하나(거래가 있는 달만 — 화면이 빈 달을 null 로 그린다). 금액은 원, 평균은 반올림

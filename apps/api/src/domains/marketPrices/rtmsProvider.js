@@ -1,6 +1,7 @@
 // 국토교통부 실거래가 API 받기 · 읽기. **외부 호출은 이 파일에서만**(CLAUDE.md 3절 5번, 시세 계획서 1절).
 // 요청 경로(사용자가 시세를 볼 때)에서는 부르지 않는다 — 정기 실행(cron)과 로컬 확인 도구만 부른다.
-// 키(DATA_GO_KR_SERVICE_KEY)는 요청 주소에만 넣고, 주소 · 키를 오류 메시지 · 로그에 남기지 않는다.
+// 키(DATA_GO_KR_SERVICE_KEY)는 정리한 뒤(normalizeServiceKey) 요청 주소에만 넣고, 주소 · 키를 오류 메시지 · 로그에 남기지 않는다.
+// 밖으로 내보내는 것은 키 모양(serviceKeyShape — 길이 · 참/거짓)뿐이다.
 // XML 은 라이브러리 없이 읽는다(뉴스 RSS 와 같은 방식). 칸 이름은 활용 가이드 PDF(docs-b/rtms/) 기준.
 
 import {
@@ -143,13 +144,49 @@ export const normalizeItem = (kind, fields) => {
   };
 };
 
+// ===== 서비스 키 정리 · 모양(규칙 · 이유: marketPriceRules.js "서비스 키") =====
+
+const QUOTES = ['"', "'"];
+// 정리 단계를 차례로 밟고, 무엇을 지웠는지도 함께 돌려준다(키 모양용). 정리한 키 글자는 이 파일 밖으로 내보내지 않는다(요청 주소에만)
+const cleanServiceKey = (raw) => {
+  const original = String(raw ?? '');
+  // 앞뒤 공백 · 탭 · 줄바꿈(\r \n) · BOM(\uFEFF) — String.prototype.trim 이 모두 지운다
+  let key = original.trim();
+  let hadWhitespace = key !== original;
+  let hadQuotes = false;
+  if (key.length >= 2 && QUOTES.includes(key[0]) && key.at(-1) === key[0]) {
+    hadQuotes = true;
+    const inner = key.slice(1, -1);
+    key = inner.trim(); // 따옴표 안쪽의 공백 · 줄바꿈도
+    if (key !== inner) hadWhitespace = true;
+  }
+  const hadPercent = key.includes('%');
+  if (hadPercent) {
+    try {
+      key = decodeURIComponent(key);
+    } catch {
+      // 잘못된 % 모양이면 그대로 둔다(그대로 한 번 인코딩 — 원천이 30 으로 알려 준다)
+    }
+  }
+  return { key, hadWhitespace, hadQuotes, hadPercent };
+};
+
+// 정리한 키(디코딩 키 = 원문). 디코딩 키 · 인코딩 키 · 공백/줄바꿈/따옴표/BOM 이 붙은 키가 모두 같은 값이 된다
+export const normalizeServiceKey = (raw) => cleanServiceKey(raw).key;
+
+// 키 모양 — 길이와 참/거짓만(키 글자 · 앞뒤 몇 글자 · 해시 없음). 키가 없으면 길이 0 · 모두 false.
+// 시세 응답(service/prices.js) · 정기 실행 로그(controller.js)가 키 오류(30 · NO_KEY)일 때만 쓴다 — 외부 호출은 하지 않는 순수 함수
+export const serviceKeyShape = (raw) => {
+  const { key, hadWhitespace, hadQuotes, hadPercent } = cleanServiceKey(raw);
+  return { rawLength: String(raw ?? '').length, cleanedLength: key.length, hadWhitespace, hadQuotes, hadPercent, cleanedIsHex: /^[0-9a-f]+$/i.test(key) };
+};
+
 // ===== 받기 =====
 
 const toDealYmd = (yearMonth) => yearMonth.replace('-', '');
 
-// 요청 주소. 키는 Decoding 키(원문)를 한 번 인코딩해 넣는다. 이 주소는 어디에도 출력하지 않는다
-const buildRequestUrl = ({ kind, sigunguCode, yearMonth, pageNo, numOfRows }) => {
-  const key = process.env.DATA_GO_KR_SERVICE_KEY;
+// 요청 주소. 키는 정리한 원문(디코딩 키)을 한 번 인코딩해 넣는다. 이 주소는 어디에도 출력하지 않는다
+const buildRequestUrl = ({ key, kind, sigunguCode, yearMonth, pageNo, numOfRows }) => {
   const params = new URLSearchParams({ LAWD_CD: sigunguCode, DEAL_YMD: toDealYmd(yearMonth), pageNo: String(pageNo), numOfRows: String(numOfRows) });
   return `${RTMS_ENDPOINTS[kind]}?serviceKey=${encodeURIComponent(key)}&${params}`;
 };
@@ -162,10 +199,12 @@ const transportError = (error, where) => new RtmsError(error?.name === 'TimeoutE
 // 한 페이지. 정상이면 { totalCount, items(원천 칸) }, 아니면 RtmsError. 다시 시도는 하지 않는다(fetchRtmsMonth 가 한다)
 export const fetchRtmsPage = async ({ kind, sigunguCode, yearMonth, pageNo = 1, numOfRows = PAGE_SIZE }, { fetchImpl = globalThis.fetch } = {}) => {
   const where = { kind, sigunguCode, yearMonth };
-  if (!process.env.DATA_GO_KR_SERVICE_KEY) throw new RtmsError('NO_KEY', 'DATA_GO_KR_SERVICE_KEY 없음', where);
+  // 환경 변수가 없거나, 정리하니 비었으면(공백 · 따옴표뿐) 부르지 않는다
+  const key = normalizeServiceKey(process.env.DATA_GO_KR_SERVICE_KEY);
+  if (!key) throw new RtmsError('NO_KEY', 'DATA_GO_KR_SERVICE_KEY 없음', where);
   let response;
   try {
-    response = await fetchImpl(buildRequestUrl({ kind, sigunguCode, yearMonth, pageNo, numOfRows }), {
+    response = await fetchImpl(buildRequestUrl({ key, kind, sigunguCode, yearMonth, pageNo, numOfRows }), {
       headers: { Accept: 'application/xml' },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

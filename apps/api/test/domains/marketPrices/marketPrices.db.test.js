@@ -425,9 +425,22 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       assert.deepEqual(full.failures, [`${sgg} ${months[0]} TRADE 30`]);
       const failed = await regionPrices(dong, 'SALE');
       assert.equal(failed.data.collectionStatus, 'COLLECTING');
+      // 키 오류(30)라 키 모양이 붙는다(#233) — FAKE_KEY 그대로(20자, 공백 · 따옴표 · % 없음, 16진수 아님)
+      const noMark = { hadWhitespace: false, hadQuotes: false, hadPercent: false };
       assert.deepEqual(failed.data.collectionProgress, {
         requiredMonths: 13, collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastErrorCode: '30',
+        keyShape: { rawLength: FAKE_KEY.length, cleanedLength: FAKE_KEY.length, ...noMark, cleanedIsHex: false },
       });
+      // 환경 변수를 바꾸면 다시 모으지 않아도 다음 응답의 키 모양이 바로 바뀐다(표에 적지 않음) — 따옴표 + 줄바꿈이 붙은 값
+      process.env.DATA_GO_KR_SERVICE_KEY = `"${FAKE_KEY}"\n`;
+      const reshaped = await regionPrices(dong, 'SALE');
+      assert.deepEqual(reshaped.data.collectionProgress.keyShape, {
+        rawLength: FAKE_KEY.length + 3, cleanedLength: FAKE_KEY.length, hadWhitespace: true, hadQuotes: true, hadPercent: false, cleanedIsHex: false,
+      });
+      assertNoLeak(reshaped.text, '키 모양');
+      process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
+      // 로그 한 줄에도 같은 키 모양(30 실패가 있어서)
+      assert.deepEqual(JSON.parse(formatCollectionLog(full).slice('[market-prices] cron '.length)).keyShape, failed.data.collectionProgress.keyShape);
       // 전월세는 13개월 다 모았다 — READY 응답은 그대로(collectionProgress 칸 없음)
       const jeonse = await regionPrices(dong, 'JEONSE');
       assert.equal(jeonse.data.collectionStatus, 'READY');
@@ -462,7 +475,11 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
         const { data, text } = await regionPrices(dong, dealType);
         assert.equal(data.collectionStatus, 'COLLECTING');
         const { lastAttemptedAt, ...counts } = data.collectionProgress;
-        assert.deepEqual(counts, { requiredMonths: 13, collectedMonths: 0, failedMonths: 13, notTriedMonths: 0, lastErrorCode: 'NO_KEY' });
+        // NO_KEY 라 키 모양이 붙는다 — 키가 없으니 길이 0 · 모두 false(#233)
+        assert.deepEqual(counts, {
+          requiredMonths: 13, collectedMonths: 0, failedMonths: 13, notTriedMonths: 0, lastErrorCode: 'NO_KEY',
+          keyShape: { rawLength: 0, cleanedLength: 0, hadWhitespace: false, hadQuotes: false, hadPercent: false, cleanedIsHex: false },
+        });
         assert.equal(lastAttemptedAt, await lastAttemptOf(sgg, dealType === 'SALE' ? 'TRADE' : 'RENT'));
         assertNoLeak(text, dealType);
       }
