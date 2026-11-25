@@ -6,6 +6,7 @@ import { NoticeBox } from '../../../web/components/NoticeBox/NoticeBox';
 import { usePatchPropertyOwnership } from '../../../web/hooks/usePatchPropertyOwnership';
 import { formatDateKST, formatNumber } from '../../../web/utils/format';
 import { toPriceDigits, toYearMonthInput, validateAcquiredYearMonth, validatePurchasePrice } from '../../../web/utils/formValidation';
+import { toSameBuildingAcquiredHint } from '../../../web/utils/ownershipVerification';
 import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 import { CardRow, DetailCardFrame } from '../DetailCardFrame/DetailCardFrame';
 
@@ -56,6 +57,7 @@ const OwnershipEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => 
         inputMode="numeric"
         placeholder="2019-03"
         maxLength={7}
+        hint={toSameBuildingAcquiredHint(ownership)}
         value={draft.acquiredYearMonth}
         onChange={(event) => updateDraft('acquiredYearMonth', toYearMonthInput(event.target.value))}
         error={clientErrors.acquiredYearMonth ?? fieldErrors.acquiredYearMonth}

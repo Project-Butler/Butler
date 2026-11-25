@@ -266,6 +266,20 @@ describe('앱 부동산 상세: 내 소유 정보 카드', () => {
     expect(api.patchPropertyOwnership).toHaveBeenCalledWith('o1', { acquiredYearMonth: '2019-03', purchasePrice: 912000000 });
   });
 
+  it('같은 건물 묶음이면 취득 연월 칸에 다른 방도 함께 바뀐다고 알린다', async () => {
+    api.getPropertyOwnership.mockResolvedValue({ ...OWNERSHIP, sameBuildingOwnershipCount: 3 });
+    renderDetail();
+    const sheet = await openSheet('내 소유 정보');
+    expect(within(sheet).getByText('같은 건물의 다른 방 3개도 함께 바뀌어요')).toBeInTheDocument();
+  });
+
+  it('같은 건물 묶음이 아니면 그 안내가 없다', async () => {
+    api.getPropertyOwnership.mockResolvedValue({ ...OWNERSHIP, sameBuildingOwnershipCount: 0 });
+    renderDetail();
+    const sheet = await openSheet('내 소유 정보');
+    expect(within(sheet).queryByText(/같은 건물의 다른 방/)).not.toBeInTheDocument();
+  });
+
   it('취득 연월 형식이 틀리면 칸 아래 오류이고 저장할 수 없다', async () => {
     renderDetail();
     const sheet = await openSheet('내 소유 정보');

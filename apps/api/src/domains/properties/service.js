@@ -201,8 +201,9 @@ export const createPropertyWithOwnership = async (user, input) => {
         });
 
         // 같은 건물(단지·동)에 일반건축물대장으로 인증된 내 방이 있으면(다가구 등) 그 인증을 이 방에도 적용한다.
+        // 다가구는 건물째 사고팔아 취득 연월도 같다: 입력한 값은 같은 건물 전체에, 입력이 없으면 원래 방 값을 이 방에.
         stage = 'verificationShare';
-        const shared = await shareBuildingVerificationOnRegisterInTx(tx, { ownershipId: created.id });
+        const shared = await shareBuildingVerificationOnRegisterInTx(tx, { ownershipId: created.id, acquiredYearMonth: input.acquiredYearMonth });
         const ownershipRow = shared.shared ? await tx.ownership.findUnique({ where: { id: created.id } }) : created;
 
         return { property: filled, ownership: ownershipRow, removedPaths: shared.removedPaths };

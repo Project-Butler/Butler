@@ -176,9 +176,10 @@ const checkVerifiable = (rows, ownershipId, now) => {
 // 내 행을 VERIFIED로 저장한 뒤 감사·활동을 남긴다. 인증한 적 없는 행의 기록 첨부 파일 경로를 돌려준다(커밋 뒤 지운다, H-37).
 // sharedFromOwnershipId: 같은 건물의 다른 방 인증을 이어받은 경우 그 소유 관계 id(감사에만 남긴다).
 // ledgerUnit: 대장(전유부) 값으로 호실 면적·층을 덮어쓴 경우 쓴 값(감사에만 남긴다).
+// acquiredYearMonth: 있으면 취득 연월을 이 값으로 덮어쓴다(대장 소유자현황 변동일자, 또는 같은 건물에서 이어받은 값).
 const saveVerifiedInTx = async (
   tx,
-  { mine, others, property, attemptId, now, expiresAt, saveVerified, sharedFromOwnershipId = null, ledgerUnit = null },
+  { mine, others, property, attemptId, now, expiresAt, saveVerified, sharedFromOwnershipId = null, ledgerUnit = null, acquiredYearMonth = null },
 ) => {
   const removedPaths = [];
   for (const row of others) {
@@ -190,6 +191,7 @@ const saveVerifiedInTx = async (
   await saveVerified(tx, { ownershipId: mine.id, attemptId, verifiedAt: now, expiresAt });
   // 처음 인증 시각은 한 번만 채운다(재인증으로 덮어써지는 verifiedAt과 별개, 하우스 로그 H-37·H-44).
   await tx.ownership.updateMany({ where: { id: mine.id, firstVerifiedAt: null }, data: { firstVerifiedAt: now } });
+  if (acquiredYearMonth) await tx.ownership.update({ where: { id: mine.id }, data: { acquiredYearMonth } });
 
   await audit.record({
     action: 'OWNERSHIP_VERIFICATION_APPLIED',
@@ -202,6 +204,7 @@ const saveVerifiedInTx = async (
       verificationExpiresAt: expiresAt,
       ...(sharedFromOwnershipId ? { sharedFromOwnershipId } : {}),
       ...(ledgerUnit ? { ledgerUnit } : {}),
+      ...(acquiredYearMonth ? { acquiredYearMonth } : {}),
     },
     client: tx,
   });
@@ -221,7 +224,8 @@ const saveVerifiedInTx = async (
 // 집합건축물대장(전유부)은 방마다 대장이 달라 공유하지 않는다.
 // 방마다 일반 인증과 같은 규칙을 거친다 — 다른 사람이 인증한 방·철회된 방·앞선 철회자가 있는 방은 건너뛴다.
 
-// source: { ownershipId, userId, attemptId, expiresAt }, target: { id, propertyId, property }
+// 다가구는 건물째 사고팔아 취득 연월도 같다(2026-11-26 사용자 결정) — source.acquiredYearMonth가 있으면 함께 적용한다.
+// source: { ownershipId, userId, attemptId, expiresAt, acquiredYearMonth? }, target: { id, propertyId, property }
 const shareToOwnershipInTx = async (tx, source, target, { now, saveVerified }) => {
   const rows = await lockActiveOwnershipRows(tx, target.propertyId);
   const checked = checkVerifiable(rows, target.id, now);
@@ -234,7 +238,48 @@ const shareToOwnershipInTx = async (tx, source, target, { now, saveVerified }) =
     expiresAt: source.expiresAt,
     saveVerified,
     sharedFromOwnershipId: source.ownershipId,
+    acquiredYearMonth: source.acquiredYearMonth ?? null,
   });
+};
+
+// 같은 건물 묶음: ownershipId가 일반건축물대장으로 인증된 유효한 행이면, 같은 건물(단지·동)의 내 다른 활성 행 중
+// 역시 일반건축물대장으로 인증된 유효한 행의 id들. 아니면 []. 취득 연월을 건물 전체에 맞출 때 쓴다(다가구는 건물째 매매).
+export const findGeneralBuildingSiblingIds = async (client, ownershipId, now = getNow()) => {
+  const mine = await client.ownership.findUnique({
+    where: { id: ownershipId },
+    select: { id: true, userId: true, endedAt: true, verificationStatus: true, verificationExpiresAt: true, checkId: true, property: { select: { complexId: true, buildingNo: true } } },
+  });
+  if (!mine || mine.endedAt || !mine.checkId || computeOwnershipVerificationStatus(mine, now) !== 'VERIFIED') return [];
+
+  const siblings = await client.ownership.findMany({
+    where: {
+      userId: mine.userId,
+      endedAt: null,
+      id: { not: mine.id },
+      verificationStatus: 'VERIFIED',
+      verificationExpiresAt: { gt: now },
+      checkId: { not: null },
+      property: { complexId: mine.property.complexId, buildingNo: mine.property.buildingNo },
+    },
+    select: { id: true, checkId: true },
+    orderBy: { id: 'asc' },
+  });
+  const attemptIds = [...new Set([mine.checkId, ...siblings.map((row) => row.checkId)])];
+  const generalAttempts = await client.ownershipVerificationAttempt.findMany({
+    where: { id: { in: attemptIds }, status: 'VERIFIED', ledgerKind: 'GENERAL' },
+    select: { id: true },
+  });
+  const generalIds = new Set(generalAttempts.map((attempt) => attempt.id));
+  if (!generalIds.has(mine.checkId)) return [];
+  return siblings.filter((row) => generalIds.has(row.checkId)).map((row) => row.id);
+};
+
+// 같은 건물 묶음의 다른 방 취득 연월을 value로 맞춘다. 바꾼 행 수를 돌려준다.
+export const syncBuildingAcquiredYearMonthInTx = async (tx, ownershipId, value, now = getNow()) => {
+  const ids = await findGeneralBuildingSiblingIds(tx, ownershipId, now);
+  if (ids.length === 0) return 0;
+  const { count } = await tx.ownership.updateMany({ where: { id: { in: ids } }, data: { acquiredYearMonth: value } });
+  return count;
 };
 
 const SHARE_TARGET_SELECT = { id: true, propertyId: true, property: { select: { complexId: true, buildingNo: true, unitNo: true } } };
@@ -259,7 +304,12 @@ const shareToBuildingInTx = async (tx, source, building, { now, saveVerified }) 
 
 // 호실 등록(POST /properties) 트랜잭션 안에서 부른다. 같은 건물에 일반건축물대장으로 인증된 내 방이 있으면
 // 새로 만든 소유 관계에 그 인증을 적용한다. 돌려주는 값: { shared, removedPaths } — removedPaths는 커밋 뒤 지운다.
-export const shareBuildingVerificationOnRegisterInTx = async (tx, { ownershipId, now = getNow(), saveVerified = defaultSaveVerified }) => {
+// acquiredYearMonth: 등록 때 사용자가 입력한 취득 연월. 공유되면 이 값을 새 방과 같은 건물의 다른 방 전체에 적용하고,
+//   입력이 없으면 원래 방의 취득 연월을 새 방에 복사한다(2026-11-26 사용자 결정: 사용자 입력이 우선).
+export const shareBuildingVerificationOnRegisterInTx = async (
+  tx,
+  { ownershipId, acquiredYearMonth = null, now = getNow(), saveVerified = defaultSaveVerified },
+) => {
   const target = await tx.ownership.findUnique({ where: { id: ownershipId }, select: { ...SHARE_TARGET_SELECT, userId: true } });
   if (!target) return { shared: false, removedPaths: [] };
 
@@ -273,7 +323,7 @@ export const shareBuildingVerificationOnRegisterInTx = async (tx, { ownershipId,
       checkId: { not: null },
       property: { complexId: target.property.complexId, buildingNo: target.property.buildingNo },
     },
-    select: { id: true, userId: true, checkId: true, verificationExpiresAt: true },
+    select: { id: true, userId: true, checkId: true, verificationExpiresAt: true, acquiredYearMonth: true },
     orderBy: [{ verificationExpiresAt: 'desc' }, { id: 'asc' }],
   });
   if (candidates.length === 0) return { shared: false, removedPaths: [] };
@@ -288,12 +338,20 @@ export const shareBuildingVerificationOnRegisterInTx = async (tx, { ownershipId,
 
   const removedPaths = await shareToOwnershipInTx(
     tx,
-    { ownershipId: source.id, userId: source.userId, attemptId: source.checkId, expiresAt: source.verificationExpiresAt },
+    {
+      ownershipId: source.id,
+      userId: source.userId,
+      attemptId: source.checkId,
+      expiresAt: source.verificationExpiresAt,
+      acquiredYearMonth: acquiredYearMonth ?? source.acquiredYearMonth,
+    },
     target,
     { now, saveVerified },
   );
   const after = await tx.ownership.findUnique({ where: { id: target.id }, select: { verificationStatus: true } });
-  return { shared: after.verificationStatus === 'VERIFIED', removedPaths };
+  const shared = after.verificationStatus === 'VERIFIED';
+  if (shared && acquiredYearMonth) await syncBuildingAcquiredYearMonthInTx(tx, target.id, acquiredYearMonth, now);
+  return { shared, removedPaths };
 };
 
 // 대장(전유부)에서 읽은 전용면적·층으로 호실 값을 덮어쓴다(2026-11-26 사용자 결정: 입력해 둔 값이 있어도 대장 값이 우선).
@@ -308,7 +366,7 @@ const applyLedgerUnitInTx = async (tx, propertyId, { ledgerKind, unit }) => {
   return data;
 };
 
-const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, unit, saveVerified }) => {
+const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, unit, acquiredYearMonth, saveVerified }) => {
   const now = getNow();
   const fail = async (reasonCode) => {
     await failAttemptInTx(tx, attemptId, 'RUNNING', reasonCode, { ledgerKind, ownerCount });
@@ -333,12 +391,12 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, unit, saveVeri
   const expiresAt = computeVerificationExpiry(now, validityYears);
   const property = attempt.ownership.property;
   const ledgerUnit = await applyLedgerUnitInTx(tx, attempt.ownership.propertyId, { ledgerKind, unit });
-  const removedPaths = await saveVerifiedInTx(tx, { ...checked, property, attemptId, now, expiresAt, saveVerified, ledgerUnit });
+  const removedPaths = await saveVerifiedInTx(tx, { ...checked, property, attemptId, now, expiresAt, saveVerified, ledgerUnit, acquiredYearMonth });
   await finishAttempt(tx, attemptId, 'RUNNING', { status: 'VERIFIED', ledgerKind, ownerCount });
 
-  // 5. 일반건축물대장이면 같은 건물의 내 다른 방에도 적용한다.
+  // 5. 일반건축물대장이면 같은 건물의 내 다른 방에도 적용한다(대장에서 읽은 취득 연월도 함께).
   if (ledgerKind === 'GENERAL') {
-    const source = { ownershipId: checked.mine.id, userId: checked.mine.userId, attemptId, expiresAt };
+    const source = { ownershipId: checked.mine.id, userId: checked.mine.userId, attemptId, expiresAt, acquiredYearMonth };
     removedPaths.push(...(await shareToBuildingInTx(tx, source, property, { now, saveVerified })));
   }
   return { outcome: 'VERIFIED', expiresAt, removedPaths };
@@ -348,10 +406,14 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, unit, saveVeri
 // 판정 실패는 throw하지 않고 같은 트랜잭션에서 실패 기록을 커밋한다.
 // uq_ownership_verified 충돌은 롤백 후 별도 트랜잭션에서 VERIFIED_OWNER_EXISTS로 끝낸다.
 // unit: 러너 결과의 전유부 전용면적·층(parseRunnerResult), 없으면 생략.
-export const applyOwnershipVerification = async ({ attemptId, ledgerKind, ownerCount, unit = null }, { saveVerified = defaultSaveVerified } = {}) => {
+// acquiredYearMonth: 본인 소유자 줄의 변동일자로 고른 취득 연월(pickAcquiredYearMonth), 없으면 생략.
+export const applyOwnershipVerification = async (
+  { attemptId, ledgerKind, ownerCount, unit = null, acquiredYearMonth = null },
+  { saveVerified = defaultSaveVerified } = {},
+) => {
   try {
     const { removedPaths = [], ...result } = await prisma.$transaction(
-      (tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, unit, saveVerified }),
+      (tx) => applyInTx(tx, { attemptId, ledgerKind, ownerCount, unit, acquiredYearMonth, saveVerified }),
       TX_OPTIONS,
     );
     await removeStoredObjects(removedPaths);
