@@ -211,6 +211,34 @@ describe('인증 전 하우스 로그', { skip: dbTestSkip }, () => {
     await assertKept(lapsedLog);
   });
 
+  test('인증받은 임대인 기록은 처음 인증 시각이 비어 있어도 남는다(백필 전 데이터·철회·만료)', async () => {
+    const admin = await createUser('ADMIN');
+    // 인증 시각까지 비어 있는 VERIFIED(직접 넣은 예전 데이터 모양) → 사용자 종료
+    const legacyUser = await createUser();
+    const legacy = await own(legacyUser, await createProperty(), { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE() });
+    const legacyLog = await seedLog(legacyUser, legacy, { scope: 'PROPERTY_HISTORY' });
+    await endOwnership(legacyUser, legacy.id, { reason: null, endReason: 'SOLD' });
+    await assertKept(legacyLog);
+
+    // 철회(REVOKED)된 관계 → 운영자 종료
+    const revokedUser = await createUser();
+    const revoked = await own(revokedUser, await createProperty(), { verificationStatus: 'REVOKED', verifiedAt: PAST() });
+    const revokedLog = await seedLog(revokedUser, revoked, { type: 'NOTE', keepPrivate: true });
+    await endOwnershipByAdmin(admin, revoked.id, { reason: '테스트' }, null);
+    await assertKept(revokedLog);
+
+    // 만료된 VERIFIED(처음 인증 시각 없음) → 다른 사람 인증으로 SUPERSEDED
+    const oldOwner = await createUser();
+    const newOwner = await createUser();
+    const property = await createProperty();
+    const lapsed = await own(oldOwner, property, { startedAtOffset: -5000, verificationStatus: 'VERIFIED', verifiedAt: PAST(), verificationExpiresAt: PAST() });
+    const mine = await own(newOwner, property);
+    const lapsedLog = await seedLog(oldOwner, lapsed);
+    await verifyNow(newOwner, mine);
+    assert.equal((await prisma.ownership.findUnique({ where: { id: lapsed.id } })).endReason, 'SUPERSEDED');
+    await assertKept(lapsedLog);
+  });
+
   test('H-44 올리기: 수리·점검·체크 안 한 메모만, 나만 보기 메모·TICKET_SUMMARY는 그대로. 두 번째는 409', async () => {
     const user = await createUser();
     const stranger = await createUser();
@@ -278,13 +306,16 @@ describe('인증 전 하우스 로그', { skip: dbTestSkip }, () => {
     const ownership = await own(user, property, { verificationStatus: 'VERIFIED', verifiedAt: PAST(), verificationExpiresAt: FUTURE() });
     const note = await seedLog(user, ownership, { type: 'NOTE' });
     const plainOwnership = await own(user, await createProperty());
+    // 인증 시각이 비어 있는 VERIFIED·REVOKED도 인증한 적 있는 관계로 채운다(소유 시작 시각).
+    const noTimeOwnership = await own(user, await createProperty(), { verificationStatus: 'VERIFIED', verificationExpiresAt: FUTURE() });
+    const revokedOwnership = await own(user, await createProperty(), { verificationStatus: 'REVOKED' });
 
     // 마이그레이션의 UPDATE 문을 이 테스트 행에만 적용한다.
     const sql = await readFile(MIGRATION_SQL, 'utf8');
     const updates = sql.split(';').map((part) => part.replace(/--.*$/gm, '').trim()).filter((part) => part.startsWith('UPDATE'));
     assert.equal(updates.length, 3);
     for (const statement of updates) {
-      const ids = statement.includes('"property_logs"') ? [note.log.id] : [ownership.id, plainOwnership.id];
+      const ids = statement.includes('"property_logs"') ? [note.log.id] : [ownership.id, plainOwnership.id, noTimeOwnership.id, revokedOwnership.id];
       await prisma.$executeRawUnsafe(`${statement} AND "id" = ANY($1::uuid[])`, ids);
     }
 
@@ -295,6 +326,11 @@ describe('인증 전 하우스 로그', { skip: dbTestSkip }, () => {
     const plain = await prisma.ownership.findUnique({ where: { id: plainOwnership.id } });
     assert.equal(plain.firstVerifiedAt, null);
     assert.equal(plain.logsPromotedAt, null);
+    for (const row of [noTimeOwnership, revokedOwnership]) {
+      const filled = await prisma.ownership.findUnique({ where: { id: row.id } });
+      assert.equal(filled.firstVerifiedAt.getTime(), filled.startedAt.getTime());
+      assert.ok(filled.logsPromotedAt);
+    }
     assert.equal((await findPromotePreview(user, ownership.id)).count, 0);
   });
 });

@@ -93,6 +93,7 @@ describe('계약 서비스', { skip: dbTestSkip }, () => {
       'userId',
       'verificationExpiresAt',
       'verificationStatus',
+      'verifiedAt',
     ]);
     assert.equal(row.userId, user.id);
     assert.equal(row.verificationStatus, 'VERIFIED');

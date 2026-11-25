@@ -9,6 +9,7 @@ export const lockOwnershipRow = async (tx, ownershipId) => {
            ended_at AS "endedAt",
            verification_status::text AS "verificationStatus",
            verification_expires_at AS "verificationExpiresAt",
+           verified_at AS "verifiedAt",
            first_verified_at AS "firstVerifiedAt",
            logs_promoted_at AS "logsPromotedAt",
            end_reason::text AS "endReason",
@@ -29,6 +30,7 @@ export const lockActiveOwnershipRows = (tx, propertyId) =>
            ended_at AS "endedAt",
            verification_status::text AS "verificationStatus",
            verification_expires_at AS "verificationExpiresAt",
+           verified_at AS "verifiedAt",
            first_verified_at AS "firstVerifiedAt",
            logs_promoted_at AS "logsPromotedAt"
     FROM ownerships
