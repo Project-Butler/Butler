@@ -17,12 +17,10 @@ import { formatKstShortDate, splitRegionName } from '../utils/communityFormat';
 
 // "전체"는 분류를 보내지 않는다(서버가 category 없이도 받는다).
 const CATEGORY_ALL = 'ALL';
-const CATEGORY_FILTERS = [{ value: CATEGORY_ALL, label: '전체' }, ...POST_CATEGORIES];
+export const CATEGORY_FILTERS = [{ value: CATEGORY_ALL, label: '전체' }, ...POST_CATEGORIES];
 
-// 게시판 목록 화면.
-// 법정동 단위 — 다른 단지 글이 섞여 보이는 것이 의도다. 분류·내 글 필터는 주소의 쿼리(?category=&mine=true)에 두어
-// 새로고침·뒤로가기에도 남는다. 목록은 "더 보기"로 이어 붙인다. 표는 BuildingListPage 와 같은 클래스.
-export const CommunityPostListPage = ({ frame, building }) => {
+// 게시판 목록의 데이터 · 필터 · 이동(열기 · 글쓰기). 앱 게시판(app CommunityAppBoardPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePostListState = ({ frame, building }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const category = POST_CATEGORIES.some((item) => item.value === searchParams.get('category'))
@@ -55,6 +53,14 @@ export const CommunityPostListPage = ({ frame, building }) => {
     frame.nickname.ensure(() =>
       navigate(category === CATEGORY_ALL ? `${COMMUNITY_PATH}/posts/new` : `${COMMUNITY_PATH}/posts/new?category=${category}`),
     );
+  return { category, mine, setFilter, list, posts, canWrite, blockedReason, dongName, openPost, openWrite };
+};
+
+// 게시판 목록 화면.
+// 법정동 단위 — 다른 단지 글이 섞여 보이는 것이 의도다. 분류·내 글 필터는 주소의 쿼리(?category=&mine=true)에 두어
+// 새로고침·뒤로가기에도 남는다. 목록은 "더 보기"로 이어 붙인다. 표는 BuildingListPage 와 같은 클래스.
+export const CommunityPostListPage = ({ frame, building }) => {
+  const { category, mine, setFilter, list, posts, canWrite, blockedReason, dongName, openPost, openWrite } = usePostListState({ frame, building });
 
   return (
     <CommunityFrame frame={frame} section="board" scopeText={`${dongName} 임대인`} blockedReason={blockedReason}>

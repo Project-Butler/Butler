@@ -109,8 +109,6 @@ describe('임대인 앱: 하단 탭', () => {
 
 describe('임대인 앱: 준비 중 화면', () => {
   it.each([
-    '/landlord/community',
-    '/landlord/community/briefing',
     '/landlord/settings',
     '/landlord/contracts',
     '/landlord/logs/l-1',
@@ -123,8 +121,8 @@ describe('임대인 앱: 준비 중 화면', () => {
   });
 
   it('탭 화면은 그 이름을 제목으로 보여 준다', () => {
-    renderAt('/landlord/community');
-    expect(within(screen.getByRole('region', { name: '준비 중' })).getByRole('heading', { name: '커뮤니티' })).toBeInTheDocument();
+    renderAt('/landlord/settings');
+    expect(within(screen.getByRole('region', { name: '준비 중' })).getByRole('heading', { name: '내 정보' })).toBeInTheDocument();
   });
 
   it('/landlord 로 들어오면 /landlord/home 으로 간다', () => {

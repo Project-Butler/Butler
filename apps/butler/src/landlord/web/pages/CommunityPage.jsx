@@ -1,13 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPost } from '../hooks/useGetCommunityPost';
 import { useGetMyBuildings } from '../hooks/useGetMyBuildings';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
+import { CommunitySurfaceProvider } from '../components/CommunityLayout/CommunitySurface';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { useNicknameGate } from '../components/CommunityNickname/useNicknameGate';
 import { loadCurrentComplexId, pickCurrentBuilding, saveCurrentComplexId } from '../utils/communityCurrentBuilding';
+import { useCommunityGoBack as useGoBack } from '../utils/communityNavigation';
 import { getRegionPreview } from '../utils/communityPreview';
 import { COMMUNITY_PATH } from '../routes';
 import { CommunityBriefingPage } from './CommunityBriefingPage';
@@ -31,21 +33,13 @@ import { CommunityPostWritePage } from './CommunityPostWritePage';
 // 화면은 LandlordLayout 안의 PC 페이지다 — 머리 · 탭 줄은 CommunityFrame.
 const DEFAULT_TAB_PATH = `${COMMUNITY_PATH}/briefing`;
 
-// 하위 화면의 "뒤로": 앱 안에서 들어왔으면 브라우저 뒤로가기, 주소를 직접 열었으면(돌아갈 기록 없음) fallback 으로.
-// 판단은 react-router 가 history state 에 두는 idx(push 때만 오르고 replace 에는 그대로)로 한다 —
-// location.key 는 replace 이동(새 글 등록 → 상세)에도 바뀌어서, 주소로 연 글쓰기에서 등록한 뒤 뒤로가 앱 밖으로 나갔다.
-const useGoBack = (fallback) => {
-  const navigate = useNavigate();
-  return useCallback(() => {
-    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
-    else navigate(fallback, { replace: true });
-  }, [navigate, fallback]);
-};
+// 하위 화면의 "뒤로"는 utils/communityNavigation useCommunityGoBack — 앱 뒤로 가기 바도 같은 규칙 · 같은 fallback 표를 쓴다.
 
-const PollDetailRoute = ({ frame }) => {
+// Page: 그릴 화면(앱은 자기 화면을 넘긴다 — pages.pollDetail). 받는 props 는 웹 화면과 같다
+const PollDetailRoute = ({ frame, Page = CommunityPollDetailPage }) => {
   const { pollId } = useParams();
   const goBack = useGoBack(`${COMMUNITY_PATH}/polls`);
-  return <CommunityPollDetailPage key={pollId} pollId={pollId} frame={frame} onBack={goBack} />;
+  return <Page key={pollId} pollId={pollId} frame={frame} onBack={goBack} />;
 };
 
 const PollNewRoute = ({ building, frame }) => {
@@ -78,12 +72,12 @@ const BuildingSelectRoute = ({ buildings, current, onSelect, onRegister }) => {
   );
 };
 
-const PostDetailRoute = ({ building, frame }) => {
+const PostDetailRoute = ({ building, frame, Page = CommunityPostDetailPage }) => {
   const { postId } = useParams();
   const navigate = useNavigate();
   const goBack = useGoBack(`${COMMUNITY_PATH}/board`);
   return (
-    <CommunityPostDetailPage
+    <Page
       key={postId}
       postId={postId}
       frame={frame}
@@ -126,7 +120,20 @@ const PostEditRoute = ({ building, frame }) => {
   return <CommunityPostWritePage key={postId} frame={frame} building={building} post={post.data} onBack={goBack} onSaved={goBack} />;
 };
 
-const CommunityRoutes = ({ onNavigate }) => {
+// 화면 이름 → 웹 화면. 앱(app CommunityAppLayout)은 pages 로 같은 이름의 앱 화면을 넘겨 바꿔 끼운다(넘기지 않은 화면은 웹 그대로).
+// 바꿔 끼운 화면도 같은 props(building · frame, 상세는 postId/pollId · onBack …)를 받아 같은 데이터 훅 · 동작을 쓴다.
+const WEB_PAGES = {
+  briefing: CommunityBriefingPage,
+  news: CommunityNewsPage,
+  market: CommunityMarketPage,
+  board: CommunityPostListPage,
+  polls: CommunityPollListPage,
+  postDetail: CommunityPostDetailPage,
+  pollDetail: CommunityPollDetailPage,
+};
+
+const CommunityRoutes = ({ onNavigate, pages }) => {
+  const Pages = { ...WEB_PAGES, ...pages };
   const { data: buildings, isPending, isError, error } = useGetMyBuildings();
   const [storedComplexId, setStoredComplexId] = useState(loadCurrentComplexId);
   // 닉네임 대화상자 — 머리 버튼 · 글쓰기 · 투표 만들기 · 댓글 등록이 같이 쓴다(frame.nickname). 미리보기 표기는 지금 고른 건물 기준
@@ -163,15 +170,15 @@ const CommunityRoutes = ({ onNavigate }) => {
     <Routes>
       <Route index element={<Navigate to={DEFAULT_TAB_PATH} replace />} />
       <Route path="buildings" element={<BuildingSelectRoute {...selectProps} />} />
-      <Route path="briefing" element={<CommunityBriefingPage {...props} />} />
-      <Route path="market" element={<CommunityMarketPage {...props} />} />
-      <Route path="news" element={<CommunityNewsPage {...props} />} />
-      <Route path="board" element={<CommunityPostListPage {...props} />} />
-      <Route path="polls" element={<CommunityPollListPage {...props} />} />
+      <Route path="briefing" element={<Pages.briefing {...props} />} />
+      <Route path="market" element={<Pages.market {...props} />} />
+      <Route path="news" element={<Pages.news {...props} />} />
+      <Route path="board" element={<Pages.board {...props} />} />
+      <Route path="polls" element={<Pages.polls {...props} />} />
       <Route path="polls/new" element={<PollNewRoute {...props} />} />
-      <Route path="polls/:pollId" element={<PollDetailRoute {...props} />} />
+      <Route path="polls/:pollId" element={<PollDetailRoute {...props} Page={Pages.pollDetail} />} />
       <Route path="posts/new" element={<PostNewRoute {...props} />} />
-      <Route path="posts/:postId" element={<PostDetailRoute {...props} />} />
+      <Route path="posts/:postId" element={<PostDetailRoute {...props} Page={Pages.postDetail} />} />
       <Route path="posts/:postId/edit" element={<PostEditRoute {...props} />} />
       <Route path="*" element={<Navigate to={DEFAULT_TAB_PATH} replace />} />
     </Routes>
@@ -180,4 +187,11 @@ const CommunityRoutes = ({ onNavigate }) => {
 
 // 커뮤니티 안 이동은 react-router. App 이 넘기는 onNavigate 는 커뮤니티 밖(호실 등록 · 권리자 인증)으로 나갈 때만 쓴다.
 // react-query 는 앱 공용 QueryClientProvider(main.jsx)를 쓴다.
-export const CommunityPage = ({ onNavigate }) => <CommunityRoutes onNavigate={onNavigate} />;
+// isApp: 임대인 앱(app CommunityAppLayout)이 그릴 때 — 틀 · 대화상자가 앱 배치(CommunitySurface).
+// Sheet: 앱에서 대화상자 대신 쓰는 아래 시트. pages: 앱 화면으로 바꿔 끼울 화면(WEB_PAGES 와 같은 이름).
+// 둘 다 앱 틀이 넘긴다 — web 은 app/ 를 import 하지 않는다. 웹(LandlordWebRoutes)은 아무것도 넘기지 않는다(지금 웹 그대로).
+export const CommunityPage = ({ onNavigate, isApp = false, Sheet = null, useSheet = null, pages }) => (
+  <CommunitySurfaceProvider isApp={isApp} Sheet={Sheet} useSheet={useSheet}>
+    <CommunityRoutes onNavigate={onNavigate} pages={pages} />
+  </CommunitySurfaceProvider>
+);

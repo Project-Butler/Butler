@@ -13,7 +13,10 @@ export const BRIEFING_COMPLEX_NEWS_SIZE = 2;
 // 브리핑 — 최근 뉴스: 모두 5건. 우리 단지 기사를 먼저 최대 2건(줄 앞 "우리 단지" 칩), 나머지를 뉴스 탭 "우리 지역" 규칙
 // (시·군·구, 모자라면 서버 meta.sidoFallback 으로 시·도)으로 채운다. 단지 기사가 없거나 못 불러와도 지금처럼 지역 5건.
 // 한 줄 = 제목(한 줄 말줄임) · 출처 · 날짜, 줄을 누르면 원문 새 창.
-export const BriefingNews = ({ building, sigunguName, onMore, className = '' }) => {
+export const BRIEFING_NEWS_EMPTY_TEXT = '수집된 기사가 없습니다';
+
+// 데이터 · 계산(단지 기사 먼저 · 지역으로 채움 · 같은 기사 한 번) — 앱 브리핑 카드도 같은 것을 쓴다
+export const useBriefingNews = ({ building, sigunguName }) => {
   const complexList = useGetCommunityComplexNewsList({ complexId: building.complexId, size: BRIEFING_COMPLEX_NEWS_SIZE });
   const complexItems = (complexList.data?.pages[0]?.data ?? []).slice(0, BRIEFING_COMPLEX_NEWS_SIZE);
   const list = useGetCommunityNewsList({ legalDongCode: building.legalDongCode, scope: 'SIGUNGU', size: BRIEFING_NEWS_SIZE });
@@ -27,11 +30,21 @@ export const BriefingNews = ({ building, sigunguName, onMore, className = '' }) 
     ...complexItems.map((item) => ({ ...item, isComplex: true })),
     ...regionItems.filter((item) => !complexUrls.has(item.url)),
   ].slice(0, BRIEFING_NEWS_SIZE);
+  return {
+    items,
+    sigungu: first?.meta.region?.sigunguName ?? sigunguName,
+    isLoading: list.isPending || (needsSido && sido.isPending && items.length === 0),
+    isError: list.isError && items.length === 0,
+  };
+};
+
+export const BriefingNews = ({ building, sigunguName, onMore, className = '' }) => {
+  const { items, sigungu, isLoading, isError } = useBriefingNews({ building, sigunguName });
 
   let body;
-  if (list.isPending || (needsSido && sido.isPending && items.length === 0)) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
-  else if (list.isError && items.length === 0) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (items.length === 0) body = <BriefingNote>수집된 기사가 없습니다</BriefingNote>;
+  if (isLoading) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
+  else if (isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
+  else if (items.length === 0) body = <BriefingNote>{BRIEFING_NEWS_EMPTY_TEXT}</BriefingNote>;
   else {
     body = (
       <ul>
@@ -59,7 +72,6 @@ export const BriefingNews = ({ building, sigunguName, onMore, className = '' }) 
     );
   }
 
-  const sigungu = first?.meta.region?.sigunguName ?? sigunguName;
   return (
     <BriefingSection title="최근 뉴스" scope={`${building.name} · ${sigungu}`} onMore={onMore} className={className}>
       {body}

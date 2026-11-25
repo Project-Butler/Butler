@@ -6,6 +6,33 @@ import { VerificationBadge } from '../CommunityLayout/VerificationBadge';
 // (커뮤니티는 건물 하나를 골라야 열린다). 각 줄은 건물 선택 화면 카드의 정보를 한 줄로 — 임대인 인원 수는 여기에만(머리말 등 다른 곳에는 두지 않는다).
 // 인증 전 · 만료 건물 줄에는 머리와 같은 배지('인증 전' · '인증 만료').
 // buildings: GET /community/my-buildings 응답
+// 줄 하나는 BuildingSwitcherRow — 앱의 건물 바꾸기 시트(CommunityAppHeader)도 같은 줄을 쓴다(문구가 PC 와 같게).
+// role: 드롭다운은 'menuitemradio', 시트는 'radio' · onPick: 줄을 누를 때(지금 건물이어도 부른다 — 닫기는 부르는 쪽)
+// stacked: 좁은 화면(앱 시트) — 호실 · 지역 · 인원 줄을 이름 아래로 내려 자르지 않는다(문구는 같다)
+export const BuildingSwitcherRow = ({ building, isActive, role = 'menuitemradio', stacked = false, onPick }) => (
+  <button
+    type="button"
+    role={role}
+    aria-checked={isActive}
+    onClick={onPick}
+    className={`flex w-full items-center gap-2 px-3 text-left text-body ${stacked ? 'flex-wrap gap-y-0.5 rounded-btn py-3' : 'py-2'} ${
+      isActive ? 'bg-accent-soft text-accent-strong' : 'text-ink-2 hover:bg-surface-2'
+    }`}
+  >
+    <Building2 size={15} className="flex-none" aria-hidden="true" />
+    <span className={`flex-none ${isActive ? 'font-semibold' : 'font-medium text-ink'}`}>{building.name}</span>
+    {building.verificationStatus && building.verificationStatus !== 'VERIFIED' && (
+      <span className="flex-none">
+        <VerificationBadge blockedReason={building.verificationStatus} />
+      </span>
+    )}
+    <span className={`min-w-0 text-sub ${stacked ? 'basis-full pl-[23px]' : 'flex-1 truncate'} ${isActive ? '' : 'text-ink-3'}`}>
+      <span className="font-num tabular-nums">{building.unitCount}</span>호실 보유 · {building.regionName} · 임대인{' '}
+      <span className="font-num tabular-nums">{building.memberCount}</span>명
+    </span>
+  </button>
+);
+
 export const BuildingSwitcher = ({ buildings, activeComplexId, onChange }) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -49,31 +76,15 @@ export const BuildingSwitcher = ({ buildings, activeComplexId, onChange }) => {
           {buildings.map((building) => {
             const isActive = building.complexId === activeComplexId;
             return (
-              <button
+              <BuildingSwitcherRow
                 key={building.complexId}
-                type="button"
-                role="menuitemradio"
-                aria-checked={isActive}
-                onClick={() => {
+                building={building}
+                isActive={isActive}
+                onPick={() => {
                   setOpen(false);
                   if (!isActive) onChange(building.complexId);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-body ${
-                  isActive ? 'bg-accent-soft text-accent-strong' : 'text-ink-2 hover:bg-surface-2'
-                }`}
-              >
-                <Building2 size={15} className="flex-none" aria-hidden="true" />
-                <span className={`flex-none ${isActive ? 'font-semibold' : 'font-medium text-ink'}`}>{building.name}</span>
-                {building.verificationStatus && building.verificationStatus !== 'VERIFIED' && (
-                  <span className="flex-none">
-                    <VerificationBadge blockedReason={building.verificationStatus} />
-                  </span>
-                )}
-                <span className={`min-w-0 flex-1 truncate text-sub ${isActive ? '' : 'text-ink-3'}`}>
-                  <span className="font-num tabular-nums">{building.unitCount}</span>호실 보유 · {building.regionName} · 임대인{' '}
-                  <span className="font-num tabular-nums">{building.memberCount}</span>명
-                </span>
-              </button>
+              />
             );
           })}
         </div>

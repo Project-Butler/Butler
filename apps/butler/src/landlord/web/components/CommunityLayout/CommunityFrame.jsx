@@ -4,6 +4,7 @@ import { COMMUNITY_PATH } from '../../routes';
 import { PageHeader } from '../PageHeader/PageHeader';
 import { BuildingSwitcher } from '../CommunityBuildingSwitcher/BuildingSwitcher';
 import { NicknameButton } from '../CommunityNickname/NicknameButton';
+import { useCommunitySurface } from './CommunitySurface';
 import { PreviewNotice } from './PreviewNotice';
 import { SectionTabs } from './SectionTabs';
 import { VerificationBadge } from './VerificationBadge';
@@ -20,8 +21,13 @@ import { VerificationBadge } from './VerificationBadge';
 // onBack 이 있으면 하위 화면 — 탭 줄 아래 "← 목록으로". narrow 면 내용을 max-w-3xl 로 좁힌다
 // (글 상세 · 글쓰기 · 투표 만들기 — 읽는 화면. 투표 상세는 두 칸이라 넓게).
 // 내용 조각(글 카드 · 투표 카드 · 차트 …)은 이 틀과 떼어 둔다 — 모바일 화면을 다시 붙일 때 그대로 쓴다.
+//
+// 앱(임대인 앱, CommunitySurface isApp)에서는 탭 다섯 화면 · 글 상세 · 투표 상세를 앱 화면(app/)으로 바꿔 끼우고(CommunityPage pages),
+// 이 틀은 웹 폼을 그대로 쓰는 하위 화면(글쓰기 · 글 수정 · 투표 만들기)에만 쓰인다 — 머리 · 탭 줄 · "← 목록으로" 없이
+// (앱 뒤로 가기 바가 대신) 미리보기 안내 · 닉네임 대화상자만 PC 와 같은 규칙으로.
 export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null, onBack, narrow = false, children }) => {
   const navigate = useNavigate();
+  const { isApp } = useCommunitySurface();
   const { building, buildings, onSelectBuilding, preview, verify } = frame;
   const reason = blockedReason ?? preview?.reason ?? null;
 
@@ -30,6 +36,18 @@ export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null
     onSelectBuilding(complexId);
     if (onBack) navigate(`${COMMUNITY_PATH}/${section}`);
   };
+
+  if (isApp) {
+    // 웹 폼 안의 버튼(분류 칩 · 취소 · 등록 · 선택지 추가)과 입력칸(TextField 의 input — 공용 부품이라 바깥에서)은
+    // 휴대폰에서 누르기 좋게 높이 44px 이상 — 앱에서만(PC 는 아래 그대로)
+    return (
+      <div className="space-y-4 break-keep break-words [&_.rounded-input>input]:min-h-11 [&_button]:min-h-11">
+        {reason && <PreviewNotice onVerify={verify} />}
+        {children}
+        {frame.nickname?.dialog}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-6xl space-y-6 pb-10">

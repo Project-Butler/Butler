@@ -18,11 +18,11 @@ import { formatKstDateTime } from '../utils/communityFormat';
 
 const MAX_COMMENT_LENGTH = 1000; // CommunityComment.body VarChar(1000)
 
-// 작은 글자 버튼(글 상세의 "신고" 모양). 내 글이면 같은 모양으로 "수정"·"삭제".
+// 작은 글자 버튼(글 상세의 "신고" 모양). 내 글이면 같은 모양으로 "수정"·"삭제". 좁은 화면(앱)에서도 글자가 꺾이지 않게 nowrap.
 const TextButton = ({ children, ...props }) => (
   <button
     type="button"
-    className="inline-flex h-8 items-center gap-1.5 text-label font-semibold text-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-ink-3"
+    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap text-label font-semibold text-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-ink-3"
     {...props}
   >
     {children}
@@ -34,7 +34,8 @@ const TextButton = ({ children, ...props }) => (
 // 댓글은 아래 별도 카드(목록 + 맨 아래 입력칸). 작성자 옆 '인증 완료'는 글쓴이 표기다 — 글은 인증을 마친 임대인만 쓴다.
 // 머리의 배지는 보는 사람의 이 법정동 자격(writeBlockedReason)이다. 자격이 없어도 내 글·댓글 삭제는 된다(수정은 안 됨).
 // 인증 전 미리보기(locked)면 서버가 본문 · 댓글을 주지 않는다 — 제목 · 분류 · 작성자 · 날짜 아래에 잠금 카드, 신고 · 댓글 없음.
-export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdit }) => {
+// 글 상세의 데이터 · 댓글 쓰기/지우기 · 글 지우기 · 신고 상태. 앱 글 상세(app CommunityAppPostDetailPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePostDetailState = ({ postId, frame, building, onBack }) => {
   const post = useGetCommunityPost(postId);
   const addComment = usePostCommunityComment();
   const removeComment = useDeleteCommunityComment();
@@ -87,6 +88,46 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
       setActionError(getErrorMessage(error));
     }
   };
+
+  return {
+    post,
+    data,
+    canWrite,
+    addComment,
+    removeComment,
+    removePost,
+    draft,
+    setDraft,
+    isReportOpen,
+    setIsReportOpen,
+    isReported,
+    setIsReported,
+    actionError,
+    submitComment,
+    deleteComment,
+    deletePost,
+  };
+};
+
+export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdit }) => {
+  const {
+    post,
+    data,
+    canWrite,
+    addComment,
+    removeComment,
+    removePost,
+    draft,
+    setDraft,
+    isReportOpen,
+    setIsReportOpen,
+    isReported,
+    setIsReported,
+    actionError,
+    submitComment,
+    deleteComment,
+    deletePost,
+  } = usePostDetailState({ postId, frame, building, onBack });
 
   return (
     <CommunityFrame frame={frame} section="board" blockedReason={data?.writeBlockedReason ?? null} onBack={onBack} narrow>
@@ -151,7 +192,8 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
                     <li key={comment.id} className="border-t border-line py-3 first:border-t-0 first:pt-0">
                       <div className="mb-1 flex items-center gap-1.5">
                         <AuthorName nickname={comment.authorNickname} label={comment.authorLabel} />
-                        <span className="font-num text-sub font-medium tabular-nums text-ink-3">
+                        {/* 좁은 화면(앱)에서는 작성자 괄호 표기가 먼저 줄어든다 — 날짜는 한 줄 그대로 */}
+                        <span className="flex-none whitespace-nowrap font-num text-sub font-medium tabular-nums text-ink-3">
                           {formatKstDateTime(comment.createdAt)}
                         </span>
                         {comment.isMine && (
