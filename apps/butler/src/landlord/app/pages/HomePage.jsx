@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Badge, Button } from '@butler/ui';
+import { ChevronRight, Wrench } from 'lucide-react';
 import { useGetContractList } from '../../web/hooks/useGetContractList';
 import { useGetPropertyList } from '../../web/hooks/useGetPropertyList';
 import { useGetPropertyOwnershipList } from '../../web/hooks/useGetPropertyOwnershipList';
+import { useGetTicketList } from '../../web/hooks/useGetTicketList';
 import { buildLocation } from '../../web/routes';
 import { formatDday, formatManwon, getDdayTone, getTodayKST } from '../../web/utils/contract';
 import { formatNumber } from '../../web/utils/format';
@@ -35,6 +37,27 @@ const getVerificationBadge = (verification) => {
   return verification.unverified > 0 ? { tone: 'pending', label: `미인증 ${verification.unverified}` } : { tone: 'verified', label: '모두 인증' };
 };
 
+// 확인 필요 수리 요청(D18). 누르면 그 요청 상세로.
+const TicketTaskItem = ({ ticket, onOpen }) => (
+  <li className="border-b border-line last:border-b-0">
+    <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 py-3 text-left">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-accent-soft text-accent">
+        <Wrench size={18} strokeWidth={1.8} aria-hidden="true" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-body font-medium text-ink">수리 요청 확인</span>
+        <span className="truncate text-m-sub text-ink-2">
+          {ticket.property?.displayName} · {ticket.title}
+        </span>
+      </span>
+      <Badge mobile tone="warning">
+        확인 필요
+      </Badge>
+      <ChevronRight size={16} strokeWidth={1.8} className="shrink-0 text-ink-3" aria-hidden="true" />
+    </button>
+  </li>
+);
+
 const TaskItem = ({ task }) => {
   const { kind, contract } = task;
   const isRent = kind === 'rent';
@@ -63,7 +86,7 @@ const TaskItem = ({ task }) => {
 };
 
 // 임대인 앱 홈 (Figma M03 / 임대인 홈, 3:111). 웹 대시보드(LandlordDashboard)와 같은 API·같은 조건으로 불러와 Figma 칸에 맞게 보여 준다.
-// Figma 에 있지만 연결할 API 가 없는 것(상단 검색·알림, 수리 요청 항목, 오늘 할 일 [전체 보기])은 두지 않는다.
+// Figma 에 있지만 연결할 API 가 없는 것(상단 검색·알림, 오늘 할 일 [전체 보기])은 두지 않는다. 확인 필요 수리 요청은 오늘 할 일에 넣는다(docs/10 D18).
 // 부동산을 등록하고 오면 history state 의 notice 를 한 번 보여 주고 state 를 바로 비운다(새로고침·뒤로 가기에 다시 안 보임).
 export const HomePage = ({ user, onUnauthorized }) => {
   const navigate = useNavigate();
@@ -82,7 +105,15 @@ export const HomePage = ({ user, onUnauthorized }) => {
   const ownerships = useGetPropertyOwnershipList({ active: 'true', size: LIST_SIZE }, hookOptions);
 
   const today = getTodayKST();
-  const summary = toHomeSummary({ contracts: contracts.data, properties: properties.data, ownerships: ownerships.data, today });
+  // 확인 필요(접수) 수리 요청(D18). 할 일 칸에만 쓰므로 앞 20건만.
+  const openTickets = useGetTicketList({ status: 'OPEN', size: 20 }, { onUnauthorized });
+  const summary = toHomeSummary({
+    contracts: contracts.data,
+    properties: properties.data,
+    ownerships: ownerships.data,
+    openTickets: openTickets.data?.items ?? [],
+    today,
+  });
   const { verification } = summary;
 
   const goTo = (key, params) => navigate(buildLocation(key, params));
@@ -151,9 +182,17 @@ export const HomePage = ({ user, onUnauthorized }) => {
         {contracts.data && summary.tasks.length === 0 && <p className="py-4 text-center text-body text-ink-3">오늘 할 일이 없어요</p>}
         {summary.tasks.length > 0 && (
           <ul>
-            {summary.tasks.map((task) => (
-              <TaskItem key={`${task.kind}-${task.contract.id}`} task={task} />
-            ))}
+            {summary.tasks.map((task) =>
+              task.kind === 'ticket' ? (
+                <TicketTaskItem
+                  key={`ticket-${task.ticket.id}`}
+                  ticket={task.ticket}
+                  onOpen={() => goTo('ticketDetail', { ticketId: task.ticket.id })}
+                />
+              ) : (
+                <TaskItem key={`${task.kind}-${task.contract.id}`} task={task} />
+              ),
+            )}
           </ul>
         )}
       </section>

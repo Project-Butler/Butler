@@ -54,6 +54,16 @@ describe('toHomeSummary: 계약', () => {
     expect(summary.taskCount).toBe(2);
   });
 
+  it('확인 필요 수리 요청이 오늘 할 일 맨 앞에 온다 — 처리할 수 없는(isReadOnly) 요청은 뺀다(D18)', () => {
+    const summary = toHomeSummary({
+      contracts: list([contract({ id: 'rent', nextRentPaymentDate: TODAY })]),
+      openTickets: [{ id: 't1', isReadOnly: false }, { id: 't2', isReadOnly: true }],
+      today: TODAY,
+    });
+    expect(summary.tasks.map((task) => `${task.kind}:${(task.ticket ?? task.contract).id}`)).toEqual(['ticket:t1', 'rent:rent']);
+    expect(summary.taskCount).toBe(2);
+  });
+
   it('불러오는 중(contracts=null)이면 숫자는 null 이다(0 으로 보이지 않게)', () => {
     const summary = toHomeSummary({ today: TODAY });
     expect(summary).toMatchObject({ depositSum: null, contractCount: null, contractBadge: null, taskCount: null, tasks: [] });

@@ -5,12 +5,14 @@ import { getRentDueToday } from '../../web/utils/dashboard';
 const sumDeposit = (contracts) => contracts.reduce((sum, contract) => sum + contract.deposit, 0);
 
 // contracts: 시작 전·진행 중 계약 목록({ items }), properties: 내 소유 호실 목록({ items, meta }), ownerships: 활성 소유 관계 목록({ items, meta }).
-export const toHomeSummary = ({ contracts = null, properties = null, ownerships = null, today }) => {
+// openTickets: 확인 필요(접수) 수리 요청 목록(배열, D18). 처리할 수 없는 요청(isReadOnly, 소유가 끝난 호실)은 할 일에서 뺀다.
+export const toHomeSummary = ({ contracts = null, properties = null, ownerships = null, openTickets = [], today }) => {
   // 보증금·계약 수·오늘 할 일은 진행 중(ACTIVE·EXPIRING_SOON)만 쓴다(웹 대시보드와 같음).
   const inProgress = contracts ? contracts.items.filter((contract) => contract.status !== 'UPCOMING') : null;
   const expiring = inProgress ? inProgress.filter((contract) => contract.status === 'EXPIRING_SOON') : [];
   const rentDue = inProgress ? getRentDueToday(inProgress, today) : [];
   const tasks = [
+    ...openTickets.filter((ticket) => !ticket.isReadOnly).map((ticket) => ({ kind: 'ticket', ticket })),
     ...rentDue.map((contract) => ({ kind: 'rent', contract })),
     ...expiring.map((contract) => ({ kind: 'expiring', contract })),
   ];
