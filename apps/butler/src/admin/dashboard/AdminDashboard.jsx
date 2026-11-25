@@ -11,6 +11,7 @@ const RECENT_SIZE = 5;
 const formatCount = (value) => value.toLocaleString('ko-KR');
 
 // 처리 대기 항목. 운영자가 손봐야 하는 카운트만 모은다(0건이면 빼고 보여 준다).
+// target: 누르면 그 조건으로 거른 목록 화면으로 간다({ key, search }).
 const buildPendingItems = (counts) =>
   [
     {
@@ -19,6 +20,7 @@ const buildPendingItems = (counts) =>
       tone: 'warning',
       count: counts.ownerships.byVerificationStatus.UNVERIFIED,
       title: '권리자 인증을 받지 않은 소유 관계',
+      target: { key: 'ownerships', search: '?verificationStatus=UNVERIFIED' },
     },
     {
       key: 'failedJobs',
@@ -26,6 +28,7 @@ const buildPendingItems = (counts) =>
       tone: 'danger',
       count: counts.jobs.byStatus.FAILED,
       title: '실패한 작업 — 원인 확인 후 재시도 필요',
+      target: { key: 'jobs', search: '?status=FAILED' },
     },
     {
       key: 'openTickets',
@@ -33,6 +36,7 @@ const buildPendingItems = (counts) =>
       tone: 'warning',
       count: counts.tickets.byStatus.OPEN,
       title: '접수 후 처리되지 않은 수리·점검 요청',
+      target: { key: 'tickets', search: '?status=OPEN' },
     },
   ].filter((item) => item.count > 0);
 
@@ -103,12 +107,17 @@ export const AdminDashboard = ({ onNavigate, onUnauthorized, currentUser }) => {
           {dashboard.isLoading && !counts && <StatusMessage>불러오는 중입니다</StatusMessage>}
           <div className="mt-4 space-y-3">
             {pendingItems.map((item) => (
-              <div key={item.key} className="rounded-btn border border-line p-3">
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onNavigate(item.target.key, undefined, item.target.search)}
+                className="block w-full rounded-btn border border-line p-3 text-left hover:bg-surface-2"
+              >
                 <Badge tone={item.tone}>{item.tag}</Badge>
                 <p className="mt-1.5 text-body font-semibold text-ink">
                   {item.title} <span className="font-num">{formatCount(item.count)}</span>건
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         </Card>
