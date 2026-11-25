@@ -11,7 +11,17 @@ import {
   losesCommunityAccess,
   toOwnershipEndBody,
   toRenewalNotices,
+  toSameBuildingAcquiredHint,
 } from '../../src/landlord/web/utils/ownershipVerification';
+
+describe('toSameBuildingAcquiredHint', () => {
+  it('같은 건물의 다른 방이 있으면 함께 바뀐다고 알리고, 없으면 undefined', () => {
+    expect(toSameBuildingAcquiredHint({ sameBuildingOwnershipCount: 2 })).toBe('같은 건물의 다른 방 2개도 함께 바뀌어요');
+    expect(toSameBuildingAcquiredHint({ sameBuildingOwnershipCount: 0 })).toBeUndefined();
+    expect(toSameBuildingAcquiredHint({})).toBeUndefined();
+    expect(toSameBuildingAcquiredHint(null)).toBeUndefined();
+  });
+});
 
 const NOW = new Date('2026-11-03T03:00:00Z');
 const DONG = '1171010100';

@@ -34,7 +34,7 @@ import {
   validateExclusiveArea,
   validatePurchasePrice,
 } from '../utils/formValidation';
-import { END_REASONS, isSoldReason, toOwnershipEndBody } from '../utils/ownershipVerification';
+import { END_REASONS, isSoldReason, toOwnershipEndBody, toSameBuildingAcquiredHint } from '../utils/ownershipVerification';
 import { formatUnitLabel } from '../utils/unitAddress';
 import {
   EQUIPMENT_OPTIONS,
@@ -281,6 +281,7 @@ const OwnershipSection = ({ propertyId, ownership, onSaved, onEnded, onUnauthori
               inputMode="numeric"
               placeholder="2019-03"
               maxLength={7}
+              hint={toSameBuildingAcquiredHint(ownership)}
               value={draft.acquiredYearMonth}
               onChange={(event) =>
                 setDraft((prev) => ({ ...prev, acquiredYearMonth: toYearMonthInput(event.target.value) }))

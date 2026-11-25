@@ -2,7 +2,7 @@
 import { ACTIVITY_TYPES, recordActivity } from '../../platform/activityLog.js';
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
-import { getNow } from '../../platform/dateUtils.js';
+import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { decryptField } from '../../platform/fieldCrypto.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { applyOwnershipVerification, expireStaleAttempts, failAttemptInTx } from '../../platform/ownershipVerification.js';
@@ -11,6 +11,7 @@ import {
   buildLedgerTarget,
   getStartBlockReason,
   matchOwner,
+  pickAcquiredYearMonth,
   RENEWAL_WINDOW_DAYS,
   resolveIdentity,
 } from '../../platform/ownershipVerificationRules.js';
@@ -74,8 +75,13 @@ export const receiveRunnerResult = async (attemptId, result, deps = {}) => {
     const judged = matchOwner(identity, result.owners);
     if (judged !== 'VERIFIED') return { accepted: await failRunningAttempt(attemptId, judged, extra) };
 
-    // 전유부면 대장의 전용면적·층(result.unit)으로 호실 값을 덮어쓴다(인증에 성공했을 때만).
-    const applied = await applyOwnershipVerification({ attemptId, ledgerKind, ownerCount, unit: result.unit ?? null }, deps);
+    // 인증에 성공했을 때만: 전유부면 대장의 전용면적·층(result.unit)으로 호실 값을,
+    // 본인 소유자 줄의 변동일자가 취득이면 그 연월로 취득 연월을 덮어쓴다.
+    const acquiredYearMonth = pickAcquiredYearMonth(identity, result.owners, getTodayKST());
+    const applied = await applyOwnershipVerification(
+      { attemptId, ledgerKind, ownerCount, unit: result.unit ?? null, acquiredYearMonth },
+      deps,
+    );
     return { accepted: applied.outcome !== 'IGNORED' };
   } catch (error) {
     logFailure('결과 반영 실패', attemptId, error);

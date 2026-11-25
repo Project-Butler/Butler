@@ -42,12 +42,31 @@ export const matchOwner = (identity, owners) => {
   const list = Array.isArray(owners) ? owners : [];
   if (list.length === 0) return 'UNREADABLE';
 
-  const name = normalizeName(identity?.name);
-  const birthDate = identity?.birthDate ?? null;
-  const isMatch = (owner) => Boolean(name) && Boolean(birthDate) && normalizeName(owner?.name) === name && owner?.birthDate === birthDate;
-  if (list.some(isMatch)) return 'VERIFIED';
+  if (list.some((owner) => isSameOwner(identity, owner))) return 'VERIFIED';
 
   return list.some((owner) => !normalizeName(owner?.name) || !owner?.birthDate) ? 'UNREADABLE' : 'NOT_MATCHED';
+};
+
+// 본인 정보와 대장 소유자 1명이 같은 사람인지(성명·생년월일이 모두 있고 정확히 같을 때만).
+const isSameOwner = (identity, owner) => {
+  const name = normalizeName(identity?.name);
+  const birthDate = identity?.birthDate ?? null;
+  return Boolean(name) && Boolean(birthDate) && normalizeName(owner?.name) === name && owner?.birthDate === birthDate;
+};
+
+// 취득으로 보는 변동원인(2026-11-26 사용자 결정, 코드 0411·0412·0419·0493 — docs/ledger-change-cause-codes.md).
+// 주소변경·등기명의인표시변경 같은 표시 변경은 날짜만 바뀌고 취득이 아니라 넣지 않는다.
+export const ACQUISITION_CHANGE_CAUSES = Object.freeze(['소유권보존', '소유권이전', '소유권취득', '본등기']);
+
+// 본인과 일치한 소유자 줄의 변동일자 → 취득 연월('YYYY-MM'). 변동일자는 등기일과 같아 법적 취득일로 본다(사용자 확인).
+// 원인이 취득이 아니거나, 날짜가 없거나, 이번 달(todayKst 'YYYY-MM-DD') 뒤면 null. 일치한 줄이 여럿이면 가장 늦은 날짜.
+export const pickAcquiredYearMonth = (identity, owners, todayKst) => {
+  const months = (Array.isArray(owners) ? owners : [])
+    .filter((owner) => isSameOwner(identity, owner) && owner.changedOn && ACQUISITION_CHANGE_CAUSES.includes(owner.changeCause))
+    .map((owner) => owner.changedOn.slice(0, 7))
+    .filter((month) => month <= todayKst.slice(0, 7))
+    .sort();
+  return months.at(-1) ?? null;
 };
 
 const isBefore = (a, b) => {
@@ -119,6 +138,17 @@ export const toRunnerResult = ({ issued, extracted = null, ocrFailed = false }) 
 
 const MAX_RUNNER_OWNERS = 10;
 const MAX_OWNER_NAME_LENGTH = 100;
+const MAX_CHANGE_CAUSE_LENGTH = 50;
+// 소유자 칸. changedOn(변동일자 'YYYY-MM-DD')·changeCause(변동원인 이름)는 2026-11-26 추가, 읽었을 때만 온다.
+const OWNER_FIELDS = ['name', 'birthDate', 'changedOn', 'changeCause'];
+
+// 'YYYY-MM-DD'이고 실제로 있는 날인지(2월 30일 등을 거른다).
+const isRealDate = (text) => {
+  if (!BIRTH_DATE_PATTERN.test(text)) return false;
+  const [y, m, d] = text.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // 대장(전유부)에서 읽은 호실 값의 범위. 호실 입력 검사(domains/properties/controller.js)와 같다.
@@ -153,11 +183,20 @@ export const parseRunnerResult = (body) => {
 
   const parsed = [];
   for (const owner of owners) {
-    if (!isPlainObject(owner) || Object.keys(owner).some((key) => key !== 'name' && key !== 'birthDate')) return null;
-    const { name = null, birthDate = null } = owner;
+    if (!isPlainObject(owner) || Object.keys(owner).some((key) => !OWNER_FIELDS.includes(key))) return null;
+    const { name = null, birthDate = null, changedOn = null, changeCause = null } = owner;
     if (name !== null && (typeof name !== 'string' || name.length > MAX_OWNER_NAME_LENGTH)) return null;
     if (birthDate !== null && (typeof birthDate !== 'string' || !BIRTH_DATE_PATTERN.test(birthDate))) return null;
-    parsed.push({ name, birthDate });
+    if (changedOn !== null && typeof changedOn !== 'string') return null;
+    if (changeCause !== null && (typeof changeCause !== 'string' || changeCause.length > MAX_CHANGE_CAUSE_LENGTH)) return null;
+    // 변동일자 형식이 틀리면 그 칸만 버린다(취득 연월 때문에 인증까지 버리지 않는다).
+    const validChangedOn = changedOn !== null && isRealDate(changedOn) ? changedOn : null;
+    parsed.push({
+      name,
+      birthDate,
+      ...(validChangedOn ? { changedOn: validChangedOn } : {}),
+      ...(changeCause ? { changeCause: changeCause.replace(/\s/g, '') } : {}),
+    });
   }
   return unit ? { kind, ledgerKind, owners: parsed, unit } : { kind, ledgerKind, owners: parsed };
 };

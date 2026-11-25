@@ -4,6 +4,7 @@ import { audit } from '../../platform/audit.js';
 import { getNow } from '../../platform/dateUtils.js';
 import { endOwnershipInTx, removeLogsInTx } from '../../platform/ownershipEnd.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
+import { findGeneralBuildingSiblingIds, syncBuildingAcquiredYearMonthInTx } from '../../platform/ownershipVerification.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { toOwnershipResponse, toPropertySummary } from '../../platform/propertySerializer.js';
 import { removeStoredObjects } from '../documents/storage/index.js';
@@ -45,13 +46,20 @@ export const findMyOwnerships = async (user, { active, page, size }) => {
   };
 };
 
+// 단건 응답: 같은 건물 묶음(일반건축물대장으로 인증된 내 다른 방) 수를 더한다.
+// 취득 연월을 고치면 그 방들도 함께 바뀐다고 화면이 알려 주는 데 쓴다(2026-11-26, 다가구는 건물째 매매).
+const toDetailResponse = async (client, ownership) => ({
+  ...toResponse(ownership),
+  sameBuildingOwnershipCount: (await findGeneralBuildingSiblingIds(client, ownership.id)).length,
+});
+
 // 본인 또는 ADMIN만 볼 수 있다. 그 밖은 null → controller가 404.
 export const findOwnershipForUser = async (user, ownershipId) => {
   const ownership = await prisma.ownership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
   if (!ownership) return null;
   if (ownership.userId !== user.id && user.role !== 'ADMIN') return null;
 
-  return toResponse(ownership);
+  return toDetailResponse(prisma, ownership);
 };
 
 const toActivityParams = (ownership) => ({
@@ -66,6 +74,10 @@ export const updateOwnership = async (user, ownershipId, data) => {
       where: { id: ownershipId, userId: user.id, endedAt: null },
       data,
     });
+    // 같은 건물 묶음(다가구 등 일반건축물대장 인증)이면 취득 연월을 건물 전체에 맞춘다(비우는 것도 함께).
+    if (result.count > 0 && data.acquiredYearMonth !== undefined) {
+      await syncBuildingAcquiredYearMonthInTx(tx, ownershipId, data.acquiredYearMonth);
+    }
     const row = await tx.ownership.findUnique({ where: { id: ownershipId }, include: PROPERTY_INCLUDE });
     if (result.count > 0) {
       await recordActivity(tx, {
@@ -83,7 +95,7 @@ export const updateOwnership = async (user, ownershipId, data) => {
   // count 0인데 본인 것이면 이미 종료된 소유 관계다.
   if (count === 0) throwOwnershipEnded();
 
-  return toResponse(ownership);
+  return toDetailResponse(prisma, ownership);
 };
 
 // POST /property-ownerships/:ownershipId/end — 조회·활성 계약 확인·종료를 한 트랜잭션으로 한다.

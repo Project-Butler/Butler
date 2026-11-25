@@ -13,7 +13,7 @@ import { prisma } from '../../../src/platform/prismaClient.js';
 import { toContractResponse, CONTRACT_INCLUDE } from '../../../src/platform/contractSerializer.js';
 import { getOwnershipVerificationSetting, findOwnershipVerificationAttempts, revokeOwnership, updateOwnershipVerificationSetting } from '../../../src/domains/admin/service.js';
 import { buildAuthMe, signAccessToken } from '../../../src/domains/auth/service.js';
-import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
+import { endOwnership, findOwnershipForUser, updateOwnership } from '../../../src/domains/propertyOwnerships/service.js';
 import { createPropertyWithOwnership } from '../../../src/domains/properties/service.js';
 import { ownershipVerificationResultRouter } from '../../../src/domains/ownershipVerifications/router.js';
 import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from '../../../src/domains/ownershipVerifications/runnerSignature.js';
@@ -923,6 +923,94 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
         assert.equal(saved.exclusiveArea, null);
         assert.equal(saved.floor, null);
       }
+    });
+  });
+
+  describe('대장 소유자현황 변동일자 → 취득 연월', () => {
+    const owned = (changedOn, changeCause) => [{ name: NAME, birthDate: BIRTH_DATE, changedOn, changeCause }];
+    const unitIn = (complex, unitNo) => prisma.property.create({ data: { complexId: complex.id, buildingNo: '', unitNo } });
+    const registerInput = (complexId, unitNo, acquiredYearMonth = null) => ({
+      complexId,
+      buildingNo: '',
+      unitNo,
+      exclusiveArea: null,
+      floor: null,
+      acquiredYearMonth,
+      purchasePrice: null,
+      listing: {},
+    });
+
+    test('집합: 본인 줄이 취득 원인이면 입력값을 덮어쓰고 감사에 남기며, 다른 방에는 적용하지 않는다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const ownership = await own(user, await unitIn(complex, '701'), { acquiredYearMonth: '2020-01' });
+      const sibling = await own(user, await unitIn(complex, '702'), { acquiredYearMonth: '2021-01' });
+
+      await receiveRunnerResult((await runningAttempt(user, ownership)).id, { ...matched, owners: owned('2012-09-05', '소유권이전') });
+      assert.equal((await getOwnership(ownership.id)).acquiredYearMonth, '2012-09');
+      assert.equal((await getOwnership(sibling.id)).acquiredYearMonth, '2021-01');
+      const [applied] = await auditsOf(ownership, 'OWNERSHIP_VERIFICATION_APPLIED');
+      assert.equal(applied.after.acquiredYearMonth, '2012-09');
+    });
+
+    test('취득이 아닌 원인(등기명의인표시변경)이면 취득 연월을 그대로 둔다', async () => {
+      const user = await createUser();
+      const ownership = await own(user, await createProperty(), { acquiredYearMonth: '2020-01' });
+      await receiveRunnerResult((await runningAttempt(user, ownership)).id, { ...matched, owners: owned('2015-03-02', '등기명의인표시변경') });
+      assert.equal((await getOwnership(ownership.id)).verificationStatus, 'VERIFIED');
+      assert.equal((await getOwnership(ownership.id)).acquiredYearMonth, '2020-01');
+    });
+
+    test('일반: 같은 건물의 내 다른 방에도 같은 취득 연월을 적용한다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const source = await own(user, await unitIn(complex, '801'));
+      const sibling = await own(user, await unitIn(complex, '802'), { acquiredYearMonth: '2021-01' });
+
+      const general = { ...matched, ledgerKind: 'GENERAL', owners: owned('2012-09-05', '소유권이전') };
+      await receiveRunnerResult((await runningAttempt(user, source)).id, general);
+      for (const id of [source.id, sibling.id]) assert.equal((await getOwnership(id)).acquiredYearMonth, '2012-09');
+    });
+
+    test('등록: 입력한 취득 연월은 같은 건물 전체에, 입력이 없으면 원래 방 값을 복사한다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const source = await own(user, await unitIn(complex, '901'));
+      const general = { ...matched, ledgerKind: 'GENERAL', owners: owned('2012-09-05', '소유권이전') };
+      await receiveRunnerResult((await runningAttempt(user, source)).id, general);
+
+      const copied = await createPropertyWithOwnership(user, registerInput(complex.id, '902'));
+      ownershipIds.push(copied.ownership.id);
+      assert.equal(copied.ownership.acquiredYearMonth, '2012-09');
+
+      const typed = await createPropertyWithOwnership(user, registerInput(complex.id, '903', '2013-01'));
+      ownershipIds.push(typed.ownership.id);
+      assert.equal(typed.ownership.acquiredYearMonth, '2013-01');
+      for (const id of [source.id, copied.ownership.id]) assert.equal((await getOwnership(id)).acquiredYearMonth, '2013-01');
+    });
+
+    test('수정: 같은 건물 묶음이면 다른 방도 함께 바뀌고, 응답에 그 방 수를 준다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const source = await own(user, await unitIn(complex, '1001'));
+      const sibling = await own(user, await unitIn(complex, '1002'));
+      const unitComplex = await fixture.createComplex(JIBUN);
+      const alone = await own(user, await unitIn(unitComplex, '1001'));
+      await own(user, await unitIn(unitComplex, '1002'), { acquiredYearMonth: '2021-01' });
+      await receiveRunnerResult((await runningAttempt(user, source)).id, { ...matched, ledgerKind: 'GENERAL' });
+      await receiveRunnerResult((await runningAttempt(user, alone)).id, matched);
+
+      assert.equal((await findOwnershipForUser(user, source.id)).sameBuildingOwnershipCount, 1);
+      const updated = await updateOwnership(user, source.id, { acquiredYearMonth: '2014-05' });
+      assert.equal(updated.acquiredYearMonth, '2014-05');
+      assert.equal(updated.sameBuildingOwnershipCount, 1);
+      assert.equal((await getOwnership(sibling.id)).acquiredYearMonth, '2014-05');
+
+      // 집합건축물대장으로 인증된 방은 묶음이 없어 그 방만 바뀐다.
+      assert.equal((await findOwnershipForUser(user, alone.id)).sameBuildingOwnershipCount, 0);
+      await updateOwnership(user, alone.id, { acquiredYearMonth: '2014-05' });
+      const others = await prisma.ownership.findMany({ where: { userId: user.id, property: { complexId: unitComplex.id }, id: { not: alone.id } } });
+      assert.deepEqual(others.map((row) => row.acquiredYearMonth), ['2021-01']);
     });
   });
 
