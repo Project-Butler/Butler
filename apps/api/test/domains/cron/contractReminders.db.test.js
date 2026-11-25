@@ -86,6 +86,37 @@ describe('계약 일정 알림 정기 작업', { skip: dbTestSkip }, () => {
     assert.deepEqual(await typesFor(user), ['CONTRACT_EXPIRING_SOON']);
   });
 
+  // 2027-12-01~2029-11-30 다음 계약. previous면 갱신 계약, 아니면 새 임차인 계약.
+  const createNextContract = (ownership, { previous = null, terminatedOn = null } = {}) =>
+    prisma.contract.create({
+      data: {
+        ownershipId: ownership.id,
+        tenantName: previous ? '이임차' : '김새입',
+        tenantPhone: '01011112222',
+        leaseType: 'MONTHLY',
+        deposit: 10000000n,
+        monthlyRent: 500000n,
+        startDate: day('2027-12-01'),
+        endDate: day('2029-11-30'),
+        previousContractId: previous?.id ?? null,
+        terminatedOn,
+      },
+    });
+
+  test('갱신 계약이 등록되면 통지 알림을 보내지 않는다. 취소한 갱신 계약·새 임차인 계약은 그대로 보낸다(#242)', async () => {
+    const renewed = await createContract();
+    await createNextContract(renewed.ownership, { previous: renewed.contract });
+    const canceled = await createContract();
+    await createNextContract(canceled.ownership, { previous: canceled.contract, terminatedOn: day('2027-08-01') });
+    const newTenant = await createContract();
+    await createNextContract(newTenant.ownership);
+
+    await run('2027-09-23');
+    assert.deepEqual(await typesFor(renewed.user), ['CONTRACT_EXPIRING_SOON']);
+    assert.deepEqual(await typesFor(canceled.user), ['CONTRACT_EXPIRING_SOON', 'RENEWAL_NOTICE_DEADLINE_SOON']);
+    assert.deepEqual(await typesFor(newTenant.user), ['CONTRACT_EXPIRING_SOON', 'RENEWAL_NOTICE_DEADLINE_SOON']);
+  });
+
   test('해지한 계약과 끝난 소유 관계는 읽지 않는다', async () => {
     const terminated = await createContract();
     await prisma.contract.update({ where: { id: terminated.contract.id }, data: { terminatedOn: day('2027-01-01') } });
