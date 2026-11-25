@@ -15,7 +15,7 @@ import {
   RENEWAL_NOTICE_MEMO_MAX,
   RENEWAL_NOTICE_METHOD_OPTIONS,
 } from '../../utils/scheduleView';
-import { BottomSheet } from '../BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 
 const LABEL = 'text-m-label font-semibold text-ink';
 const INPUT_CLASS =
@@ -93,6 +93,8 @@ const validate = (form, today) => {
 // 증빙(내용증명 사본·문자 캡처 등)은 먼저 미연결 문서로 올리고 저장할 때 attachmentDocumentIds 로 붙인다.
 // readOnly(끝난 계약·끝난 소유 관계)면 폼과 삭제를 두지 않는다. 저장하면 시트를 닫고 onChanged 로 계약을 다시 불러온다.
 export const RenewalNoticeSheet = ({ contractId, readOnly = false, onChanged, onClose, onUnauthorized }) => {
+  const sheet = useBottomSheet();
+  const close = () => sheet.close(onClose);
   const [today] = useState(getTodayKST);
   const notices = useRenewalNotices(contractId, { onChanged, onUnauthorized });
   const uploads = useAttachmentUploads([], { onUnauthorized, maxCount: MAX_RENEWAL_NOTICE_ATTACHMENTS });
@@ -113,7 +115,7 @@ export const RenewalNoticeSheet = ({ contractId, readOnly = false, onChanged, on
     setError(null);
     const apiError = await notices.create(toBody(form, uploads.documentIds));
     if (!apiError) {
-      onClose();
+      close();
       return;
     }
     setFieldErrors(toFieldErrors(apiError));
@@ -130,7 +132,7 @@ export const RenewalNoticeSheet = ({ contractId, readOnly = false, onChanged, on
   const canSubmit = !busy && !uploads.isUploading && !uploads.hasFailed;
 
   return (
-    <BottomSheet label="통지 기록" onClose={onClose}>
+    <BottomSheet label="통지 기록" onClose={onClose} sheet={sheet}>
       <section aria-label="저장된 기록" className="flex flex-col">
         {notices.error && <NoticeBox>{notices.error.message}</NoticeBox>}
         {!notices.data && !notices.error && (
@@ -228,7 +230,7 @@ export const RenewalNoticeSheet = ({ contractId, readOnly = false, onChanged, on
           <AttachmentPicker uploads={uploads} label="증빙 (선택)" disabled={busy} onUnauthorized={onUnauthorized} />
           {error && <NoticeBox>{error}</NoticeBox>}
           <div className="flex gap-2.5">
-            <Button variant="secondary" size="h52" onClick={onClose} disabled={busy}>
+            <Button variant="secondary" size="h52" onClick={close} disabled={busy}>
               닫기
             </Button>
             <Button type="submit" size="h52" className="flex-1" disabled={!canSubmit}>
@@ -238,7 +240,7 @@ export const RenewalNoticeSheet = ({ contractId, readOnly = false, onChanged, on
         </form>
       )}
       {readOnly && (
-        <Button variant="secondary" size="h52" onClick={onClose}>
+        <Button variant="secondary" size="h52" onClick={close}>
           닫기
         </Button>
       )}

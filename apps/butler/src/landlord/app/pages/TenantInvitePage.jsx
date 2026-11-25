@@ -8,7 +8,7 @@ import { usePatchContract } from '../../web/hooks/usePatchContract';
 import { usePostTenantInvitation } from '../../web/hooks/usePostTenantInvitation';
 import { formatPhone, isValidPhone, toPhoneDigits } from '../../web/utils/contract';
 import { formatDotDate } from '../../web/utils/tenantInvite';
-import { BottomSheet } from '../components/BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../components/BottomSheet/BottomSheet';
 import { useGoBack } from '../utils/navigation';
 import {
   formatInviteContractLabel,
@@ -69,33 +69,37 @@ const VisibilityCard = () => (
   </section>
 );
 
-const ContractSheet = ({ options, selectedId, onSelect, onClose }) => (
-  <BottomSheet label="연결할 계약" onClose={onClose}>
-    <ul className="flex flex-col gap-2">
-      {options.map((option) => {
-        const isSelected = option.id === selectedId;
-        return (
-          <li key={option.id}>
-            <button
-              type="button"
-              aria-pressed={isSelected}
-              onClick={() => onSelect(option.id)}
-              className={`flex w-full items-center justify-between gap-3 rounded-input border px-4 py-3 text-left ${
-                isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
-              }`}
-            >
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-body text-ink">{formatInviteContractLabel(option)}</span>
-                <span className="text-m-sub text-ink-3">{option.tenantName}</span>
-              </span>
-              {isSelected && <Check size={18} className="shrink-0 text-accent" aria-hidden="true" />}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  </BottomSheet>
-);
+// 계약을 고르면 시트가 내려간 뒤 onSelect 를 부른다(부모가 시트를 닫는다).
+const ContractSheet = ({ options, selectedId, onSelect, onClose }) => {
+  const sheet = useBottomSheet();
+  return (
+    <BottomSheet label="연결할 계약" onClose={onClose} sheet={sheet}>
+      <ul className="flex flex-col gap-2">
+        {options.map((option) => {
+          const isSelected = option.id === selectedId;
+          return (
+            <li key={option.id}>
+              <button
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => sheet.close(() => onSelect(option.id))}
+                className={`flex w-full items-center justify-between gap-3 rounded-input border px-4 py-3 text-left ${
+                  isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
+                }`}
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-body text-ink">{formatInviteContractLabel(option)}</span>
+                  <span className="text-m-sub text-ink-3">{option.tenantName}</span>
+                </span>
+                {isSelected && <Check size={18} className="shrink-0 text-accent" aria-hidden="true" />}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </BottomSheet>
+  );
+};
 
 // 링크를 만든 뒤. inviteUrl 은 발급 응답에서 한 번만 받으므로 이 화면을 나가면 다시 볼 수 없다.
 const InviteDoneView = ({ invitation, tenantName, sendResult, isSending, onSend, onDone }) => (

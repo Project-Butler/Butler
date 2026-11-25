@@ -12,7 +12,7 @@ import { useGetTicket } from '../../web/hooks/useGetTicket';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { usePatchTicket } from '../../web/hooks/usePatchTicket';
 import { formatUnitLabel } from '../../web/utils/unitAddress';
-import { BottomSheet } from '../components/BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../components/BottomSheet/BottomSheet';
 import { useGoBack, useGoTo } from '../utils/navigation';
 import {
   canCancelTicket,
@@ -29,18 +29,21 @@ const TEXTAREA_CLASS =
 const MAX_RESOLUTION_NOTE_LENGTH = 3000;
 
 // 완료 처리: 처리 내용(선택)·비용(선택)을 적고 DONE 으로 바꾼다. 완료되면 서버가 하우스 로그(TICKET_SUMMARY)를 자동으로 남긴다.
-const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
+// onSubmit(body)는 바뀐 요청(실패면 null)을 돌려준다. 성공하면 시트가 내려간 뒤 onDone(바뀐 요청)을 부른다.
+const CompleteSheet = ({ isSubmitting, error, onSubmit, onDone, onClose }) => {
+  const sheet = useBottomSheet();
   const [resolutionNote, setResolutionNote] = useState('');
   const [cost, setCost] = useState('');
 
   return (
-    <BottomSheet label="완료 처리" onClose={onClose}>
+    <BottomSheet label="완료 처리" onClose={onClose} sheet={sheet}>
       <form
         noValidate
         className="flex flex-col gap-4"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          onSubmit(toCompleteBody({ resolutionNote, cost }));
+          const updated = await onSubmit(toCompleteBody({ resolutionNote, cost }));
+          if (updated) sheet.close(() => onDone(updated));
         }}
       >
         <div className="flex flex-col gap-1.5">
@@ -78,7 +81,7 @@ const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
         <p className="rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">완료하면 처리 내용이 하우스 로그에 자동으로 기록되고, 이후에는 바꿀 수 없어요.</p>
         {error && <NoticeBox>{error}</NoticeBox>}
         <div className="flex gap-2.5">
-          <Button variant="secondary" size="h52" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" size="h52" onClick={() => sheet.close(onClose)} disabled={isSubmitting}>
             닫기
           </Button>
           <Button type="submit" size="h52" className="flex-1" disabled={isSubmitting}>
@@ -90,20 +93,28 @@ const CompleteSheet = ({ isSubmitting, error, onSubmit, onClose }) => {
   );
 };
 
-const CancelSheet = ({ isSubmitting, error, onConfirm, onClose }) => (
-  <BottomSheet label="요청 취소" onClose={onClose}>
-    <p className="text-body text-ink-2">이 요청을 취소할까요? 취소한 요청은 다시 열 수 없어요.</p>
-    {error && <NoticeBox>{error}</NoticeBox>}
-    <div className="flex gap-2.5">
-      <Button variant="secondary" size="h52" className="flex-1" onClick={onClose} disabled={isSubmitting}>
-        닫기
-      </Button>
-      <Button size="h52" className="flex-1" onClick={onConfirm} disabled={isSubmitting}>
-        {isSubmitting ? '취소 중' : '요청 취소'}
-      </Button>
-    </div>
-  </BottomSheet>
-);
+// onConfirm()은 바뀐 요청(실패면 null)을 돌려준다. 성공하면 시트가 내려간 뒤 onDone(바뀐 요청)을 부른다.
+const CancelSheet = ({ isSubmitting, error, onConfirm, onDone, onClose }) => {
+  const sheet = useBottomSheet();
+  const handleConfirm = async () => {
+    const updated = await onConfirm();
+    if (updated) sheet.close(() => onDone(updated));
+  };
+  return (
+    <BottomSheet label="요청 취소" onClose={onClose} sheet={sheet}>
+      <p className="text-body text-ink-2">이 요청을 취소할까요? 취소한 요청은 다시 열 수 없어요.</p>
+      {error && <NoticeBox>{error}</NoticeBox>}
+      <div className="flex gap-2.5">
+        <Button variant="secondary" size="h52" className="flex-1" onClick={() => sheet.close(onClose)} disabled={isSubmitting}>
+          닫기
+        </Button>
+        <Button size="h52" className="flex-1" onClick={handleConfirm} disabled={isSubmitting}>
+          {isSubmitting ? '취소 중' : '요청 취소'}
+        </Button>
+      </div>
+    </BottomSheet>
+  );
+};
 
 // 임대인 앱 수리·점검 요청 상세 (M09 카드를 눌렀을 때). 하단 고정 바에 대화하기·처리 시작/완료 처리.
 // openComplete: 목록의 [완료 처리]로 들어오면 완료 시트를 바로 연다.
@@ -145,17 +156,26 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
     setActionError(null);
   };
 
+  // 시트에서 부른다. 바뀐 요청을 돌려주고, 화면 반영(handleSheetDone)은 시트가 내려간 뒤에 한다(먼저 반영하면 완료된 요청이라 시트가 바로 사라진다).
   const patch = async (body) => {
     setActionError(null);
     const result = await updateTicket(ticket.id, body);
     if (result.error) {
       setActionError(result.error.message);
-      return;
+      return null;
     }
-    if (result.data) {
-      setData(result.data);
-      setSheet(null);
-    }
+    return result.data ?? null;
+  };
+
+  const handleSheetDone = (updated) => {
+    setData(updated);
+    setSheet(null);
+  };
+
+  // [처리 시작]은 시트 없이 바로 반영한다.
+  const handleStart = async () => {
+    const updated = await patch({ status: 'IN_PROGRESS' });
+    if (updated) setData(updated);
   };
 
   const handleChat = async () => {
@@ -173,9 +193,15 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
       topBar={{ title: '수리·점검', onBack: goBack }}
       overlay={
         openSheet === 'complete' ? (
-          <CompleteSheet isSubmitting={isUpdating} error={actionError} onSubmit={patch} onClose={closeSheet} />
+          <CompleteSheet isSubmitting={isUpdating} error={actionError} onSubmit={patch} onDone={handleSheetDone} onClose={closeSheet} />
         ) : openSheet === 'cancel' ? (
-          <CancelSheet isSubmitting={isUpdating} error={actionError} onConfirm={() => patch({ status: 'CANCELED' })} onClose={closeSheet} />
+          <CancelSheet
+            isSubmitting={isUpdating}
+            error={actionError}
+            onConfirm={() => patch({ status: 'CANCELED' })}
+            onDone={handleSheetDone}
+            onClose={closeSheet}
+          />
         ) : null
       }
       cta={
@@ -187,7 +213,7 @@ export const TicketDetailPage = ({ ticketId, openComplete = false, onUnauthorize
               </Button>
             )}
             {action === 'START' && (
-              <Button size="h52" className="flex-1" disabled={busy} onClick={() => patch({ status: 'IN_PROGRESS' })}>
+              <Button size="h52" className="flex-1" disabled={busy} onClick={handleStart}>
                 {isUpdating ? '처리 중' : '처리 시작'}
               </Button>
             )}

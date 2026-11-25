@@ -6,12 +6,14 @@ import { NoticeBox } from '../../../web/components/NoticeBox/NoticeBox';
 import { usePatchPropertyOwnership } from '../../../web/hooks/usePatchPropertyOwnership';
 import { formatDateKST, formatNumber } from '../../../web/utils/format';
 import { toPriceDigits, toYearMonthInput, validateAcquiredYearMonth, validatePurchasePrice } from '../../../web/utils/formValidation';
-import { BottomSheet } from '../BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 import { CardRow, DetailCardFrame } from '../DetailCardFrame/DetailCardFrame';
 
 // 내 소유 정보 수정 시트(취득 연월·매입가). 칸·검증·요청 본문은 웹 호실 상세 [내 소유 정보]와 같다(PATCH /property-ownerships/:id).
 // 서버 입력 오류(400)는 칸 아래에, 그 밖의 오류는 시트 안 안내 박스에 보여 준다.
+// 저장하면 시트가 내려간 뒤 onSaved. 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
 const OwnershipEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => {
+  const sheet = useBottomSheet();
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const [draft, setDraft] = useState(() => ({
     acquiredYearMonth: ownership.acquiredYearMonth ?? '',
@@ -37,7 +39,7 @@ const OwnershipEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => 
       purchasePrice: draft.purchasePrice ? Number(draft.purchasePrice) : null,
     });
     if (data) {
-      onSaved();
+      sheet.close(onSaved);
       return;
     }
     if (error?.status === 400) setFieldErrors(toFieldErrors(error));
@@ -45,13 +47,8 @@ const OwnershipEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => 
 
   const showErrorBox = patch.error && !(patch.error.status === 400 && (fieldErrors.acquiredYearMonth || fieldErrors.purchasePrice));
 
-  // 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
-  const handleClose = () => {
-    if (!patch.isLoading) onClose();
-  };
-
   return (
-    <BottomSheet label="내 소유 정보 수정" onClose={handleClose}>
+    <BottomSheet label="내 소유 정보 수정" onClose={onClose} closeDisabled={patch.isLoading} sheet={sheet}>
       <TextField
         mobile
         label="취득 연월"
@@ -79,7 +76,7 @@ const OwnershipEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => 
       <p className="text-m-sub text-ink-3">인증일·인증 만료일·소유 시작은 바꿀 수 없어요.</p>
       {showErrorBox && <NoticeBox>{patch.error.message}</NoticeBox>}
       <div className="flex gap-2.5">
-        <Button variant="secondary" size="h52" className="flex-1" onClick={onClose} disabled={patch.isLoading}>
+        <Button variant="secondary" size="h52" className="flex-1" onClick={() => sheet.close(onClose)} disabled={patch.isLoading}>
           취소
         </Button>
         <Button size="h52" className="flex-1" onClick={handleSave} disabled={hasClientError || patch.isLoading}>

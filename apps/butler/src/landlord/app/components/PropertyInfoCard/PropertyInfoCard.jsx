@@ -8,12 +8,14 @@ import { formatFloor, parseFloorInput, toFloorText, validateFloorInput } from '.
 import { formatDateKST } from '../../../web/utils/format';
 import { toAreaInput, validateExclusiveArea } from '../../../web/utils/formValidation';
 import { formatUnitLabel } from '../../../web/utils/unitAddress';
-import { BottomSheet } from '../BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 import { CardRow, DetailCardFrame } from '../DetailCardFrame/DetailCardFrame';
 
 // 호실 정보 수정 시트(전용면적·층). 칸·검증·요청 본문은 웹 호실 상세 [호실 정보]와 같다(PATCH /properties/:id).
 // 서버 입력 오류(400)는 칸 아래에, 그 밖의 오류(403: 그 사이 인증이 끝남 등)는 시트 안 안내 박스에 보여 준다.
+// 저장하면 시트가 내려간 뒤 onSaved. 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
 const PropertyInfoEditSheet = ({ property, onSaved, onClose, onUnauthorized }) => {
+  const sheet = useBottomSheet();
   const patch = usePatchProperty({ onUnauthorized });
   const [draft, setDraft] = useState(() => ({
     exclusiveArea: property.exclusiveArea != null ? String(property.exclusiveArea) : '',
@@ -36,7 +38,7 @@ const PropertyInfoEditSheet = ({ property, onSaved, onClose, onUnauthorized }) =
       floor: parseFloorInput(draft.floor),
     });
     if (data) {
-      onSaved();
+      sheet.close(onSaved);
       return;
     }
     if (error?.status === 400) setFieldErrors(toFieldErrors(error));
@@ -44,13 +46,8 @@ const PropertyInfoEditSheet = ({ property, onSaved, onClose, onUnauthorized }) =
 
   const showErrorBox = patch.error && !(patch.error.status === 400 && (fieldErrors.exclusiveArea || fieldErrors.floor));
 
-  // 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
-  const handleClose = () => {
-    if (!patch.isLoading) onClose();
-  };
-
   return (
-    <BottomSheet label="호실 정보 수정" onClose={handleClose}>
+    <BottomSheet label="호실 정보 수정" onClose={onClose} closeDisabled={patch.isLoading} sheet={sheet}>
       <TextField
         mobile
         label="전용면적"
@@ -74,7 +71,7 @@ const PropertyInfoEditSheet = ({ property, onSaved, onClose, onUnauthorized }) =
       <p className="text-m-sub text-ink-3">주소·동·호는 바꿀 수 없어요.</p>
       {showErrorBox && <NoticeBox>{patch.error.message}</NoticeBox>}
       <div className="flex gap-2.5">
-        <Button variant="secondary" size="h52" className="flex-1" onClick={onClose} disabled={patch.isLoading}>
+        <Button variant="secondary" size="h52" className="flex-1" onClick={() => sheet.close(onClose)} disabled={patch.isLoading}>
           취소
         </Button>
         <Button size="h52" className="flex-1" onClick={handleSave} disabled={hasClientError || patch.isLoading}>

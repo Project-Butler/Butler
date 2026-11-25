@@ -17,7 +17,7 @@ import {
   pickDefaultContract,
   TARGET_LABELS,
 } from '../../../web/utils/documentBox';
-import { BottomSheet } from '../BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 
 const SECTION_LABEL = 'text-m-label font-semibold text-ink';
 
@@ -69,7 +69,9 @@ const FileRow = ({ item, isSaving, onRemove }) => {
 // 보관할 곳(내 소유 문서 / 계약 문서) → 계약 → 종류 → 파일을 고르고 [저장]을 누를 때 올린다.
 //  - box: 문서함 응답. 올릴 수 있는 곳(isUploadable)·남은 자리(30 − 지금 수)를 여기서 읽는다.
 //  - onUploaded(count): 한 번이라도 올라가면 부른다. 모두 올라가면 시트를 닫고, 일부 실패면 실패한 파일만 남긴다.
+//  - 닫을 때는 시트가 내려간 뒤 onClose 를 부른다. 올리는 중에는 바깥을 눌러도 닫지 않는다.
 export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }) => {
+  const sheet = useBottomSheet();
   const targets = getUploadTargets(box);
   const [chosenTarget, setChosenTarget] = useState(null);
   const [chosenContractId, setChosenContractId] = useState(null);
@@ -87,7 +89,7 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
   const remaining = resource ? getRemainingSlots(resource.documents.length) : 0;
   const capacity = resource ? getSelectableFileCount(resource.documents.length, items.length) : 0;
   const hasFailed = items.some((item) => item.status === 'error');
-  const close = isSaving ? () => {} : onClose;
+  const close = () => sheet.close(onClose);
 
   const handleSave = async () => {
     if (!resource || !documentType || items.length === 0) return;
@@ -96,14 +98,14 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
       setSavedCount((prev) => prev + uploadedCount);
       onUploaded(uploadedCount);
     }
-    if (failedCount === 0) onClose();
+    if (failedCount === 0) close();
   };
 
   if (!target) {
     return (
-      <BottomSheet label="문서 올리기" onClose={close}>
+      <BottomSheet label="문서 올리기" onClose={onClose} sheet={sheet}>
         <p className="text-body text-ink-2">지금은 문서를 올릴 수 있는 곳이 없어요.</p>
-        <Button variant="secondary" size="h52" onClick={onClose}>
+        <Button variant="secondary" size="h52" onClick={close}>
           닫기
         </Button>
       </BottomSheet>
@@ -111,7 +113,7 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
   }
 
   return (
-    <BottomSheet label="문서 올리기" onClose={close}>
+    <BottomSheet label="문서 올리기" onClose={onClose} closeDisabled={isSaving} sheet={sheet}>
       <div className="flex flex-col gap-2">
         <p className={SECTION_LABEL}>어디에 보관할까요</p>
         <div className="grid grid-cols-2 gap-2">
@@ -217,7 +219,7 @@ export const DocumentUploadSheet = ({ box, onClose, onUploaded, onUnauthorized }
       )}
 
       <div className="flex gap-2.5">
-        <Button variant="secondary" size="h52" onClick={onClose} disabled={isSaving}>
+        <Button variant="secondary" size="h52" onClick={close} disabled={isSaving}>
           {savedCount > 0 && items.length === 0 ? '닫기' : '취소'}
         </Button>
         <Button size="h52" className="flex-1" onClick={handleSave} disabled={isSaving || items.length === 0}>

@@ -11,7 +11,7 @@ import {
   MAX_EQUIPMENT_ETC_LENGTH,
   UNIT_TYPE_OPTIONS,
 } from '../../../web/utils/unitListing';
-import { BottomSheet } from '../BottomSheet/BottomSheet';
+import { BottomSheet, useBottomSheet } from '../BottomSheet/BottomSheet';
 import { CheckboxChip } from '../CheckboxChip/CheckboxChip';
 import { CardRow, DetailCardFrame } from '../DetailCardFrame/DetailCardFrame';
 
@@ -19,7 +19,9 @@ const SELECT_CLASS =
   'h-12 w-full rounded-input border border-line bg-surface px-3.5 text-body text-ink outline-none focus:border-accent disabled:bg-surface-2 disabled:text-ink-3';
 
 // 임대 조건 수정 시트. 칸·검증·요청 본문은 웹 호실 상세 [임대 조건]과 같다(PATCH /property-ownerships/:id).
+// 저장하면 시트가 내려간 뒤 onSaved. 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
 const ListingEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => {
+  const sheet = useBottomSheet();
   const patch = usePatchPropertyOwnership({ onUnauthorized });
   const [draft, setDraft] = useState(() => ({
     unitType: ownership.unitType ?? '',
@@ -43,16 +45,11 @@ const ListingEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => {
       equipment: draft.equipment,
       equipmentEtc: draft.equipmentEtc.trim() || null,
     });
-    if (data) onSaved();
-  };
-
-  // 저장 중에는 바깥을 눌러도 닫지 않는다(결과를 못 보고 닫히지 않게).
-  const handleClose = () => {
-    if (!patch.isLoading) onClose();
+    if (data) sheet.close(onSaved);
   };
 
   return (
-    <BottomSheet label="임대 조건 수정" onClose={handleClose}>
+    <BottomSheet label="임대 조건 수정" onClose={onClose} closeDisabled={patch.isLoading} sheet={sheet}>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="app-listing-unit-type" className="text-m-label font-semibold text-ink">
           방 구성
@@ -98,7 +95,7 @@ const ListingEditSheet = ({ ownership, onSaved, onClose, onUnauthorized }) => {
       />
       {patch.error && <NoticeBox>{patch.error.message}</NoticeBox>}
       <div className="flex gap-2.5">
-        <Button variant="secondary" size="h52" className="flex-1" onClick={onClose} disabled={patch.isLoading}>
+        <Button variant="secondary" size="h52" className="flex-1" onClick={() => sheet.close(onClose)} disabled={patch.isLoading}>
           취소
         </Button>
         <Button size="h52" className="flex-1" onClick={handleSave} disabled={Boolean(etcError) || patch.isLoading}>
