@@ -98,3 +98,10 @@ export const toOwnershipEndBody = (label) => {
   if (!option) return {};
   return option.endReason ? { reason: option.label, endReason: option.endReason } : { reason: option.label };
 };
+
+// 취득 연월 칸 안내. 일반건축물대장(다가구 등)으로 인증된 같은 건물의 내 다른 방이 있으면 서버가 함께 바꾼다
+// (응답 sameBuildingOwnershipCount, 다가구는 건물째 매매라 취득 연월이 같다). 없으면 undefined.
+export const toSameBuildingAcquiredHint = (ownership) => {
+  const count = ownership?.sameBuildingOwnershipCount ?? 0;
+  return count > 0 ? `같은 건물의 다른 방 ${count}개도 함께 바뀌어요` : undefined;
+};

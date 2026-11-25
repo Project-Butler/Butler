@@ -9,6 +9,7 @@ import {
   matchOwner,
   parseRunnerResult,
   parseValidityYears,
+  pickAcquiredYearMonth,
   resolveIdentity,
   toRunnerResult,
 } from '../../src/platform/ownershipVerificationRules.js';
@@ -151,6 +152,30 @@ test('parseRunnerResult: 허용한 모양만 받는다', () => {
   ]) {
     assert.equal(parseRunnerResult(bad), null);
   }
+});
+
+test('parseRunnerResult: 소유자 변동일자·변동원인은 보냈을 때만 받고, 날짜가 틀리면 그 칸만 버린다', () => {
+  const owner = { name: '김철수', birthDate: '1980-01-01' };
+  assert.deepEqual(parseRunnerResult({ kind: 'OK', owners: [{ ...owner, changedOn: '2012-09-05', changeCause: '소유권 이전' }] }).owners, [
+    { ...owner, changedOn: '2012-09-05', changeCause: '소유권이전' },
+  ]);
+  assert.deepEqual(parseRunnerResult({ kind: 'OK', owners: [{ ...owner, changedOn: '2012-02-30', changeCause: null }] }).owners, [owner]);
+  for (const bad of [{ changedOn: 20120905 }, { changeCause: 1 }, { changeCause: '가'.repeat(51) }]) {
+    assert.equal(parseRunnerResult({ kind: 'OK', owners: [{ ...owner, ...bad }] }), null);
+  }
+});
+
+test('pickAcquiredYearMonth: 본인 줄의 취득 원인 변동일자만, 이번 달 뒤는 버린다', () => {
+  const identity = { name: '김철수', birthDate: '1980-01-01' };
+  const me = (changedOn, changeCause) => ({ ...identity, changedOn, changeCause });
+  const today = '2026-11-26';
+  assert.equal(pickAcquiredYearMonth(identity, [me('2012-09-05', '소유권이전')], today), '2012-09');
+  for (const cause of ['소유권보존', '소유권취득', '본등기']) assert.equal(pickAcquiredYearMonth(identity, [me('2019-03-15', cause)], today), '2019-03');
+  for (const cause of ['등기명의인표시변경', '주소변경', undefined]) assert.equal(pickAcquiredYearMonth(identity, [me('2019-03-15', cause)], today), null);
+  assert.equal(pickAcquiredYearMonth(identity, [{ name: '이영희', birthDate: '1980-01-01', changedOn: '2019-03-15', changeCause: '소유권이전' }], today), null);
+  assert.equal(pickAcquiredYearMonth(identity, [me('2026-12-01', '소유권이전')], today), null);
+  assert.equal(pickAcquiredYearMonth(identity, [me('2010-01-01', '소유권이전'), me('2015-06-30', '소유권이전')], today), '2015-06');
+  assert.equal(pickAcquiredYearMonth(identity, [identity], today), null);
 });
 
 test('parseRunnerResult: unit(전유부 면적·층)은 보냈을 때만 받고, 범위 밖 값은 그 칸만 null', () => {
