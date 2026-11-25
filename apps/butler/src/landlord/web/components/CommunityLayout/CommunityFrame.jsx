@@ -4,7 +4,6 @@ import { COMMUNITY_PATH } from '../../routes';
 import { PageHeader } from '../PageHeader/PageHeader';
 import { BuildingSwitcher } from '../CommunityBuildingSwitcher/BuildingSwitcher';
 import { NicknameButton } from '../CommunityNickname/NicknameButton';
-import { CommunityAppHeader } from './CommunityAppHeader';
 import { useCommunitySurface } from './CommunitySurface';
 import { PreviewNotice } from './PreviewNotice';
 import { SectionTabs } from './SectionTabs';
@@ -23,14 +22,9 @@ import { VerificationBadge } from './VerificationBadge';
 // (글 상세 · 글쓰기 · 투표 만들기 — 읽는 화면. 투표 상세는 두 칸이라 넓게).
 // 내용 조각(글 카드 · 투표 카드 · 차트 …)은 이 틀과 떼어 둔다 — 모바일 화면을 다시 붙일 때 그대로 쓴다.
 //
-// 앱(임대인 앱, CommunitySurface isApp)이면 같은 내용을 앱 배치로 그린다 — 페이지는 그대로다:
-//   탭 첫 화면: PC 머리 · 탭 줄 대신 앱 머리(CommunityAppHeader — 같은 정보 + 가로 칩 줄)
-//   하위 화면(onBack): 머리 · 칩 줄 · "← 목록으로" 없음 — 앱 틀의 뒤로 가기 바(CommunityAppLayout)가 대신한다
-//   미리보기 안내 · 범위 안내 줄 · 닉네임 대화상자는 PC 와 같은 규칙으로 그린다
-//   간격은 PC 보다 좁게(space-y-4, 안쪽 grid 도 gap-4 — 좁은 화면에서 칸이 한 줄로 쌓일 때 간격이 고르게),
-//   [글쓰기] · [투표 만들기]가 떠 있는 목록(게시판 · 투표)은 마지막 줄이 버튼에 가리지 않게 아래를 더 비운다
-const FLOATING_ACTION_SECTIONS = ['board', 'polls'];
-
+// 앱(임대인 앱, CommunitySurface isApp)에서는 탭 다섯 화면 · 글 상세 · 투표 상세를 앱 화면(app/)으로 바꿔 끼우고(CommunityPage pages),
+// 이 틀은 웹 폼을 그대로 쓰는 하위 화면(글쓰기 · 글 수정 · 투표 만들기)에만 쓰인다 — 머리 · 탭 줄 · "← 목록으로" 없이
+// (앱 뒤로 가기 바가 대신) 미리보기 안내 · 닉네임 대화상자만 PC 와 같은 규칙으로.
 export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null, onBack, narrow = false, children }) => {
   const navigate = useNavigate();
   const { isApp } = useCommunitySurface();
@@ -44,22 +38,11 @@ export const CommunityFrame = ({ frame, section, scopeText, blockedReason = null
   };
 
   if (isApp) {
-    const isSubScreen = Boolean(onBack);
-    const hasFloatingAction = !isSubScreen && FLOATING_ACTION_SECTIONS.includes(section);
+    // 웹 폼 안의 버튼(분류 칩 · 취소 · 등록 · 선택지 추가)과 입력칸(TextField 의 input — 공용 부품이라 바깥에서)은
+    // 휴대폰에서 누르기 좋게 높이 44px 이상 — 앱에서만(PC 는 아래 그대로)
     return (
-      <div className={`space-y-4 [&_.grid]:gap-4 ${hasFloatingAction ? 'pb-16' : ''}`}>
-        {!isSubScreen && (
-          <CommunityAppHeader
-            building={building}
-            buildings={buildings}
-            reason={reason}
-            nickname={frame.nickname}
-            section={section}
-            onSelectBuilding={selectBuilding}
-          />
-        )}
+      <div className="space-y-4 break-keep break-words [&_.rounded-input>input]:min-h-11 [&_button]:min-h-11">
         {reason && <PreviewNotice onVerify={verify} />}
-        {!isSubScreen && scopeText && <p className="text-body text-ink-2">{scopeText}</p>}
         {children}
         {frame.nickname?.dialog}
       </div>

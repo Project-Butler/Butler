@@ -5,17 +5,23 @@ import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './Brie
 import { BriefingSection } from './BriefingSection';
 
 export const BRIEFING_POST_SIZE = 5;
+export const BRIEFING_POSTS_EMPTY_TEXT = '아직 올라온 글이 없습니다';
+
+// 데이터 — 앱 브리핑 카드도 같은 것을 쓴다
+export const useBriefingPosts = ({ building }) => {
+  const list = useGetCommunityPostList({ legalDongCode: building.legalDongCode, size: BRIEFING_POST_SIZE });
+  return { list, posts: list.data?.pages[0]?.data ?? [] };
+};
 
 // 브리핑 — 최근 게시글: 게시판 목록 API 를 5건만. 분류 칩 · 제목(한 줄) · 댓글 수 · 날짜.
 // 줄을 누르면 글 상세 — 인증 전이면 서버가 본문을 주지 않아 잠금 화면이 된다.
 export const BriefingPosts = ({ building, dongName, onOpen, onMore, className = '' }) => {
-  const list = useGetCommunityPostList({ legalDongCode: building.legalDongCode, size: BRIEFING_POST_SIZE });
-  const posts = list.data?.pages[0]?.data ?? [];
+  const { list, posts } = useBriefingPosts({ building });
 
   let body;
   if (list.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (list.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (posts.length === 0) body = <BriefingNote>아직 올라온 글이 없습니다</BriefingNote>;
+  else if (posts.length === 0) body = <BriefingNote>{BRIEFING_POSTS_EMPTY_TEXT}</BriefingNote>;
   else {
     body = (
       <ul>

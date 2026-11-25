@@ -16,7 +16,7 @@ import { AuthorName } from '../components/CommunityNickname/AuthorName';
 import { formatKstDateTime } from '../utils/communityFormat';
 
 // 선택지 한 줄: 원형 라디오 + 문구, 고르면 accent-soft 바탕 + accent 테두리.
-const OptionRadio = ({ option, checked, disabled, onChange }) => (
+export const OptionRadio = ({ option, checked, disabled, onChange }) => (
   <label
     className={`flex h-[52px] items-center gap-3 rounded-btn border px-3.5 text-body font-medium text-ink ${
       checked ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
@@ -49,7 +49,8 @@ const OptionRadio = ({ option, checked, disabled, onChange }) => (
 // 투표권 = 범위 안 인증 호실 수(PC 명세 v3 6절): 한 사람 한 번, 가진 표를 한 선택지에 모두.
 // 마감 전에는 서버가 득표를 주지 않는다. 참여했으면 내 선택을 보여 주고 버튼은 "참여함 · N표"로 잠근다.
 // 인증 전 미리보기(locked)면 서버가 선택지 · 내 참여 · 결과를 주지 않는다 — 질문 · 범위 · 마감 · 참여 인원 아래에 잠금 카드.
-export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
+// 투표 상세의 데이터 · 고르기 · 참여 · 지우기. 앱 투표 상세(app CommunityAppPollDetailPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePollDetailState = ({ pollId, onBack }) => {
   const poll = useGetCommunityPoll(pollId);
   const vote = usePostCommunityVote();
   const removePoll = useDeleteCommunityPoll();
@@ -77,6 +78,14 @@ export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
 
   const eligibilityTarget = data?.scope === 'COMPLEX' ? data.complexName : data?.region.dongName;
   const chosen = data?.hasVoted ? data.myOptionId : selected;
+  return { poll, data, vote, removePoll, setSelected, selected, submit, deletePoll, eligibilityTarget, chosen };
+};
+
+export const CommunityPollDetailPage = ({ pollId, frame, onBack }) => {
+  const { poll, data, vote, removePoll, setSelected, selected, submit, deletePoll, eligibilityTarget, chosen } = usePollDetailState({
+    pollId,
+    onBack,
+  });
   const num = (value) => <span className="font-num font-medium tabular-nums">{value}</span>;
 
   return (

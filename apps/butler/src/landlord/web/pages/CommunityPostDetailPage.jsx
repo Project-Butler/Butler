@@ -34,7 +34,8 @@ const TextButton = ({ children, ...props }) => (
 // 댓글은 아래 별도 카드(목록 + 맨 아래 입력칸). 작성자 옆 '인증 완료'는 글쓴이 표기다 — 글은 인증을 마친 임대인만 쓴다.
 // 머리의 배지는 보는 사람의 이 법정동 자격(writeBlockedReason)이다. 자격이 없어도 내 글·댓글 삭제는 된다(수정은 안 됨).
 // 인증 전 미리보기(locked)면 서버가 본문 · 댓글을 주지 않는다 — 제목 · 분류 · 작성자 · 날짜 아래에 잠금 카드, 신고 · 댓글 없음.
-export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdit }) => {
+// 글 상세의 데이터 · 댓글 쓰기/지우기 · 글 지우기 · 신고 상태. 앱 글 상세(app CommunityAppPostDetailPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePostDetailState = ({ postId, frame, building, onBack }) => {
   const post = useGetCommunityPost(postId);
   const addComment = usePostCommunityComment();
   const removeComment = useDeleteCommunityComment();
@@ -87,6 +88,46 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
       setActionError(getErrorMessage(error));
     }
   };
+
+  return {
+    post,
+    data,
+    canWrite,
+    addComment,
+    removeComment,
+    removePost,
+    draft,
+    setDraft,
+    isReportOpen,
+    setIsReportOpen,
+    isReported,
+    setIsReported,
+    actionError,
+    submitComment,
+    deleteComment,
+    deletePost,
+  };
+};
+
+export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdit }) => {
+  const {
+    post,
+    data,
+    canWrite,
+    addComment,
+    removeComment,
+    removePost,
+    draft,
+    setDraft,
+    isReportOpen,
+    setIsReportOpen,
+    isReported,
+    setIsReported,
+    actionError,
+    submitComment,
+    deleteComment,
+    deletePost,
+  } = usePostDetailState({ postId, frame, building, onBack });
 
   return (
     <CommunityFrame frame={frame} section="board" blockedReason={data?.writeBlockedReason ?? null} onBack={onBack} narrow>

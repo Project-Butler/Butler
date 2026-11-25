@@ -7,7 +7,6 @@ import { useGetCommunityPollList } from '../hooks/useGetCommunityPollList';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
-import { CommunityWriteButton } from '../components/CommunityLayout/CommunityWriteButton';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { PollCard } from '../components/CommunityPoll/PollCard';
@@ -18,11 +17,8 @@ import { splitRegionName } from '../utils/communityFormat';
 
 const SCOPE_ALL = 'ALL';
 
-// 투표 목록 화면.
-// 도구 줄: 범위 칩(전체 · 우리 단지 · 법정동) + 진행중/마감 + [투표 만들기], 아래 면책 문구(상시), 카드 두 칸.
-// 필터는 주소 쿼리(?scope=COMPLEX|REGION&status=CLOSED)에 둔다. "우리 단지"는 현재 건물의 단지다.
-// 만들기 버튼은 법정동 자격이 있을 때만(목록 meta canWrite).
-export const CommunityPollListPage = ({ frame, building }) => {
+// 투표 목록의 데이터 · 필터 · 이동(열기 · 만들기). 앱 투표 목록(app CommunityAppPollsPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePollListState = ({ frame, building }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const scope = ['COMPLEX', 'REGION'].includes(searchParams.get('scope')) ? searchParams.get('scope') : SCOPE_ALL;
@@ -48,6 +44,26 @@ export const CommunityPollListPage = ({ frame, building }) => {
     if (filter.status === 'CLOSED') query.set('status', 'CLOSED');
     setSearchParams(query, { replace: true });
   };
+  const scopeOptions = [
+    { value: SCOPE_ALL, label: '전체' },
+    { value: 'COMPLEX', label: '우리 단지' },
+    { value: 'REGION', label: dongName || '법정동' },
+  ];
+  // 닉네임이 없으면 닉네임 대화상자를 먼저 — 저장하면 투표 만들기로 간다
+  const openCreate = () => frame.nickname.ensure(() => navigate(`${COMMUNITY_PATH}/polls/new`));
+  const openPoll = (id) => navigate(`${COMMUNITY_PATH}/polls/${id}`);
+  return { scope, status, setFilter, list, polls, dongName, canWrite, blockedReason, scopeOptions, openCreate, openPoll };
+};
+
+// 투표 목록 화면.
+// 도구 줄: 범위 칩(전체 · 우리 단지 · 법정동) + 진행중/마감 + [투표 만들기], 아래 면책 문구(상시), 카드 두 칸.
+// 필터는 주소 쿼리(?scope=COMPLEX|REGION&status=CLOSED)에 둔다. "우리 단지"는 현재 건물의 단지다.
+// 만들기 버튼은 법정동 자격이 있을 때만(목록 meta canWrite).
+export const CommunityPollListPage = ({ frame, building }) => {
+  const { scope, status, setFilter, list, polls, dongName, canWrite, blockedReason, scopeOptions, openCreate, openPoll } = usePollListState({
+    frame,
+    building,
+  });
 
   return (
     <CommunityFrame frame={frame} section="polls" scopeText={`${dongName} 임대인`} blockedReason={blockedReason}>
@@ -55,11 +71,7 @@ export const CommunityPollListPage = ({ frame, building }) => {
         <div className="flex flex-wrap items-center gap-3">
           <ChipGroup
             label="투표 범위"
-            options={[
-              { value: SCOPE_ALL, label: '전체' },
-              { value: 'COMPLEX', label: '우리 단지' },
-              { value: 'REGION', label: dongName || '법정동' },
-            ]}
+            options={scopeOptions}
             value={scope}
             onChange={(value) => setFilter({ scope: value })}
             wrap
@@ -68,15 +80,14 @@ export const CommunityPollListPage = ({ frame, building }) => {
           {list.isSuccess && !canWrite && (
             <span className="ml-auto text-sub text-ink-3">{getBlockedMessage(blockedReason, 'poll')}</span>
           )}
-          {/* 앱에서는 하단 탭 위에 떠 있는 버튼(CommunityWriteButton) — 문구 · 조건은 같다 */}
-          <CommunityWriteButton
-            icon={Plus}
-            label="투표 만들기"
+          <Button
             className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
-            // 닉네임이 없으면 닉네임 대화상자를 먼저 — 저장하면 투표 만들기로 간다
-            onClick={() => frame.nickname.ensure(() => navigate(`${COMMUNITY_PATH}/polls/new`))}
+            onClick={openCreate}
             disabled={!list.isSuccess || !canWrite}
-          />
+          >
+            <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+            투표 만들기
+          </Button>
         </div>
         <PollDisclaimer />
       </div>
@@ -91,7 +102,7 @@ export const CommunityPollListPage = ({ frame, building }) => {
           <>
             <ul aria-label="투표" className="grid gap-4 lg:grid-cols-2">
               {polls.map((poll) => (
-                <PollCard key={poll.id} poll={poll} dongName={dongName} onOpen={(id) => navigate(`${COMMUNITY_PATH}/polls/${id}`)} />
+                <PollCard key={poll.id} poll={poll} dongName={dongName} onOpen={openPoll} />
               ))}
             </ul>
             {list.hasNextPage && (

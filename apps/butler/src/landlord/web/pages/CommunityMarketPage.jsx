@@ -29,12 +29,12 @@ import { collectingNotice } from '../utils/communityMarketCollecting';
 // 면적대는 건물마다 "내 호실 면적대"로 다시 시작한다(건물마다 내 면적대가 다르다).
 
 // 한 거래의 금액 표기: 매매 가격 / 전세 보증금 / 월세 "보증금 1억 / 월 280만"
-const formatDealAmount = (deal, dealType) => {
+export const formatDealAmount = (deal, dealType) => {
   if (dealType === 'SALE') return formatWon(deal.price);
   if (dealType === 'JEONSE') return formatWon(deal.deposit);
   return `보증금 ${formatWon(deal.deposit)} / 월 ${formatWon(deal.monthlyRent)}`;
 };
-const AMOUNT_HEADER = { SALE: '금액', JEONSE: '보증금', MONTHLY: '보증금 / 월세' };
+export const AMOUNT_HEADER = { SALE: '금액', JEONSE: '보증금', MONTHLY: '보증금 / 월세' };
 
 const AreaChips = ({ owned, value, onChange }) => (
   <div role="radiogroup" aria-label="면적대" className="flex flex-wrap gap-2">
@@ -150,8 +150,8 @@ const DealTable = ({ deals, dealType }) => (
   </Card>
 );
 
-// 건물마다 새로 시작하도록 key={complexId} 로 그린다(면적대 선택이 건물을 따라가지 않게).
-const MarketBody = ({ building, dealType, onDealTypeChange }) => {
+// 시세 화면의 데이터 · 면적대 선택 · 상태(모으는 중 · 빈 상태). 앱 시세(app CommunityAppMarketPage)도 같은 것을 쓴다.
+export const useMarketBodyState = ({ building, dealType }) => {
   // 내 호실 면적은 my-buildings 응답의 unitAreas(인증 호실 · 면적 있는 것만). 비면 점 없이 60–85㎡ 로 시작한다.
   const { owned, defaultKey } = pickAreaBands(building.unitAreas ?? []);
   const [bandKey, setBandKey] = useState(defaultKey);
@@ -165,6 +165,21 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
   const isCollecting = data?.collectionStatus === 'COLLECTING';
   const collecting = isCollecting ? collectingNotice(data) : null;
   const isEmpty = Boolean(data) && !isCollecting && data.recentDeals.length === 0 && data.monthly.length === 0;
+  return { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, isEmpty };
+};
+
+// 거래 유형(?dealType=JEONSE|MONTHLY, 매매는 안 씀) — 앱 시세도 같은 주소 규칙
+export const useMarketDealType = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dealType = DEAL_TYPES.some((type) => type.value === searchParams.get('dealType')) ? searchParams.get('dealType') : 'SALE';
+  const setDealType = (value) =>
+    setSearchParams(value === 'SALE' ? new URLSearchParams() : new URLSearchParams({ dealType: value }), { replace: true });
+  return [dealType, setDealType];
+};
+
+// 건물마다 새로 시작하도록 key={complexId} 로 그린다(면적대 선택이 건물을 따라가지 않게).
+const MarketBody = ({ building, dealType, onDealTypeChange }) => {
+  const { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, isEmpty } = useMarketBodyState({ building, dealType });
   const source = data?.source && data.asOf ? <MarketSource source={data.source} asOf={data.asOf} /> : null;
 
   return (
@@ -201,10 +216,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 };
 
 export const CommunityMarketPage = ({ frame, building }) => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const dealType = DEAL_TYPES.some((type) => type.value === searchParams.get('dealType')) ? searchParams.get('dealType') : 'SALE';
-  const setDealType = (value) =>
-    setSearchParams(value === 'SALE' ? new URLSearchParams() : new URLSearchParams({ dealType: value }), { replace: true });
+  const [dealType, setDealType] = useMarketDealType();
 
   return (
     <CommunityFrame frame={frame} section="market" scopeText={`${building.name} 기준`}>

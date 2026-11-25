@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button, TextField } from '@butler/ui';
 import { CommunityDialogFrame } from '../CommunityLayout/CommunityDialogFrame';
+import { useCommunitySurface } from '../CommunityLayout/CommunitySurface';
 import { usePutCommunityProfile } from '../../hooks/usePutCommunityProfile';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { formatKstDate } from '../../utils/communityFormat';
@@ -16,6 +17,8 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([
 // 규칙(2~12자 · 한글 · 영문 · 숫자 · 금지 낱말 · 30일)은 서버가 본다 — 화면은 서버 오류 문구를 칸 아래 한 줄로 보여 준다.
 // profile: { nickname, nextChangeAt, previewLabel } (없으면 아직 못 불러온 것) · onSaved: 저장한 뒤(하던 일로 돌아가기) · onClose: 닫기
 export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
+  // 앱(아래 시트)에서는 미리보기 줄의 괄호 표기를 자르지 않고 줄을 바꾼다 — PC 대화상자는 그대로(말줄임)
+  const { isApp } = useCommunitySurface();
   const save = usePutCommunityProfile();
   const [value, setValue] = useState(profile?.nickname ?? '');
   const dialogRef = useRef(null);
@@ -110,7 +113,7 @@ export const NicknameDialog = ({ complexId, profile, onSaved, onClose }) => {
         {profile?.previewLabel && (
           <p className="flex min-w-0 items-baseline gap-2 text-sub text-ink-3">
             <span className="flex-none">미리보기</span>
-            <AuthorName nickname={trimmed || '닉네임'} label={profile.previewLabel} />
+            <AuthorName nickname={trimmed || '닉네임'} label={profile.previewLabel} wrap={isApp} />
           </p>
         )}
         <p className="text-sub text-ink-3">2~12자 · 한글 · 영문 · 숫자 · 30일에 한 번 바꿀 수 있어요</p>

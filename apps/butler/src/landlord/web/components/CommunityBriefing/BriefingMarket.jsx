@@ -11,7 +11,11 @@ import { BriefingSection } from './BriefingSection';
 // 계산 규칙은 시세 탭과 같다(utils/communityMarketSummary recentSummary — 이번 달 빼기). 브리핑은 전세를 따로 부르지 않아 매매 평균만.
 // 전환 칩은 두지 않는다(시세 탭에서). 데이터는 시세 탭과 같은 훅(국토교통부 실거래가 — 출처 줄도 같이).
 // band: AREA_BANDS 한 칸(내 호실 면적대) · onMore: 시세 탭으로
-export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
+// 빈 상태 문구(면적대마다) — 앱 브리핑 시세 카드도 같은 문구
+export const briefingMarketEmptyText = (band) => `${band.label}에는 최근 매매 거래가 없습니다`;
+
+// 데이터 · 계산(대표 숫자 · 차트 값) — 앱 브리핑 시세 카드도 같은 것을 쓴다
+export const useBriefingMarket = ({ building, band }) => {
   const prices = useGetMarketPrices({ complexId: building.complexId, dealType: 'SALE', areaMin: band.areaMin, areaMax: band.areaMax });
   const data = prices.data;
   const summary = data ? recentSummary({ prices: data, dealType: 'SALE', band }) : null;
@@ -21,6 +25,11 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
     const row = data.monthly.find((item) => item.yearMonth === month);
     return row ? chartValue(row, 'SALE') : null;
   });
+  return { prices, data, summary, months, values };
+};
+
+export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
+  const { prices, data, summary, months, values } = useBriefingMarket({ building, band });
 
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
@@ -39,7 +48,7 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
       <BriefingNote>{COLLECTING_BRIEFING_TEXT}</BriefingNote>
     );
   }
-  else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <BriefingNote>{band.label}에는 최근 매매 거래가 없습니다</BriefingNote>;
+  else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <BriefingNote>{briefingMarketEmptyText(band)}</BriefingNote>;
   else {
     body = (
       <div className="space-y-1 px-5 py-4">

@@ -9,10 +9,7 @@ import { getBlockedMessage, POST_CATEGORIES } from '../utils/communityBoardLabel
 import { CategoryChip } from '../components/CommunityBoard/CategoryChip';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { MineToggle } from '../components/CommunityBoard/MineToggle';
-import { PostListItem } from '../components/CommunityBoard/PostListItem';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
-import { useCommunitySurface } from '../components/CommunityLayout/CommunitySurface';
-import { CommunityWriteButton } from '../components/CommunityLayout/CommunityWriteButton';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { AuthorName } from '../components/CommunityNickname/AuthorName';
@@ -20,15 +17,11 @@ import { formatKstShortDate, splitRegionName } from '../utils/communityFormat';
 
 // "전체"는 분류를 보내지 않는다(서버가 category 없이도 받는다).
 const CATEGORY_ALL = 'ALL';
-const CATEGORY_FILTERS = [{ value: CATEGORY_ALL, label: '전체' }, ...POST_CATEGORIES];
+export const CATEGORY_FILTERS = [{ value: CATEGORY_ALL, label: '전체' }, ...POST_CATEGORIES];
 
-// 게시판 목록 화면.
-// 법정동 단위 — 다른 단지 글이 섞여 보이는 것이 의도다. 분류·내 글 필터는 주소의 쿼리(?category=&mine=true)에 두어
-// 새로고침·뒤로가기에도 남는다. 목록은 "더 보기"로 이어 붙인다. 표는 BuildingListPage 와 같은 클래스.
-// 앱(임대인 앱)에서는 표 대신 같은 칸을 두 줄로 놓은 목록(PostListItem), [글쓰기]는 떠 있는 버튼(CommunityWriteButton) — 문구 · 동작은 같다.
-export const CommunityPostListPage = ({ frame, building }) => {
+// 게시판 목록의 데이터 · 필터 · 이동(열기 · 글쓰기). 앱 게시판(app CommunityAppBoardPage)도 같은 것을 쓴다 — 동작이 PC 와 같게.
+export const usePostListState = ({ frame, building }) => {
   const navigate = useNavigate();
-  const { isApp } = useCommunitySurface();
   const [searchParams, setSearchParams] = useSearchParams();
   const category = POST_CATEGORIES.some((item) => item.value === searchParams.get('category'))
     ? searchParams.get('category')
@@ -60,6 +53,14 @@ export const CommunityPostListPage = ({ frame, building }) => {
     frame.nickname.ensure(() =>
       navigate(category === CATEGORY_ALL ? `${COMMUNITY_PATH}/posts/new` : `${COMMUNITY_PATH}/posts/new?category=${category}`),
     );
+  return { category, mine, setFilter, list, posts, canWrite, blockedReason, dongName, openPost, openWrite };
+};
+
+// 게시판 목록 화면.
+// 법정동 단위 — 다른 단지 글이 섞여 보이는 것이 의도다. 분류·내 글 필터는 주소의 쿼리(?category=&mine=true)에 두어
+// 새로고침·뒤로가기에도 남는다. 목록은 "더 보기"로 이어 붙인다. 표는 BuildingListPage 와 같은 클래스.
+export const CommunityPostListPage = ({ frame, building }) => {
+  const { category, mine, setFilter, list, posts, canWrite, blockedReason, dongName, openPost, openWrite } = usePostListState({ frame, building });
 
   return (
     <CommunityFrame frame={frame} section="board" scopeText={`${dongName} 임대인`} blockedReason={blockedReason}>
@@ -69,13 +70,10 @@ export const CommunityPostListPage = ({ frame, building }) => {
         {list.isSuccess && !canWrite && (
           <span className="ml-auto text-sub text-ink-3">{getBlockedMessage(blockedReason)}</span>
         )}
-        <CommunityWriteButton
-          icon={Pencil}
-          label="글쓰기"
-          className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
-          onClick={openWrite}
-          disabled={!list.isSuccess || !canWrite}
-        />
+        <Button className={list.isSuccess && !canWrite ? '' : 'ml-auto'} onClick={openWrite} disabled={!list.isSuccess || !canWrite}>
+          <Pencil size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+          글쓰기
+        </Button>
       </div>
 
       {list.isPending && <LoadingStatus />}
@@ -85,22 +83,6 @@ export const CommunityPostListPage = ({ frame, building }) => {
         (posts.length === 0 ? (
           // 게시판 빈 상태
           <EmptyState title="아직 글이 없습니다." description="첫 글을 남겨 보세요." />
-        ) : isApp ? (
-          // 카드 틀은 Card 와 같은 토큰을 직접 — @butler/ui Card 는 p-0 이 먹지 않아(안쪽 p-4 고정) 줄 여백이 두 번 들어간다
-          <div className="overflow-hidden rounded-card border border-line bg-surface">
-            <ul aria-label="게시글">
-              {posts.map((post) => (
-                <PostListItem key={post.id} post={post} onOpen={openPost} />
-              ))}
-            </ul>
-            {list.hasNextPage && (
-              <div className="border-t border-line p-4 text-center">
-                <Button variant="secondary" onClick={() => list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-                  {list.isFetchingNextPage ? '불러오는 중' : '더 보기'}
-                </Button>
-              </div>
-            )}
-          </div>
         ) : (
           <Card className="overflow-hidden p-0">
             <table className="w-full text-body">

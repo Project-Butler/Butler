@@ -1,7 +1,8 @@
-// 임대인 앱 커뮤니티(하단 탭 '커뮤니티'). 앱은 PC 커뮤니티의 모바일 버전 — 같은 페이지 · 같은 문구, 배치만 다르다.
-// 실패 조건: 앱에서 /community 가 '준비 중' · PC 머리(건물 바꾸기 드롭다운) · 탭 줄 · "← 목록으로"가 앱에 남음 · 칩 줄 목록/주소가 PC 탭과 다름 ·
-// 하위 화면에 뒤로 가기 바가 없거나 주소로 바로 들어온 화면의 뒤로가 앱 밖으로 나감 · 미리보기 안내가 없음 · 마감 전 투표에 득표가 보임 ·
-// [글쓰기]가 떠 있지 않음 · 게시판이 표로 나옴 · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름.
+// 임대인 앱 커뮤니티(하단 탭 '커뮤니티'). 앱은 PC 커뮤니티의 모바일 버전 — 같은 문구 · 같은 데이터, 휴대폰에 맞는 배치(app/pages/CommunityApp*Page).
+// 실패 조건: 앱에서 /community 가 '준비 중' · 상단 바 왼쪽이 단지 이름이 아님 · PC 머리(건물 바꾸기 드롭다운) · 탭 줄 · "← 목록으로"가 앱에 남음 ·
+// 칩 줄 목록/주소가 PC 탭과 다름 · 하위 화면에 뒤로 가기 바가 없거나 주소로 바로 들어온 화면의 뒤로가 앱 밖으로 나감 · 미리보기 안내가 없음 ·
+// 마감 전 투표에 득표가 보임 · [글쓰기]가 떠 있지 않음 · 게시판이 표로 나옴 · 좁은 폭에서 목록 제목이 사라질 수 있는 배치(한 줄 말줄임 ·
+// 옆 칸과 폭 다툼 · 창 폭 클래스) · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -151,10 +152,12 @@ describe('앱 커뮤니티: 들어오기 · 머리 · 칩 줄', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /잠실한빛아파트/ }, FIRST_RENDER)).toBeInTheDocument();
     expect(where()).toBe('/landlord/community/briefing');
     expect(container.querySelector('[data-shell="landlord-app"]')).not.toBeNull();
-    // 홈형 상단 바(검색 · 알림 · 내 계정) — 뒤로 가기 없음
+    // 홈형 상단 바(검색 · 알림 · 내 계정) — 뒤로 가기 없음, 왼쪽 로고 · Butler 자리에 단지 이름
     const banner = screen.getByRole('banner');
     expect(within(banner).getByRole('button', { name: '내 계정' })).toBeInTheDocument();
     expect(within(banner).queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+    expect(within(banner).getByRole('heading', { level: 1 })).toHaveTextContent('잠실한빛아파트');
+    expect(within(banner).queryByText('Butler')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
     // PC 머리와 같은 정보: 지역 · 닉네임 · 인증 배지. 건물이 하나면 ▾(건물 바꾸기) 없음 — PC 도 그때는 [건물 바꾸기]가 없다
     expect(screen.getByText('서울특별시 송파구 잠실동')).toBeInTheDocument();
@@ -291,7 +294,7 @@ describe('앱 커뮤니티: PC 와 같은 상태 · 규칙', () => {
     expect(first).toHaveTextContent('자유');
     expect(first).toHaveTextContent('게시글 1');
     expect(within(first).getByLabelText('댓글 1개')).toHaveTextContent('[1]');
-    expect(first).toHaveTextContent('서강(잠실서강아파트 201동 임대인)');
+    expect(first).toHaveTextContent('서강 (잠실서강아파트 201동 임대인)');
     expect(first).toHaveTextContent('11-04');
     const write = screen.getByRole('button', { name: '글쓰기' });
     expect(write.parentElement).toHaveClass('fixed');
@@ -307,6 +310,65 @@ describe('앱 커뮤니티: PC 와 같은 상태 · 규칙', () => {
     await waitFor(() => expect(create).toBeDisabled());
     expect(create.parentElement).toHaveClass('fixed');
     expect(screen.getByText('진행 중인 투표가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('빈 상태는 큰 상자가 아니라 카드 안 한 줄(문구는 PC 와 같다)', async () => {
+    api.getCommunityPostList.mockResolvedValue(page([]));
+    renderAt('/landlord/community/briefing');
+    const posts = await screen.findByRole('region', { name: '최근 게시글' }, FIRST_RENDER);
+    const note = await within(posts).findByText('아직 올라온 글이 없습니다');
+    expect(note).toHaveAttribute('role', 'status');
+    expect(note).toHaveClass('py-3.5');
+  });
+});
+
+describe('앱 커뮤니티: 좁은 폭에서도 목록 제목이 보인다', () => {
+  const LONG_TITLE = '공동현관 도어락 교체 비용을 세대별로 똑같이 나눌지 평형별로 나눌지 관리단 회의 전에 다른 단지 사례를 여쭙니다';
+  // 제목 줄: 줄의 맨 위에 혼자(옆에 폭을 다투는 칩 · 날짜가 없다) · 한 줄 말줄임(truncate)이 아니라 최대 2줄 · 글자는 다 들어 있다
+  const expectTitleOnTop = (title) => {
+    expect(title).toHaveClass('line-clamp-2');
+    expect(title).not.toHaveClass('truncate');
+    expect(title.parentElement.firstElementChild).toBe(title);
+    expect(title.parentElement).toHaveClass('flex-col');
+  };
+
+  it.each([
+    ['/landlord/community/briefing', '최근 게시글'],
+    ['/landlord/community/board', '게시글'],
+  ])('%s 의 글 줄(%s)', async (path, label) => {
+    api.getCommunityPostList.mockResolvedValue(page([post(1, { title: LONG_TITLE }), post(2)]));
+    renderAt(path);
+    const list = await screen.findByRole('list', { name: label }, FIRST_RENDER);
+    const titles = list.querySelectorAll('[data-row-title]');
+    expect(titles).toHaveLength(2);
+    expect(titles[0]).toHaveTextContent(LONG_TITLE);
+    titles.forEach(expectTitleOnTop);
+  });
+
+  it('뉴스 · 투표 줄도 제목이 맨 위(뉴스는 원문 링크 표시가 오른쪽 끝)', async () => {
+    api.getCommunityNewsList.mockResolvedValue(
+      page([{ id: 'n-1', scope: 'SIGUNGU', title: LONG_TITLE, url: 'https://news.example/1', publisher: '한국부동산경제매거진 정책연구소', publishedAt: '2026-11-04T01:00:00.000Z' }]),
+    );
+    api.getCommunityPollList.mockResolvedValue(page([{ id: 'poll-9', scope: 'REGION', complexId: null, title: LONG_TITLE, closesAt: '2099-01-01T00:00:00.000Z', isClosed: false, voteCount: 3, hasVoted: false }]));
+    renderAt('/landlord/community/briefing');
+    const news = await screen.findByRole('list', { name: '최근 뉴스' }, FIRST_RENDER);
+    const newsTitle = news.querySelector('[data-row-title]');
+    expect(newsTitle).toHaveTextContent(LONG_TITLE);
+    expectTitleOnTop(newsTitle);
+    expect(within(news).getByRole('link')).toHaveTextContent('한국부동산경제매거진 정책연구소');
+    const polls = await screen.findByRole('list', { name: '최근 투표' });
+    expectTitleOnTop(polls.querySelector('[data-row-title]'));
+  });
+
+  it('앱 커뮤니티 화면에는 창 폭에 따라 바뀌는 클래스(sm: · md: · lg: · xl:)가 없다 — 넓은 창에서 ?surface=app 으로 봐도 한 줄 배치', async () => {
+    for (const path of ['/landlord/community/briefing', '/landlord/community/board', '/landlord/community/polls', '/landlord/community/news', '/landlord/community/market']) {
+      const { container, unmount } = renderAt(path);
+      await screen.findByRole('navigation', { name: '커뮤니티 메뉴' }, FIRST_RENDER);
+      const main = container.querySelector('main');
+      const responsive = [...main.querySelectorAll('[class]')].filter((el) => /(^|\s)(sm|md|lg|xl):/.test(el.getAttribute('class')));
+      expect(responsive.map((el) => el.getAttribute('class')), path).toEqual([]);
+      unmount();
+    }
   });
 });
 
