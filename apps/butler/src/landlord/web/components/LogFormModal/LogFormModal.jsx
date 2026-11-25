@@ -11,7 +11,7 @@ import {
   toLogForm,
   validateLogForm,
 } from '../ManagementLogForm/ManagementLogForm';
-import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
+import { useAttachmentUploads } from '../../../../shared/upload/useAttachmentUploads';
 import { useGetManagementLog } from '../../hooks/useGetManagementLog';
 import { useGetPropertyList } from '../../hooks/useGetPropertyList';
 import { usePatchManagementLog } from '../../hooks/usePatchManagementLog';

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getNotificationList, postNotificationRead, postNotificationReadAll } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
+import { isUnauthorizedError, toApiError } from '../apiError';
 
 const PAGE_SIZE = 30;
 

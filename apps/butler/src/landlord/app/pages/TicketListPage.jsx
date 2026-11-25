@@ -16,8 +16,8 @@ import {
   getPrimaryTicketAction,
   getRequesterLabel,
   getTicketStatusBadge,
-  TICKET_TABS,
-} from '../utils/ticketView';
+} from '../../web/utils/ticketView';
+import { TICKET_TABS } from '../../../shared/ticketLabels';
 
 const PAGE_SIZE = 20;
 const PREVIEW_PHOTO_COUNT = 3;

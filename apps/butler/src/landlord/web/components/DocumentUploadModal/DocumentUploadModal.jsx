@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, FilterChip } from '@butler/ui';
 import { FileSignature, FileText, FileVideo, Image, ShieldCheck, Upload, X } from 'lucide-react';
 import { useDocumentBoxUploads } from '../../hooks/useDocumentBoxUploads';
-import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../utils/attachment';
+import { buildAttachmentAccept, describeDocumentBoxFileLimits, formatFileSize, isVideoMimeType } from '../../../../shared/upload/attachment';
 import {
   CONTRACT_TARGET,
   DOCUMENT_TYPE_LABELS,

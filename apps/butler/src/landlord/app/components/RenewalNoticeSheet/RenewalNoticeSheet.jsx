@@ -3,7 +3,7 @@ import { Badge, Button, FilterChip } from '@butler/ui';
 import { toFieldErrors } from '../../../../shared/apiError';
 import { AttachmentPicker } from '../../../web/components/AttachmentPicker/AttachmentPicker';
 import { NoticeBox } from '../../../web/components/NoticeBox/NoticeBox';
-import { useAttachmentUploads } from '../../../web/hooks/useAttachmentUploads';
+import { useAttachmentUploads } from '../../../../shared/upload/useAttachmentUploads';
 import { getTodayKST } from '../../../web/utils/contract';
 import { useRenewalNotices } from '../../hooks/useRenewalNotices';
 import {

@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AttachmentPicker } from '../../src/landlord/web/components/AttachmentPicker/AttachmentPicker';
-import { useAttachmentUploads } from '../../src/landlord/web/hooks/useAttachmentUploads';
-import { resetUploadRulesCache } from '../../src/landlord/web/hooks/useGetUploadRules';
+import { useAttachmentUploads } from '../../src/shared/upload/useAttachmentUploads';
+import { resetUploadRulesCache } from '../../src/shared/upload/useGetUploadRules';
 import { DocumentViewer } from '../../src/shared/documentViewer/DocumentViewer';
 
 const MB = 1024 * 1024;

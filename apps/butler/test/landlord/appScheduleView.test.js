@@ -1,7 +1,7 @@
 // 일정·알림 화면과 갱신 거절 통지 카드의 계산(#163).
 import { describe, expect, it } from 'vitest';
+import { formatNotificationTime } from '../../src/shared/notifications/formatNotificationTime';
 import {
-  formatNotificationTime,
   formatScheduleDate,
   formatWeekMonthLabel,
   getRenewalNoticePhaseBadge,

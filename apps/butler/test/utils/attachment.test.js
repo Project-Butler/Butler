@@ -12,7 +12,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   resolveFileMimeType,
   toDocumentType,
-} from '../../src/landlord/web/utils/attachment';
+} from '../../src/shared/upload/attachment';
 
 const fakeFile = (name, type, size = 1000) => ({ name, type, size });
 

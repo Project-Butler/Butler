@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getUploadRules } from '@butler/api-client';
-import { DEFAULT_UPLOAD_RULES } from '../utils/attachment';
+import { DEFAULT_UPLOAD_RULES } from './attachment';
 
 // 업로드 규칙(GET /files/upload-rules)은 앱을 쓰는 동안 바뀌지 않으므로 한 번 받아 화면들이 함께 쓴다.
 // 받기 전·받지 못했을 때(로그인 전, 오류)는 DEFAULT_UPLOAD_RULES(사진·PDF 20MB, 동영상 없음)를 돌려준다.

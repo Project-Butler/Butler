@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AttachmentPicker } from '../../src/landlord/web/components/AttachmentPicker/AttachmentPicker';
 import { DocumentThumbnail } from '../../src/landlord/web/components/DocumentThumbnail/DocumentThumbnail';
-import { useAttachmentUploads } from '../../src/landlord/web/hooks/useAttachmentUploads';
+import { useAttachmentUploads } from '../../src/shared/upload/useAttachmentUploads';
 
 const api = vi.hoisted(() => ({
   postUploadSession: vi.fn(),

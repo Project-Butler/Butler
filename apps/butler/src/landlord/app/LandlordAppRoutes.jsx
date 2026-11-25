@@ -27,7 +27,7 @@ import { TicketDetailPage } from './pages/TicketDetailPage';
 import { TicketListPage } from './pages/TicketListPage';
 import { TicketRegisterPage } from './pages/TicketRegisterPage';
 import { VerifyPage } from './pages/VerifyPage';
-import { useNotificationUnreadCount } from './hooks/useNotificationUnreadCount';
+import { useNotificationUnreadCount } from '../../shared/notifications/useNotificationUnreadCount';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 import { parseCategoryParam } from './utils/documentBoxView';
 import { useGoBack, useGoTo } from './utils/navigation';

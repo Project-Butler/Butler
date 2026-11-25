@@ -13,7 +13,7 @@ import { useGetManagementLogList } from '../hooks/useGetManagementLogList';
 import { useGetPropertyList } from '../hooks/useGetPropertyList';
 import { formatWon } from '../utils/contract';
 import { getLogTypeLabel, isFutureLog, TYPE_FILTER_OPTIONS } from '../utils/managementLog';
-import { ROOM_FILTER_OPTIONS } from '../utils/room';
+import { ROOM_FILTER_OPTIONS } from '../../../shared/room';
 import { formatUnitLabel } from '../utils/unitAddress';
 
 const PAGE_SIZE = 20;

@@ -8,7 +8,7 @@ import {
   getTicketStatusBadge,
   toCompleteBody,
   toTicketRows,
-} from '../../src/landlord/app/utils/ticketView';
+} from '../../src/landlord/web/utils/ticketView';
 import { formatMessageDay, formatMessageTime, getThreadTitle, groupMessagesByDay, isMyMessage } from '../../src/landlord/app/utils/threadView';
 
 const ticket = (overrides = {}) => ({

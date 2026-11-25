@@ -1,6 +1,6 @@
 // 방(위치) 태그. 서버 값(apps/api platform/roomRules.js)과 어긋나지 않게 고정한다.
 import { describe, expect, it } from 'vitest';
-import { getRoomLabel, ROOM_FILTER_NONE, ROOM_FILTER_OPTIONS, ROOM_OPTIONS } from '../../../../src/landlord/web/utils/room';
+import { getRoomLabel, ROOM_FILTER_NONE, ROOM_FILTER_OPTIONS, ROOM_OPTIONS } from '../../src/shared/room';
 
 describe('방 태그', () => {
   it('9가지 값과 라벨이 서버와 같다', () => {

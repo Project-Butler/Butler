@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteDocument, postDocument, postUploadSession, putUploadContent } from '@butler/api-client';
-import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
+import { isUnauthorizedError, toApiError } from '../apiError';
 import {
   allowedFileKinds,
   checkAttachmentFile,
@@ -8,7 +8,7 @@ import {
   MAX_LOG_ATTACHMENTS,
   resolveFileMimeType,
   toDocumentType,
-} from '../utils/attachment';
+} from './attachment';
 import { useGetUploadRules } from './useGetUploadRules';
 
 let nextKey = 0;

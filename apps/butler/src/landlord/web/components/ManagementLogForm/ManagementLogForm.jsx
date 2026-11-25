@@ -2,7 +2,7 @@ import { SegmentedControl, TextField } from '@butler/ui';
 import { AttachmentPicker } from '../AttachmentPicker/AttachmentPicker';
 import { formatNumber } from '../../utils/format';
 import { WRITABLE_TYPE_OPTIONS } from '../../utils/managementLog';
-import { ROOM_OPTIONS } from '../../utils/room';
+import { ROOM_OPTIONS } from '../../../../shared/room';
 
 // 서버 검증(apps/api managementLogs controller)과 같은 범위
 const MAX_TITLE_LENGTH = 100;

@@ -1,4 +1,4 @@
-import { getRoomLabel } from '../../utils/room';
+import { getRoomLabel } from '../../../../shared/room';
 
 // 방(위치) 칩. 방이 없으면 '—'.
 export const RoomChip = ({ room }) => {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FileText, FileVideo, Image, MoreHorizontal } from 'lucide-react';
 import { Badge } from '@butler/ui';
 import { IconTile } from '../IconTile/IconTile';
-import { formatFileSize, isVideoMimeType } from '../../utils/attachment';
+import { formatFileSize, isVideoMimeType } from '../../../../shared/upload/attachment';
 import { canDeleteDocument, getDocumentTypeLabel } from '../../utils/documentBox';
 import { formatDateKST } from '../../utils/format';
 
