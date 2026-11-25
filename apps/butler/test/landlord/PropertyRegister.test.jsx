@@ -216,6 +216,31 @@ describe('부동산 등록 뒤 이동', () => {
     expect(status).toHaveTextContent('부동산을 등록했어요');
     expect(status).toHaveTextContent('이미 등록된 값이 있어 그 값을 보여 줍니다(면적 84.97㎡)');
   });
+
+  // 같은 건물(다가구 등)에 인증된 내 방이 있으면 서버가 새 방도 인증된 상태로 돌려준다.
+  const SHARED = { property: { id: 'new-p', displayName: '다가구주택 202호', exclusiveArea: null, floor: null, myRelation: { type: 'OWNER', verificationStatus: 'VERIFIED' } } };
+
+  it('웹: 같은 건물 인증이 적용됐으면 인증 화면에 그 안내를 넘긴다', async () => {
+    api.postProperty.mockResolvedValue(SHARED);
+    const { onNavigate } = SURFACES.web();
+    await chooseAddress();
+    await userEvent.type(screen.getByLabelText(/^호/), '202');
+    await userEvent.click(submitButton());
+
+    await waitFor(() =>
+      expect(onNavigate).toHaveBeenCalledWith('propertyVerify', { propertyId: 'new-p', notice: '같은 건물 인증이 적용됐어요' }, { replace: true }),
+    );
+  });
+
+  it('앱: 같은 건물 인증이 적용됐으면 등록 안내에 함께 보여 준다', async () => {
+    api.postProperty.mockResolvedValue(SHARED);
+    SURFACES.app();
+    await chooseAddress();
+    await userEvent.type(screen.getByLabelText(/^호/), '202');
+    await userEvent.click(submitButton());
+
+    expect(await screen.findByRole('status')).toHaveTextContent('부동산을 등록했어요. 같은 건물 인증이 적용됐어요');
+  });
 });
 
 describe('앱 부동산 등록(M04) 화면', () => {

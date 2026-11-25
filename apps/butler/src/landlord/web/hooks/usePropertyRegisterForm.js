@@ -73,8 +73,18 @@ const toSavedValueNotice = (body, property) => {
   return `${property.displayName}: 이미 등록된 값이 있어 그 값을 보여 줍니다(${differs.join(', ')}). 권리자 인증 뒤 수정할 수 있어요.`;
 };
 
+// 같은 건물(다가구 등 일반건축물대장)에 인증된 내 방이 있으면 서버가 새 방에도 그 인증을 적용한다.
+// 등록 직후 인증된 상태면 그 경우뿐이다.
+export const SHARED_VERIFICATION_NOTICE = '같은 건물 인증이 적용됐어요';
+
+const toRegisterNotice = (body, property) => {
+  const notices = [property.myRelation?.verificationStatus === 'VERIFIED' && SHARED_VERIFICATION_NOTICE, toSavedValueNotice(body, property)];
+  return notices.filter(Boolean).join('. ') || null;
+};
+
 // 부동산 등록(POST /properties) 입력 상태·검증·저장. 웹(PropertyRegisterPage)과 앱(M04)이 같이 쓰고, 모양과 저장 뒤 이동만 화면이 정한다.
-// 한 번에 한 호실씩 등록한다. submit()은 성공하면 { property, notice }(notice: 이미 등록된 면적·층을 썼을 때의 안내 또는 null), 아니면 null.
+// 한 번에 한 호실씩 등록한다. submit()은 성공하면 { property, notice }, 아니면 null.
+// notice: 같은 건물 인증이 적용됐을 때·이미 등록된 면적·층을 썼을 때의 안내, 없으면 null.
 export const usePropertyRegisterForm = ({ onUnauthorized }) => {
   const register = usePostProperty({ onUnauthorized });
   const [complex, setComplex] = useState(null);
@@ -129,7 +139,7 @@ export const usePropertyRegisterForm = ({ onUnauthorized }) => {
     if (!isReady || isSubmitting) return null;
     const body = toCreateBody(complex.id, form);
     const { data, error } = await register.createProperty(body);
-    if (data) return { property: data.property, notice: toSavedValueNotice(body, data.property) };
+    if (data) return { property: data.property, notice: toRegisterNotice(body, data.property) };
     if (error?.status === 400) setServerFieldErrors(toFieldErrors(error));
     return null;
   };

@@ -14,6 +14,7 @@ import { toContractResponse, CONTRACT_INCLUDE } from '../../../src/platform/cont
 import { getOwnershipVerificationSetting, findOwnershipVerificationAttempts, revokeOwnership, updateOwnershipVerificationSetting } from '../../../src/domains/admin/service.js';
 import { buildAuthMe, signAccessToken } from '../../../src/domains/auth/service.js';
 import { endOwnership } from '../../../src/domains/propertyOwnerships/service.js';
+import { createPropertyWithOwnership } from '../../../src/domains/properties/service.js';
 import { ownershipVerificationResultRouter } from '../../../src/domains/ownershipVerifications/router.js';
 import { buildSignedHeaders, SIGNATURE_HEADER, TIMESTAMP_HEADER, verifyRunnerSignature } from '../../../src/domains/ownershipVerifications/runnerSignature.js';
 import { createFixtureRunner, FIXTURE_ID_TEXT, FIXTURE_REASON, FIXTURE_WARNING } from '../../helpers/fakeLedgerRunner.js';
@@ -867,6 +868,112 @@ describe('권리자 인증', { skip: dbTestSkip }, () => {
       assert.equal((await fetch(`${baseUrl}/renewal-targets`)).status, 401);
       const noCsrf = await fetch(baseUrl, { method: 'POST', body: '{}' });
       assert.equal(noCsrf.status, 403);
+    });
+  });
+
+  describe('같은 건물 인증 공유(일반건축물대장)', () => {
+    const general = { ...matched, ledgerKind: 'GENERAL' };
+    const unitIn = (complex, unitNo, buildingNo = '') => prisma.property.create({ data: { complexId: complex.id, buildingNo, unitNo } });
+    const registerInput = (complexId, unitNo) => ({
+      complexId,
+      buildingNo: '',
+      unitNo,
+      exclusiveArea: null,
+      floor: null,
+      acquiredYearMonth: null,
+      purchasePrice: null,
+      listing: {},
+    });
+
+    test('일반건축물대장으로 인증하면 같은 단지·동의 내 다른 방이 같은 만료일로 인증된다', async () => {
+      const user = await createUser();
+      const other = await createUser('김다른사람');
+      const complex = await fixture.createComplex(JIBUN);
+      const elsewhere = await fixture.createComplex(JIBUN);
+
+      const source = await own(user, await unitIn(complex, '201'));
+      const sibling = await own(user, await unitIn(complex, '202'));
+      const renewing = await own(user, await unitIn(complex, '203'), {
+        verificationStatus: 'VERIFIED',
+        verifiedAt: PAST(),
+        verificationExpiresAt: new Date(Date.now() + DAY * 10),
+      });
+      const otherDong = await own(user, await unitIn(complex, '204', '2'));
+      const otherComplex = await own(user, await unitIn(elsewhere, '201'));
+      // 다른 사람이 인증해 둔 방은 건너뛴다. 그 방의 내 행은 미인증으로 남는다.
+      const takenProperty = await unitIn(complex, '205');
+      await own(other, takenProperty, { verificationStatus: 'VERIFIED', verifiedAt: PAST(), verificationExpiresAt: FUTURE() });
+      const taken = await own(user, takenProperty);
+      // 내 방에 남아 있던 다른 사람의 미인증 등록은 일반 인증처럼 SUPERSEDED로 끝난다.
+      const stale = await own(other, await prisma.property.findUnique({ where: { id: sibling.propertyId } }), { startedAtOffset: -DAY });
+
+      const attempt = await runningAttempt(user, source);
+      assert.deepEqual(await receiveRunnerResult(attempt.id, general), { accepted: true });
+
+      const verified = await getOwnership(source.id);
+      assert.equal(verified.verificationStatus, 'VERIFIED');
+      for (const id of [sibling.id, renewing.id]) {
+        const row = await getOwnership(id);
+        assert.equal(row.verificationStatus, 'VERIFIED');
+        assert.equal(row.verificationExpiresAt.getTime(), verified.verificationExpiresAt.getTime());
+        assert.equal(row.checkId, attempt.id);
+        assert.ok(row.firstVerifiedAt);
+        const [applied] = await auditsOf(row, 'OWNERSHIP_VERIFICATION_APPLIED');
+        assert.equal(applied.after.sharedFromOwnershipId, source.id);
+      }
+      for (const id of [otherDong.id, otherComplex.id, taken.id]) assert.equal((await getOwnership(id)).verificationStatus, 'UNVERIFIED');
+      assert.equal((await getOwnership(stale.id)).endReason, 'SUPERSEDED');
+      // 시도는 원래 방 1건뿐이고, 활동은 인증된 방마다 남는다.
+      assert.equal(await prisma.ownershipVerificationAttempt.count({ where: { requestedBy: user.id } }), 1);
+      assert.equal((await activitiesOf(user, 'OWNERSHIP_VERIFIED')).length, 3);
+    });
+
+    test('집합건축물대장(전유부) 인증은 다른 방에 적용하지 않는다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const source = await own(user, await unitIn(complex, '301'));
+      const sibling = await own(user, await unitIn(complex, '302'));
+
+      const attempt = await runningAttempt(user, source);
+      await receiveRunnerResult(attempt.id, matched);
+      assert.equal((await getOwnership(source.id)).verificationStatus, 'VERIFIED');
+      assert.equal((await getOwnership(sibling.id)).verificationStatus, 'UNVERIFIED');
+    });
+
+    test('등록: 같은 건물에 일반건축물대장으로 인증된 내 방이 있으면 새 방도 인증된 상태로 등록된다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const source = await own(user, await unitIn(complex, '401'));
+      const attempt = await runningAttempt(user, source);
+      await receiveRunnerResult(attempt.id, general);
+      const verified = await getOwnership(source.id);
+
+      const { ownership, property } = await createPropertyWithOwnership(user, registerInput(complex.id, '402'));
+      ownershipIds.push(ownership.id);
+      assert.equal(ownership.verificationStatus, 'VERIFIED');
+      assert.equal(property.myRelation.verificationStatus, 'VERIFIED');
+      const saved = await getOwnership(ownership.id);
+      assert.equal(saved.verificationExpiresAt.getTime(), verified.verificationExpiresAt.getTime());
+      assert.equal(saved.checkId, attempt.id);
+    });
+
+    test('등록: 원래 인증이 전유부이거나 만료됐으면 새 방은 미인증이다', async () => {
+      const user = await createUser();
+      const complex = await fixture.createComplex(JIBUN);
+      const unitSource = await own(user, await unitIn(complex, '501'));
+      await receiveRunnerResult((await runningAttempt(user, unitSource)).id, matched);
+      const first = await createPropertyWithOwnership(user, registerInput(complex.id, '502'));
+      ownershipIds.push(first.ownership.id);
+      assert.equal(first.ownership.verificationStatus, 'UNVERIFIED');
+
+      const otherComplex = await fixture.createComplex(JIBUN);
+      const expiredSource = await own(user, await unitIn(otherComplex, '601'));
+      const attempt = await runningAttempt(user, expiredSource);
+      await receiveRunnerResult(attempt.id, general);
+      await prisma.ownership.update({ where: { id: expiredSource.id }, data: { verificationExpiresAt: PAST() } });
+      const second = await createPropertyWithOwnership(user, registerInput(otherComplex.id, '602'));
+      ownershipIds.push(second.ownership.id);
+      assert.equal(second.ownership.verificationStatus, 'UNVERIFIED');
     });
   });
 

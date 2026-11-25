@@ -161,6 +161,136 @@ export const endAbandonedUnverifiedOwnerships = async ({ now = getNow() } = {}) 
   return { ended };
 };
 
+// 잠근 활성 행(rows)에서 ownershipId를 인증할 수 있는지. 막히면 { reasonCode }, 아니면 { mine, others }.
+// 잠금 안에서 다른 행의 만료를 다시 계산한다.
+const checkVerifiable = (rows, ownershipId, now) => {
+  const mine = rows.find((row) => row.id === ownershipId);
+  if (!mine || mine.verificationStatus === 'REVOKED') return { reasonCode: 'OWNERSHIP_CHANGED' };
+  const others = rows.filter((row) => row.id !== mine.id);
+  if (others.some((row) => computeOwnershipVerificationStatus(row, now) === 'VERIFIED')) return { reasonCode: 'VERIFIED_OWNER_EXISTS' };
+  if (mine.verificationStatus !== 'VERIFIED' && hasEarlierRevokedOwner(rows, mine)) return { reasonCode: 'NOT_FIRST_REGISTRANT' };
+  return { mine, others };
+};
+
+// 인증을 저장한다: 먼저 인증한 사람이 소유자라 만료·미인증인 다른 행을 자동 종료하고(REVOKED는 관리자 처리까지 남긴다)
+// 내 행을 VERIFIED로 저장한 뒤 감사·활동을 남긴다. 인증한 적 없는 행의 기록 첨부 파일 경로를 돌려준다(커밋 뒤 지운다, H-37).
+// sharedFromOwnershipId: 같은 건물의 다른 방 인증을 이어받은 경우 그 소유 관계 id(감사에만 남긴다).
+const saveVerifiedInTx = async (tx, { mine, others, property, attemptId, now, expiresAt, saveVerified, sharedFromOwnershipId = null }) => {
+  const removedPaths = [];
+  for (const row of others) {
+    if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) {
+      removedPaths.push(...(await endOwnerAutomatically(tx, row, 'SUPERSEDED')));
+    }
+  }
+
+  await saveVerified(tx, { ownershipId: mine.id, attemptId, verifiedAt: now, expiresAt });
+  // 처음 인증 시각은 한 번만 채운다(재인증으로 덮어써지는 verifiedAt과 별개, 하우스 로그 H-37·H-44).
+  await tx.ownership.updateMany({ where: { id: mine.id, firstVerifiedAt: null }, data: { firstVerifiedAt: now } });
+
+  await audit.record({
+    action: 'OWNERSHIP_VERIFICATION_APPLIED',
+    resourceType: 'OWNERSHIP',
+    resourceId: mine.id,
+    summary: 'VERIFIED',
+    after: {
+      attemptId,
+      verificationStatus: 'VERIFIED',
+      verificationExpiresAt: expiresAt,
+      ...(sharedFromOwnershipId ? { sharedFromOwnershipId } : {}),
+    },
+    client: tx,
+  });
+  await recordActivity(tx, {
+    userId: mine.userId,
+    type: ACTIVITY_TYPES.OWNERSHIP_VERIFIED,
+    complexId: property.complexId,
+    propertyId: mine.propertyId,
+    params: { attemptId, expiresAt: expiresAt.toISOString(), ...toUnitParams(property) },
+  });
+  return removedPaths;
+};
+
+// ── 같은 건물 인증 공유(2026-11-25 사용자 결정) ──
+// 일반건축물대장(다가구 등)은 건물 전체가 1건이라, 한 방의 인증이 그 건물 전체의 소유를 확인한 것이다.
+// 그래서 같은 건물(같은 단지·동)의 내 다른 활성 방에도 같은 인증을 적용한다. 만료일은 원래 방과 같다.
+// 집합건축물대장(전유부)은 방마다 대장이 달라 공유하지 않는다.
+// 방마다 일반 인증과 같은 규칙을 거친다 — 다른 사람이 인증한 방·철회된 방·앞선 철회자가 있는 방은 건너뛴다.
+
+// source: { ownershipId, userId, attemptId, expiresAt }, target: { id, propertyId, property }
+const shareToOwnershipInTx = async (tx, source, target, { now, saveVerified }) => {
+  const rows = await lockActiveOwnershipRows(tx, target.propertyId);
+  const checked = checkVerifiable(rows, target.id, now);
+  if (checked.reasonCode) return [];
+  return saveVerifiedInTx(tx, {
+    ...checked,
+    property: target.property,
+    attemptId: source.attemptId,
+    now,
+    expiresAt: source.expiresAt,
+    saveVerified,
+    sharedFromOwnershipId: source.ownershipId,
+  });
+};
+
+const SHARE_TARGET_SELECT = { id: true, propertyId: true, property: { select: { complexId: true, buildingNo: true, unitNo: true } } };
+
+// 인증한 방(source)과 같은 건물의 내 다른 활성 방 전부에 적용한다(이미 인증된 방은 만료일을 함께 갱신).
+// 여러 호실을 잠그므로 호실 id 순서로 잠가 교착을 줄인다. 지울 첨부 파일 경로를 돌려준다.
+const shareToBuildingInTx = async (tx, source, building, { now, saveVerified }) => {
+  const targets = await tx.ownership.findMany({
+    where: {
+      userId: source.userId,
+      endedAt: null,
+      id: { not: source.ownershipId },
+      property: { complexId: building.complexId, buildingNo: building.buildingNo },
+    },
+    select: SHARE_TARGET_SELECT,
+    orderBy: [{ propertyId: 'asc' }, { id: 'asc' }],
+  });
+  const removedPaths = [];
+  for (const target of targets) removedPaths.push(...(await shareToOwnershipInTx(tx, source, target, { now, saveVerified })));
+  return removedPaths;
+};
+
+// 호실 등록(POST /properties) 트랜잭션 안에서 부른다. 같은 건물에 일반건축물대장으로 인증된 내 방이 있으면
+// 새로 만든 소유 관계에 그 인증을 적용한다. 돌려주는 값: { shared, removedPaths } — removedPaths는 커밋 뒤 지운다.
+export const shareBuildingVerificationOnRegisterInTx = async (tx, { ownershipId, now = getNow(), saveVerified = defaultSaveVerified }) => {
+  const target = await tx.ownership.findUnique({ where: { id: ownershipId }, select: { ...SHARE_TARGET_SELECT, userId: true } });
+  if (!target) return { shared: false, removedPaths: [] };
+
+  const candidates = await tx.ownership.findMany({
+    where: {
+      userId: target.userId,
+      endedAt: null,
+      id: { not: target.id },
+      verificationStatus: 'VERIFIED',
+      verificationExpiresAt: { gt: now },
+      checkId: { not: null },
+      property: { complexId: target.property.complexId, buildingNo: target.property.buildingNo },
+    },
+    select: { id: true, userId: true, checkId: true, verificationExpiresAt: true },
+    orderBy: [{ verificationExpiresAt: 'desc' }, { id: 'asc' }],
+  });
+  if (candidates.length === 0) return { shared: false, removedPaths: [] };
+
+  const generalAttempts = await tx.ownershipVerificationAttempt.findMany({
+    where: { id: { in: candidates.map((row) => row.checkId) }, status: 'VERIFIED', ledgerKind: 'GENERAL' },
+    select: { id: true },
+  });
+  const generalIds = new Set(generalAttempts.map((attempt) => attempt.id));
+  const source = candidates.find((row) => generalIds.has(row.checkId));
+  if (!source) return { shared: false, removedPaths: [] };
+
+  const removedPaths = await shareToOwnershipInTx(
+    tx,
+    { ownershipId: source.id, userId: source.userId, attemptId: source.checkId, expiresAt: source.verificationExpiresAt },
+    target,
+    { now, saveVerified },
+  );
+  const after = await tx.ownership.findUnique({ where: { id: target.id }, select: { verificationStatus: true } });
+  return { shared: after.verificationStatus === 'VERIFIED', removedPaths };
+};
+
 const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }) => {
   const now = getNow();
   const fail = async (reasonCode) => {
@@ -176,50 +306,23 @@ const applyInTx = async (tx, { attemptId, ledgerKind, ownerCount, saveVerified }
   if (count === 0) return { outcome: 'IGNORED' };
   const attempt = await loadAttemptContext(tx, attemptId);
 
-  // 2. 호실의 활성 행을 id 순서로 잠근다.
+  // 2. 호실의 활성 행을 id 순서로 잠그고 3. 인증할 수 있는지 확인한다.
   const rows = await lockActiveOwnershipRows(tx, attempt.ownership.propertyId);
+  const checked = checkVerifiable(rows, attempt.ownershipId, now);
+  if (checked.reasonCode) return fail(checked.reasonCode);
 
-  // 3. 내 행이 없거나 철회됐으면 실패.
-  const mine = rows.find((row) => row.id === attempt.ownershipId);
-  if (!mine || mine.verificationStatus === 'REVOKED') return fail('OWNERSHIP_CHANGED');
-
-  // 4. 잠금 안에서 다른 행의 만료를 다시 계산한다.
-  const others = rows.filter((row) => row.id !== mine.id);
-  if (others.some((row) => computeOwnershipVerificationStatus(row, now) === 'VERIFIED')) return fail('VERIFIED_OWNER_EXISTS');
-  if (mine.verificationStatus !== 'VERIFIED' && hasEarlierRevokedOwner(rows, mine)) return fail('NOT_FIRST_REGISTRANT');
-
-  // 5. 먼저 인증한 사람이 소유자다. 만료·미인증인 다른 행을 자동 종료한다(REVOKED는 관리자 처리까지 남긴다).
-  // 인증한 적 없는 행의 기록 첨부 파일 경로는 모아서 커밋 뒤 지운다(H-37).
-  const removedPaths = [];
-  for (const row of others) {
-    if (['EXPIRED', 'UNVERIFIED'].includes(computeOwnershipVerificationStatus(row, now))) {
-      removedPaths.push(...(await endOwnerAutomatically(tx, row, 'SUPERSEDED')));
-    }
-  }
-
-  // 6. 내 행을 인증으로 저장하고 시도를 끝낸다. 유효기간은 지금 값으로 계산해 저장한다.
+  // 4. 인증을 저장하고 시도를 끝낸다. 유효기간은 지금 값으로 계산해 저장한다.
   const { validityYears } = await readValiditySetting(tx);
   const expiresAt = computeVerificationExpiry(now, validityYears);
-  await saveVerified(tx, { ownershipId: mine.id, attemptId, verifiedAt: now, expiresAt });
-  // 처음 인증 시각은 한 번만 채운다(재인증으로 덮어써지는 verifiedAt과 별개, 하우스 로그 H-37·H-44).
-  await tx.ownership.updateMany({ where: { id: mine.id, firstVerifiedAt: null }, data: { firstVerifiedAt: now } });
+  const property = attempt.ownership.property;
+  const removedPaths = await saveVerifiedInTx(tx, { ...checked, property, attemptId, now, expiresAt, saveVerified });
   await finishAttempt(tx, attemptId, 'RUNNING', { status: 'VERIFIED', ledgerKind, ownerCount });
 
-  await audit.record({
-    action: 'OWNERSHIP_VERIFICATION_APPLIED',
-    resourceType: 'OWNERSHIP',
-    resourceId: mine.id,
-    summary: 'VERIFIED',
-    after: { attemptId, verificationStatus: 'VERIFIED', verificationExpiresAt: expiresAt },
-    client: tx,
-  });
-  await recordActivity(tx, {
-    userId: attempt.requestedBy,
-    type: ACTIVITY_TYPES.OWNERSHIP_VERIFIED,
-    complexId: attempt.ownership.property.complexId,
-    propertyId: attempt.ownership.propertyId,
-    params: { attemptId, expiresAt: expiresAt.toISOString(), ...toUnitParams(attempt.ownership.property) },
-  });
+  // 5. 일반건축물대장이면 같은 건물의 내 다른 방에도 적용한다.
+  if (ledgerKind === 'GENERAL') {
+    const source = { ownershipId: checked.mine.id, userId: checked.mine.userId, attemptId, expiresAt };
+    removedPaths.push(...(await shareToBuildingInTx(tx, source, property, { now, saveVerified })));
+  }
   return { outcome: 'VERIFIED', expiresAt, removedPaths };
 };
 
