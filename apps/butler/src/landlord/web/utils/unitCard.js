@@ -1,4 +1,4 @@
-// 내 부동산 호실 카드 계산(React 없음). 지금 API 응답(호실·진행 중 계약·활성 소유 관계·관리 로그)만 화면에서 합친다.
+// 내 부동산 호실 카드 계산(React 없음). 지금 API 응답(호실·진행 중 계약·활성 소유 관계·하우스 로그)만 화면에서 합친다.
 import { getVerificationAction } from './ownershipVerification';
 import { formatDateKST } from './format';
 
@@ -18,7 +18,7 @@ export const groupByProperty = (items, getPropertyId) => {
 };
 
 // 다음 일정 하나: 오늘 이후 가장 가까운 것. 계약 시작(시작 전)·월세 입금일(서버 nextRentPaymentDate)·계약 종료·
-// 권리자 인증 만료(인증 완료일 때)·예정 관리 로그. 없으면 null.
+// 권리자 인증 만료(인증 완료일 때)·예정 하우스 로그. 없으면 null.
 export const getNextEvent = ({ contract, ownership, logs = [], today }) => {
   const events = [];
   if (contract?.status === 'UPCOMING' && contract.startDate) events.push({ kind: 'CONTRACT_START', date: contract.startDate, label: '계약 시작' });
@@ -41,5 +41,5 @@ export const getNeededAction = ({ property, contract, ownership, now = new Date(
   return null;
 };
 
-// 오늘 이전(오늘 포함) 가장 최근 관리 로그. 목록 API는 날짜 내림차순으로 온다.
+// 오늘 이전(오늘 포함) 가장 최근 하우스 로그. 목록 API는 날짜 내림차순으로 온다.
 export const getLatestPastLog = (logs = [], today) => logs.find((log) => log.occurredOn <= today) ?? null;

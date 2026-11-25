@@ -18,6 +18,7 @@ const log = {
   property: { displayName: '테스트 단지 1동 101호' },
   type: 'REPAIR',
   scope: 'PRIVATE',
+  room: 'BATHROOM',
   title: '욕실 배수구 교체',
   content: '배수구 교체함',
   occurredOn: '2026-10-01',
@@ -34,7 +35,7 @@ const renderInspector = (logId) => {
   return handlers;
 };
 
-describe('LogInspector (관리 로그 오른쪽 기록 상세)', () => {
+describe('LogInspector (하우스 로그 오른쪽 기록 상세)', () => {
   beforeEach(() => {
     vi.mocked(getManagementLog).mockReset();
     vi.mocked(deleteManagementLog).mockReset();
@@ -51,11 +52,20 @@ describe('LogInspector (관리 로그 오른쪽 기록 상세)', () => {
     const { onEdit, onNavigate } = renderInspector('log-1');
     expect(await screen.findByRole('heading', { name: '욕실 배수구 교체' })).toBeInTheDocument();
     expect(screen.getByText('350,000원')).toBeInTheDocument();
+    expect(screen.getByText('욕실·화장실')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '수리 요청 보기' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '수정' }));
     expect(onEdit).toHaveBeenCalledWith('log-1');
     await userEvent.click(screen.getByRole('button', { name: '호실 보기' }));
     expect(onNavigate).toHaveBeenCalledWith('propertyDetail', { propertyId: 'p1' });
+  });
+
+  it('방이 없으면 —', async () => {
+    vi.mocked(getManagementLog).mockResolvedValue({ ...log, room: null });
+    renderInspector('log-1');
+    await screen.findByRole('heading', { name: '욕실 배수구 교체' });
+    expect(screen.getByText('방').nextElementSibling).toHaveTextContent('—');
   });
 
   it('읽기 전용 기록은 [수정]이 없다', async () => {

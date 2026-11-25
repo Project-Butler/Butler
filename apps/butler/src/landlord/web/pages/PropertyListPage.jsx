@@ -97,7 +97,7 @@ export const PropertyListPage = ({ relation, onNavigate, onUnauthorized }) => {
     <div className="former-page w-full space-y-5 pb-10">
       <PageHeader
         title="내 부동산"
-        description="소유가 끝난 호실이에요. 그때 남긴 계약·관리 기록을 볼 수 있어요."
+        description="소유가 끝난 호실이에요. 그때 남긴 계약·하우스 로그를 볼 수 있어요."
         actions={
           <>
             <OwnershipTabs active="FORMER_OWNER" counts={{ OWNER: currentCount.data?.meta.total, FORMER_OWNER: formerTotal }} onNavigate={onNavigate} />

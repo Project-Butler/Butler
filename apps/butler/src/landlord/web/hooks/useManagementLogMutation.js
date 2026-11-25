@@ -3,7 +3,7 @@ import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
 
 const INITIAL_STATE = { data: null, error: null, isLoading: false };
 
-// 관리 로그 쓰기 요청 공통. mutate(...args)는 { data, error }를 돌려준다.
+// 하우스 로그 쓰기 요청 공통. mutate(...args)는 { data, error }를 돌려준다.
 // 이미 요청 중이면 다시 보내지 않고 { data: null, error: null }. 401이면 오류 대신 onUnauthorized를 부른다.
 export const useManagementLogMutation = (request, { onUnauthorized } = {}) => {
   const [state, setState] = useState(INITIAL_STATE);

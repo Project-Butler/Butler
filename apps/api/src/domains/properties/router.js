@@ -15,7 +15,7 @@ router.post('/', roleGuard(['LANDLORD']), generalRateLimiter, createProperty);
 router.get('/', roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), generalRateLimiter, listProperties);
 router.get('/:propertyId', roleGuard(['LANDLORD', 'TENANT', 'ADMIN']), generalRateLimiter, getProperty);
 router.patch('/:propertyId', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, patchProperty);
-// 관리 로그(5장)
+// 하우스 로그(5장)
 router.post('/:propertyId/management-logs', roleGuard(['LANDLORD']), generalRateLimiter, postPropertyManagementLog);
 router.get('/:propertyId/management-logs', roleGuard(['LANDLORD', 'ADMIN']), generalRateLimiter, listPropertyManagementLogs);
 // 서류함(6장): 내 소유 서류 + 계약 서류. 임대인만.

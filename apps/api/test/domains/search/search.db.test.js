@@ -163,7 +163,7 @@ describe('통합 검색 API', { skip: dbTestSkip }, () => {
     assert.deepEqual(bySchedule.body.data.schedules.map((item) => item.title), ['계약 만기']);
   });
 
-  test('임차인: 관리 로그·계약은 비고, 내 호실·티켓·티켓 첨부만', async () => {
+  test('임차인: 하우스 로그·계약은 비고, 내 호실·티켓·티켓 첨부만', async () => {
     const { body } = await search(tenant, { query: '101호 보일러' });
     assert.deepEqual(body.data.properties.map((item) => item.id), [property101.id]);
     assert.deepEqual(body.data.managementLogs, []);

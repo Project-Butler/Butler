@@ -15,11 +15,12 @@ import {
   TICKET_CATEGORIES,
   TICKET_STATUSES,
 } from '../../platform/ticketRules.js';
+import { parseRoom, parseRoomFilter } from '../../platform/roomRules.js';
 import { isUuid } from '../../platform/uuid.js';
 import { createTicket, findTicketForUser, findTickets, throwTicketNotFound, updateTicket } from './service.js';
 
-const CREATE_FIELDS = ['propertyId', 'category', 'title', 'description', 'attachmentDocumentIds'];
-const UPDATE_FIELDS = ['title', 'description', 'status', 'resolutionNote', 'cost'];
+const CREATE_FIELDS = ['propertyId', 'category', 'room', 'title', 'description', 'attachmentDocumentIds'];
+const UPDATE_FIELDS = ['title', 'description', 'status', 'resolutionNote', 'cost', 'room'];
 const SORT_PATTERN = /^createdAt(?::(asc|desc))?$/;
 
 const parseText = (field, max) => (value, details) => {
@@ -59,6 +60,7 @@ const UPDATE_PARSERS = {
   status: parseEnum('status', TICKET_STATUSES),
   resolutionNote: parseResolutionNote,
   cost: parseCost,
+  room: (value, details) => parseRoom(value, details),
 };
 
 // 미연결 문서 id 목록. 최대 10개, 중복 없음.
@@ -86,6 +88,7 @@ const parseCreateBody = (body) => {
   const input = {
     propertyId: body.propertyId,
     category: parseEnum('category', TICKET_CATEGORIES)(body.category, details),
+    room: body.room === undefined ? null : parseRoom(body.room, details),
     title: parseTitle(body.title, details),
     description: parseDescription(body.description, details),
     attachmentDocumentIds: parseAttachmentIds(body.attachmentDocumentIds ?? [], details),
@@ -124,6 +127,7 @@ const parseListQuery = (query) => {
   if (query.propertyId !== undefined && !isUuid(query.propertyId)) details.push({ field: 'propertyId', reason: 'UUID여야 합니다.' });
   const statuses = parseCsv(query.status, 'status', TICKET_STATUSES, details);
   const categories = parseCsv(query.category, 'category', TICKET_CATEGORIES, details);
+  const rooms = parseRoomFilter(query.room, details);
   const sortMatch = SORT_PATTERN.exec(query.sort ?? 'createdAt:desc');
   if (!sortMatch) details.push({ field: 'sort', reason: 'createdAt 또는 createdAt:asc|desc 형식이어야 합니다.' });
   const { page, size } = parsePagination(query, details);
@@ -133,6 +137,7 @@ const parseListQuery = (query) => {
     propertyId: query.propertyId ?? null,
     statuses,
     categories,
+    rooms,
     sortDirection: sortMatch[1] ?? 'desc',
     page,
     size,

@@ -1,13 +1,10 @@
 // OWNERSHIP 문서(내 소유 서류) 권한(docs/10. 유지보수 요청·문서 개발/서류함 개발 계획.md 3-3).
 //   열람: 그 소유 관계의 본인(활성·종료 모두)만. 다른 임대인·임차인·ADMIN은 열람 불가(404).
-//   올리기: 인증이 유효한 활성 소유 관계만(종료 422 OWNERSHIP_ENDED, 미인증·만료·철회 403 OWNERSHIP_VERIFICATION_REQUIRED).
-//   삭제: 올린 본인이면 소유 종료·인증 만료 뒤에도 된다(lockForDelete는 종료·인증 상태를 보지 않는다).
+//   올리기·삭제: 내 소유 관계(활성·종료 모두)면 소유 종료·권리자 인증과 관계없이 된다(2026-11-20 문서함 제한 제거). 삭제는 올린 본인만.
 //   권리자 인증 증빙(evidenceDocumentId로 연결된 문서)은 보이지 않는다.
 import { AppError } from '../../platform/AppError.js';
-import { getNow } from '../../platform/dateUtils.js';
 import { OWNERSHIP_RESOURCE } from '../../platform/documentAttachments.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
-import { computeOwnershipVerificationStatus } from '../../platform/ownershipStatus.js';
 import { prisma } from '../../platform/prismaClient.js';
 import { OWNERSHIP_DOCUMENT_TYPES } from './fileRules.js';
 
@@ -34,16 +31,8 @@ export const ownershipDocumentPolicy = {
     return ownership?.userId === user.id;
   },
   documentWhere,
-  lockForWrite: async (tx, user, ownershipId) => {
-    const ownership = await lockOwnOwnership(tx, user, ownershipId);
-    if (ownership.endedAt) throw new AppError('OWNERSHIP_ENDED', 422, '끝난 소유 관계라 문서를 올릴 수 없습니다.');
-    if (computeOwnershipVerificationStatus(ownership, getNow()) !== 'VERIFIED') {
-      throw new AppError('OWNERSHIP_VERIFICATION_REQUIRED', 403, '권리자 인증을 마친 호실만 내 소유 문서를 올릴 수 있습니다.');
-    }
-    return ownership;
-  },
-  // 지우기는 종료·인증 상태를 보지 않는다. 올린 본인인지는 deleteDocument(assertDocumentsDeletable)가 본다.
-  lockForDelete: async (tx, user, ownershipId) => lockOwnOwnership(tx, user, ownershipId),
+  // 올리기·지우기 모두 내 소유 관계인지만 본다. 올린 본인인지는 deleteDocument(assertDocumentsDeletable)가 본다.
+  lockForWrite: lockOwnOwnership,
   // 서류함·목록 수용 배치 where. 넘겨받은 id를 믿지 않고 내 소유 관계로 다시 거른다.
   landlordScopeWhere: async (user, ownershipIds) => {
     const owned = await prisma.ownership.findMany({ where: { id: { in: ownershipIds }, userId: user.id }, select: { id: true } });

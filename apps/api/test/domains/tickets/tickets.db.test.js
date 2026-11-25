@@ -152,7 +152,7 @@ describe('티켓 서비스', { skip: dbTestSkip }, () => {
     assert.equal(active.items[0].id, second.id);
   });
 
-  test('처리 시작 → 완료: 비용은 임대인에게만, 요약 관리 로그 생성, 감사 로그', async () => {
+  test('처리 시작 → 완료: 비용은 임대인에게만, 요약 하우스 로그 생성, 감사 로그', async () => {
     const { landlord, tenant, property, ownership } = await setup({ verified: true });
     const ticket = await createTicket(tenant, input(property.id));
     const started = await updateTicket(landlord, ticket.id, { status: 'IN_PROGRESS' });
@@ -169,7 +169,8 @@ describe('티켓 서비스', { skip: dbTestSkip }, () => {
     assert.equal(log.scope, 'PROPERTY_HISTORY');
     assert.equal(log.ownershipId, ownership.id);
     assert.equal(log.authorId, null);
-    assert.equal(log.title, '보일러 누수');
+    // 제목은 임차인이 쓴 요청 제목('보일러 누수')이 아니라 방·유형으로 만든 중립 문구
+    assert.equal(log.title, '수리 완료');
     assert.equal(log.content, '배관 교체');
     assert.equal(log.cost, 120000n);
     assert.equal(log.sourceResourceType, 'TICKET');
@@ -179,6 +180,74 @@ describe('티켓 서비스', { skip: dbTestSkip }, () => {
     assert.equal((await findTicketForUser(tenant, ticket.id)).cost, null);
     const audits = await prisma.auditLog.count({ where: { resourceType: 'TICKET', resourceId: ticket.id, action: 'TICKET_STATUS_CHANGED' } });
     assert.equal(audits, 2);
+  });
+
+  test('알림: 임차인 요청 → 임대인, 소유자 상태 변경 → 임차인, 임차인 취소 → 임대인', async () => {
+    const { landlord, tenant, property } = await setup();
+    const ticket = await createTicket(tenant, input(property.id, { room: 'KITCHEN' }));
+    const toLandlord = await prisma.notification.findMany({ where: { userId: landlord.id, resourceId: ticket.id } });
+    assert.equal(toLandlord.length, 1);
+    assert.equal(toLandlord[0].type, 'TICKET_CREATED');
+    assert.equal(toLandlord[0].link, `/tickets/${ticket.id}`);
+    assert.equal(toLandlord[0].resourceType, 'TICKET');
+    assert.ok(toLandlord[0].body.includes('주방'));
+    assert.ok(toLandlord[0].body.includes('보일러 누수'));
+    // 요청자 이름·연락처·계약 금액은 넣지 않는다
+    for (const secret of ['김임차', '01000000000', '500000']) assert.equal(toLandlord[0].body.includes(secret), false, secret);
+    // 요청한 임차인 본인에게는 없음
+    assert.equal(await prisma.notification.count({ where: { userId: tenant.id, resourceId: ticket.id } }), 0);
+
+    await updateTicket(landlord, ticket.id, { status: 'IN_PROGRESS' });
+    await updateTicket(landlord, ticket.id, { status: 'DONE', resolutionNote: '배관 교체', cost: 90000n });
+    const toTenant = await prisma.notification.findMany({ where: { userId: tenant.id, resourceId: ticket.id }, orderBy: { createdAt: 'asc' } });
+    assert.deepEqual(toTenant.map((row) => row.title), ['수리 요청 처리가 시작됐어요', '수리 요청이 완료됐어요']);
+    assert.ok(toTenant.every((row) => row.type === 'TICKET_STATUS_CHANGED' && !row.body.includes('90000')));
+    // 임대인 본인이 바꾼 상태 변경은 임대인에게 가지 않는다(생성 알림 1건 그대로)
+    assert.equal(await prisma.notification.count({ where: { userId: landlord.id, resourceId: ticket.id } }), 1);
+
+    const second = await createTicket(tenant, input(property.id));
+    await updateTicket(tenant, second.id, { status: 'CANCELED' });
+    const canceled = await prisma.notification.findMany({ where: { userId: landlord.id, resourceId: second.id }, orderBy: { createdAt: 'asc' } });
+    assert.deepEqual(canceled.map((row) => row.type), ['TICKET_CREATED', 'TICKET_STATUS_CHANGED']);
+    assert.equal(canceled[1].title, '수리 요청이 취소됐어요');
+  });
+
+  test('알림 없음: 임대인 직접 등록·제목/방만 수정, 받는 사람이 끈 type, 첨부 실패로 롤백', async () => {
+    const { landlord, tenant, property } = await setup();
+    // 임대인이 직접 등록하면 연결된 임차인에게도 보내지 않는다
+    const own = await createTicket(landlord, input(property.id));
+    await updateTicket(landlord, own.id, { status: 'DONE' });
+    assert.equal(await prisma.notification.count({ where: { resourceId: own.id } }), 0);
+
+    // 제목·방만 바꾸면 없음
+    const ticket = await createTicket(tenant, input(property.id));
+    await updateTicket(tenant, ticket.id, { title: '보일러 누수(수정)', room: 'BOILER_ROOM' });
+    await updateTicket(landlord, ticket.id, { room: 'UTILITY' });
+    assert.equal(await prisma.notification.count({ where: { resourceId: ticket.id, type: 'TICKET_STATUS_CHANGED' } }), 0);
+
+    // 받는 사람이 그 type을 끄면 만들지 않는다(계약 7장 mutedTypes)
+    await prisma.notificationPreference.create({ data: { userId: landlord.id, mutedTypes: ['TICKET_CREATED'] } });
+    const muted = await createTicket(tenant, input(property.id));
+    assert.equal(await prisma.notification.count({ where: { resourceId: muted.id } }), 0);
+
+    // 첨부가 없는 문서라 요청이 롤백되면 알림도 없다
+    const before = await prisma.notification.count({ where: { userId: landlord.id } });
+    await rejectsWith(
+      createTicket(tenant, input(property.id, { attachmentDocumentIds: ['00000000-0000-4000-8000-000000000000'] })),
+      'DOCUMENT_NOT_FOUND',
+    );
+    assert.equal(await prisma.notification.count({ where: { userId: landlord.id } }), before);
+  });
+
+  test('완료 요약 제목: 방·유형 중립 문구(요청 제목 아님)', async () => {
+    const { landlord, tenant, property } = await setup();
+    const kitchen = await createTicket(tenant, input(property.id, { room: 'KITCHEN', title: '임차인이 쓴 제목' }));
+    const doneKitchen = await updateTicket(landlord, kitchen.id, { status: 'DONE' });
+    assert.equal((await prisma.propertyLog.findUnique({ where: { id: doneKitchen.historyLogId } })).title, '주방 수리 완료');
+    const other = await createTicket(tenant, input(property.id, { category: 'OTHER', room: 'BATHROOM' }));
+    // 완료와 함께 방을 바꾸면 바뀐 방으로
+    const doneOther = await updateTicket(landlord, other.id, { status: 'DONE', room: 'LIVING' });
+    assert.equal((await prisma.propertyLog.findUnique({ where: { id: doneOther.historyLogId } })).title, '거실 요청 처리 완료');
   });
 
   test('인증 안 된 소유 관계의 완료 요약은 나만 보기', async () => {

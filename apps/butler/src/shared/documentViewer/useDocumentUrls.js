@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-// 다운로드 주소는 5분만 쓸 수 있다. 4분이 지난 주소는 쓰기 전에 다시 받는다.
+// 다운로드 주소는 5분만 쓸 수 있다. 4분이 지난 주소는 쓰기 전에 다시 받는다(동영상은 60분 주소라 load에 freshMs를 준다).
 const FRESH_MS = 4 * 60 * 1000;
 
 // 주소를 받는 동안 팝업 차단에 걸리지 않게, 누른 순간 빈 탭을 먼저 연다. 주소가 오면 그 탭을 옮긴다.
@@ -26,7 +26,7 @@ const saveFile = (url, fileName) => {
 
 // 공유 문서의 서명 주소를 문서마다 받아 둔다. fetchUrl(documentId, { purpose }) → { url, expiresAt }
 //   - 공개 초대 화면: postTenantInvitationDocumentDownloadUrl(token, id, opts) · 임차인 앱: postDocumentDownloadUrl(id, opts)
-//   - load(id, { force, purpose }): 없거나 오래된 주소만 다시 받는다(열 때마다 새 주소). force 면 항상 새로.
+//   - load(id, { force, purpose, freshMs }): 없거나 오래된(freshMs, 기본 4분) 주소만 다시 받는다(열 때마다 새 주소). force 면 항상 새로.
 //     purpose 'THUMBNAIL'(격자·미리 받기, 사진은 감사 안 함) | 'VIEW'(기본, 크게 본 것 — 감사).
 //     VIEW로 받은 주소는 썸네일에도 쓰지만, THUMBNAIL로 받은 주소로는 VIEW를 대신하지 않는다(크게 볼 때 VIEW로 다시 받는다).
 //   - open·save는 항상 VIEW로 새 주소를 받는다.
@@ -75,10 +75,10 @@ export const useDocumentUrls = (fetchUrl) => {
   );
 
   const load = useCallback(
-    (id, { force = false, purpose = 'VIEW' } = {}) => {
+    (id, { force = false, purpose = 'VIEW', freshMs = FRESH_MS } = {}) => {
       const entry = entriesRef.current[id];
       const isUsable = purpose === 'THUMBNAIL' || entry?.purpose === 'VIEW';
-      const isFresh = entry?.status === 'ready' && Date.now() - entry.fetchedAt < FRESH_MS && isUsable;
+      const isFresh = entry?.status === 'ready' && Date.now() - entry.fetchedAt < freshMs && isUsable;
       if (!force && isFresh) return Promise.resolve(entry.url);
       if (!force && purpose === 'THUMBNAIL' && entry?.status === 'loading') return Promise.resolve(entry?.url ?? null);
       return fetchFresh(id, purpose).catch(() => null);

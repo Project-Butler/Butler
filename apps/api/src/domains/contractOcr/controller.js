@@ -49,11 +49,13 @@ export const postContractOcr = async (req, res, next) => {
       throw new AppError('CONTRACT_OCR_FILE_REQUIRED', 400, '계약서 파일을 선택해 주세요.');
     }
     if (!type.matches(file)) throwUnsupported();
-    if (type.format === 'pdf' && countPdfPages(file) > MAX_PDF_PAGES) {
+    // 사진은 1쪽. PDF 쪽 수를 셀 수 없으면 0(하루 쪽 한도 확인 때 1쪽으로 본다).
+    const knownPages = type.format === 'pdf' ? countPdfPages(file) : 1;
+    if (knownPages > MAX_PDF_PAGES) {
       throw new AppError('CONTRACT_OCR_TOO_MANY_PAGES', 422, `PDF는 ${MAX_PDF_PAGES}쪽까지 올릴 수 있어요.`);
     }
 
-    sendData(res, await readContract(req.user, { ownershipId, file, format: type.format }));
+    sendData(res, await readContract(req.user, { ownershipId, file, format: type.format, knownPages }));
   } catch (error) {
     next(error);
   }

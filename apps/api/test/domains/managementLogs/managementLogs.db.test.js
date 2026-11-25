@@ -1,4 +1,4 @@
-// 관리 로그 API 서비스(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
+// 하우스 로그 API 서비스(실제 로컬 Postgres). RUN_DB_TESTS=1일 때만 돈다(test/helpers/dbTest.js).
 import { createDbFixture, dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -43,7 +43,7 @@ const rejectsWith = async (promise, code) => {
   });
 };
 
-describe('관리 로그 서비스', { skip: dbTestSkip }, () => {
+describe('하우스 로그 서비스', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
   const testUserIds = [];
   const createUser = async (role) => {
@@ -203,7 +203,7 @@ describe('관리 로그 서비스', { skip: dbTestSkip }, () => {
     const rows = await prisma.auditLog.findMany({ where: { resourceType: 'MANAGEMENT_LOG', resourceId: history.id } });
     assert.equal(rows.length, 1);
     assert.equal(rows[0].action, 'MANAGEMENT_LOG_UPDATED');
-    assert.equal(rows[0].summary, '관리 기록 수정: 제목, 내용, 비용');
+    assert.equal(rows[0].summary, '하우스 로그 수정: 제목, 내용, 비용');
     assert.equal(rows[0].before, null);
     assert.equal(rows[0].after, null);
     assert.doesNotMatch(JSON.stringify(rows[0]), /바뀐 제목값|바뀐 내용값|777|욕실/);
@@ -228,7 +228,7 @@ describe('관리 로그 서비스', { skip: dbTestSkip }, () => {
 
     await updateManagementLog(user, log.id, { ...sameFields, title: '정정' });
     const [row] = await prisma.auditLog.findMany({ where: { resourceId: log.id } });
-    assert.equal(row.summary, '관리 기록 수정: 제목');
+    assert.equal(row.summary, '하우스 로그 수정: 제목');
     const activity = await prisma.activity.findFirst({ where: { userId: user.id, type: 'MANAGEMENT_LOG_UPDATED' } });
     assert.deepEqual(activity.params.fields, ['title']);
   });

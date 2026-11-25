@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, MessageCircle } from 'lucide-react';
 import { Badge, Button } from '@butler/ui';
@@ -7,8 +7,10 @@ import { useGetComplex } from '../../web/hooks/useGetComplex';
 import { useGetContractList } from '../../web/hooks/useGetContractList';
 import { useGetLatestOwnershipVerification } from '../../web/hooks/useGetLatestOwnershipVerification';
 import { useGetManagementLogList } from '../../web/hooks/useGetManagementLogList';
+import { useGetOwnershipRenewalNoticeList } from '../../web/hooks/useGetOwnershipRenewalNoticeList';
 import { useGetProperty } from '../../web/hooks/useGetProperty';
 import { useGetPropertyDocumentBox } from '../../web/hooks/useGetPropertyDocumentBox';
+import { useGetPropertyOwnership } from '../../web/hooks/useGetPropertyOwnership';
 import { useOpenThread } from '../../web/hooks/useOpenThread';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { formatContractAmount, formatPeriod, getContractDdayBadge, getContractStatusBadge } from '../../web/utils/contract';
@@ -21,6 +23,7 @@ import { AppTabShell } from '../components/AppTabShell/AppTabShell';
 import { MoreMenu } from '../components/MoreMenu/MoreMenu';
 import { TenantInviteCard } from '../components/TenantInviteCard/TenantInviteCard';
 import { UnderlineTabs } from '../components/UnderlineTabs/UnderlineTabs';
+import { VerificationCard } from '../components/VerificationCard/VerificationCard';
 import { describeDocument, flattenDocuments } from '../utils/documentBoxView';
 import { formatLogDay } from '../utils/logGroups';
 import { useGoBack, useGoTo } from '../utils/navigation';
@@ -34,7 +37,7 @@ const DOCUMENT_PREVIEW_SIZE = 3;
 const TAB_OPTIONS = [
   { value: 'info', label: '기본 정보' },
   { value: 'contracts', label: '계약' },
-  { value: 'logs', label: '관리 로그' },
+  { value: 'logs', label: '하우스 로그' },
   { value: 'documents', label: '문서' },
 ];
 
@@ -96,10 +99,11 @@ const TenantChatButton = ({ contract, isOpening, error, onOpen, onInvite }) => {
   );
 };
 
-// [기본 정보] 등기 고유번호는 응답에 없어 두지 않는다. 등기부 대조 카드는 인증 완료일 때 인증 응답의 날짜만 쓴다.
-const InfoTab = ({ property, complex, attempt, chat, onCommunity }) => {
+// [기본 정보] 권리자 인증은 건축물대장의 소유자와 대조한다(등기부는 대조하지 않는다).
+// 대조 카드 날짜는 소유 관계의 인증일(verifiedAt)을 쓴다. 인증 시도 없이 인증된 호실(운영자 처리·시드)도 보이게 웹과 맞춘다.
+const InfoTab = ({ property, complex, ownership, chat, onCommunity }) => {
   const isVerified = property.myRelation?.verificationStatus === 'VERIFIED';
-  const verifiedOn = attempt?.status === 'VERIFIED' ? formatDateKST(attempt.finishedAt) : null;
+  const verifiedOn = ownership?.verificationStatus === 'VERIFIED' ? formatDateKST(ownership.verifiedAt) : null;
   return (
     <div className="flex flex-col gap-3">
       <dl className={`${CARD_CLASS} px-4`}>
@@ -110,8 +114,8 @@ const InfoTab = ({ property, complex, attempt, chat, onCommunity }) => {
         <InfoRow label="등록일" value={formatDateKST(property.createdAt)} numeric />
       </dl>
       {isVerified && verifiedOn && (
-        <section aria-label="등기부 대조 완료" className="rounded-card border border-seal bg-seal-box px-4 py-3.5">
-          <h3 className="text-m-label font-semibold text-seal-ink">등기부 대조 완료</h3>
+        <section aria-label="건축물대장 대조 완료" className="rounded-card border border-seal bg-seal-box px-4 py-3.5">
+          <h3 className="text-m-label font-semibold text-seal-ink">건축물대장 대조 완료</h3>
           <p className="mt-1 font-num text-num-sub tabular-nums text-seal-ink">인증 완료 · {verifiedOn}</p>
         </section>
       )}
@@ -171,7 +175,7 @@ const ContractsTab = ({ ownershipId, onOpen, onUnauthorized }) => {
   );
 };
 
-// [관리 로그] 최근 기록 몇 건 + 전체 보기(호실 필터).
+// [하우스 로그] 최근 기록 몇 건 + 전체 보기(호실 필터).
 const LogsTab = ({ propertyId, onOpen, onAll, onUnauthorized }) => {
   const list = useGetManagementLogList({ propertyId, size: LOG_PREVIEW_SIZE }, { onUnauthorized });
   if (list.error && !list.data) return <NoticeBox>{list.error.message}</NoticeBox>;
@@ -180,9 +184,9 @@ const LogsTab = ({ propertyId, onOpen, onAll, onUnauthorized }) => {
   return (
     <div className="flex flex-col gap-3">
       {logs.length === 0 ? (
-        <EmptyText>아직 관리 로그가 없어요</EmptyText>
+        <EmptyText>아직 하우스 로그가 없어요</EmptyText>
       ) : (
-        <ul aria-label="최근 관리 로그" className={`${CARD_CLASS} px-4`}>
+        <ul aria-label="최근 하우스 로그" className={`${CARD_CLASS} px-4`}>
           {logs.map((log) => (
             <li key={log.id} className="border-b border-line last:border-b-0">
               <button type="button" onClick={() => onOpen(log.id)} className="flex w-full items-center gap-3 py-3 text-left">
@@ -239,7 +243,8 @@ const DocumentsTab = ({ propertyId, onOpenBox, onUnauthorized }) => {
 };
 
 // 임대인 앱 부동산 상세 (Figma M06). 웹 호실 상세와 같은 API를 쓰고, 수정·소유 종료처럼 폼이 필요한 동작은 웹 상세에서 한다.
-export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
+// 권리자 인증 카드(VerificationCard)는 요약 카드 아래에 둔다. 인증을 마치면 onVerified 로 내 정보(커뮤니티 권한)를 다시 읽는다.
+export const PropertyDetailPage = ({ propertyId, verifiedLegalDongCodes, onVerified, onUnauthorized }) => {
   const navigate = useNavigate();
   const goTo = useGoTo();
   const goBack = useGoBack('buildingList');
@@ -251,7 +256,28 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
   const complexQuery = useGetComplex(property?.complex.id, hookOptions);
   const ownershipId = property?.myRelation?.ownershipId;
   const activeOwnershipId = property?.myRelation?.type === 'OWNER' ? ownershipId : undefined;
-  const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, hookOptions);
+  const ownershipQuery = useGetPropertyOwnership(activeOwnershipId, hookOptions);
+  const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, hookOptions);
+  const { refetch: refetchProperty } = propertyQuery;
+  const { refetch: refetchOwnership } = ownershipQuery;
+  const { refetch: refetchRenewal } = renewal;
+
+  // 인증 화면을 나가도 인증은 계속되므로 여기서도 진행 상태를 읽고, 끝나면 화면을 맞춘다.
+  const handleVerificationFinished = useCallback(
+    (attempt) => {
+      refetchProperty();
+      refetchOwnership();
+      if (attempt.status === 'VERIFIED') {
+        refetchRenewal();
+        onVerified?.();
+      }
+    },
+    [refetchProperty, refetchOwnership, refetchRenewal, onVerified],
+  );
+  const latestAttempt = useGetLatestOwnershipVerification(activeOwnershipId, {
+    onFinished: handleVerificationFinished,
+    onUnauthorized,
+  });
   const { openThread, isLoading: isOpeningThread, error: threadError } = useOpenThread(hookOptions);
 
   const handleOpenThread = async (contractId) => {
@@ -300,6 +326,17 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
           <SummaryStats contract={currentContract} />
         </section>
 
+        {ownershipQuery.data && (
+          <VerificationCard
+            ownership={ownershipQuery.data}
+            attempt={latestAttempt.data}
+            isAttemptRunning={latestAttempt.isActive}
+            renewalNotice={renewal.notices.find((notice) => notice.id === ownershipQuery.data.id)}
+            onVerify={() => goTo('propertyVerify', { propertyId: property.id })}
+            onInquiry={() => goTo('supportInquiry')}
+          />
+        )}
+
         <UnderlineTabs ariaLabel="부동산 정보" idPrefix="property" options={TAB_OPTIONS} value={tab} onChange={setTab} />
 
         <div id="property-panel" role="tabpanel" aria-labelledby={`property-tab-${tab}`}>
@@ -307,7 +344,7 @@ export const PropertyDetailPage = ({ propertyId, onUnauthorized }) => {
             <InfoTab
               property={property}
               complex={complexQuery.data}
-              attempt={latestAttempt.data}
+              ownership={ownershipQuery.data}
               chat={
                 <TenantChatButton
                   contract={currentContract}

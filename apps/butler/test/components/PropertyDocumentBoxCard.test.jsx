@@ -67,20 +67,20 @@ describe('PropertyDocumentBoxCard (호실 상세 문서함 카드)', () => {
     expect(await screen.findByRole('button', { name: '문서 업로드' })).toBeInTheDocument();
   });
 
-  it('미인증이고 계약도 없으면 [문서 업로드]를 숨기고 인증 안내 한 줄을 보여 준다', async () => {
-    api.getPropertyDocumentBox.mockResolvedValue(box({ ownerships: [ownership({ isUploadable: false, verificationStatus: 'UNVERIFIED' })] }));
+  it('미인증이어도 [문서 업로드]가 보이고 인증 안내는 없다(2026-11-20)', async () => {
+    api.getPropertyDocumentBox.mockResolvedValue(box({ ownerships: [ownership({ isUploadable: true, verificationStatus: 'UNVERIFIED' })] }));
     renderCard();
-    expect(await screen.findByText('권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '문서 업로드' })).toBeInTheDocument();
+    expect(screen.queryByText(/권리자 인증을 마치면/)).not.toBeInTheDocument();
   });
 
-  it('끝난 소유 호실은 [문서 업로드]도 안내도 없다', async () => {
+  it('끝난 소유 호실도 [문서 업로드]가 보이고 인증 안내는 없다(2026-11-20)', async () => {
     api.getPropertyDocumentBox.mockResolvedValue(
-      box({ ownerships: [ownership({ isActive: false, isUploadable: false })], contracts: [contract({ isUploadable: false, status: 'EXPIRED' })] }),
+      box({ ownerships: [ownership({ isActive: false, isUploadable: true })], contracts: [contract({ isUploadable: true, isOwnershipActive: false, status: 'EXPIRED' })] }),
     );
     renderCard();
     expect(await screen.findByRole('button', { name: '문서함 열기' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '문서 업로드' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '문서 업로드' })).toBeInTheDocument();
     expect(screen.queryByText(/권리자 인증을 마치면/)).not.toBeInTheDocument();
   });
 

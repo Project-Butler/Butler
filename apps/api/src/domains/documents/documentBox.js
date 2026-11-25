@@ -80,9 +80,9 @@ export const findPropertyDocumentBox = async (user, propertyId) => {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
 
+  const activeOwnershipIds = new Set(ownerships.filter((ownership) => !ownership.endedAt).map((ownership) => ownership.id));
   const now = getNow();
   const today = getTodayKST();
-  const activeOwnershipIds = new Set(ownerships.filter((ownership) => !ownership.endedAt).map((ownership) => ownership.id));
 
   const ownershipItems = [...ownerships]
     .sort((a, b) => {
@@ -97,7 +97,8 @@ export const findPropertyDocumentBox = async (user, propertyId) => {
         startedAt: ownership.startedAt.toISOString(),
         endedAt: ownership.endedAt?.toISOString() ?? null,
         verificationStatus,
-        isUploadable: !ownership.endedAt && verificationStatus === 'VERIFIED',
+        // 2026-11-20부터 내 소유 관계면 종료·인증과 관계없이 올릴 수 있다. 화면 호환을 위해 필드는 남긴다.
+        isUploadable: true,
         documents: documents.filter((document) => document.resourceType === 'OWNERSHIP' && document.resourceId === ownership.id).map(toDocumentResponse),
       };
     });
@@ -119,10 +120,13 @@ export const findPropertyDocumentBox = async (user, propertyId) => {
     startDate: contract.startDate,
     endDate: contract.endDate,
     status: contract.status,
-    isUploadable: activeOwnershipIds.has(contract.ownershipId),
+    // 내 소유 관계(활성·종료)의 계약이면 항상 올릴 수 있다(필드는 호환용).
+    isUploadable: true,
+    // 그 계약의 소유 관계가 아직 활성인지(화면이 진행 중 계약·"소유 종료" 표시를 나눌 때 쓴다).
+    isOwnershipActive: activeOwnershipIds.has(contract.ownershipId),
     documents: documents
       .filter((document) => document.resourceType === 'CONTRACT' && document.resourceId === contract.id)
-      // 삭제 검사(contractDocumentPolicy.lockForDelete)와 같게 그 계약의 수락한 초대만 센다.
+      // 임차인 열람 범위(contractDocumentPolicy.sharedWithTenantWhere)와 같게 그 계약의 수락한 초대만 센다.
       .map((document) => ({
         ...toDocumentResponse(document),
         isSharedWithTenant: document.invitationShares.some((share) => share.invitation.contractId === contract.id),

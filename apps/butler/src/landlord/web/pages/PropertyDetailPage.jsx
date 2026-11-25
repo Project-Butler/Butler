@@ -489,7 +489,7 @@ const ListingSection = ({ ownership, onSaved, onUnauthorized }) => {
 
 const LOG_SECTION_SIZE = 5;
 
-// 이 호실의 최근 관리 로그(S-01): 날짜 타일 + 제목·칩·내용 한 줄. 기록 추가는 지금 소유 중일 때만.
+// 이 호실의 최근 하우스 로그(S-01): 날짜 타일 + 제목·칩·내용 한 줄. 기록 추가는 지금 소유 중일 때만.
 const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
   const logList = useGetManagementLogList({ propertyId, size: LOG_SECTION_SIZE }, { onUnauthorized });
   const logs = logList.data?.items ?? [];
@@ -499,7 +499,7 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
       <div className="flex items-center justify-between gap-3">
         <h2 id="log-area-title" className="flex items-center gap-2 text-section font-semibold text-ink">
           <History size={20} className="text-ink-3" aria-hidden="true" />
-          관리 로그
+          하우스 로그
         </h2>
         <span className="flex gap-2">
           {logs.length > 0 && (
@@ -517,7 +517,7 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
       </div>
       {logList.error && <NoticeBox>{logList.error.message}</NoticeBox>}
       {logList.isLoading && !logList.data && <PageSkeleton variant="text" rows={3} />}
-      {logList.data && logs.length === 0 && <p className="text-body text-ink-3">아직 관리 로그가 없어요</p>}
+      {logList.data && logs.length === 0 && <p className="text-body text-ink-3">아직 하우스 로그가 없어요</p>}
       <ol className="space-y-3">
         {logs.map((log) => (
           <li key={log.id}>
@@ -545,7 +545,7 @@ const LogSection = ({ propertyId, canAdd, onNavigate, onUnauthorized }) => {
 
 // 호실 상세. 소유 정보·임대 조건·계약은 내 소유 관계(myRelation.ownershipId)가 있을 때만 불러온다.
 // isVerifyOpen: /properties/:id/verify 로 들어오면 권리자 인증 팝업을 띄운다(onCloseVerify로 닫는다).
-// isLogModalOpen: /properties/:id/logs/new 로 들어오면 이 호실로 고정한 기록 추가 팝업을 띄운다. 저장하면 관리 로그를 새로 고친다.
+// isLogModalOpen: /properties/:id/logs/new 로 들어오면 이 호실로 고정한 기록 추가 팝업을 띄운다. 저장하면 하우스 로그를 새로 고친다.
 export const PropertyDetailPage = ({
   propertyId,
   focusContractId,
@@ -610,7 +610,7 @@ export const PropertyDetailPage = ({
   const address = complexQuery.data?.roadAddress ?? complexQuery.data?.jibunAddress;
   const ownership = ownershipQuery.data;
 
-  // 호실 상세 = 워크스페이스: 본문(계약 영역·관리 로그) + 오른쪽 보조 패널(권리자 인증·호실 정보·임대 조건·내 소유 정보).
+  // 호실 상세 = 워크스페이스: 본문(계약 영역·하우스 로그) + 오른쪽 보조 패널(권리자 인증·호실 정보·임대 조건·내 소유 정보).
   // 버튼은 각 영역 안에만 둔다(머리에는 호실 이름·주소·상태만).
   return (
     <div className="property-detail-page w-full space-y-5 pb-10">

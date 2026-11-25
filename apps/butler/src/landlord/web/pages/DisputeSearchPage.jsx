@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Button, FilterChip, Pagination, SegmentedControl } from '@butler/ui';
+import { Button, Pagination, SegmentedControl } from '@butler/ui';
 import { AskAiCard } from '../components/DisputeReference/AskAiCard';
 import { FaqList } from '../components/DisputeReference/FaqList';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
-import { PageHeader } from '../components/PageHeader/PageHeader';
+import { DisputeHeader } from '../components/DisputeReference/DisputeHeader';
+import { ChipLine, DisputeChip } from '../components/DisputeReference/DisputeChips';
 import { ReferenceCard } from '../components/DisputeReference/ReferenceCard';
 import { SearchBox } from '../components/DisputeReference/SearchBox';
 import { SourceFooter } from '../components/DisputeReference/SourceFooter';
@@ -37,7 +38,7 @@ const sum = (values) => values.reduce((total, value) => total + value, 0);
 // 조건이 없으면 전체 자료를 보여 준다(상황 고르기는 첫 화면 몫이라 여기에는 타일을 두지 않는다).
 // 조건(topic·q·tab)은 주소에 둬서 사례 상세에서 돌아와도 그대로 남는다.
 export const DisputeSearchPage = () => {
-  const { askAi, openReference, goBack, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onUnauthorized, isApp } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const topic = findTopic(searchParams.get('topic'));
   const q = searchParams.get('q') ?? '';
@@ -138,8 +139,8 @@ export const DisputeSearchPage = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 다른 메뉴 화면과 같은 제목 줄(PageHeader). [뒤로]는 앱 안에서 왔으면 이전 화면, 주소로 바로 들어왔으면 임대차 분쟁 센터로 간다. */}
-      <PageHeader title="자료 찾기" onBack={goBack} />
+      {/* 다른 메뉴 화면과 같은 제목 줄(웹 PageHeader · 앱 상단 바). [뒤로]는 앱 안에서 왔으면 이전 화면, 주소로 바로 들어왔으면 임대차 분쟁 센터로 간다. */}
+      <DisputeHeader title="자료 찾기" onBack={goBack} />
 
       <SearchBox
         value={keyword}
@@ -151,16 +152,17 @@ export const DisputeSearchPage = () => {
         }}
       />
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="상황">
+      <ChipLine isApp={isApp} ariaLabel="상황">
         {DISPUTE_TOPICS.map((item) => (
-          <FilterChip key={item.key} selected={topic?.key === item.key} onClick={() => selectTopic(item.key)}>
+          <DisputeChip key={item.key} selected={topic?.key === item.key} onClick={() => selectTopic(item.key)}>
             {item.label}
-          </FilterChip>
+          </DisputeChip>
         ))}
-      </div>
+      </ChipLine>
 
-      {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다. */}
-      <div ref={resultsRef} className="scroll-mt-4">
+      {/* 쪽을 넘기면 이 탭 줄로 올라온다. 빈 칸을 따로 두면 flex 간격이 한 번 더 붙어서 탭에 직접 단다.
+          앱은 위에 고정된 상단 바(h-14)가 있어 그만큼 더 띄운다(scroll-mt-16, AI 상담과 같음). */}
+      <div ref={resultsRef} className={isApp ? 'scroll-mt-16' : 'scroll-mt-4'}>
         <SegmentedControl
           ariaLabel="결과 종류"
           value={tab}

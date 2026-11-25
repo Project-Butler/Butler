@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteDocument, postDocument, postUploadSession, putUploadContent } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../../../shared/apiError';
-import { checkAttachmentFile, isRenderableImage, MAX_LOG_ATTACHMENTS, resolveFileMimeType, toDocumentType } from '../utils/attachment';
+import {
+  allowedFileKinds,
+  checkAttachmentFile,
+  isRenderableImage,
+  MAX_LOG_ATTACHMENTS,
+  resolveFileMimeType,
+  toDocumentType,
+} from '../utils/attachment';
+import { useGetUploadRules } from './useGetUploadRules';
 
 let nextKey = 0;
 const newKey = () => {
@@ -23,13 +31,17 @@ const toExistingItem = (attachment) => ({
   error: null,
 });
 
-// 관리 로그 사진 첨부 업로드 상태.
+// 하우스 로그 사진 첨부 업로드 상태.
 // 순서: 업로드 세션 발급 → uploadUrl로 PUT → POST /documents(리소스 없이 = 미연결 문서).
 // 기록은 아직 없을 수도 있어서(작성 화면) 문서를 먼저 미연결로 등록하고, 저장할 때 attachmentDocumentIds로 한꺼번에 붙인다.
 // 수정 화면도 같은 방식이다 — 저장할 때 최종 목록을 보내면 서버가 빠진 문서는 지우고 새 문서는 붙인다(저장 전 취소하면 그대로).
 // 저장소를 쓸 수 없는 환경(503 STORAGE_UNAVAILABLE)이면 storageUnavailable이 true가 되고, 글 작성은 그대로 된다.
-// maxCount: 붙일 수 있는 최대 개수(기본 관리 로그 10장). 갱신 거절 통지 증빙은 5개다.
-export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS } = {}) => {
+// maxCount: 붙일 수 있는 최대 개수(기본 하우스 로그 10장). 갱신 거절 통지 증빙은 5개다.
+// resourceType: 붙일 곳(예: 'TICKET'). 주면 그 곳이 받는 형식(동영상 포함 여부)을 업로드 규칙에서 찾고 세션에 targetResourceType으로 보낸다.
+// 빼면 지금처럼 사진·PDF만 받는다(하우스 로그·갱신 거절 통지).
+export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType } = {}) => {
+  const rules = useGetUploadRules();
+  const kinds = useMemo(() => allowedFileKinds(rules, resourceType), [rules, resourceType]);
   const [items, setItems] = useState(() => initialAttachments.map(toExistingItem));
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -63,7 +75,13 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
   const upload = useCallback(
     async (key, file, mimeType) => {
       try {
-        const session = await postUploadSession({ fileName: file.name, mimeType, sizeBytes: file.size, documentType: toDocumentType(mimeType) });
+        const session = await postUploadSession({
+          fileName: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          documentType: toDocumentType(mimeType),
+          ...(resourceType ? { targetResourceType: resourceType } : {}),
+        });
         await putUploadContent(session, file, { onProgress: (progress) => patchItem(key, { progress }) });
         // 등록 안 한 업로드 세션은 서버 정리 작업이 지운다.
         if (cancelledKeys.current.delete(key)) return;
@@ -90,7 +108,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
         patchItem(key, { status: 'error', error: apiError.message });
       }
     },
-    [dropItem, onUnauthorized, patchItem],
+    [dropItem, onUnauthorized, patchItem, resourceType],
   );
 
   const addFiles = useCallback(
@@ -101,7 +119,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
       if (files.length > room) messages.push(`사진은 기록 하나에 ${maxCount}장까지 붙일 수 있어요.`);
       const accepted = [];
       for (const file of files.slice(0, Math.max(room, 0))) {
-        const problem = checkAttachmentFile(file);
+        const problem = checkAttachmentFile(file, { rules, kinds });
         if (problem) messages.push(problem);
         else accepted.push(file);
       }
@@ -130,7 +148,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
       setItems((prev) => [...prev, ...added.map(({ item }) => item)]);
       for (const { item, file } of added) upload(item.key, file, item.mimeType);
     },
-    [items.length, maxCount, upload],
+    [items.length, maxCount, upload, rules, kinds],
   );
 
   // 이번에 새로 올린 문서는 바로 지운다(미연결이라 남겨 둬도 24시간 뒤 정리되지만 빨리 치운다). 이미 붙은 문서는 저장할 때 서버가 지운다.
@@ -157,5 +175,8 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
     hasFailed: items.some((item) => item.status === 'error'),
     documentIds: doneItems.map((item) => item.documentId),
     maxCount,
+    // AttachmentPicker가 accept·안내 문구에 쓴다.
+    rules,
+    kinds,
   };
 };

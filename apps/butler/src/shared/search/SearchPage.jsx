@@ -124,7 +124,7 @@ const RowCard = ({ icon, title, sub, trailing, query, onClick }) => (
   </li>
 );
 
-// 날짜 + 제목 목록(관리 로그). 한 카드 안에 줄로 나눈다.
+// 날짜 + 제목 목록(하우스 로그). 한 카드 안에 줄로 나눈다.
 const DatedListCard = ({ items, query, onOpen }) => (
   <li className="overflow-hidden rounded-card border border-line bg-surface">
     <ul className="divide-y divide-line">
@@ -328,7 +328,7 @@ export const SearchPage = ({ userId, shell, onBack, onOpen, onUnauthorized }) =>
           <RecentSearches items={recent} onPick={(item) => setInput(item)} onRemove={(item) => setRecent(removeRecentSearch(userId, item))} />
         )}
 
-        {!searchable && <Message>{query.length === 1 ? '두 글자 이상 입력해 주세요.' : '호실·관리 로그·문서·일정을 한 번에 찾아요.'}</Message>}
+        {!searchable && <Message>{query.length === 1 ? '두 글자 이상 입력해 주세요.' : '호실·하우스 로그·문서·일정을 한 번에 찾아요.'}</Message>}
         {searchable && error && <Message>{error.message ?? '검색하지 못했어요. 잠시 후 다시 시도해 주세요.'}</Message>}
         {searchable && !error && !showResults && isLoading && <Message>검색하고 있어요…</Message>}
         {showResults && !error && total === 0 && <Message>‘{searchedQuery}’ 검색 결과가 없어요.</Message>}

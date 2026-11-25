@@ -9,7 +9,7 @@ import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import app from '../../../src/app.js';
 import { signAccessToken } from '../../../src/domains/auth/service.js';
-import { MAX_FILE_BYTES } from '../../../src/domains/documents/fileRules.js';
+import { getUploadRules } from '../../../src/platform/uploadRules.js';
 import { cleanupExpiredUploads } from '../../../src/domains/documents/service.js';
 import { createStorageToken } from '../../../src/domains/documents/storage/signature.js';
 import { createManagementLog } from '../../../src/domains/managementLogs/service.js';
@@ -18,6 +18,8 @@ import { getTodayKST } from '../../../src/platform/dateUtils.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
 
 const SECRET = 'test-secret';
+// 사진·PDF 최대 크기(기본 20MB, platform/uploadRules.js)
+const MAX_FILE_BYTES = getUploadRules({}).kinds.IMAGE.maxBytes;
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]), Buffer.from('JFIF test image body')]);
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('png body....')]);
 const PDF = Buffer.from('%PDF-1.7\n테스트 계약서');
@@ -111,7 +113,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     }
   };
 
-  test('업로드 → 등록(관리 로그) → 목록·상세 → 다운로드 → 삭제', async () => {
+  test('업로드 → 등록(하우스 로그) → 목록·상세 → 다운로드 → 삭제', async () => {
     const user = await landlord();
     const property = await createProperty();
     await own(user, property);
@@ -393,7 +395,7 @@ describe('파일·문서 API', { skip: dbTestSkip }, () => {
     const log = await writeLog(user, property);
     const document = await uploadDocument(user);
     const stale = await prisma.document.findUnique({ where: { id: document.id } });
-    // 삭제 요청이 읽은 뒤 다른 요청이 관리 로그에 붙였다
+    // 삭제 요청이 읽은 뒤 다른 요청이 하우스 로그에 붙였다
     await prisma.document.update({ where: { id: document.id }, data: { resourceType: 'MANAGEMENT_LOG', resourceId: log.id, attachedAt: new Date() } });
     await assert.rejects(
       prisma.$transaction((tx) => softDeleteDocumentsInTx(tx, [stale], new Date())),

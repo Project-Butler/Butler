@@ -42,11 +42,11 @@ const CREATED_CHAT = {
   ],
 };
 
-const renderPage = () => {
+const renderPage = (props = {}) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <DisputeChatPage />
+      <DisputeChatPage {...props} />
     </QueryClientProvider>,
   );
 };
@@ -62,6 +62,24 @@ describe('DisputeChatPage', () => {
 
     expect(screen.getByText('AI 도움 · 법률 자문 아님')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '계약이 끝났는데 세입자가 이사를 안 나가요.' })).toBeInTheDocument();
+    expect(await screen.findByText('아직 상담 기록이 없어요.')).toBeInTheDocument();
+  });
+
+  it('넘겨받은 질문(initialDraft)은 입력창에 채우기만 하고 보내지 않는다', async () => {
+    renderPage({ initialDraft: '보증금 반환 문제로 상담하고 싶어요.\n제 상황: ' });
+
+    expect(screen.getByLabelText('상담 질문')).toHaveValue('보증금 반환 문제로 상담하고 싶어요.\n제 상황: ');
+    expect(await screen.findByText('아직 상담 기록이 없어요.')).toBeInTheDocument();
+    expect(api.postDisputeChat).not.toHaveBeenCalled();
+  });
+
+  it('웹은 제목을 보여주고, 입력창은 대화 스크롤 칸 밖(아래)에 둔다', async () => {
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'AI 분쟁 상담' })).toBeInTheDocument();
+    const composer = screen.getByLabelText('상담 질문').closest('form');
+    expect(composer.closest('.overflow-y-auto')).toBeNull();
+    expect(screen.getByRole('button', { name: '계약이 끝났는데 세입자가 이사를 안 나가요.' }).closest('.overflow-y-auto')).not.toBeNull();
     expect(await screen.findByText('아직 상담 기록이 없어요.')).toBeInTheDocument();
   });
 

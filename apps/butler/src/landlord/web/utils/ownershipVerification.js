@@ -7,6 +7,17 @@ export const VERIFICATION_PREPARING_MESSAGE = '권리자 인증을 준비 중이
 export const VERIFICATION_RUNNING_MESSAGE = '소유자 정보를 확인하고 있어요. 화면을 나가도 계속 진행돼요.';
 export const VERIFICATION_REVOKED_MESSAGE = '이 호실의 인증이 취소됐어요. 다시 인증하려면 관리자에게 문의해 주세요.';
 
+// 권리자 인증 시작 전 개인정보 수집·이용 동의 문구(웹 팝업·앱 화면이 같이 쓴다). [항목, 설명]
+export const VERIFICATION_CONSENT_ROWS = [
+  ['수집 항목', '본인인증 결과(이름·생년월일), 회원 정보의 이름·생년월일, 건축물대장의 소유자 정보'],
+  ['이용 목적', '본인인증 결과와 회원 정보가 같은지 확인하고, 회원 정보와 건축물대장의 소유자 정보를 비교해 권리자를 확인해요.'],
+  [
+    '보유 기간',
+    '본인인증 결과와 건축물대장의 소유자 정보는 비교가 끝나면 바로 파기해요. 회원 정보는 따로 저장하지 않고 비교에만 써요. 이번 본인인증을 처리했다는 기록(본인인증 번호·처리 시각)은 부정 사용을 막기 위해 보관하고, 하루가 지나면 파기해요.',
+  ],
+  ['거부 권리', '동의하지 않을 수 있지만, 동의하지 않으면 인증을 진행할 수 없어요.'],
+];
+
 export const RUNNER_UNAVAILABLE_CODE = 'VERIFICATION_RUNNER_UNAVAILABLE';
 export const VERIFICATION_REVOKED_CODE = 'VERIFICATION_REVOKED';
 

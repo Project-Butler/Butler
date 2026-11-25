@@ -26,6 +26,7 @@ import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialo
 import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
+import { useHistoryDraft } from './hooks/useHistoryDraft';
 import { useApplyDisplaySettings } from './hooks/useDisplaySettings';
 import { useGetOwnershipRenewalNoticeList } from './hooks/useGetOwnershipRenewalNoticeList';
 import { ReadyGate } from './components/ReadyGate/ReadyGate';
@@ -129,7 +130,7 @@ const PropertyListRoute = (pageProps) => {
   return <PropertyListPage relation={searchParams.get('relation') ?? 'OWNER'} {...pageProps} />;
 };
 
-// 관리 로그 목록·기록 상세(/logs/:logId)·기록 추가(/logs/new)·수정(/logs/:logId/edit)은 같은 화면이다.
+// 하우스 로그 목록·기록 상세(/logs/:logId)·기록 추가(/logs/new)·수정(/logs/:logId/edit)은 같은 화면이다.
 // 상세는 오른쪽 패널, 추가·수정은 가운데 팝업. 화면에서 연 팝업(state.fromPage)은 뒤로 가서 닫고, 바로 들어온 주소면 목록 주소로 바꾼다.
 const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const { logId } = useParams();
@@ -137,6 +138,7 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const { state } = useLocation();
   const { onNavigate } = pageProps;
   const propertyId = searchParams.get('propertyId') ?? undefined;
+  const showAll = searchParams.get('all') === '1';
   const modal = modalMode === 'create' ? {} : modalMode === 'edit' ? { logId } : null;
   const openModal = useCallback(
     (next) =>
@@ -148,11 +150,12 @@ const ManagementLogListRoute = ({ modalMode, ...pageProps }) => {
   const closeModal = useCallback(() => {
     if (state?.fromPage) window.history.back();
     else if (modalMode === 'edit') onNavigate('logDetail', { logId }, { replace: true });
-    else onNavigate('logs', { propertyId }, { replace: true });
-  }, [state, modalMode, onNavigate, logId, propertyId]);
+    else onNavigate('logs', { propertyId, all: showAll }, { replace: true });
+  }, [state, modalMode, onNavigate, logId, propertyId, showAll]);
   return (
     <ManagementLogListPage
       propertyId={propertyId}
+      showAll={showAll}
       selectedLogId={modalMode ? undefined : logId}
       modal={modal}
       onOpenModal={openModal}
@@ -204,6 +207,9 @@ const ContractEditRoute = (pageProps) => {
   const { contractId } = useParams();
   return <ContractEditPage key={contractId} contractId={contractId} {...pageProps} />;
 };
+
+// AI 상담: 사례 상세·상황 안내에서 넘긴 질문(history state draft)을 입력창에 미리 채운다.
+const DisputeChatRoute = () => <DisputeChatPage initialDraft={useHistoryDraft()} />;
 
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
 // 계약 메뉴 배지 = 만료 임박 건수. 화면을 옮길 때마다 다시 세어 등록·해지 뒤에도 맞게 한다.
@@ -300,8 +306,8 @@ export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
           <Route path="/documents" element={<DocumentBoxRoute userId={user.id} {...pageProps} />} />
           <Route path="/setup" element={<SetupPage {...pageProps} />} />
           <Route path="/settings" element={<SettingsPage />} />
-          {/* 좁은 화면의 AI 상담(#2 담당 화면). 사례에서 넘긴 질문(history state draft)을 미리 채우는 건 담당자와 협의 후. */}
-          <Route path="/disputes/chat" element={<DisputeChatPage />} />
+          {/* AI 상담. 사례 상세·상황 안내에서 넘긴 질문(history state draft)을 입력창에 미리 채운다. */}
+          <Route path="/disputes/chat" element={<DisputeChatRoute />} />
           <Route path="/disputes" element={<DisputePage {...pageProps} />}>
             <Route index element={<DisputeHomePage />} />
             <Route path="search" element={<DisputeSearchPage />} />

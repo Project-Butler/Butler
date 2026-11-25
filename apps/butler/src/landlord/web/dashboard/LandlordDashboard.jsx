@@ -23,7 +23,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const getWeekday = (dateString) => WEEKDAYS[new Date(`${dateString}T00:00:00Z`).getUTCDay()];
 
-// 최근 관리 로그(D-12): 오늘까지의 기록 최신 5개. 미래 기록은 그날이 되면 나온다.
+// 최근 하우스 로그(D-12): 오늘까지의 기록 최신 5개. 미래 기록은 그날이 되면 나온다.
 const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
   const today = getTodayKST();
   const { data, error, isLoading } = useGetManagementLogList({ until: today, size: RECENT_LOG_SIZE }, { onUnauthorized });
@@ -32,7 +32,7 @@ const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-body font-semibold text-ink">최근 관리 로그</h3>
+        <h3 className="text-body font-semibold text-ink">최근 하우스 로그</h3>
         {logs.length > 0 && (
           <Button variant="secondary" size="sm" onClick={() => onNavigate('logs')}>
             전체 보기
@@ -44,7 +44,7 @@ const RecentLogsCard = ({ onNavigate, onUnauthorized }) => {
         {isLoading && !data && <PageSkeleton variant="text" rows={3} />}
         {data && logs.length === 0 && (
           <div className="space-y-3">
-            <p className="text-body text-ink-3">아직 관리 로그가 없어요</p>
+            <p className="text-body text-ink-3">아직 하우스 로그가 없어요</p>
             <Button variant="secondary" size="sm" onClick={() => onNavigate('buildingList')}>
               호실 목록 보기
             </Button>

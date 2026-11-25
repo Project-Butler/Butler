@@ -205,7 +205,7 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal(invalid.body.error.code, 'VALIDATION_ERROR');
   });
 
-  test('이전 소유자는 보기만 한다(올리기 422 CONTRACT_READ_ONLY)', async () => {
+  test('이전 소유자도 그 계약 문서를 보고 올리고 지운다(2026-11-20 문서함 제한 제거)', async () => {
     const landlord = await createUser();
     const { contract } = await createContract(landlord);
     const document = await insertAttachedDocument(landlord, contract);
@@ -217,12 +217,11 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal((await getJson(landlord, `/documents/${document.id}`)).status, 200);
     assert.equal((await postJson(landlord, `/documents/${document.id}/download-url`, {})).status, 200);
 
-    const rejected = await uploadToContract(landlord, contract);
-    assert.equal(rejected.status, 422);
-    assert.equal(rejected.body.error.code, 'CONTRACT_READ_ONLY');
-    const deleted = await json(await api(landlord, `/documents/${document.id}`, { method: 'DELETE' }));
-    assert.equal(deleted.status, 422);
-    assert.equal(deleted.body.error.code, 'CONTRACT_READ_ONLY');
+    assert.equal((await uploadToContract(landlord, contract)).status, 201);
+    assert.equal((await json(await api(landlord, `/documents/${document.id}`, { method: 'DELETE' }))).status, 204);
+    // 남(새 소유자 등)은 여전히 이 계약을 모른다.
+    const stranger = await createUser();
+    assert.equal((await uploadToContract(stranger, contract)).status, 404);
   });
 
   test('계약에는 허용된 서류 종류만 올린다(권한 검사가 먼저)', async () => {
@@ -264,7 +263,7 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
     assert.equal(deleted.status, 204);
   });
 
-  test('끝난 계약에서 수락한 초대로 공유된 문서는 못 지우고, 그 밖의 문서는 지운다(D-E)', async () => {
+  test('끝난 계약에서도 임차인에게 공유한 문서를 지울 수 있고, 지우면 임차인도 못 본다(2026-11-20)', async () => {
     const landlord = await createUser();
     const tenant = await createUser('TENANT');
     for (const ended of ['EXPIRED', 'TERMINATED']) {
@@ -278,14 +277,12 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
       await shareInvitation(contract, landlord, [pendingOnly.id], { status: 'PENDING' });
       await shareInvitation(contract, landlord, [canceledOnly.id], { status: 'CANCELED' });
 
-      const rejected = await json(await api(landlord, `/documents/${accepted.id}`, { method: 'DELETE' }));
-      assert.equal(rejected.status, 422, ended);
-      assert.equal(rejected.body.error.code, 'DOCUMENT_NOT_DELETABLE');
-      for (const document of [pendingOnly, canceledOnly, unshared]) {
+      // 지우기 전 임차인은 공유된 문서만 본다.
+      assert.deepEqual((await listContractDocuments(tenant, contract)).body.data.map((item) => item.id), [accepted.id]);
+      for (const document of [accepted, pendingOnly, canceledOnly, unshared]) {
         assert.equal((await json(await api(landlord, `/documents/${document.id}`, { method: 'DELETE' }))).status, 204, ended);
       }
-      // 임차인 열람은 그대로: 공유된 문서만 보인다.
-      assert.deepEqual((await listContractDocuments(tenant, contract)).body.data.map((item) => item.id), [accepted.id]);
+      assert.deepEqual((await listContractDocuments(tenant, contract)).body.data, []);
     }
   });
 
@@ -345,6 +342,23 @@ describe('CONTRACT 문서 권한', { skip: dbTestSkip }, () => {
 
     // 임대인은 전부 본다.
     assert.equal((await listContractDocuments(landlord, contract)).body.data.length, 3);
+  });
+
+  test('제한을 없앤 뒤에도 막히는 것: 잠긴 문서 삭제 422, ADMIN·다른 임대인(새 소유자 등)의 올리기·삭제 404(2026-11-20)', async () => {
+    const landlord = await createUser();
+    const { contract } = await createContract(landlord, { ownershipEnded: true });
+    const locked = await insertAttachedDocument(landlord, contract);
+    await prisma.document.update({ where: { id: locked.id }, data: { isLocked: true } });
+    const lockedDelete = await json(await api(landlord, `/documents/${locked.id}`, { method: 'DELETE' }));
+    assert.equal(lockedDelete.status, 422);
+    assert.equal(lockedDelete.body.error.code, 'DOCUMENT_NOT_DELETABLE');
+
+    const document = await insertAttachedDocument(landlord, contract);
+    for (const other of [await createUser('ADMIN'), await createUser()]) {
+      assert.equal((await uploadToContract(other, contract)).status, 404);
+      assert.equal((await json(await api(other, `/documents/${document.id}`, { method: 'DELETE' }))).status, 404);
+    }
+    assert.equal(await prisma.document.count({ where: { id: { in: [locked.id, document.id] }, deletedAt: null } }), 2);
   });
 
   test('ADMIN·다른 임대인·연결 안 된 임차인은 404', async () => {

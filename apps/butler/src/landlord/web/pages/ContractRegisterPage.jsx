@@ -1,85 +1,42 @@
-import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Badge, Button, PageSkeleton, RequiredMark } from '@butler/ui';
-import {
-  CONTRACT_FORM_FIELDS,
-  ContractForm,
-  EMPTY_CONTRACT_FORM,
-  isContractFormComplete,
-  toContractFields,
-  toContractForm,
-  toServerFieldErrors,
-  validateContractForm,
-} from '../components/ContractForm/ContractForm';
+import { ContractForm, toContractFields } from '../components/ContractForm/ContractForm';
 import { ContractOcrFill } from '../components/ContractOcrFill/ContractOcrFill';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { FormPageLayout } from '../components/FormPageLayout/FormPageLayout';
 import { FormSummary } from '../components/FormSummary/FormSummary';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { useGetContract } from '../../../shared/useGetContract';
-import { useGetPropertyList } from '../hooks/useGetPropertyList';
-import { usePostContract } from '../hooks/usePostContract';
-import { CONTRACT_LEGAL_NOTICE, formatContractAmount, formatPeriod, formatPhone, getRenewalPeriod, getLeaseTypeLabel } from '../utils/contract';
+import { useContractRegisterForm } from '../hooks/useContractRegisterForm';
+import { CONTRACT_LEGAL_NOTICE, formatContractAmount, formatPeriod, formatPhone, getLeaseTypeLabel } from '../utils/contract';
 import { getPropertyStatusBadge } from '../utils/unitListing';
 
-// 호실 선택은 내 활성 소유 호실 중 인증 완료된 것(목록 API 최대 크기)
-const PROPERTY_PICKER_SIZE = 100;
-
-// 갱신(D-14): 호실·임차인·유형·금액은 이전 계약 그대로, 기간은 이전 종료일 다음 날부터 2년
-const toRenewalForm = (previous) => ({
-  ...toContractForm(previous),
-  ...getRenewalPeriod(previous.endDate),
-  memo: '',
-});
-
 const ContractRegisterForm = ({ title, description, initialPropertyId, previous, onNavigate, onUnauthorized }) => {
-  const hookOptions = { onUnauthorized };
-  const propertyList = useGetPropertyList({ relation: 'OWNER', size: PROPERTY_PICKER_SIZE }, hookOptions);
-  const register = usePostContract(hookOptions);
-  const properties = (propertyList.data?.items ?? []).filter((item) => item.myRelation?.verificationStatus === 'VERIFIED');
-
-  const [propertyId, setPropertyId] = useState(previous?.property.id ?? initialPropertyId ?? '');
-  const [form, setForm] = useState(() => (previous ? toRenewalForm(previous) : EMPTY_CONTRACT_FORM));
-  const [serverFieldErrors, setServerFieldErrors] = useState({});
-
-  const property = properties.find((item) => item.id === propertyId);
-  const ownershipId = property?.myRelation?.ownershipId;
-  const clientErrors = validateContractForm(form);
-  const fieldError = (name) => clientErrors[name] ?? serverFieldErrors[name];
-  const isSubmitting = register.isLoading;
-  const isReady = Boolean(ownershipId) && isContractFormComplete(form) && Object.keys(clientErrors).length === 0;
-
-  const updateField = (name, value) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setServerFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
-
-  // [계약서로 채우기](B팀 #168)가 빈 칸을 채운 폼으로 바꾼다. 이전 저장 오류는 지운다.
-  const fillFromContract = (nextForm) => {
-    setForm(nextForm);
-    setServerFieldErrors({});
-  };
+  // 상태·검증·저장은 앱 계약 등록 화면과 같이 쓴다(useContractRegisterForm).
+  const {
+    propertyList,
+    properties,
+    propertyId,
+    setPropertyId,
+    property,
+    ownershipId,
+    isPropertyMissing,
+    form,
+    updateField,
+    fillFromContract,
+    fieldError,
+    isReady,
+    isSubmitting,
+    submit,
+    submitErrorMessage,
+  } = useContractRegisterForm({ initialPropertyId, previous, onUnauthorized });
 
   const handleSubmit = async () => {
-    if (!isReady || isSubmitting) return;
-    const { data, error } = await register.createContract({
-      ownershipId,
-      ...toContractFields(form),
-      previousContractId: previous?.id ?? null,
-    });
+    const result = await submit();
     // 등록 화면 기록은 그 호실 상세(계약 영역)로 바꾼다(뒤로 가면 다시 등록 폼이 나오지 않게).
     // 새 계약 id를 넘겨 호실 상세 위에 임차인 초대 팝업(A1)을 바로 띄운다.
-    if (data) {
-      onNavigate('propertyDetail', { propertyId: property.id, inviteContractId: data.id }, { replace: true });
-      return;
-    }
-    if (error?.status === 400) setServerFieldErrors(toServerFieldErrors(error));
+    if (result) onNavigate('propertyDetail', { propertyId: result.property.id, inviteContractId: result.contract.id }, { replace: true });
   };
-
-  const submitError = register.error;
-  const hasMappedFieldError =
-    submitError?.status === 400 && submitError.details.some(({ field }) => CONTRACT_FORM_FIELDS.includes(field));
-  const isPropertyMissing = propertyList.data && propertyId && !property;
 
   const propertyField = (
     <div className="flex flex-col gap-1.5">
@@ -170,7 +127,7 @@ const ContractRegisterForm = ({ title, description, initialPropertyId, previous,
             </div>
           )}
           {previous && <NoticeBox tone="info">이전 계약 내용을 채워 뒀어요. 금액과 기간만 확인해 주세요.</NoticeBox>}
-          {submitError && !hasMappedFieldError && <NoticeBox>{submitError.message}</NoticeBox>}
+          {submitErrorMessage && <NoticeBox>{submitErrorMessage}</NoticeBox>}
         </FormSummary>
       }
     >

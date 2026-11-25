@@ -162,7 +162,7 @@ describe('계약 관리 (M07)', () => {
   });
 });
 
-describe('관리 로그 (M08)', () => {
+describe('하우스 로그 (M08)', () => {
   it('달로 묶고 최신 달이 위, 달 안의 순서는 받은 그대로', () => {
     const groups = groupLogsByMonth([
       { id: 'a', occurredOn: '2026-10-20' },

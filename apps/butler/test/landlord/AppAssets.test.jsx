@@ -1,6 +1,6 @@
-// 임대인 앱 M05 내 자산 · M06 부동산 상세 · M07 계약 관리 · M08 관리 로그. 웹과 같은 API로 Figma 배치대로 보이는지 본다.
+// 임대인 앱 M05 내 자산 · M06 부동산 상세 · M07 계약 관리 · M08 하우스 로그. 웹과 같은 API로 Figma 배치대로 보이는지 본다.
 // 실패 조건: 공실에 보증금 · API에 없는 반려 칩/문서가 실제처럼 보임 · 버튼이 엉뚱한 주소로 감 · 401에 onUnauthorized 를 안 부름
-// · 관리 로그에 수정·삭제 동작이 생김 · [갱신 의사 묻기]가 눌림.
+// · 하우스 로그에 수정·삭제 동작이 생김 · [갱신 의사 묻기]가 눌림.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   getContract: vi.fn(),
   getManagementLogList: vi.fn(),
   getLatestOwnershipVerification: vi.fn(),
+  getPropertyOwnership: vi.fn(),
   postThread: vi.fn(),
   getThreadList: vi.fn(),
   getPropertyDocumentBox: vi.fn(),
@@ -111,6 +112,7 @@ beforeEach(() => {
   api.getContract.mockResolvedValue(CONTRACT);
   api.getManagementLogList.mockResolvedValue(page([LOG(), LOG({ id: 'l2', occurredOn: '2026-09-03', title: '누수 점검', type: 'INSPECTION', attachments: [], source: { resourceType: 'TICKET' } })]));
   api.getLatestOwnershipVerification.mockResolvedValue({ id: 'a1', ownershipId: 'o1', status: 'VERIFIED', createdAt: '2026-09-02T00:00:00.000Z', finishedAt: '2026-09-02T01:00:00.000Z' });
+  api.getPropertyOwnership.mockResolvedValue({ id: 'o1', verificationStatus: 'VERIFIED', verifiedAt: '2026-09-05T01:00:00.000Z', verificationExpiresAt: '2027-09-05T01:00:00.000Z', isActive: true });
 });
 
 describe('M05 내 자산', () => {
@@ -175,7 +177,7 @@ describe('M06 부동산 상세', () => {
     expect(within(summary).getByText('D-7')).toHaveClass('text-crit-ink');
   });
 
-  it('[기본 정보]: 주소·법정동·동호·면적·등록일, 등기부 대조 카드는 인증 완료일만, 등기 고유번호 없음', async () => {
+  it('[기본 정보]: 주소·법정동·동호·면적·등록일, 건축물대장 대조 카드는 소유 관계 인증일만, 등기 고유번호 없음', async () => {
     renderAt('/landlord/properties/p1');
     const panel = await screen.findByRole('tabpanel');
     // 법정동은 주소 바로 아래 줄이다
@@ -184,10 +186,19 @@ describe('M06 부동산 상세', () => {
     expect(await within(panel).findByText('서울특별시 강남구 역삼동')).toBeInTheDocument();
     expect(within(panel).getByText('101동 101호')).toBeInTheDocument();
     expect(within(panel).getByText('2026-09-02')).toBeInTheDocument();
-    const sealed = await within(panel).findByRole('region', { name: '등기부 대조 완료' });
-    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-02');
+    const sealed = await within(panel).findByRole('region', { name: '건축물대장 대조 완료' });
+    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-05');
     expect(sealed).not.toHaveTextContent('SHA-256');
     expect(screen.queryByText(/고유번호/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/등기부 대조/)).not.toBeInTheDocument();
+  });
+
+  it('[기본 정보] 인증 시도 기록 없이 인증된 호실(운영자 처리·시드)도 대조 카드를 보여 준다', async () => {
+    api.getLatestOwnershipVerification.mockResolvedValue(null);
+    renderAt('/landlord/properties/p1');
+    const panel = await screen.findByRole('tabpanel');
+    const sealed = await within(panel).findByRole('region', { name: '건축물대장 대조 완료' });
+    expect(sealed).toHaveTextContent('인증 완료 · 2026-09-05');
   });
 
   it('[기본 정보]의 임차인 대화 버튼은 지금 계약으로 대화를 연다', async () => {
@@ -228,9 +239,9 @@ describe('M06 부동산 상세', () => {
     expect(where()).toBe('/landlord/documents?propertyId=p1');
   });
 
-  it('[관리 로그] 전체 보기는 호실 필터로 간다', async () => {
+  it('[하우스 로그] 전체 보기는 호실 필터로 간다', async () => {
     renderAt('/landlord/properties/p1');
-    await userEvent.click(await screen.findByRole('tab', { name: '관리 로그' }));
+    await userEvent.click(await screen.findByRole('tab', { name: '하우스 로그' }));
     await userEvent.click(await screen.findByRole('button', { name: '전체 보기' }));
     expect(where()).toBe('/landlord/logs?propertyId=p1');
   });
@@ -239,8 +250,8 @@ describe('M06 부동산 상세', () => {
     renderAt('/landlord/properties/p1');
     await userEvent.click(await within(banner()).findByRole('button', { name: '더보기' }));
     const menu = screen.getByRole('menu', { name: '더보기' });
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['관리 로그 기록 추가', '수리·점검']);
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '관리 로그 기록 추가' }));
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['하우스 로그 기록 추가', '수리·점검']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '하우스 로그 기록 추가' }));
     expect(where()).toBe('/landlord/properties/p1/logs/new');
   });
 
@@ -324,14 +335,14 @@ describe('M07 계약 관리', () => {
   });
 });
 
-describe('M08 관리 로그', () => {
+describe('M08 하우스 로그', () => {
   it('월별로 묶고, 수정·삭제 안내만 있고 동작은 없다. 행을 누르면 기록 상세', async () => {
     renderAt('/landlord/logs');
     const october = await screen.findByRole('region', { name: '2026년 10월' });
     expect(within(october).getByText('101동 101호')).toBeInTheDocument();
     expect(within(october).getByText(/보일러 수리 완료/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '2026년 9월' })).getByText(/수리 요청/)).toBeInTheDocument();
-    expect(screen.getByText(/관리 로그는 수정·삭제할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/하우스 로그는 수정·삭제할 수 없습니다/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /삭제|수정/ })).not.toBeInTheDocument();
 
     await userEvent.click(within(october).getByRole('button'));
@@ -346,6 +357,28 @@ describe('M08 관리 로그', () => {
     await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'INSPECTION' })));
   });
 
+  it('방 칩은 전체 + 9가지 + 방 없음, 여러 개 고르면 쉼표로, 전체를 누르면 풀린다', async () => {
+    renderAt('/landlord/logs');
+    const chips = await screen.findByRole('group', { name: '방' });
+    expect(within(chips).getAllByRole('button').map((chip) => chip.textContent)).toEqual([
+      '전체', '현관', '거실', '주방', '욕실·화장실', '침실', '다용도실', '베란다', '보일러실', '기타', '방 없음',
+    ]);
+    expect(within(chips).getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(chips).getByRole('button', { name: '방 없음' }));
+    await userEvent.click(within(chips).getByRole('button', { name: '주방' }));
+    expect(within(chips).getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ room: 'KITCHEN,NONE' })));
+    await userEvent.click(within(chips).getByRole('button', { name: '전체' }));
+    await waitFor(() => expect(api.getManagementLogList).toHaveBeenLastCalledWith(expect.objectContaining({ room: undefined })));
+  });
+
+  it('기록 줄에 방을 보여 준다', async () => {
+    api.getManagementLogList.mockResolvedValue(page([LOG({ room: 'BOILER_ROOM' })]));
+    renderAt('/landlord/logs');
+    const october = await screen.findByRole('region', { name: '2026년 10월' });
+    expect(within(october).getByText(/보일러실/)).toBeInTheDocument();
+  });
+
   it('필터 아이콘으로 호실을 고르면 주소에 남긴다', async () => {
     renderAt('/landlord/logs');
     await userEvent.click(await within(banner()).findByRole('button', { name: '호실 선택' }));
@@ -358,7 +391,7 @@ describe('M08 관리 로그', () => {
   it('기록이 없으면 빈 안내', async () => {
     api.getManagementLogList.mockResolvedValue(page([]));
     renderAt('/landlord/logs');
-    expect(await screen.findByText('아직 관리 로그가 없어요')).toBeInTheDocument();
+    expect(await screen.findByText('아직 하우스 로그가 없어요')).toBeInTheDocument();
   });
 });
 

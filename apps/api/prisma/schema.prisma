@@ -587,7 +587,7 @@ model RenewalNotice {
 
 // 수리·점검 요청 (노션 6번 10장, 계약 5장).
 // category는 등록형 문자열(REPAIR, INSPECTION, OTHER, 피처가 추가)이라 enum이 아니다.
-// 관리 로그(하우스 로그, 계약 5장). API 경로·활동·감사 이름은 management-logs·MANAGEMENT_LOG_*를 쓴다.
+// 하우스 로그(계약 5장). API 경로·활동·감사 이름은 management-logs·MANAGEMENT_LOG_*를 쓴다.
 enum PropertyLogScope {
   PRIVATE
   PROPERTY_HISTORY
@@ -612,6 +612,11 @@ model PropertyLog {
   content    String?
   occurredOn DateTime         @map("occurred_on") @db.Date
   cost       BigInt?
+  // 방(위치) 태그: ENTRANCE·LIVING·KITCHEN·BATHROOM·BEDROOM·UTILITY·BALCONY·BOILER_ROOM·OTHER(등록형, platform/roomRules.js). null = 방 없음.
+  room       String?          @db.VarChar(20)
+  // 수리 완료 정보(하우스 로그 개편 H-09·H-10). 보증은 끝나는 날짜 하나만 둔다.
+  vendorName    String?   @map("vendor_name") @db.VarChar(100)
+  warrantyUntil DateTime? @map("warranty_until") @db.Date
 
   // 응답의 source. 직접 쓴 기록은 platform + null, 시스템 기록은 만든 곳을 가리킨다.
   sourceFeature      String  @default("platform") @map("source_feature") @db.VarChar(40)
@@ -643,12 +648,14 @@ model Ticket {
   requester   User      @relation("RequestedTickets", fields: [requesterId], references: [id])
 
   category       String       @db.VarChar(30)
+  // 방(위치) 태그(platform/roomRules.js). 완료되면 TICKET_SUMMARY 하우스 로그로 그대로 넘어간다.
+  room           String?      @db.VarChar(20)
   title          String
   description    String
   status         TicketStatus @default(OPEN)
   resolutionNote String?      @map("resolution_note")
   cost           BigInt? // 임대인에게만 보인다
-  // DONE이 되면 자동 생성되는 TICKET_SUMMARY 관리 로그(응답의 historyLogId).
+  // DONE이 되면 자동 생성되는 TICKET_SUMMARY 하우스 로그(응답의 historyLogId).
   logId          String?      @map("log_id") @db.Uuid
   log            PropertyLog? @relation(fields: [logId], references: [id])
   closedAt       DateTime?    @map("closed_at") @db.Timestamptz(3) // DONE·CANCELED가 된 시각

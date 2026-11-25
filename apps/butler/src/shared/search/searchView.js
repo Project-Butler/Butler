@@ -9,7 +9,7 @@ export const SECTIONS = [
   { key: 'properties', title: '부동산' },
   { key: 'contracts', title: '계약' },
   { key: 'tickets', title: '수리·점검' },
-  { key: 'managementLogs', title: '관리 로그' },
+  { key: 'managementLogs', title: '하우스 로그' },
   { key: 'documents', title: '문서' },
   { key: 'schedules', title: '일정' },
 ];

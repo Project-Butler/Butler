@@ -1,6 +1,7 @@
-// 리소스에 붙은 문서(documents.resource_type + resource_id) 공용 함수. 관리 로그·소유 종료·문서 API가 함께 쓴다.
+// 리소스에 붙은 문서(documents.resource_type + resource_id) 공용 함수. 하우스 로그·소유 종료·문서 API가 함께 쓴다.
 // 파일 삭제는 하지 않는다 — 행을 숨긴(deletedAt) 뒤 돌려준 저장 경로로 호출하는 쪽이 지운다(트랜잭션 밖에서).
 import { AppError } from './AppError.js';
+import { assertKindAllowedFor, getUploadRules } from './uploadRules.js';
 
 export const MANAGEMENT_LOG_RESOURCE = 'MANAGEMENT_LOG';
 export const TICKET_RESOURCE = 'TICKET';
@@ -34,18 +35,24 @@ export const withAttachments = async (client, resourceType, rows) => {
 export const findAttachedDocuments = (client, resourceType, resourceId) =>
   client.document.findMany({ where: activeDocumentsWhere(resourceType, [resourceId]), orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
 
+const throwAttachmentNotFound = () => {
+  throw new AppError('DOCUMENT_NOT_FOUND', 404, '첨부할 문서를 찾을 수 없습니다.', [
+    { field: 'attachmentDocumentIds', reason: '내가 올린 미연결 문서만 붙일 수 있습니다.' },
+  ]);
+};
+
 // 미연결 문서(내가 올렸고 아직 어디에도 안 붙음)만 붙인다. 남의 문서·이미 붙은 문서·지운 문서는 없는 문서로 본다(404).
+// 그 곳이 받지 않는 형식(예: 하우스 로그·메시지·갱신 통지의 동영상)은 422 FILE_TYPE_NOT_ALLOWED(platform/uploadRules.js).
+// 남의 문서 id로 형식을 알아낼 수 없게 404를 먼저 본다.
 export const attachDocumentsInTx = async (tx, user, { resourceType, resourceId, documentIds, now }) => {
   if (documentIds.length === 0) return;
-  const { count } = await tx.document.updateMany({
-    where: { id: { in: documentIds }, uploaderId: user.id, resourceType: null, deletedAt: null },
-    data: { resourceType, resourceId, attachedAt: now },
-  });
-  if (count !== documentIds.length) {
-    throw new AppError('DOCUMENT_NOT_FOUND', 404, '첨부할 문서를 찾을 수 없습니다.', [
-      { field: 'attachmentDocumentIds', reason: '내가 올린 미연결 문서만 붙일 수 있습니다.' },
-    ]);
-  }
+  const attachableWhere = { id: { in: documentIds }, uploaderId: user.id, resourceType: null, deletedAt: null };
+  const documents = await tx.document.findMany({ where: attachableWhere, select: { id: true, mimeType: true } });
+  if (documents.length !== documentIds.length) throwAttachmentNotFound();
+  assertKindAllowedFor(getUploadRules(), resourceType, documents.map((document) => document.mimeType));
+  // 읽은 뒤 다른 요청이 먼저 붙였으면 개수가 모자란다(404).
+  const { count } = await tx.document.updateMany({ where: attachableWhere, data: { resourceType, resourceId, attachedAt: now } });
+  if (count !== documentIds.length) throwAttachmentNotFound();
 };
 
 const throwNotDeletable = (message) => {

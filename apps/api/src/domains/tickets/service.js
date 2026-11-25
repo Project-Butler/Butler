@@ -1,19 +1,26 @@
 // 티켓(수리·점검 요청, 계약 5장). 임차인이 요청하고 임대인이 처리한다.
-// 쓰기는 티켓이 붙은 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js) — 소유 종료·관리 로그와 줄을 선다.
+// 쓰기는 티켓이 붙은 소유 관계 행을 잠근 트랜잭션 안에서 한다(platform/ownershipLock.js) — 소유 종료·하우스 로그와 줄을 선다.
 import { AppError } from '../../platform/AppError.js';
 import { audit } from '../../platform/audit.js';
 import { computeContractStatus } from '../../platform/contractStatus.js';
 import { getNow, getTodayKST } from '../../platform/dateUtils.js';
 import { attachDocumentsInTx, TICKET_RESOURCE, withAttachments } from '../../platform/documentAttachments.js';
+import { notify } from '../../platform/notify.js';
 import { lockOwnershipRow } from '../../platform/ownershipLock.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { toRoomWhere } from '../../platform/roomRules.js';
 import { appendPropertyHistory } from '../../platform/propertyHistory.js';
+import { toPropertySummary } from '../../platform/propertySerializer.js';
 import {
+  buildTicketNotification,
+  buildTicketSummaryTitle,
   checkTicketTransition,
   findForbiddenTicketFields,
   isTicketEnded,
   resolveTicketActor,
+  resolveTicketNotificationRecipient,
   TICKET_REQUESTABLE_CONTRACT_STATUSES,
+  TICKET_STATUS_LABELS as STATUS_LABELS,
 } from '../../platform/ticketRules.js';
 import { TICKET_INCLUDE, toTicketResponse } from '../../platform/ticketSerializer.js';
 
@@ -33,7 +40,12 @@ const throwInvalidTransition = (message) => {
   throw new AppError('TICKET_INVALID_TRANSITION', 422, message);
 };
 
-const STATUS_LABELS = { OPEN: '접수', IN_PROGRESS: '처리 중', DONE: '완료', CANCELED: '취소' };
+// 받는 사람이 있으면 같은 트랜잭션에서 알림을 쓴다(본 작업이 롤백되면 알림도 없다). ticket은 TICKET_INCLUDE로 읽은 행.
+const notifyTicketEvent = async (tx, ticket, user, event) => {
+  const userId = resolveTicketNotificationRecipient(ticket, user, event);
+  if (!userId) return;
+  await notify(tx, { userId, ...buildTicketNotification(event, ticket, toPropertySummary(ticket.property).displayName) });
+};
 
 const respondOne = async (client, ticket, user) => {
   const [withDocuments] = await withAttachments(client, TICKET_RESOURCE, [ticket]);
@@ -41,7 +53,7 @@ const respondOne = async (client, ticket, user) => {
 };
 
 // 볼 수 있는 범위: 이 티켓을 처리하는 소유자(소유가 끝난 뒤에도 본인 것), 요청자, 운영자.
-// 다음 소유자에게는 넘어가지 않는다(완료 요약만 관리 로그로 넘어간다).
+// 다음 소유자에게는 넘어가지 않는다(완료 요약만 하우스 로그로 넘어간다).
 export const toVisibleTicketWhere = (user) =>
   user.role === 'ADMIN' ? {} : { OR: [{ ownership: { userId: user.id } }, { requesterId: user.id }] };
 
@@ -90,16 +102,22 @@ export const createTicket = async (user, { propertyId, attachmentDocumentIds = [
       documentIds: attachmentDocumentIds,
       now: getNow(),
     });
-    // TODO(notifications): 임차인이 만들면 임대인에게 TICKET_CREATED 알림. notify()가 생기면 연결한다.
+    // 임차인이 만들면 그 소유 관계 사용자(임대인)에게. 임대인이 직접 등록하면 받는 사람이 없다.
+    await notifyTicketEvent(tx, ticket, user, 'CREATED');
     return ticket;
   });
   return respondOne(prisma, created, user);
 };
 
-const buildFilters = ({ propertyId, statuses, categories }) => ({
-  ...(propertyId ? { propertyId } : {}),
-  ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
-  ...(categories.length > 0 ? { category: { in: categories } } : {}),
+const buildFilters = ({ propertyId, statuses, categories, rooms }) => ({
+  AND: [
+    {
+      ...(propertyId ? { propertyId } : {}),
+      ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
+      ...(categories.length > 0 ? { category: { in: categories } } : {}),
+    },
+    toRoomWhere(rooms),
+  ],
 });
 
 // GET /tickets — 볼 수 있는 것만. 최근 요청 순(sortDirection).
@@ -162,23 +180,25 @@ export const lockWritableTicket = async (tx, user, ticketId) => {
   return ticket;
 };
 
-// DONE이 되면 관리 로그에 요약을 남긴다. 소유 관계가 인증 상태면 호실 이력(다음 소유자에게 넘어감), 아니면 나만 보기.
-// 다음 소유자에게 넘어갈 수 있으므로 임차인이 쓴 설명·이름은 넣지 않는다. 제목·처리 내용·수리 비용만 남긴다.
+// DONE이 되면 하우스 로그에 요약을 남긴다. 소유 관계가 인증 상태면 호실 이력(다음 소유자에게 넘어감), 아니면 나만 보기.
+// 다음 소유자에게 넘어갈 수 있으므로 임차인이 쓴 제목·설명·이름은 넣지 않는다. 제목은 방·유형으로 만든 중립 문구, 처리 내용·수리 비용만 남긴다.
 const appendTicketSummary = (tx, ticket) =>
   appendPropertyHistory({
     propertyId: ticket.propertyId,
     ownershipId: ticket.ownershipId,
     type: 'TICKET_SUMMARY',
-    title: ticket.title,
+    title: buildTicketSummaryTitle(ticket),
     content: ticket.resolutionNote ?? null,
     occurredOn: getTodayKST(),
     cost: ticket.cost ?? null,
+    room: ticket.room ?? null,
     source: { feature: 'platform', resourceType: TICKET_RESOURCE, resourceId: ticket.id },
     client: tx,
   });
 
 // PATCH /tickets/:ticketId — data는 컨트롤러가 검증한 값(보낸 칸만).
 // 요청자: title·description(OPEN일 때만), status → CANCELED. 활성 소유자: status·resolutionNote·cost.
+// room: 요청자는 OPEN일 때, 활성 소유자는 끝나기 전까지.
 export const updateTicket = async (user, ticketId, { status, ...fields }, req) => {
   const updated = await prisma.$transaction(async (tx) => {
     const { ticket, actor } = await lockTicket(tx, user, ticketId);
@@ -221,7 +241,8 @@ export const updateTicket = async (user, ticketId, { status, ...fields }, req) =
         req,
         client: tx,
       });
-      // TODO(notifications): 상대방에게 TICKET_STATUS_CHANGED 알림. notify()가 생기면 연결한다.
+      // 소유자가 바꾸면 요청자에게, 요청자가 취소하면 소유 관계 사용자에게.
+      await notifyTicketEvent(tx, row, user, 'STATUS_CHANGED');
     }
     return row;
   });

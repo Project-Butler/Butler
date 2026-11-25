@@ -1,5 +1,5 @@
-// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다(홈 M03·부동산 등록 M04 는 #98, 내 자산 M05~관리 로그 M08 은 #112 에서 실제 화면).
-// 하단 탭 4칸(Figma IA 기준 임시): 홈 /landlord/home · 내 자산 /landlord/buildings · 커뮤니티 /landlord/community · 내 정보 /landlord/settings
+// 임대인 앱 화면: 앱 셸 안에서 앱 화면이 아직 없는 주소는 "준비 중"을 보여 준다(홈 M03·부동산 등록 M04 는 #98, 내 자산 M05~하우스 로그 M08 은 #112 에서 실제 화면).
+// 하단 탭 5칸(Figma IA 기준 임시, #215): 홈 /landlord/home · 커뮤니티 /landlord/community · 내 자산 /landlord/buildings · 분쟁 센터 /landlord/disputes · 내 정보 /landlord/settings
 // 표가 많은 웹 화면을 모바일에 그대로 보여 주지 않는다.
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -46,7 +46,7 @@ const renderAt = (path, { onLogout = vi.fn() } = {}) => {
 const activeTabs = () => screen.getAllByRole('button').filter((button) => button.getAttribute('aria-current') === 'page').map((button) => button.textContent);
 
 describe('임대인 앱: 하단 탭', () => {
-  it('앱 셸(data-shell="landlord-app")과 탭 4칸이 그려진다', () => {
+  it('앱 셸(data-shell="landlord-app")과 탭 5칸이 그려진다', () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/landlord/home']}>
         <Routes>
@@ -56,14 +56,13 @@ describe('임대인 앱: 하단 탭', () => {
     );
     expect(container.querySelector('[data-shell="landlord-app"]')).not.toBeNull();
     const nav = screen.getByRole('navigation', { name: '하단 메뉴' });
-    expect(within(nav).getAllByRole('button').map((button) => button.textContent)).toEqual(['홈', '내 자산', '커뮤니티', '내 정보']);
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent)).toEqual(['홈', '커뮤니티', '내 자산', '분쟁 센터', '내 정보']);
   });
 
   it.each([
     ['/landlord/home', '홈'],
     ['/landlord/buildings', '내 자산'],
     ['/landlord/properties/p-1', '내 자산'],
-    ['/landlord/properties/p-1/verify', '내 자산'],
     ['/landlord/logs', '내 자산'],
     ['/landlord/logs/l-1', '내 자산'],
     ['/landlord/community', '커뮤니티'],
@@ -114,8 +113,6 @@ describe('임대인 앱: 준비 중 화면', () => {
     '/landlord/community/briefing',
     '/landlord/settings',
     '/landlord/contracts',
-    '/landlord/contracts/new',
-    '/landlord/properties/p-1/verify',
     '/landlord/logs/l-1',
     '/landlord/no-such-page',
   ])('%s 은 앱 셸 안에서 "준비 중"을 보여 준다 (웹 화면을 그대로 보여 주지 않는다)', (path) => {
@@ -142,6 +139,20 @@ describe('임대인 앱: 내 자산·상세 화면의 셸', () => {
     renderAt('/landlord/contracts/c-1');
     expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+  });
+
+  it('권리자 인증(/landlord/properties/:id/verify)은 "준비 중"이 아니고 하단 탭 없는 전체 화면이다', () => {
+    renderAt('/landlord/properties/p-1/verify');
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+  });
+
+  it('계약 등록(/landlord/contracts/new)은 "준비 중"이 아니고 하단 탭 없이 뒤로 가기 상단 바를 쓴다', () => {
+    renderAt('/landlord/contracts/new');
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '하단 메뉴' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('heading', { name: '계약 등록' })).toBeInTheDocument();
   });
 
   it('계약 수정(/landlord/contracts/:id/edit)은 "준비 중"이 아니고 하단 탭 없이 뒤로 가기 상단 바를 쓴다', () => {

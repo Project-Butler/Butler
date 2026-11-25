@@ -4,7 +4,7 @@ import { Check, CheckCircle2, Copy, Files, FileText, ImagePlus, Info, Send, Uplo
 import { postDocumentDownloadUrl } from '@butler/api-client';
 import { Modal } from '../Modal/Modal';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
-import { SharedDocumentPreview } from './SharedDocumentPreview';
+import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useContractDocumentUploads } from '../../hooks/useContractDocumentUploads';
 import { useGetContractDocumentList } from '../../hooks/useGetContractDocumentList';
 import { usePostTenantInvitation } from '../../hooks/usePostTenantInvitation';
@@ -346,7 +346,6 @@ export const TenantInviteModal = ({ contract, startStep = 'documents', onClose, 
   const [step, setStep] = useState(startStep);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isLimitOpen, setIsLimitOpen] = useState(false);
-  const [previewIndex, setPreviewIndex] = useState(null);
   const invite = usePostTenantInvitation({ onUnauthorized });
   const isDocumentsStep = step === 'documents';
   const documentList = useGetContractDocumentList(contract.id, { onUnauthorized });
@@ -366,6 +365,8 @@ export const TenantInviteModal = ({ contract, startStep = 'documents', onClose, 
   const documents = [...merged.filter((document) => !isContractPhoto(document.mimeType)), ...merged.filter((document) => isContractPhoto(document.mimeType))];
   const imageUrls = useDocumentImageUrls(documents, uploads.previewUrls, onUnauthorized);
   const previewDocuments = toPreviewDocuments(documents, selectedIds);
+  // 크게 보기는 PC 웹 공용 미리보기 팝업(사진·동영상·PDF 같은 흰 팝업). 고른 파일(없으면 전부)끼리 넘긴다.
+  const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
 
   const handleToggle = (documentId) => {
     const next = toggleSharedDocument(selectedIds, documentId);
@@ -374,8 +375,8 @@ export const TenantInviteModal = ({ contract, startStep = 'documents', onClose, 
   };
 
   const handlePreview = (documentId) => {
-    const position = previewDocuments.findIndex((document) => document.id === documentId);
-    setPreviewIndex(position >= 0 ? position : 0);
+    const target = previewDocuments.find((document) => document.id === documentId) ?? previewDocuments[0];
+    if (target) openPreview(target, previewDocuments);
   };
 
   const handleCreate = async () => {
@@ -443,15 +444,7 @@ export const TenantInviteModal = ({ contract, startStep = 'documents', onClose, 
         )}
         {step === 'link' && invite.data && <LinkStep invitation={invite.data} tenantName={contract.tenantName} />}
       </Modal>
-      {previewIndex !== null && previewDocuments.length > 0 && (
-        <SharedDocumentPreview
-          documents={previewDocuments}
-          initialIndex={previewIndex}
-          imageUrls={imageUrls}
-          onClose={() => setPreviewIndex(null)}
-          onUnauthorized={onUnauthorized}
-        />
-      )}
+      {preview}
       {isLimitOpen && <LimitDialog onClose={() => setIsLimitOpen(false)} />}
     </>
   );

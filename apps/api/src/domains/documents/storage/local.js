@@ -79,7 +79,8 @@ export const createLocalStorage = ({ dir = DEFAULT_LOCAL_STORAGE_DIR, secret }) 
       }
     },
 
-    openObjectStream: (storagePath) => createReadStream(toFilePath(storagePath)),
+    // range: { start, end }(끝 포함)면 그 부분만 읽는다(동영상 탐색, controller의 Range 처리).
+    openObjectStream: (storagePath, range) => createReadStream(toFilePath(storagePath), range ? { start: range.start, end: range.end } : undefined),
 
     // 이미 없으면 그대로 끝난다.
     deleteObject: async (storagePath) => {

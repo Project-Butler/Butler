@@ -6,6 +6,8 @@ import homeOff from './assets/tab-home-off.svg';
 import homeOn from './assets/tab-home-on.svg';
 import userOff from './assets/tab-user-off.svg';
 import userOn from './assets/tab-user-on.svg';
+import scaleOff from './assets/tab-scale-off.svg';
+import scaleOn from './assets/tab-scale-on.svg';
 import usersOff from './assets/tab-users-off.svg';
 import usersOn from './assets/tab-users-on.svg';
 import wrenchOff from './assets/tab-wrench-off.svg';
@@ -18,4 +20,6 @@ export const TAB_ICONS = {
   user: { on: userOn, off: userOff },
   // 임차인 앱 '수리 요청' 탭(#109). Figma 에 없어 같은 선 굵기·색으로 lucide wrench 모양을 옮겼다.
   wrench: { on: wrenchOn, off: wrenchOff },
+  // 임대인 앱 '분쟁' 탭(#215, 임대차 분쟁 센터). Figma 에 없어 wrench 와 같이 lucide scale(천칭) 모양을 옮겼다(웹 사이드바와 같은 아이콘).
+  scale: { on: scaleOn, off: scaleOff },
 };

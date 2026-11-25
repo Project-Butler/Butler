@@ -192,7 +192,7 @@ describe('서류함 조회', { skip: dbTestSkip }, () => {
     assert.equal(await listedCount(landlord, 'FORMER_OWNER', former), 2);
   });
 
-  test('B-3·B-4 이전 소유자는 자기 서류만 읽기 전용으로 보고, 새 소유자는 예전 서류를 보지 않는다', async () => {
+  test('B-3·B-4 이전 소유자는 자기 서류만 보고 계속 올릴 수 있으며, 새 소유자는 예전 서류를 보지 않는다', async () => {
     const previous = await createUser();
     const next = await createUser();
     const property = await createProperty();
@@ -205,8 +205,9 @@ describe('서류함 조회', { skip: dbTestSkip }, () => {
     const previousBox = await box(previous, property);
     assert.deepEqual(allDocumentIds(previousBox).sort(), ids(previousDocs).sort());
     assert.equal(previousBox.ownerships[0].isActive, false);
-    assert.equal(previousBox.ownerships[0].isUploadable, false);
-    assert.equal(previousBox.contracts[0].isUploadable, false);
+    assert.equal(previousBox.ownerships[0].isUploadable, true);
+    assert.equal(previousBox.contracts[0].isUploadable, true);
+    assert.equal(previousBox.contracts[0].isOwnershipActive, false);
 
     const nextBox = await box(next, property);
     assert.deepEqual(allDocumentIds(nextBox), [nextDoc.id]);
@@ -264,7 +265,7 @@ describe('서류함 조회', { skip: dbTestSkip }, () => {
     const data = await box(landlord, property);
     assert.deepEqual(data.ownerships.map((item) => item.id), [current.id, old.id]);
     assert.equal(data.ownerships[0].verificationStatus, 'EXPIRED');
-    assert.equal(data.ownerships[0].isUploadable, false);
+    assert.equal(data.ownerships[0].isUploadable, true); // 인증 만료여도 올릴 수 있다(2026-11-20)
     assert.equal(data.ownerships[0].isActive, true);
     assert.equal(data.ownerships[1].isActive, false);
     assert.equal(data.property.id, property.id);
@@ -274,6 +275,7 @@ describe('서류함 조회', { skip: dbTestSkip }, () => {
     assert.deepEqual(data.contracts.map((item) => item.id), [active.id, terminated.id, expired.id]);
     assert.deepEqual(data.contracts.map((item) => item.status), ['ACTIVE', 'TERMINATED', 'EXPIRED']);
     assert.ok(data.contracts.every((item) => item.isUploadable === true));
+    assert.ok(data.contracts.every((item) => item.isOwnershipActive === true));
     // 최근 올린 순
     assert.deepEqual(ids(data.contracts[0].documents), [second.id, first.id]);
     assert.deepEqual(data.contracts[0].documents.map((item) => item.isSharedWithTenant), [false, true]);

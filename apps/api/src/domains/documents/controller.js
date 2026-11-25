@@ -1,5 +1,6 @@
 // 파일·문서 요청 형식 검사와 응답. 권한·상태 규칙은 service.js.
 import { pipeline } from 'node:stream';
+import express from 'express';
 import { AppError } from '../../platform/AppError.js';
 import { getNow } from '../../platform/dateUtils.js';
 import {
@@ -11,13 +12,18 @@ import {
 import { sendData, sendList } from '../../platform/respond.js';
 import { isUuid } from '../../platform/uuid.js';
 import {
-  DOCUMENT_RESOURCE_TYPES,
-  DOCUMENT_TYPES,
-  isAllowedMimeType,
-  MAX_FILE_BYTES,
-  MAX_FILE_NAME_LENGTH,
-  parseDownloadUrlBody,
-} from './fileRules.js';
+  describeAllowedKinds,
+  describeKindNotAllowedHere,
+  describeSizeLimit,
+  getMaxUploadBytes,
+  getUploadRules,
+  isKindAllowedFor,
+  KNOWN_RESOURCE_TYPES,
+  kindOfMime,
+  kindsForResource,
+  toUploadRulesResponse,
+} from '../../platform/uploadRules.js';
+import { DOCUMENT_RESOURCE_TYPES, DOCUMENT_TYPES, MAX_FILE_NAME_LENGTH, parseDownloadUrlBody } from './fileRules.js';
 import { findPropertyDocumentBox } from './documentBox.js';
 import { SUPPORTED_RESOURCE_TYPES } from './resourcePolicies.js';
 import {
@@ -32,7 +38,7 @@ import {
   verifyUploadRequest,
 } from './service.js';
 
-const UPLOAD_SESSION_FIELDS = ['fileName', 'mimeType', 'sizeBytes', 'documentType'];
+const UPLOAD_SESSION_FIELDS = ['fileName', 'mimeType', 'sizeBytes', 'documentType', 'targetResourceType'];
 const DOCUMENT_FIELDS = ['uploadSessionId', 'resourceType', 'resourceId'];
 
 const throwDocumentNotFound = () => {
@@ -52,10 +58,15 @@ const isValidFileName = (fileName) =>
   fileName.isWellFormed() &&
   !CONTROL_CHAR_PATTERN.test(fileName);
 
+// 세션에서 미리 받는 붙일 곳. 문서 API·첨부 정책·업로드 규칙 표가 아는 resourceType만 받는다.
+const UPLOAD_TARGET_RESOURCE_TYPES = [...new Set([...DOCUMENT_RESOURCE_TYPES, ...SUPPORTED_RESOURCE_TYPES, ...KNOWN_RESOURCE_TYPES])];
+
+// 업로드 세션 바디. targetResourceType(선택)은 붙일 곳이고, 그 곳이 받는 형식·크기를 바로 확인한다(계약 6장).
+// 동영상은 정해진 곳에서만 받으므로 targetResourceType이 꼭 있어야 한다. 최종 판단은 붙일 때 다시 한다.
 const parseUploadSessionBody = (body) => {
   assertAllowedBody(body, UPLOAD_SESSION_FIELDS);
   const details = [];
-  const { fileName, mimeType, sizeBytes, documentType } = body;
+  const { fileName, mimeType, sizeBytes, documentType, targetResourceType } = body;
   if (!isValidFileName(fileName)) {
     details.push({ field: 'fileName', reason: `제어 문자 없는 1~${MAX_FILE_NAME_LENGTH}자 문자열이어야 합니다.` });
   }
@@ -64,10 +75,23 @@ const parseUploadSessionBody = (body) => {
   if (!DOCUMENT_TYPES.includes(documentType)) {
     details.push({ field: 'documentType', reason: `${DOCUMENT_TYPES.join(', ')} 중 하나여야 합니다.` });
   }
+  const hasTarget = targetResourceType !== undefined && targetResourceType !== null;
+  if (hasTarget && !UPLOAD_TARGET_RESOURCE_TYPES.includes(targetResourceType)) {
+    details.push({ field: 'targetResourceType', reason: `${UPLOAD_TARGET_RESOURCE_TYPES.join(', ')} 중 하나여야 합니다.` });
+  }
   throwIfInvalid(details);
 
-  if (!isAllowedMimeType(mimeType)) throw new AppError('FILE_TYPE_NOT_ALLOWED', 422, 'JPEG·PNG·WEBP·HEIC 사진과 PDF만 올릴 수 있습니다.');
-  if (sizeBytes > MAX_FILE_BYTES) throw new AppError('FILE_TOO_LARGE', 422, '파일은 20MB까지 올릴 수 있습니다.');
+  const rules = getUploadRules();
+  const kind = kindOfMime(mimeType);
+  // 붙일 곳을 모르면 기본 묶음(사진·PDF)으로 판단한다.
+  const allowedKinds = kindsForResource(rules, hasTarget ? targetResourceType : undefined);
+  if (!kind || (kind !== 'VIDEO' && !allowedKinds.includes(kind))) {
+    throw new AppError('FILE_TYPE_NOT_ALLOWED', 422, describeAllowedKinds(rules, allowedKinds));
+  }
+  if (kind === 'VIDEO' && !(hasTarget && isKindAllowedFor(rules, targetResourceType, kind))) {
+    throw new AppError('FILE_TYPE_NOT_ALLOWED', 422, describeKindNotAllowedHere(kind));
+  }
+  if (sizeBytes > rules.kinds[kind].maxBytes) throw new AppError('FILE_TOO_LARGE', 422, describeSizeLimit(rules, kind));
   return { fileName: fileName.trim(), mimeType, sizeBytes, documentType };
 };
 
@@ -116,6 +140,26 @@ const encodeRfc5987 = (value) =>
   encodeURIComponent(value).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 const toContentDisposition = (fileName) => `inline; filename*=UTF-8''${encodeRfc5987(fileName)}`;
 
+// Range: bytes=시작-끝 | 시작- | -끝부분길이 (범위 하나만). 동영상 탐색에 쓴다.
+// 돌려주는 값: null(Range 없음·모르는 단위·여러 범위 → 전체 200), 'unsatisfiable'(416), { start, end }(206, 끝 포함).
+export const parseByteRange = (header, totalBytes) => {
+  if (typeof header !== 'string') return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const [, startText, endText] = match;
+  if (startText === '' && endText === '') return null;
+  if (totalBytes < 1) return 'unsatisfiable';
+  if (startText === '') {
+    const suffix = Number(endText);
+    if (suffix === 0) return 'unsatisfiable';
+    return { start: Math.max(0, totalBytes - suffix), end: totalBytes - 1 };
+  }
+  const start = Number(startText);
+  const end = endText === '' ? totalBytes - 1 : Math.min(Number(endText), totalBytes - 1);
+  if (start >= totalBytes || end < start) return 'unsatisfiable';
+  return { start, end };
+};
+
 // Express 4는 async 핸들러의 에러를 자동으로 넘기지 않아서 next(error)로 넘긴다.
 export const postUploadSession = async (req, res, next) => {
   try {
@@ -125,7 +169,7 @@ export const postUploadSession = async (req, res, next) => {
   }
 };
 
-// 업로드 본문(최대 20MB)을 읽기 전에 경로·서명·저장소부터 본다. 틀리면 본문을 받지 않고 바로 거절한다.
+// 업로드 본문(최대 크기는 platform/uploadRules.js)을 읽기 전에 경로·서명·저장소부터 본다. 틀리면 본문을 받지 않고 바로 거절한다.
 export const checkUploadContent = (req, res, next) => {
   try {
     const { uploadId } = req.params;
@@ -137,10 +181,24 @@ export const checkUploadContent = (req, res, next) => {
   }
 };
 
+// GET /files/upload-rules — 화면이 쓸 형식·크기·위치·유효 시간. 요청마다 환경 변수를 다시 읽는다.
+export const getUploadRulesResponse = (req, res, next) => {
+  try {
+    sendData(res, toUploadRulesResponse(getUploadRules()));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 로컬 업로드 본문 한도는 어느 형식이든 받을 수 있는 가장 큰 크기다(요청마다 계산). 형식별 크기는 세션 크기 일치로 보장한다(service).
+export const readUploadBody = (req, res, next) =>
+  express.raw({ type: () => true, limit: getMaxUploadBytes(getUploadRules()) })(req, res, next);
+
 // express.raw의 크기 초과(413)는 공통 처리에서 400이 되므로, 업로드 본문 경로에서는 계약대로 422 FILE_TOO_LARGE로 바꾼다.
 export const mapUploadBodyError = (error, req, res, next) => {
   if (error?.type === 'entity.too.large') {
-    next(new AppError('FILE_TOO_LARGE', 422, '파일은 20MB까지 올릴 수 있습니다.'));
+    const maxMb = Math.round(getMaxUploadBytes(getUploadRules()) / (1024 * 1024));
+    next(new AppError('FILE_TOO_LARGE', 422, `파일은 ${maxMb}MB까지 올릴 수 있습니다.`));
     return;
   }
   next(error);
@@ -213,16 +271,25 @@ export const getDocumentContent = async (req, res, next) => {
     const { documentId } = req.params;
     if (!isUuid(documentId)) throwDocumentNotFound();
     const { document, openStream } = await openDocumentContent(documentId, req.query.token);
+    const totalBytes = Number(document.sizeBytes);
+    const range = parseByteRange(req.get('Range'), totalBytes);
     const headers = {
       'Content-Type': document.mimeType,
-      'Content-Length': String(document.sizeBytes),
       'Content-Disposition': toContentDisposition(document.fileName),
+      'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, max-age=300',
       'X-Content-Type-Options': 'nosniff',
       // 주소를 직접 열어도 스크립트가 돌지 않게 한다(PDF 등).
       'Content-Security-Policy': "sandbox; default-src 'none'",
     };
-    const stream = openStream();
+    if (range === 'unsatisfiable') {
+      res.status(416).set({ ...headers, 'Content-Range': `bytes */${totalBytes}` }).end();
+      return;
+    }
+    const status = range ? 206 : 200;
+    headers['Content-Length'] = String(range ? range.end - range.start + 1 : totalBytes);
+    if (range) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${totalBytes}`;
+    const stream = openStream(range ?? undefined);
     let started = false;
     // 다 보내기 전에 연결이 끊기면 파일을 닫는다.
     res.once('close', () => stream.destroy());
@@ -233,7 +300,7 @@ export const getDocumentContent = async (req, res, next) => {
     });
     stream.once('open', () => {
       started = true;
-      res.status(200).set(headers);
+      res.status(status).set(headers);
       pipeline(stream, res, (error) => {
         if (error && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error('[documents] 다운로드 전송 실패', error.code ?? error.message);
       });

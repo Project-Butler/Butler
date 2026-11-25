@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, PageSkeleton } from '@butler/ui';
 import { FileSignature, FolderOpen, ShieldCheck } from 'lucide-react';
 import { useGetPropertyDocumentBox } from '../../hooks/useGetPropertyDocumentBox';
-import { getUploadTargets, hasUploadTarget, splitContracts, summarizeDocuments } from '../../utils/documentBox';
+import { hasUploadTarget, splitContracts, summarizeDocuments } from '../../utils/documentBox';
 import { DocumentUploadModal } from '../DocumentUploadModal/DocumentUploadModal';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 
@@ -33,8 +33,8 @@ const SummaryColumn = ({ icon: Icon, title, summary, hint }) => (
   </div>
 );
 
-// 호실 상세의 문서함 카드(관리 로그 아래). 제목 "문서함 n건" + [문서 올리기] + [문서함 열기], 내 소유 문서·계약 문서 두 칸.
-// [문서 올리기]는 올릴 곳(isUploadable인 소유 관계 또는 계약)이 있을 때만 보인다. 끝난 소유 호실은 숨기고, 미인증이고 계약도 없으면 인증 안내 한 줄.
+// 호실 상세의 문서함 카드(하우스 로그 아래). 제목 "문서함 n건" + [문서 올리기] + [문서함 열기], 내 소유 문서·계약 문서 두 칸.
+// [문서 올리기]는 올릴 곳(내 소유 관계 또는 그 계약)이 있으면 보인다. 끝난 소유 호실·미인증 호실도 올릴 수 있다(2026-11-20).
 export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized }) => {
   const { data: box, error, isLoading, refetch } = useGetPropertyDocumentBox(propertyId, { onUnauthorized });
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -43,7 +43,6 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
   const contractSummary = summarizeDocuments(box?.contracts ?? []);
   const hasCurrentContract = splitContracts(box?.contracts ?? []).current.length > 0;
   const canUpload = Boolean(box && hasUploadTarget(box));
-  const needsVerification = Boolean(box && !canUpload && getUploadTargets(box).needsVerification);
 
   return (
     <section className="space-y-4 rounded-card border border-line bg-surface p-5" aria-labelledby="document-box-title">
@@ -66,7 +65,6 @@ export const PropertyDocumentBoxCard = ({ propertyId, onNavigate, onUnauthorized
       </div>
       {error && <NoticeBox>{error.message}</NoticeBox>}
       {isLoading && !box && <PageSkeleton variant="text" rows={3} />}
-      {needsVerification && <p className="text-sub text-ink-3">권리자 인증을 마치면 등기부·매매계약서를 올릴 수 있어요</p>}
       {box && (
         <div className="grid grid-cols-2 gap-3">
           <SummaryColumn icon={ShieldCheck} title="내 소유 문서" summary={ownershipSummary} />

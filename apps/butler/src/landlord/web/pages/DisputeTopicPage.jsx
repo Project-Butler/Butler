@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { Button, FilterChip } from '@butler/ui';
+import { Button } from '@butler/ui';
 import { FaqList } from '../components/DisputeReference/FaqList';
 import { LegalNotice } from '../components/DisputeReference/LegalNotice';
-import { PageHeader } from '../components/PageHeader/PageHeader';
+import { DisputeChip, QuestionChipRow } from '../components/DisputeReference/DisputeChips';
+import { DisputeHeader } from '../components/DisputeReference/DisputeHeader';
 import { TopicGuide } from '../components/DisputeReference/TopicGuide';
 import { useGetDisputeFaqList } from '../hooks/useGetDisputeFaqList';
 import { useGetDisputeReferenceList } from '../hooks/useGetDisputeReferenceList';
@@ -14,13 +15,16 @@ import { isUnauthorizedError } from '../../../shared/apiError';
 // 실제 조정 사례는 요약과 함께 3건만 보여 주고, 나머지는 자료 찾기로 잇는다.
 const CASE_COUNT = 3;
 
-const SectionTitle = ({ children }) => <h3 className="text-section font-semibold text-ink">{children}</h3>;
+// 앱은 첫 화면과 같이 상단 바보다 가벼운 묶음 라벨.
+const SectionTitle = ({ isApp, children }) => (
+  <h3 className={isApp ? 'text-m-label font-semibold text-ink-3' : 'text-section font-semibold text-ink'}>{children}</h3>
+);
 
 // 상황 안내: 한 줄 정리와 자주 묻는 질문 칩, (칩을 눌렀으면) 고른 질문의 답을 먼저 보여 주고, 아래에 끝까지 보는 안내(TopicGuide)를 붙인다.
 // 사용자가 사례집을 직접 뒤지지 않아도 되게 정리한 내용이 위에 온다.
 export const DisputeTopicPage = () => {
   const { topicKey } = useParams();
-  const { askAi, openReference, goBack, onNavigate, onUnauthorized } = useOutletContext();
+  const { askAi, openReference, goBack, onNavigate, onUnauthorized, isApp } = useOutletContext();
   const topic = findTopic(topicKey);
   const briefing = TOPIC_BRIEFINGS[topicKey];
   const category = topic?.categories.join(',');
@@ -66,31 +70,25 @@ export const DisputeTopicPage = () => {
   const askAboutTopic = () => askAi(`${topic.label} 문제로 상담하고 싶어요.\n제 상황: `);
   const header = (
     <div className="flex flex-col gap-3">
-      <PageHeader title={topic.label} onBack={goBack} />
+      <DisputeHeader title={topic.label} onBack={goBack} />
       <div className="rounded-card bg-accent-soft p-4 lg:p-5">
         <p className="break-keep text-card font-semibold text-accent-strong">{briefing.headline}</p>
         <p className="mt-2 text-sub text-ink-2">근거 · {briefing.laws.join(', ')}</p>
       </div>
-      {/* 자주 묻는 질문 칩(카카오 고객센터 추천 키워드처럼 한 줄, 넘기는 캐러셀 아님). 누르면 바로 아래 '고른 질문'에 답을 펼친다.
+      {/* 자주 묻는 질문 칩(첫 화면과 같은 칩 줄). 누르면 바로 아래 '고른 질문'에 답을 펼친다.
           상황 전체 목록이 아니라 사례가 많은 질문만 고른 것이라, 첫 화면과 같은 '자주 묻는 질문' 라벨을 보이게 둔다. */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-sub font-semibold text-ink-3">자주 묻는 질문</span>
-        <ul className="contents">
-          {(TOPIC_QUESTIONS[topicKey] ?? []).map((question) => (
-            <li key={question.faq}>
-              <FilterChip
-                selected={question.faq === selectedFaqKey}
-                onClick={() => toggleFaq(question.faq)}
-              >
-                {question.label}
-              </FilterChip>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <QuestionChipRow isApp={isApp}>
+        {(TOPIC_QUESTIONS[topicKey] ?? []).map((question) => (
+          <li key={question.faq}>
+            <DisputeChip selected={question.faq === selectedFaqKey} onClick={() => toggleFaq(question.faq)}>
+              {question.label}
+            </DisputeChip>
+          </li>
+        ))}
+      </QuestionChipRow>
       {selectedFaq && (
         <section className="mt-3 flex flex-col gap-3" aria-label="고른 질문">
-          <SectionTitle>고른 질문</SectionTitle>
+          <SectionTitle isApp={isApp}>고른 질문</SectionTitle>
           <FaqList key={selectedFaq.key} faqs={[selectedFaq]} onOpenReference={openReference} />
         </section>
       )}
@@ -112,6 +110,7 @@ export const DisputeTopicPage = () => {
       {header}
       <TopicGuide
         key={topicKey}
+        isApp={isApp}
         guide={briefing.guide}
         helpRoutes={HELP_ROUTES}
         cases={caseItems}

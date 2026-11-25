@@ -1,9 +1,18 @@
 import { useRef } from 'react';
-import { FileText, ImagePlus, Lock, X } from 'lucide-react';
+import { FileText, FileVideo, ImagePlus, Lock, X } from 'lucide-react';
 import { Button } from '@butler/ui';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { DocumentThumbnail } from '../DocumentThumbnail/DocumentThumbnail';
-import { ATTACHMENT_ACCEPT, formatFileSize, MAX_LOG_ATTACHMENTS } from '../../utils/attachment';
+import { useDocumentPreview } from '../../hooks/useDocumentPreview';
+import {
+  buildAttachmentAccept,
+  DEFAULT_FILE_KINDS,
+  DEFAULT_UPLOAD_RULES,
+  describeAttachmentLimits,
+  formatFileSize,
+  isVideoMimeType,
+  MAX_LOG_ATTACHMENTS,
+} from '../../utils/attachment';
 
 const UploadingPreview = ({ item }) => (
   <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-line bg-surface-2">
@@ -11,7 +20,7 @@ const UploadingPreview = ({ item }) => (
       <img src={item.previewUrl} alt={item.fileName} className="h-full w-full object-cover" />
     ) : (
       <span className="flex flex-col items-center gap-1.5 px-2">
-        <FileText size={24} className="text-ink-3" />
+        {isVideoMimeType(item.mimeType) ? <FileVideo size={24} className="text-ink-3" /> : <FileText size={24} className="text-ink-3" />}
         <span className="w-full truncate text-center text-chip text-ink-2">{item.fileName}</span>
       </span>
     )}
@@ -31,14 +40,25 @@ const UploadingPreview = ({ item }) => (
   </div>
 );
 
-// 관리 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
+// 하우스 로그 사진 첨부(작성·수정 공통). uploads는 useAttachmentUploads()의 반환값.
 // 형식·크기는 고를 때 미리 검사하고, 업로드 진행·미리보기·빼기를 보여 준다.
-// label: 칸 이름(기본 '사진 (선택)'). 갱신 거절 통지 증빙처럼 PDF 도 받는 곳은 다른 이름을 준다.
-export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled = false, onUnauthorized }) => {
+// label: 칸 이름(기본 '사진 (선택)', 동영상을 받는 곳은 '사진·동영상 (선택)'). 갱신 거절 통지 증빙처럼 PDF 도 받는 곳은 다른 이름을 준다.
+// previewInPopup: 올라간 파일을 누르면 새 탭 대신 미리보기 팝업으로 연다(PC 웹). 앱 화면은 지금처럼 새 탭.
+export const AttachmentPicker = ({ uploads, label, disabled = false, onUnauthorized, previewInPopup = false }) => {
   const inputRef = useRef(null);
+  const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
   const { items, addFiles, remove, notice, storageUnavailable } = uploads;
+  // 올라간 파일들만 이전·다음으로 넘겨 본다(올리는 중인 파일은 아직 서버 문서가 아니다).
+  const uploadedDocuments = items
+    .filter((item) => item.status === 'done' && item.documentId)
+    .map((item) => ({ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes }));
   const maxCount = uploads.maxCount ?? MAX_LOG_ATTACHMENTS;
   const isFull = items.length >= maxCount;
+  // 받는 형식은 useAttachmentUploads(resourceType)가 정한다. 동영상을 받는 곳(수리 요청)만 버튼·안내가 달라진다.
+  const rules = uploads.rules ?? DEFAULT_UPLOAD_RULES;
+  const kinds = uploads.kinds ?? DEFAULT_FILE_KINDS;
+  const acceptsVideo = kinds.includes('VIDEO');
+  const title = label ?? (acceptsVideo ? '사진·동영상 (선택)' : '사진 (선택)');
 
   const handleChange = (event) => {
     addFiles(event.target.files);
@@ -50,7 +70,7 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <span className="text-label font-semibold text-ink">
-          {label}{' '}
+          {title}{' '}
           <span className="font-num font-normal tabular-nums text-ink-3">
             {items.length}/{maxCount}
           </span>
@@ -62,19 +82,19 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
           disabled={disabled || storageUnavailable || isFull}
         >
           <ImagePlus size={14} className="-ml-0.5 mr-1 inline-block" />
-          사진 추가
+          {acceptsVideo ? '사진·동영상 추가' : '사진 추가'}
         </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
-          accept={ATTACHMENT_ACCEPT}
+          accept={buildAttachmentAccept(rules, kinds)}
           onChange={handleChange}
           className="hidden"
           aria-label="사진 파일 선택"
         />
       </div>
-      <p className="text-chip text-ink-3">JPEG·PNG·WEBP·HEIC 사진과 PDF, 한 파일 20MB까지 붙일 수 있어요.</p>
+      <p className="text-chip text-ink-3">{describeAttachmentLimits(rules, kinds)}</p>
       {storageUnavailable && <NoticeBox tone="warn">사진 첨부 준비 중이에요. 글은 그대로 저장할 수 있어요.</NoticeBox>}
       {notice && <NoticeBox tone="warn">{notice}</NoticeBox>}
 
@@ -84,7 +104,11 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
             <li key={item.key} className="space-y-1">
               <div className="relative">
                 {item.status === 'done' && !item.previewUrl ? (
-                  <DocumentThumbnail document={{ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType }} onUnauthorized={onUnauthorized} />
+                  <DocumentThumbnail
+                    document={{ id: item.documentId, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes }}
+                    onUnauthorized={onUnauthorized}
+                    onOpen={previewInPopup ? (document) => openPreview(document, uploadedDocuments) : undefined}
+                  />
                 ) : (
                   <UploadingPreview item={item} />
                 )}
@@ -111,6 +135,7 @@ export const AttachmentPicker = ({ uploads, label = '사진 (선택)', disabled 
           ))}
         </ul>
       )}
+      {preview}
     </div>
   );
 };

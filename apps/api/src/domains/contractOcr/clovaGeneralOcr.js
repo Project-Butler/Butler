@@ -15,7 +15,22 @@ const throwUnavailable = () => {
 const toPlainText = (fields = []) =>
   fields.map((field) => `${field.inferText ?? ''}${field.lineBreak ? '\n' : ' '}`).join('').trim();
 
-// file: Buffer, format: 'jpg' | 'png' | 'pdf' → 읽은 글자 전체(여러 쪽이면 쪽마다 빈 줄로 나눔)
+// 오류 응답의 코드·메시지만 꺼낸다(예: "0002 Secret validate failed"). 계약서 내용은 없어 로그에 남겨도 된다.
+// OCR 오류는 { code, message }, API Gateway 오류(주소 틀림 등)는 { error: { errorCode, message } } 형식이다.
+// path(도메인 주소)는 남기지 않는다. 본문을 읽지 못하면 빈 문자열.
+const readErrorCode = async (res) => {
+  try {
+    const body = await res.json();
+    const code = body?.code ?? body?.error?.errorCode ?? '';
+    const message = body?.message ?? body?.error?.message ?? '';
+    return `${code} ${String(message).slice(0, 100)}`.trim();
+  } catch {
+    return '';
+  }
+};
+
+// file: Buffer, format: 'jpg' | 'png' | 'pdf'
+// → { text: 읽은 글자 전체(여러 쪽이면 쪽마다 빈 줄로 나눔), pageCount: CLOVA가 받은 쪽 수 }
 // 설정이 없거나 CLOVA가 응답하지 않으면 503. 원문·응답 본문은 개인정보라 로그에 남기지 않는다.
 export const readContractText = async ({ file, format }) => {
   const url = process.env.CLOVA_GENERAL_OCR_INVOKE_URL;
@@ -40,7 +55,7 @@ export const readContractText = async ({ file, format }) => {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {
-      console.error('[contractOcr/clova] HTTP 오류:', res.status);
+      console.error('[contractOcr/clova] HTTP 오류:', res.status, await readErrorCode(res));
       throwUnavailable();
     }
     body = await res.json();
@@ -50,7 +65,9 @@ export const readContractText = async ({ file, format }) => {
     throwUnavailable();
   }
 
-  // 여러 쪽 PDF가 images 하나로 오는지 쪽마다 오는지 문서에 없어서, 온 것을 모두 이어 붙인다.
-  const pages = (body?.images ?? []).filter((image) => image.inferResult === 'SUCCESS').map((image) => toPlainText(image.fields));
-  return pages.filter(Boolean).join('\n\n');
+  // 여러 쪽 PDF는 쪽마다 images 하나씩 쪽 순서대로 온다(2026-11-19 10쪽 PDF로 확인). 읽은 쪽을 이어 붙인다.
+  // pageCount는 CLOVA가 받은 쪽 수(쪽마다 1건 과금)라 읽기에 실패한 쪽도 센다.
+  const images = body?.images ?? [];
+  const pages = images.filter((image) => image.inferResult === 'SUCCESS').map((image) => toPlainText(image.fields));
+  return { text: pages.filter(Boolean).join('\n\n'), pageCount: images.length };
 };
