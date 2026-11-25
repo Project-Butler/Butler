@@ -6,5 +6,7 @@ export const getComplexMarketPrices = async ({ complexId, ...params }) => {
   // 연동 규격 2장 시세: { scope: 'COMPLEX', complexId, legalDongCode, dealType, areaMin, areaMax, coveredFromYearMonth, asOf, source,
   //   collectionStatus: 'READY'|'COLLECTING', jobId, monthly: [{ yearMonth, dealCount, avgPrice, minPrice, maxPrice, avgDeposit, avgMonthlyRent }],
   //   recentDeals: [{ contractDate, dealType, complexName, exclusiveArea, floor, price, deposit, monthlyRent }] } — 금액은 원
+  // COLLECTING 일 때만 collectionProgress(그 시군구 · 그 종류, 보관 기간의 달 기준 — READY 에는 없음):
+  //   { requiredMonths, collectedMonths, failedMonths, notTriedMonths(셋을 더하면 requiredMonths), lastAttemptedAt(ISO | null), lastErrorCode('NO_KEY' · '30' · 'TIMEOUT' … | null) }
   return data.data;
 };

@@ -1,5 +1,7 @@
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
+import { COLLECTING_BRIEFING_TEXT, collectingNotice } from '../../utils/communityMarketCollecting';
 import { chartMonths, chartValue, recentSummary } from '../../utils/communityMarketSummary';
+import { CollectingDescription } from '../CommunityMarket/CollectingDescription';
 import { MarketSource } from '../CommunityMarket/MarketSource';
 import { PriceChart } from '../CommunityMarket/PriceChart';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
@@ -23,7 +25,20 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (data.collectionStatus === 'COLLECTING') body = <BriefingNote>실거래를 모으는 중이에요. 하루 안에 채워집니다</BriefingNote>;
+  else if (data.collectionStatus === 'COLLECTING') {
+    // 처음 모으는 중이면 한 줄 그대로, 받기가 실패한 달이 있으면 두 줄(문구 · 이유는 utils/communityMarketCollecting — 시세 탭과 같은 판단)
+    const notice = collectingNotice(data);
+    body = notice.failed ? (
+      <BriefingNote>
+        <span className="block">{notice.title}</span>
+        <span className="block">
+          <CollectingDescription notice={notice} />
+        </span>
+      </BriefingNote>
+    ) : (
+      <BriefingNote>{COLLECTING_BRIEFING_TEXT}</BriefingNote>
+    );
+  }
   else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <BriefingNote>{band.label}에는 최근 매매 거래가 없습니다</BriefingNote>;
   else {
     body = (

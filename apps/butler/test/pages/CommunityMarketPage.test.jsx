@@ -53,6 +53,10 @@ const ready = ({ dealType, areaMin = 60, areaMax = 85 }) => {
   };
 };
 const collecting = { ...ready({ dealType: 'SALE' }), coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [] };
+// 모으기 진행(서버가 COLLECTING 에만 준다) — 처음 모으는 중(실패 없음) · 받기 실패(UTC 11/24 17:00 = 한국 11/25 02:00 마지막 시도)
+const progress = (values) => ({ requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastErrorCode: null, ...values });
+const collectingFirst = { ...collecting, collectionProgress: progress({ collectedMonths: 4, notTriedMonths: 9, lastAttemptedAt: '2026-11-24T17:00:03.000Z' }) };
+const collectingFailed = { ...collecting, collectionProgress: progress({ failedMonths: 13, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: 'NO_KEY' }) };
 const empty = { ...ready({ dealType: 'SALE' }), monthly: [], recentDeals: [] };
 
 const renderMarket = (path = '/community/market') => {
@@ -117,6 +121,28 @@ describe('시세 탭(국토교통부 실거래가)', () => {
     expect(await screen.findByText('이 단지의 실거래를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.getByText('하루 안에 채워집니다. 그때 다시 열어 주세요.')).toBeInTheDocument();
     expect(screen.queryByText(/거래가 없습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/출처:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 실패한 달 없음(처음 모으는 중)이면 "하루 안에" 문구 그대로 — 마지막 시도 날짜 없음', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collectingFirst);
+    renderMarket();
+    expect(await screen.findByText('이 단지의 실거래를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('하루 안에 채워집니다. 그때 다시 열어 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText('시세를 아직 불러오지 못했어요')).not.toBeInTheDocument();
+    expect(screen.queryByText(/마지막 시도/)).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 받기가 실패한 달이 있으면 "아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜 — "하루 안에" · 실패 코드 없음', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collectingFailed);
+    renderMarket();
+    expect(await screen.findByText('시세를 아직 불러오지 못했어요', {}, FIRST_RENDER)).toBeInTheDocument();
+    const description = screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '매일 새벽 다시 시도하고 있어요 · 마지막 시도 2026-11-25');
+    expect(within(description).getByText('2026-11-25')).toHaveClass('font-num', 'tabular-nums');
+    expect(screen.queryByText(/하루 안에/)).not.toBeInTheDocument();
+    expect(screen.queryByText('이 단지의 실거래를 모으는 중이에요')).not.toBeInTheDocument();
+    expect(screen.queryByText(/NO_KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/출처:/)).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });

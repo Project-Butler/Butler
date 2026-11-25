@@ -1,11 +1,11 @@
 // 시세 읽기(요청 경로) — 시세 계획서 6절, 응답은 연동 규격 2장 "시세" 와 같은 모양. **외부 API 를 부르지 않는다**(저장된 표만).
 // 단지 시세 = 그 단지에 이어진 거래, 동 시세 = 그 법정동의 거래 전부(이어진 · 못 이은 것 모두).
-// 아직 그 시군구를 다 모으지 못했으면 COLLECTING(monthly · recentDeals 빈 배열 + 요청한 사람 이름의 작업 id).
+// 아직 그 시군구를 다 모으지 못했으면 COLLECTING(monthly · recentDeals 빈 배열 + 요청한 사람 이름의 작업 id + 모으기 진행 collectionProgress).
 
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
 import { isUuid } from '../../../platform/uuid.js';
-import { DEAL_TYPES, KEEP_MONTHS, RECENT_DEALS, SOURCE, areaRange } from '../marketPriceRules.js';
+import { DEAL_TYPES, KEEP_MONTHS, RECENT_DEALS, SOURCE, areaRange, safeErrorCode } from '../marketPriceRules.js';
 import { firstDayOf, isYearMonth, kstDate, kstYearMonth, lastDayOf, retentionMonths, shiftYearMonth, yearMonthsBetween } from '../months.js';
 import { ensureBackfillJob } from './backfillJobs.js';
 import { loadLinkIndex, relinkSigungu } from './collect.js';
@@ -47,6 +47,45 @@ const loadCoverage = async (sigunguCode, kind) => {
   const months = rows.map((row) => row.yearMonth).sort();
   const lastCollectedAt = rows.reduce((latest, row) => (!latest || row.collectedAt > latest ? row.collectedAt : latest), null);
   return { coveredMonths: new Set(months), coveredFromYearMonth: months[0] ?? null, lastCollectedAt };
+};
+
+// COLLECTING 응답의 collectionProgress(순수 함수) — 그 시군구 · 그 종류(매매 / 전월세)의, 보관 기간 months 의 달마다 셋 중 하나:
+//   collectedMonths 한 번이라도 모음(collectedAt 있음 — 마지막 다시 모으기가 실패했어도 데이터는 있다)
+//   failedMonths    시도했지만 한 번도 못 모음(성공하면 collectedAt 이 늘 적히므로 — collect.js collectOne — collectedAt 없는 행 = 실패만 한 달)
+//   notTriedMonths  기록 없음(아직 차례가 안 옴)
+// 셋을 더하면 requiredMonths(= 보관 기간 달 수). 왜: 배포 DB · 로그를 못 보는 사람도 응답만으로 "처음 모으는 중" 과 "받기가 계속 실패" 를 가리게(11/25).
+// lastAttemptedAt = 그 달들의 마지막 시도 시각(ISO, 성공 · 실패 모두). lastErrorCode = 실패만 한 달 중 가장 최근에 시도한 달의 코드 그대로
+// (예: NO_KEY · 30 · TIMEOUT — 실패한 달이 없으면 null). 요청 주소 · 키는 담지 않는다(safeErrorCode 를 한 번 더 거친다)
+export const summarizeCollectionProgress = (rows, months) => {
+  const byMonth = new Map(rows.map((row) => [row.yearMonth, row]));
+  const progress = { requiredMonths: months.length, collectedMonths: 0, failedMonths: 0, notTriedMonths: 0, lastAttemptedAt: null, lastErrorCode: null };
+  let lastAttemptedAt = null;
+  let lastFailure = null;
+  for (const month of months) {
+    const row = byMonth.get(month);
+    if (!row) {
+      progress.notTriedMonths += 1;
+      continue;
+    }
+    if (!lastAttemptedAt || row.attemptedAt > lastAttemptedAt) lastAttemptedAt = row.attemptedAt;
+    if (row.collectedAt) {
+      progress.collectedMonths += 1;
+    } else {
+      progress.failedMonths += 1;
+      if (!lastFailure || row.attemptedAt > lastFailure.attemptedAt) lastFailure = row;
+    }
+  }
+  progress.lastAttemptedAt = lastAttemptedAt ? new Date(lastAttemptedAt).toISOString() : null;
+  progress.lastErrorCode = lastFailure ? safeErrorCode(lastFailure.lastErrorCode ?? 'UNKNOWN') : null;
+  return progress;
+};
+
+const loadCollectionProgress = async (sigunguCode, kind, months) => {
+  const rows = await prisma.marketCollection.findMany({
+    where: { sigunguCode, dealKind: kind, yearMonth: { in: months } },
+    select: { yearMonth: true, collectedAt: true, attemptedAt: true, lastErrorCode: true },
+  });
+  return summarizeCollectionProgress(rows, months);
 };
 
 // 매달 하나(거래가 있는 달만 — 화면이 빈 달을 null 로 그린다). 금액은 원, 평균은 반올림
@@ -100,12 +139,15 @@ const buildPrices = async ({ user, scope, complexId, legalDongCode, sigunguCode,
   };
   const coverage = await loadCoverage(sigunguCode, kind);
   // 요청 기간 중 보관 기간 안의 달은 모두 모아져 있어야 READY(보관 기간 밖은 "있는 기간만" — coveredFromYearMonth 로 알린다)
-  const keep = new Set(retentionMonths(now));
+  const keepMonths = retentionMonths(now);
+  const keep = new Set(keepMonths);
   const required = yearMonthsBetween(query.from, query.to).filter((month) => keep.has(month));
   const missing = required.filter((month) => !coverage.coveredMonths.has(month));
   if (missing.length > 0 || !coverage.lastCollectedAt) {
     const jobId = await ensureBackfillJob(user.id, sigunguCode);
-    return { ...common, coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId, monthly: [], recentDeals: [] };
+    // 진행은 요청 기간이 아니라 보관 기간 전체 기준(정기 실행이 채우는 단위). READY 응답에는 이 칸이 없다(규격 모양 그대로)
+    const collectionProgress = await loadCollectionProgress(sigunguCode, kind, keepMonths);
+    return { ...common, coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId, collectionProgress, monthly: [], recentDeals: [] };
   }
   // 마지막 수집 뒤에 등록된 단지 — 원천을 부르지 않고 저장된 거래를 지금 잇는다(DB 만, 다음 정기 실행 전까지만 일어난다)
   if (complexCreatedAt && complexCreatedAt > coverage.lastCollectedAt) await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));

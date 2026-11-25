@@ -7,7 +7,7 @@
 import { prisma } from '../../../platform/prismaClient.js';
 import { listAllOwnedLegalDongCodes } from '../../community/platformBridge.js';
 import { buildLinkIndex, dealLotKey, linkDeals, linkStoredKeys, roadKeyOf, usableKeys } from '../linkComplex.js';
-import { CONCURRENCY, REFRESH_MIN_AGE_MS, REFRESH_MONTHS, REQUEST_TIMEOUT_MS, RUN_BUDGET_MS } from '../marketPriceRules.js';
+import { CONCURRENCY, REFRESH_MIN_AGE_MS, REFRESH_MONTHS, REQUEST_TIMEOUT_MS, RUN_BUDGET_MS, safeErrorCode } from '../marketPriceRules.js';
 import { retentionMonths } from '../months.js';
 import { fetchRtmsMonth } from '../rtmsProvider.js';
 import { completeBackfillJobs, listPendingBackfillSigunguCodes } from './backfillJobs.js';
@@ -116,7 +116,8 @@ const collectOne = async (task, { fetchImpl, getIndex, nowDate, now, deadline, s
     return { ok: true, calls, saved: rows.length, linked: rows.filter((row) => row.complexId).length, cancelled: deals.length - kept.length };
   } catch (error) {
     const attemptedAt = nowDate();
-    const code = String(error?.code ?? error?.name ?? 'ERROR').slice(0, 30);
+    // 코드만 남긴다(메시지에는 주소가 섞일 수 있다). 영문 · 숫자 · 밑줄 30자가 아니면 UNKNOWN — 규칙 파일 safeErrorCode
+    const code = safeErrorCode(error?.code ?? error?.name ?? 'ERROR');
     await prisma.marketCollection.upsert({
       where,
       create: { sigunguCode, yearMonth, dealKind: kind, status: 'FAILED', attemptedAt, lastErrorCode: code },

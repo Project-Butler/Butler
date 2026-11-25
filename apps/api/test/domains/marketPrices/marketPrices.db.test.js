@@ -7,7 +7,9 @@ import { after, before, describe, test } from 'node:test';
 import app from '../../../src/app.js';
 import { signAccessToken } from '../../../src/domains/auth/service.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
+import { formatCollectionLog } from '../../../src/domains/marketPrices/controller.js';
 import { roadKeyOf } from '../../../src/domains/marketPrices/linkComplex.js';
+import { retentionMonths } from '../../../src/domains/marketPrices/months.js';
 import { BACKFILL_JOB_TYPE, REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
 import { normalizeItem, parseRtmsXml } from '../../../src/domains/marketPrices/rtmsProvider.js';
 import { collectMarketPrices, loadLinkIndex, rebuildSigunguLinks, relinkSigungu } from '../../../src/domains/marketPrices/service/collect.js';
@@ -351,6 +353,120 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     const after = await dealsIn({ dealKind: 'TRADE', contractYearMonth: '2026-10' });
     assert.equal(before.length, 3);
     assert.deepEqual(after.map((r) => r.id).sort(), before.map((r) => r.id).sort()); // 같은 행 그대로
+  });
+
+  describe('COLLECTING 의 모으기 진행(collectionProgress) — 시군구 · 종류마다, 보관 기간의 달 기준', () => {
+    // 가짜 키 — 요청 주소에만 들어가고 응답 · 요약 · 로그에는 없어야 한다. 끝나면 원래 값(.env)으로 되돌린다
+    const FAKE_KEY = 'TEST-ONLY+fake/key==';
+    const originalKey = process.env.DATA_GO_KR_SERVICE_KEY;
+    after(() => {
+      if (originalKey === undefined) delete process.env.DATA_GO_KR_SERVICE_KEY;
+      else process.env.DATA_GO_KR_SERVICE_KEY = originalKey;
+    });
+    const LEAK_WORDS = ['serviceKey', 'apis.data.go.kr', 'http', 'RTMSDataSvc', FAKE_KEY, encodeURIComponent(FAKE_KEY)];
+    const assertNoLeak = (text, label) => {
+      for (const word of LEAK_WORDS) assert.ok(!text.includes(word), `${label}: ${word}`);
+    };
+    // 아직 아무도 모으지 않은 시군구의 법정동 하나(다른 테스트 · 로컬 수집과 겹치지 않게)
+    const pickFreshDong = async () => {
+      const collected = new Set((await prisma.marketCollection.findMany({ distinct: ['sigunguCode'], select: { sigunguCode: true } })).map((row) => row.sigunguCode));
+      const regions = await prisma.region.findMany({ where: { id: { startsWith: '4' } }, select: { id: true }, orderBy: { id: 'asc' }, take: 1000 });
+      const region = regions.find((row) => !collected.has(row.id.slice(0, 5)) && !sigungus.has(row.id.slice(0, 5)));
+      sigungus.add(region.id.slice(0, 5));
+      return region.id;
+    };
+    const regionPrices = async (dong, dealType) => {
+      const res = await api(landlord, `/api/v1/market-prices/regions/${dong}?dealType=${dealType}`);
+      assert.equal(res.status, 200);
+      const text = await res.text();
+      return { text, data: JSON.parse(text).data };
+    };
+    const lastAttemptOf = async (sigunguCode, dealKind) =>
+      (await prisma.marketCollection.findFirst({ where: { sigunguCode, dealKind }, orderBy: { attemptedAt: 'desc' } })).attemptedAt.toISOString();
+
+    test('한 번도 안 시도함 → 모두 성공 전(일부만 모음) → 일부 FAILED(코드 30), 매매 · 전월세는 따로 — 응답 · 요약 · 로그에 키 · 요청 주소 없음', async () => {
+      const dong = await pickFreshDong();
+      const sgg = dong.slice(0, 5);
+      const months = retentionMonths(new Date()); // 응답도 지금 시각 기준
+      process.env.DATA_GO_KR_SERVICE_KEY = FAKE_KEY;
+      const urls = [];
+      // 가장 오래된 달의 매매만 "등록되지 않은 키"(30), 나머지는 0건 정상
+      const fetchImpl = async (url) => {
+        urls.push(url);
+        const params = new URL(url).searchParams;
+        const failing = url.includes('RTMSDataSvcAptTradeDev') && params.get('DEAL_YMD') === months[0].replace('-', '');
+        return { ok: true, status: 200, headers: new Headers(), text: async () => (failing ? KEY_ERROR_XML : EMPTY_XML) };
+      };
+      let clock = Date.now();
+      const tick = () => {
+        clock += 500;
+        return clock;
+      };
+
+      // 1) 한 번도 안 시도함
+      const untried = await regionPrices(dong, 'SALE');
+      assert.equal(untried.data.collectionStatus, 'COLLECTING');
+      assert.deepEqual(untried.data.collectionProgress, { requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastErrorCode: null });
+
+      // 2) 모두 성공 전 — 시간 한도로 최근 몇 묶음만(실패 없음)
+      const partial = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: tick, budgetMs: REQUEST_TIMEOUT_MS + 3000 });
+      assert.equal(partial.failed, 0);
+      const tradeDone = await prisma.marketCollection.count({ where: { sigunguCode: sgg, dealKind: 'TRADE', collectedAt: { not: null } } });
+      assert.ok(tradeDone >= 1 && tradeDone < 13, String(tradeDone));
+      const inProgress = await regionPrices(dong, 'SALE');
+      assert.equal(inProgress.data.collectionStatus, 'COLLECTING');
+      assert.deepEqual(inProgress.data.collectionProgress, {
+        requiredMonths: 13, collectedMonths: tradeDone, failedMonths: 0, notTriedMonths: 13 - tradeDone, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastErrorCode: null,
+      });
+
+      // 3) 나머지를 모으다 가장 오래된 달의 매매만 30 으로 실패
+      const full = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: tick });
+      assert.equal(full.failed, 1);
+      assert.deepEqual(full.failures, [`${sgg} ${months[0]} TRADE 30`]);
+      const failed = await regionPrices(dong, 'SALE');
+      assert.equal(failed.data.collectionStatus, 'COLLECTING');
+      assert.deepEqual(failed.data.collectionProgress, {
+        requiredMonths: 13, collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastErrorCode: '30',
+      });
+      // 전월세는 13개월 다 모았다 — READY 응답은 그대로(collectionProgress 칸 없음)
+      const jeonse = await regionPrices(dong, 'JEONSE');
+      assert.equal(jeonse.data.collectionStatus, 'READY');
+      assert.ok(!('collectionProgress' in jeonse.data));
+
+      // 키는 요청 주소에만 — 응답 · 수집 요약 · 로그 한 줄 어디에도 없다
+      assert.ok(urls.length > 0 && urls.every((url) => new URL(url).searchParams.get('serviceKey') === FAKE_KEY));
+      for (const [label, text] of [['안 해 봄', untried.text], ['모으는 중', inProgress.text], ['실패', failed.text], ['READY', jeonse.text]]) assertNoLeak(text, label);
+      for (const summary of [partial, full]) {
+        assertNoLeak(JSON.stringify(summary), '요약');
+        assertNoLeak(formatCollectionLog(summary), '로그');
+      }
+      const stored = await prisma.marketCollection.findMany({ where: { sigunguCode: sgg }, select: { lastErrorCode: true } });
+      assertNoLeak(JSON.stringify(stored), 'market_collections');
+    });
+
+    test('NO_KEY: 키 없이 수집하면 원천을 부르지 않고 모든 달이 FAILED NO_KEY — 응답의 lastErrorCode 가 NO_KEY', async () => {
+      const dong = await pickFreshDong();
+      const sgg = dong.slice(0, 5);
+      delete process.env.DATA_GO_KR_SERVICE_KEY;
+      const calls = [];
+      const fetchImpl = async (url) => {
+        calls.push(url);
+        throw new Error('키가 없으면 부르지 않아야 한다');
+      };
+      const summary = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: () => Date.now() });
+      assert.equal(calls.length, 0);
+      assert.deepEqual([summary.planned, summary.done, summary.failed, summary.calls], [26, 0, 26, 0]);
+      assert.equal(summary.failures.length, 10);
+      assert.ok(summary.failures.every((line) => new RegExp(`^${sgg} \\d{4}-\\d{2} (TRADE|RENT) NO_KEY$`).test(line)), summary.failures.join(' / '));
+      for (const dealType of ['SALE', 'JEONSE', 'MONTHLY']) {
+        const { data, text } = await regionPrices(dong, dealType);
+        assert.equal(data.collectionStatus, 'COLLECTING');
+        const { lastAttemptedAt, ...counts } = data.collectionProgress;
+        assert.deepEqual(counts, { requiredMonths: 13, collectedMonths: 0, failedMonths: 13, notTriedMonths: 0, lastErrorCode: 'NO_KEY' });
+        assert.equal(lastAttemptedAt, await lastAttemptOf(sgg, dealType === 'SALE' ? 'TRADE' : 'RENT'));
+        assertNoLeak(text, dealType);
+      }
+    });
   });
 
   test('cron 경로: CRON_SECRET 이 없으면 숨기고(404), 있으면 Bearer 가 틀릴 때 401', async () => {
