@@ -1,13 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { NoticeBox } from '../components/NoticeBox/NoticeBox';
 import { useGetCommunityPost } from '../hooks/useGetCommunityPost';
 import { useGetMyBuildings } from '../hooks/useGetMyBuildings';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
+import { CommunitySurfaceProvider } from '../components/CommunityLayout/CommunitySurface';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { useNicknameGate } from '../components/CommunityNickname/useNicknameGate';
 import { loadCurrentComplexId, pickCurrentBuilding, saveCurrentComplexId } from '../utils/communityCurrentBuilding';
+import { useCommunityGoBack as useGoBack } from '../utils/communityNavigation';
 import { getRegionPreview } from '../utils/communityPreview';
 import { COMMUNITY_PATH } from '../routes';
 import { CommunityBriefingPage } from './CommunityBriefingPage';
@@ -31,16 +33,7 @@ import { CommunityPostWritePage } from './CommunityPostWritePage';
 // 화면은 LandlordLayout 안의 PC 페이지다 — 머리 · 탭 줄은 CommunityFrame.
 const DEFAULT_TAB_PATH = `${COMMUNITY_PATH}/briefing`;
 
-// 하위 화면의 "뒤로": 앱 안에서 들어왔으면 브라우저 뒤로가기, 주소를 직접 열었으면(돌아갈 기록 없음) fallback 으로.
-// 판단은 react-router 가 history state 에 두는 idx(push 때만 오르고 replace 에는 그대로)로 한다 —
-// location.key 는 replace 이동(새 글 등록 → 상세)에도 바뀌어서, 주소로 연 글쓰기에서 등록한 뒤 뒤로가 앱 밖으로 나갔다.
-const useGoBack = (fallback) => {
-  const navigate = useNavigate();
-  return useCallback(() => {
-    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
-    else navigate(fallback, { replace: true });
-  }, [navigate, fallback]);
-};
+// 하위 화면의 "뒤로"는 utils/communityNavigation useCommunityGoBack — 앱 뒤로 가기 바도 같은 규칙 · 같은 fallback 표를 쓴다.
 
 const PollDetailRoute = ({ frame }) => {
   const { pollId } = useParams();
@@ -180,4 +173,10 @@ const CommunityRoutes = ({ onNavigate }) => {
 
 // 커뮤니티 안 이동은 react-router. App 이 넘기는 onNavigate 는 커뮤니티 밖(호실 등록 · 권리자 인증)으로 나갈 때만 쓴다.
 // react-query 는 앱 공용 QueryClientProvider(main.jsx)를 쓴다.
-export const CommunityPage = ({ onNavigate }) => <CommunityRoutes onNavigate={onNavigate} />;
+// isApp: 임대인 앱(app CommunityAppLayout)이 그릴 때 — 페이지는 같고 틀 · 대화상자 · 글쓰기 버튼만 앱 배치(CommunitySurface).
+// Sheet: 앱에서 대화상자 대신 쓰는 아래 시트(앱 틀이 넘긴다 — web 은 app/ 를 import 하지 않는다). 웹(LandlordWebRoutes)은 둘 다 넘기지 않는다.
+export const CommunityPage = ({ onNavigate, isApp = false, Sheet = null }) => (
+  <CommunitySurfaceProvider isApp={isApp} Sheet={Sheet}>
+    <CommunityRoutes onNavigate={onNavigate} />
+  </CommunitySurfaceProvider>
+);

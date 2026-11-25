@@ -7,6 +7,7 @@ import { useGetCommunityPollList } from '../hooks/useGetCommunityPollList';
 import { getErrorMessage } from '../utils/getErrorMessage';
 import { ChipGroup } from '../components/CommunityBoard/ChipGroup';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
+import { CommunityWriteButton } from '../components/CommunityLayout/CommunityWriteButton';
 import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { PollCard } from '../components/CommunityPoll/PollCard';
@@ -67,15 +68,15 @@ export const CommunityPollListPage = ({ frame, building }) => {
           {list.isSuccess && !canWrite && (
             <span className="ml-auto text-sub text-ink-3">{getBlockedMessage(blockedReason, 'poll')}</span>
           )}
-          <Button
+          {/* 앱에서는 하단 탭 위에 떠 있는 버튼(CommunityWriteButton) — 문구 · 조건은 같다 */}
+          <CommunityWriteButton
+            icon={Plus}
+            label="투표 만들기"
             className={list.isSuccess && !canWrite ? '' : 'ml-auto'}
             // 닉네임이 없으면 닉네임 대화상자를 먼저 — 저장하면 투표 만들기로 간다
             onClick={() => frame.nickname.ensure(() => navigate(`${COMMUNITY_PATH}/polls/new`))}
             disabled={!list.isSuccess || !canWrite}
-          >
-            <Plus size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
-            투표 만들기
-          </Button>
+          />
         </div>
         <PollDisclaimer />
       </div>

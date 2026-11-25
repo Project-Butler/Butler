@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button } from '@butler/ui';
+import { CommunityDialogFrame } from '../CommunityLayout/CommunityDialogFrame';
 import { NoticeBox } from '../NoticeBox/NoticeBox';
 import { usePostCommunityReport } from '../../hooks/usePostCommunityReport';
 import { getErrorMessage } from '../../utils/getErrorMessage';
@@ -16,7 +16,7 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([
 // 창 틀은 AddressSearchDialog(어두운 덮개 + 가운데 카드 + 닫기, Esc · 바깥 클릭으로 닫기), 사유는 게시판 분류 칩,
 // 상세는 BuildingEditPage 의 설명 칸, 버튼은 @butler/ui Button(취소 secondary · 신고하기 primary), 오류는 NoticeBox.
 // 포커스 가둠: 열리면 창 안 첫 칸으로, Tab 이 창 밖으로 나가지 않고, 닫히면 열기 전 자리(신고 버튼)로 돌려준다.
-// document.body 에 그린다(portal) — 글 상세 틀(CommunityFrame)의 간격 클래스(space-y)가 덮개에 위 여백을 주지 않게.
+// 덮개 · 창은 CommunityDialogFrame(웹은 가운데 카드 — document.body 에 portal, 앱은 아래 시트). 안의 문구는 웹 · 앱 같다.
 export const ReportDialog = ({ postId, onDone, onClose }) => {
   const report = usePostCommunityReport();
   const [reason, setReason] = useState(null);
@@ -61,61 +61,51 @@ export const ReportDialog = ({ postId, onDone, onClose }) => {
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 px-6" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="community-report-title"
-        className="flex w-full max-w-md flex-col gap-4 rounded-card bg-surface p-6"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="community-report-title" className="text-section font-semibold text-ink">
-            신고
-          </h2>
-          <button
-            type="button"
-            aria-label="닫기"
-            onClick={onClose}
-            className="-mr-3 flex h-11 w-11 items-center justify-center rounded-input text-ink-2 hover:bg-surface-2 hover:text-ink"
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-label font-semibold text-ink">사유</span>
-          <ChipGroup label="신고 사유" options={REPORT_REASONS} value={reason} onChange={setReason} wrap />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="community-report-detail" className="text-label font-semibold text-ink">
-            상세 내용 (선택)
-          </label>
-          <textarea
-            id="community-report-detail"
-            rows={3}
-            maxLength={MAX_DETAIL_LENGTH}
-            value={detail}
-            onChange={(event) => setDetail(event.target.value)}
-            className="rounded-input border border-line px-4 py-3 text-card text-ink outline-none focus:border-accent"
-          />
-        </div>
-
-        {report.isError && <NoticeBox>{getErrorMessage(report.error)}</NoticeBox>}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            취소
-          </Button>
-          <Button onClick={submit} disabled={!reason || report.isPending}>
-            신고하기
-          </Button>
-        </div>
+  return (
+    <CommunityDialogFrame dialogRef={dialogRef} labelledBy="community-report-title" onClose={onClose}>
+      <div className="flex items-center justify-between gap-4">
+        <h2 id="community-report-title" className="text-section font-semibold text-ink">
+          신고
+        </h2>
+        <button
+          type="button"
+          aria-label="닫기"
+          onClick={onClose}
+          className="-mr-3 flex h-11 w-11 items-center justify-center rounded-input text-ink-2 hover:bg-surface-2 hover:text-ink"
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
       </div>
-    </div>,
-    document.body,
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-label font-semibold text-ink">사유</span>
+        <ChipGroup label="신고 사유" options={REPORT_REASONS} value={reason} onChange={setReason} wrap />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="community-report-detail" className="text-label font-semibold text-ink">
+          상세 내용 (선택)
+        </label>
+        <textarea
+          id="community-report-detail"
+          rows={3}
+          maxLength={MAX_DETAIL_LENGTH}
+          value={detail}
+          onChange={(event) => setDetail(event.target.value)}
+          className="rounded-input border border-line px-4 py-3 text-card text-ink outline-none focus:border-accent"
+        />
+      </div>
+
+      {report.isError && <NoticeBox>{getErrorMessage(report.error)}</NoticeBox>}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>
+          취소
+        </Button>
+        <Button onClick={submit} disabled={!reason || report.isPending}>
+          신고하기
+        </Button>
+      </div>
+    </CommunityDialogFrame>
   );
 };

@@ -18,11 +18,11 @@ import { formatKstDateTime } from '../utils/communityFormat';
 
 const MAX_COMMENT_LENGTH = 1000; // CommunityComment.body VarChar(1000)
 
-// 작은 글자 버튼(글 상세의 "신고" 모양). 내 글이면 같은 모양으로 "수정"·"삭제".
+// 작은 글자 버튼(글 상세의 "신고" 모양). 내 글이면 같은 모양으로 "수정"·"삭제". 좁은 화면(앱)에서도 글자가 꺾이지 않게 nowrap.
 const TextButton = ({ children, ...props }) => (
   <button
     type="button"
-    className="inline-flex h-8 items-center gap-1.5 text-label font-semibold text-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-ink-3"
+    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap text-label font-semibold text-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-ink-3"
     {...props}
   >
     {children}
@@ -151,7 +151,8 @@ export const CommunityPostDetailPage = ({ postId, frame, building, onBack, onEdi
                     <li key={comment.id} className="border-t border-line py-3 first:border-t-0 first:pt-0">
                       <div className="mb-1 flex items-center gap-1.5">
                         <AuthorName nickname={comment.authorNickname} label={comment.authorLabel} />
-                        <span className="font-num text-sub font-medium tabular-nums text-ink-3">
+                        {/* 좁은 화면(앱)에서는 작성자 괄호 표기가 먼저 줄어든다 — 날짜는 한 줄 그대로 */}
+                        <span className="flex-none whitespace-nowrap font-num text-sub font-medium tabular-nums text-ink-3">
                           {formatKstDateTime(comment.createdAt)}
                         </span>
                         {comment.isMine && (

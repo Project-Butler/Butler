@@ -11,6 +11,7 @@ import { DisputeTopicPage } from '../web/pages/DisputeTopicPage';
 import { useHistoryDraft } from '../web/hooks/useHistoryDraft';
 import { AppTabShell } from './components/AppTabShell/AppTabShell';
 import { DisputeAppLayout, DisputeChatAppScreen } from './components/DisputeAppLayout/DisputeAppLayout';
+import { CommunityAppLayout } from './components/CommunityAppLayout/CommunityAppLayout';
 import { BuildingListPage } from './pages/BuildingListPage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractEditPage } from './pages/ContractEditPage';
@@ -35,7 +36,7 @@ import { useGoBack, useGoTo } from './utils/navigation';
 // 탭이 있는 앱 화면(홈형 상단 바 + 하단 탭). 앱 화면이 아직 없는 주소는 모두 앱 셸 안의 "준비 중"이다.
 // 상단 바 아바타의 이름은 '내 계정'이다(하단 탭 '내 정보'와 같은 이름의 버튼이 둘 생기지 않게).
 // 홈형 상단 바: 종(안 읽은 알림 수)을 누르면 일정·알림의 알림 탭으로, 아바타(내 계정)를 누르면 내 정보로 간다.
-const useHomeTopBar = (user, onUnauthorized) => {
+export const useHomeTopBar = (user, onUnauthorized) => {
   const navigate = useNavigate();
   const unreadCount = useNotificationUnreadCount({ onUnauthorized });
   return {
@@ -256,6 +257,7 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
       <Route path="topics/:topicKey" element={<DisputeTopicPage />} />
       <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
     </Route>
+    <Route path="/community/*" element={<CommunityAppLayout user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
   </Routes>
 );

@@ -7,7 +7,8 @@ export const BriefingSection = ({ title, scope, onMore, aside, className = '', c
   <Card className={`flex flex-col overflow-hidden p-0 ${className}`}>
     <section aria-label={title} className="flex flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-5 py-3.5">
-        <h2 className="text-card font-semibold text-ink">{title}</h2>
+        {/* 제목은 줄어들지 않는다 — 좁은 화면(앱)에서 범위 글이 길면 범위만 말줄임(제목이 "시 / 세" 로 꺾이지 않게) */}
+        <h2 className="flex-none whitespace-nowrap text-card font-semibold text-ink">{title}</h2>
         {scope && <span className="min-w-0 truncate text-sub text-ink-3">{scope}</span>}
         <span className="ml-auto flex flex-none items-center gap-3">
           {aside}

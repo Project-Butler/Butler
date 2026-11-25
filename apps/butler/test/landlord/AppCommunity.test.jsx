@@ -1,0 +1,336 @@
+// 임대인 앱 커뮤니티(하단 탭 '커뮤니티'). 앱은 PC 커뮤니티의 모바일 버전 — 같은 페이지 · 같은 문구, 배치만 다르다.
+// 실패 조건: 앱에서 /community 가 '준비 중' · PC 머리(건물 바꾸기 드롭다운) · 탭 줄 · "← 목록으로"가 앱에 남음 · 칩 줄 목록/주소가 PC 탭과 다름 ·
+// 하위 화면에 뒤로 가기 바가 없거나 주소로 바로 들어온 화면의 뒤로가 앱 밖으로 나감 · 미리보기 안내가 없음 · 마감 전 투표에 득표가 보임 ·
+// [글쓰기]가 떠 있지 않음 · 게시판이 표로 나옴 · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름.
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const api = vi.hoisted(() => ({
+  getMyBuildings: vi.fn(),
+  getCommunityProfile: vi.fn(),
+  putCommunityProfile: vi.fn(),
+  getCommunityPostList: vi.fn(),
+  getCommunityPost: vi.fn(),
+  postCommunityPost: vi.fn(),
+  patchCommunityPost: vi.fn(),
+  deleteCommunityPost: vi.fn(),
+  postCommunityComment: vi.fn(),
+  deleteCommunityComment: vi.fn(),
+  postCommunityReport: vi.fn(),
+  getCommunityPollList: vi.fn(),
+  getCommunityPoll: vi.fn(),
+  postCommunityPoll: vi.fn(),
+  postCommunityVote: vi.fn(),
+  deleteCommunityPoll: vi.fn(),
+  getCommunityNewsList: vi.fn(),
+  getCommunityComplexNewsList: vi.fn(),
+  getComplexMarketPrices: vi.fn(),
+  getNotificationUnreadCount: vi.fn(),
+}));
+
+vi.mock('@butler/api-client', () => ({ ...api, queryKey: new Proxy({}, { get: (_, name) => String(name) }) }));
+
+const { LandlordAppRoutes } = await import('../../src/landlord/app/LandlordAppRoutes');
+
+const USER = { id: 'l-1', name: '최앱주', role: 'LANDLORD' };
+const REGION = { legalDongCode: '1171010100', dongName: '잠실동', fullName: '서울특별시 송파구 잠실동', sigunguName: '송파구' };
+const building = (overrides = {}) => ({
+  complexId: 'complex-1',
+  name: '잠실한빛아파트',
+  legalDongCode: REGION.legalDongCode,
+  regionName: REGION.fullName,
+  unitCount: 3,
+  unitAreas: [84.97],
+  memberCount: 3,
+  verificationStatus: 'VERIFIED',
+  verifyPropertyId: null,
+  ...overrides,
+});
+const SECOND = building({ complexId: 'complex-2', name: '해운대서강아파트', legalDongCode: '2635010500', regionName: '부산광역시 해운대구 우동', unitCount: 1 });
+
+const page = (items, meta = {}) => ({
+  data: items,
+  meta: { page: 1, size: 20, total: items.length, hasNext: false, region: REGION, canWrite: true, writeBlockedReason: null, ...meta },
+});
+const post = (i, overrides = {}) => ({
+  id: `post-${i}`,
+  category: 'FREE',
+  title: `게시글 ${i}`,
+  authorNickname: '서강',
+  authorLabel: '잠실서강아파트 201동 임대인',
+  commentCount: i,
+  isMine: false,
+  createdAt: '2026-11-04T01:00:00.000Z',
+  ...overrides,
+});
+const POST_DETAIL = {
+  ...post(1),
+  body: '관리사무소에서 공동현관 도어락을 바꾼다고 합니다.',
+  legalDongCode: REGION.legalDongCode,
+  canWrite: true,
+  writeBlockedReason: null,
+  locked: false,
+  comments: [],
+  commentCount: 0,
+};
+const OPTIONS = [
+  { id: 'opt-1', label: '지금 위치 유지', position: 1 },
+  { id: 'opt-2', label: '정문 쪽으로 이동', position: 2 },
+];
+const pollDetail = (overrides = {}) => ({
+  id: 'poll-1',
+  scope: 'REGION',
+  complexId: null,
+  complexName: null,
+  region: REGION,
+  title: '분리수거장 위치 변경 의견',
+  description: null,
+  authorLabel: '잠실서강아파트 201동 임대인',
+  isMine: false,
+  closesAt: '2099-01-01T14:59:00.000Z',
+  isClosed: false,
+  voteCount: 1,
+  hasVoted: false,
+  myOptionId: null,
+  isEligible: true,
+  canVote: true,
+  myUnitCount: 3,
+  myWeight: 3,
+  canWrite: true,
+  writeBlockedReason: null,
+  locked: false,
+  options: OPTIONS,
+  createdAt: '2026-11-05T01:00:00.000Z',
+  ...overrides,
+});
+const MARKET_COLLECTING = {
+  scope: 'COMPLEX', complexId: 'complex-1', legalDongCode: REGION.legalDongCode, dealType: 'SALE', areaMin: 60, areaMax: 85,
+  coveredFromYearMonth: null, asOf: null, source: '국토교통부 실거래가', collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [],
+};
+
+const LocationProbe = () => <output data-testid="location">{useLocation().pathname}</output>;
+const where = () => screen.getByTestId('location').textContent;
+
+const renderAt = (entries) =>
+  render(
+    <MemoryRouter initialEntries={Array.isArray(entries) ? entries : [entries]} initialIndex={Array.isArray(entries) ? entries.length - 1 : 0}>
+      <Routes>
+        <Route path="/landlord/*" element={<LandlordAppRoutes user={USER} onLogout={vi.fn()} onUnauthorized={vi.fn()} />} />
+      </Routes>
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+
+// 파일의 첫 렌더는 화면 코드를 처음 불러와 전체 실행 때 1초를 넘기기도 한다 — 첫 대기만 여유를 둔다
+const FIRST_RENDER = { timeout: 3000 };
+const chips = () => screen.getByRole('navigation', { name: '커뮤니티 메뉴' });
+const backBarTitle = () => within(screen.getByRole('banner')).getByRole('heading', { level: 1 });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.localStorage.clear();
+  window.history.replaceState(null, '');
+  api.getMyBuildings.mockResolvedValue([building()]);
+  api.getCommunityProfile.mockResolvedValue({ nickname: '석촌호수뷰', nextChangeAt: null, previewLabel: '잠실한빛아파트 103동 임대인' });
+  api.getCommunityPostList.mockResolvedValue(page([1, 2, 3].map((i) => post(i))));
+  api.getCommunityPost.mockResolvedValue(POST_DETAIL);
+  api.getCommunityPollList.mockResolvedValue(page([]));
+  api.getCommunityPoll.mockResolvedValue(pollDetail());
+  api.getCommunityNewsList.mockResolvedValue(page([]));
+  api.getCommunityComplexNewsList.mockResolvedValue(page([]));
+  api.getComplexMarketPrices.mockResolvedValue(MARKET_COLLECTING);
+  api.getNotificationUnreadCount.mockResolvedValue({ count: 0 });
+});
+
+describe('앱 커뮤니티: 들어오기 · 머리 · 칩 줄', () => {
+  it('하단 탭 [커뮤니티] → /community → 브리핑. 앱 셸 안에서 홈형 상단 바 · 앱 머리 · 칩 줄, "준비 중" · PC 머리 · 탭 줄은 없다', async () => {
+    const { container } = renderAt('/landlord/home');
+    await userEvent.click(within(screen.getByRole('navigation', { name: '하단 메뉴' })).getByRole('button', { name: '커뮤니티' }));
+    expect(await screen.findByRole('heading', { level: 1, name: /잠실한빛아파트/ }, FIRST_RENDER)).toBeInTheDocument();
+    expect(where()).toBe('/landlord/community/briefing');
+    expect(container.querySelector('[data-shell="landlord-app"]')).not.toBeNull();
+    // 홈형 상단 바(검색 · 알림 · 내 계정) — 뒤로 가기 없음
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByRole('button', { name: '내 계정' })).toBeInTheDocument();
+    expect(within(banner).queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '준비 중' })).not.toBeInTheDocument();
+    // PC 머리와 같은 정보: 지역 · 닉네임 · 인증 배지. 건물이 하나면 ▾(건물 바꾸기) 없음 — PC 도 그때는 [건물 바꾸기]가 없다
+    expect(screen.getByText('서울특별시 송파구 잠실동')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '닉네임 · 석촌호수뷰' })).toBeInTheDocument();
+    expect(screen.getByText('인증 완료')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /건물 바꾸기/ })).not.toBeInTheDocument();
+    // 브리핑 칸은 PC 와 같은 순서 · 같은 제목
+    const sections = await screen.findAllByRole('region');
+    expect(sections.map((section) => section.getAttribute('aria-label'))).toEqual(['시세', '최근 거래', '최근 게시글', '최근 뉴스', '최근 투표']);
+    // 하단 탭은 커뮤니티가 켜짐
+    expect(within(screen.getByRole('navigation', { name: '하단 메뉴' })).getByRole('button', { name: '커뮤니티' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('칩 줄은 PC 탭 줄과 같은 목록 · 순서 · 주소. 누르면 그 화면으로 가고 칩이 따라 켜진다', async () => {
+    renderAt('/landlord/community/briefing');
+    await screen.findByRole('heading', { level: 1, name: /잠실한빛아파트/ }, FIRST_RENDER);
+    const buttons = within(chips()).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual(['브리핑', '뉴스', '시세', '게시판', '투표']);
+    expect(buttons[0]).toHaveAttribute('aria-current', 'page');
+    for (const [label, path] of [
+      ['뉴스', '/landlord/community/news'],
+      ['시세', '/landlord/community/market'],
+      ['게시판', '/landlord/community/board'],
+      ['투표', '/landlord/community/polls'],
+      ['브리핑', '/landlord/community/briefing'],
+    ]) {
+      await userEvent.click(within(chips()).getByRole('button', { name: label }));
+      expect(where()).toBe(path);
+      expect(within(chips()).getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
+    }
+  });
+
+  it('건물이 둘이면 단지 이름 ▾ → 아래 시트 "건물 바꾸기"(PC 드롭다운과 같은 줄) → 고르면 그 건물로', async () => {
+    api.getMyBuildings.mockResolvedValue([building(), SECOND]);
+    renderAt('/landlord/community/briefing');
+    await userEvent.click(await screen.findByRole('button', { name: /잠실한빛아파트.*건물 바꾸기/ }, FIRST_RENDER));
+    const sheet = screen.getByRole('dialog', { name: '건물 바꾸기' });
+    expect(sheet).toHaveClass('rounded-t-card'); // 가운데 대화상자가 아니라 아래 시트
+    const rows = within(sheet).getAllByRole('radio');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      '잠실한빛아파트3호실 보유 · 서울특별시 송파구 잠실동 · 임대인 3명',
+      '해운대서강아파트1호실 보유 · 부산광역시 해운대구 우동 · 임대인 3명',
+    ]);
+    expect(rows[0]).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(rows[1]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /해운대서강아파트/ })).toBeInTheDocument();
+  });
+});
+
+describe('앱 커뮤니티: 하위 화면 · 뒤로 가기', () => {
+  it.each([
+    ['/landlord/community/posts/post-1', '게시판', '/landlord/community/board'],
+    ['/landlord/community/posts/new', '게시판', '/landlord/community/board'],
+    ['/landlord/community/posts/post-1/edit', '게시판', '/landlord/community/posts/post-1'],
+    ['/landlord/community/polls/poll-1', '투표', '/landlord/community/polls'],
+    ['/landlord/community/polls/new', '투표', '/landlord/community/polls'],
+  ])('%s 은 뒤로 가기 바(제목 %s) · 머리 · 칩 줄 · "목록으로" 없음, 주소로 바로 들어왔으면 뒤로 → %s', async (path, title, fallback) => {
+    renderAt(path);
+    await waitFor(() => expect(backBarTitle()).toHaveTextContent(title), FIRST_RENDER);
+    await screen.findByRole('main');
+    expect(screen.queryByRole('navigation', { name: '커뮤니티 메뉴' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '목록으로' })).not.toBeInTheDocument();
+    // 하단 탭은 그대로(커뮤니티 켜짐)
+    expect(within(screen.getByRole('navigation', { name: '하단 메뉴' })).getByRole('button', { name: '커뮤니티' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' }));
+    expect(where()).toBe(fallback);
+  });
+
+  it('목록에서 들어온 글 상세는 뒤로 가기가 그 목록으로(앱 안 이동 기록)', async () => {
+    renderAt('/landlord/community/board');
+    await userEvent.click(await screen.findByRole('button', { name: /게시글 2/ }, FIRST_RENDER));
+    await waitFor(() => expect(backBarTitle()).toHaveTextContent('게시판'));
+    expect(where()).toBe('/landlord/community/posts/post-2');
+    await userEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: '뒤로 가기' }));
+    expect(where()).toBe('/landlord/community/board');
+  });
+});
+
+describe('앱 커뮤니티: PC 와 같은 상태 · 규칙', () => {
+  it('인증 전(미리보기) — PC 와 같은 안내 한 줄 + [권리자 인증하기](앱의 권리자 인증 화면으로), 배지 "인증 전"', async () => {
+    api.getMyBuildings.mockResolvedValue([building({ verificationStatus: 'UNVERIFIED', verifyPropertyId: 'property-9' })]);
+    renderAt('/landlord/community/briefing');
+    expect(await screen.findByText('권리자 인증을 마치면 글을 읽고 투표에 참여할 수 있어요', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('인증 전')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '권리자 인증하기' }));
+    expect(where()).toBe('/landlord/properties/property-9/verify');
+  });
+
+  it('마감 전 · 참여 전 투표: 선택지와 [투표하기]만 — 득표(표 · %)는 없다', async () => {
+    renderAt('/landlord/community/polls/poll-1');
+    expect(await screen.findByRole('button', { name: '투표하기' }, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText(/인증한 호실/)).toHaveTextContent('인증한 호실 3개 — 3표로 반영됩니다.');
+    expect(screen.queryByRole('list', { name: '투표 결과' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('마감 전 · 참여함: "참여함 · 3표"로 잠기고 내 선택만 — 득표는 여전히 없다', async () => {
+    api.getCommunityPoll.mockResolvedValue(pollDetail({ hasVoted: true, myOptionId: 'opt-2', canVote: false, voteCount: 2 }));
+    renderAt('/landlord/community/polls/poll-1');
+    const button = await screen.findByRole('button', { name: '참여함 · 3표' }, FIRST_RENDER);
+    expect(button).toBeDisabled();
+    expect(screen.getByRole('radio', { name: '정문 쪽으로 이동' })).toBeChecked();
+    expect(screen.queryByRole('list', { name: '투표 결과' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('마감 뒤: PC 와 같은 결과(참여 n명 · 총 m표, 선택지마다 표 · %) + "마감된 투표입니다"', async () => {
+    api.getCommunityPoll.mockResolvedValue(
+      pollDetail({
+        isClosed: true,
+        canVote: false,
+        hasVoted: true,
+        myOptionId: 'opt-1',
+        voteCount: 2,
+        weightTotal: 5,
+        options: [
+          { ...OPTIONS[0], voteCount: 1, weightTotal: 3, percent: 60 },
+          { ...OPTIONS[1], voteCount: 1, weightTotal: 2, percent: 40 },
+        ],
+      }),
+    );
+    renderAt('/landlord/community/polls/poll-1');
+    const results = await screen.findByRole('list', { name: '투표 결과' }, FIRST_RENDER);
+    expect(within(results).getByText('지금 위치 유지').closest('li')).toHaveTextContent('3표 · 60%');
+    expect(screen.getByText('마감된 투표입니다')).toBeInTheDocument();
+  });
+
+  it('게시판: 표가 아니라 같은 칸(분류 · 제목 · [댓글 수] · 작성자 · 작성일)의 목록, [글쓰기]는 하단 탭 위에 떠 있는 버튼', async () => {
+    renderAt('/landlord/community/board');
+    const list = await screen.findByRole('list', { name: '게시글' }, FIRST_RENDER);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const first = within(list).getAllByRole('button')[0];
+    expect(first).toHaveTextContent('자유');
+    expect(first).toHaveTextContent('게시글 1');
+    expect(within(first).getByLabelText('댓글 1개')).toHaveTextContent('[1]');
+    expect(first).toHaveTextContent('서강(잠실서강아파트 201동 임대인)');
+    expect(first).toHaveTextContent('11-04');
+    const write = screen.getByRole('button', { name: '글쓰기' });
+    expect(write.parentElement).toHaveClass('fixed');
+    await userEvent.click(write);
+    expect(where()).toBe('/landlord/community/posts/new');
+    await waitFor(() => expect(backBarTitle()).toHaveTextContent('게시판'));
+  });
+
+  it('투표 목록의 [투표 만들기]도 떠 있고, 쓸 수 없으면(인증 전) PC 와 같이 막힌다', async () => {
+    api.getCommunityPollList.mockResolvedValue(page([], { canWrite: false, writeBlockedReason: 'UNVERIFIED' }));
+    renderAt('/landlord/community/polls');
+    const create = await screen.findByRole('button', { name: '투표 만들기' }, FIRST_RENDER);
+    await waitFor(() => expect(create).toBeDisabled());
+    expect(create.parentElement).toHaveClass('fixed');
+    expect(screen.getByText('진행 중인 투표가 없습니다.')).toBeInTheDocument();
+  });
+});
+
+describe('앱 커뮤니티: 신고 · 닉네임은 아래 시트(문구는 PC 대화상자와 같다)', () => {
+  it('글 상세 [신고] → 시트 "신고": 사유 · 상세 내용 (선택) · [취소] · [신고하기]', async () => {
+    renderAt('/landlord/community/posts/post-1');
+    await userEvent.click(await screen.findByRole('button', { name: '신고' }, FIRST_RENDER));
+    const sheet = screen.getByRole('dialog', { name: '신고' });
+    expect(sheet).toHaveClass('rounded-t-card');
+    expect(within(sheet).getByText('사유')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('상세 내용 (선택)')).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: '취소' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: '신고하기' })).toBeDisabled();
+    await userEvent.click(within(sheet).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('머리 "닉네임 · …" → 시트 "커뮤니티 닉네임"(PC 대화상자와 같은 안내 · 규칙 문구)', async () => {
+    renderAt('/landlord/community/briefing');
+    await userEvent.click(await screen.findByRole('button', { name: '닉네임 · 석촌호수뷰' }, FIRST_RENDER));
+    const sheet = screen.getByRole('dialog', { name: '커뮤니티 닉네임' });
+    expect(sheet).toHaveClass('rounded-t-card');
+    expect(sheet).toHaveTextContent("글과 댓글에 '닉네임 (단지명 동 임대인)' 으로 보입니다");
+    expect(sheet).toHaveTextContent('2~12자 · 한글 · 영문 · 숫자 · 30일에 한 번 바꿀 수 있어요');
+    expect(within(sheet).getByRole('button', { name: '저장' })).toBeInTheDocument();
+  });
+});
