@@ -184,9 +184,19 @@ export const UserDetailPage = ({ onNavigate, onUnauthorized, currentUser }) => {
 
       {user && (
         <>
-          <div>
-            <h2 className="text-h1 font-bold text-ink">{user.name}</h2>
-            <p className="mt-1 text-body text-ink-2">{user.email}</p>
+          <div className="flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-h1 font-bold text-ink">{user.name}</h2>
+              <p className="mt-1 text-body text-ink-2">{user.email}</p>
+            </div>
+            {/* 문서 목록을 이 회원(등록자)으로 거른 채 연다. 문서 내용은 열리지 않는다. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onNavigate('documents', undefined, `?${new URLSearchParams({ uploaderId: user.id })}`)}
+            >
+              이 회원이 등록한 문서
+            </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

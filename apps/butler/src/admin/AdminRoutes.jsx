@@ -7,6 +7,7 @@ import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ComplexCreatePage } from './pages/ComplexCreatePage';
 import { ContractDetailPage } from './pages/ContractDetailPage';
 import { ContractLookupPage } from './pages/ContractLookupPage';
+import { DocumentListPage } from './pages/DocumentListPage';
 import { JobListPage } from './pages/JobListPage';
 import { OwnershipListPage } from './pages/OwnershipListPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -33,6 +34,7 @@ const PAGE_BY_KEY = {
   contractDetail: ContractDetailPage,
   tickets: TicketListPage,
   ticketDetail: TicketDetailPage,
+  documents: DocumentListPage,
   verificationAttempts: VerificationAttemptListPage,
   settings: SettingsPage,
 };
