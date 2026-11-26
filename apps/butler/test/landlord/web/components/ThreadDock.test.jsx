@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { THREAD_DOCK_TRIGGER_ID, ThreadDock } from '../../../../src/landlord/web/components/ThreadDock/ThreadDock';
-import { threadDockStorageKey, ThreadDockProvider, useThreadDock } from '../../../../src/landlord/web/components/ThreadDock/ThreadDockContext';
+import { clearThreadDockStorage, threadDockStorageKey, ThreadDockProvider, useThreadDock } from '../../../../src/landlord/web/components/ThreadDock/ThreadDockContext';
 import { chatDockPositionClass, VerificationProgressDock } from '../../../../src/landlord/web/components/VerificationProgressDock/VerificationProgressDock';
 
 const api = vi.hoisted(() => ({
@@ -246,5 +246,39 @@ describe('권리자 인증 진행 표시와 겹침(chatDock)', () => {
     const classes = chatDockPositionClass(chatDock).split(' ');
     for (const name of has) expect(classes).toContain(name);
     for (const name of hasNot) expect(classes).not.toContain(name);
+  });
+});
+
+describe('로그아웃·401 때 저장 지우기', () => {
+  it('대화 훅이 401을 받으면 저장한 팝업을 바로 지우고 로그인 화면으로 보낸다', async () => {
+    const onUnauthorized = vi.fn();
+    window.sessionStorage.setItem(threadDockStorageKey(USER_ID), JSON.stringify({ status: 'open', view: 'thread', threadId: 'a' }));
+    api.getThread.mockRejectedValue(Object.assign(new Error('x'), { response: { status: 401, data: { error: { code: 'UNAUTHENTICATED', message: '로그인' } } } }));
+    render(
+      <ThreadDockProvider userId={USER_ID} onUnauthorized={onUnauthorized} onNavigate={onNavigate}>
+        <ThreadDock />
+      </ThreadDockProvider>,
+    );
+    await waitFor(() => expect(onUnauthorized).toHaveBeenCalled());
+    expect(window.sessionStorage.getItem(threadDockStorageKey(USER_ID))).toBeNull();
+  });
+
+  it('clearThreadDockStorage 는 그 사용자 것만 지운다', () => {
+    window.sessionStorage.setItem(threadDockStorageKey('u1'), '{}');
+    window.sessionStorage.setItem(threadDockStorageKey('u2'), '{}');
+    clearThreadDockStorage('u1');
+    expect(window.sessionStorage.getItem(threadDockStorageKey('u1'))).toBeNull();
+    expect(window.sessionStorage.getItem(threadDockStorageKey('u2'))).toBe('{}');
+  });
+
+  it('422 안내는 팝업을 닫거나 목록을 열면 지워진다', async () => {
+    api.postThread.mockRejectedValue(
+      Object.assign(new Error('x'), { response: { status: 422, data: { error: { code: 'THREAD_CONTEXT_NOT_SUPPORTED', message: '대화를 열 수 없어요' } } } }),
+    );
+    renderDock();
+    await userEvent.click(screen.getByRole('button', { name: '요청 대화 열기' }));
+    expect(await screen.findByText('THREAD_CONTEXT_NOT_SUPPORTED')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '말풍선' }));
+    expect(screen.queryByText('THREAD_CONTEXT_NOT_SUPPORTED')).not.toBeInTheDocument();
   });
 });

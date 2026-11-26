@@ -162,7 +162,8 @@ const DockBar = ({ dock, threads, barRef }) => {
   const thread = dock.view === 'thread' ? threads.items.find((item) => item.id === dock.threadId) : null;
   const name = thread ? getThreadCounterpartName(thread, dock.userId) : null;
   const label = thread ? [name, thread.title].filter(Boolean).join(' · ') : '대화';
-  const unread = thread ? thread.unreadCount : threads.items.filter((item) => item.unreadCount > 0).length;
+  // 대화를 보다 접었으면 그 대화 숫자만(목록 첫 100개에 없으면 0), 목록에서 접었으면 안 읽은 대화 수.
+  const unread = dock.view === 'thread' ? (thread?.unreadCount ?? 0) : threads.items.filter((item) => item.unreadCount > 0).length;
   return (
     <button
       ref={barRef}

@@ -11,6 +11,15 @@ const STATUSES = new Set(['closed', 'open', 'collapsed']);
 
 export const threadDockStorageKey = (userId) => `butler:landlord:threadDock:${userId}`;
 
+// 로그아웃·401 때 부른다(상태가 커밋되기 전에 화면이 내려가도 지워지게 바로 지운다).
+export const clearThreadDockStorage = (userId) => {
+  try {
+    window.sessionStorage.removeItem(threadDockStorageKey(userId));
+  } catch {
+    // 지우지 못해도 다음 로그인에서 닫힌 채로 시작할 수 있게 그대로 둔다.
+  }
+};
+
 const readSaved = (userId) => {
   try {
     const saved = JSON.parse(window.sessionStorage.getItem(threadDockStorageKey(userId)) ?? 'null');
@@ -46,18 +55,25 @@ export const ThreadDockProvider = ({ userId, onUnauthorized, onNavigate, childre
 
   // 로그인이 풀리면 기억해 둔 팝업을 지우고 로그인 화면으로 보낸다.
   const handleUnauthorized = useCallback(() => {
+    clearThreadDockStorage(userId);
     setState(CLOSED);
     onUnauthorized?.();
-  }, [onUnauthorized]);
+  }, [userId, onUnauthorized]);
 
   const { openThread: postOpenThread, isLoading: isOpening } = useOpenThread({ onUnauthorized: handleUnauthorized });
 
-  const openList = useCallback(() => setState({ status: 'open', view: 'list', threadId: null }), []);
+  const openList = useCallback(() => {
+    setOpenError(null);
+    setState({ status: 'open', view: 'list', threadId: null });
+  }, []);
   const openThread = useCallback((threadId) => setState({ status: 'open', view: 'thread', threadId }), []);
   const backToList = useCallback(() => setState((prev) => ({ ...prev, view: 'list', threadId: null })), []);
   const collapse = useCallback(() => setState((prev) => (prev.status === 'open' ? { ...prev, status: 'collapsed' } : prev)), []);
   const expand = useCallback(() => setState((prev) => (prev.status === 'collapsed' ? { ...prev, status: 'open' } : prev)), []);
-  const close = useCallback(() => setState(CLOSED), []);
+  const close = useCallback(() => {
+    setOpenError(null);
+    setState(CLOSED);
+  }, []);
 
   // 계약·요청의 대화를 팝업으로 연다(POST /threads, 이미 있으면 그 대화). 이미 여는 중이면 아무것도 하지 않는다.
   // 422(임차인이 연결되지 않음 등)면 openError 를 두고 팝업은 그대로 둔다.

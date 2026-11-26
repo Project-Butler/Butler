@@ -31,7 +31,7 @@ import { DisputeTopicPage } from './pages/DisputeTopicPage';
 import { NoticeBox } from './components/NoticeBox/NoticeBox';
 import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
 import { THREAD_DOCK_TRIGGER_ID, ThreadDock } from './components/ThreadDock/ThreadDock';
-import { ThreadDockProvider, useThreadDock } from './components/ThreadDock/ThreadDockContext';
+import { clearThreadDockStorage, ThreadDockProvider, useThreadDock } from './components/ThreadDock/ThreadDockContext';
 import { useGetThreadUnreadCount } from '../../shared/threads/useGetThreadUnreadCount';
 import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
@@ -337,7 +337,20 @@ const LayoutWithBadges = (props) => (
   </ThreadDockProvider>
 );
 
-export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUnauthorized, onRefreshMe }) => {
+export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout: onLogoutProp, onUnauthorized: onUnauthorizedProp, onRefreshMe }) => {
+  // 로그인이 풀리거나 로그아웃하면 기억해 둔 대화 팝업을 먼저 지운다(같은 탭에서 다시 로그인했을 때 되살아나지 않게).
+  const userId = user.id;
+  const onUnauthorized = useCallback(() => {
+    clearThreadDockStorage(userId);
+    onUnauthorizedProp?.();
+  }, [userId, onUnauthorizedProp]);
+  const onLogout = useCallback(
+    (...args) => {
+      clearThreadDockStorage(userId);
+      return onLogoutProp?.(...args);
+    },
+    [userId, onLogoutProp],
+  );
   const location = useLocation();
   const routerNavigate = useNavigate();
   const locationRef = useRef(location);
