@@ -11,7 +11,8 @@ import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 import { useGetTicket } from '../../hooks/useGetTicket';
 import { usePatchTicket } from '../../hooks/usePatchTicket';
 import { formatWon } from '../../utils/contract';
-import { canCancelTicket, formatTicketDateTime, getPrimaryTicketAction, getRequesterLabel, getTicketStatusBadge } from '../../utils/ticketView';
+import { canCancelTicket, canOpenTicketThread, formatTicketDateTime, getPrimaryTicketAction, getRequesterLabel, getTicketStatusBadge } from '../../utils/ticketView';
+import { useThreadDock } from '../ThreadDock/ThreadDockContext';
 
 const InfoRow = ({ icon: Icon, label, children }) => (
   <div className="flex items-center gap-3 py-1.5 text-body">
@@ -51,6 +52,9 @@ const CancelRow = ({ busy, onCancel }) => {
 // - 대화는 개수·조회 없이 안내 한 줄(HL H-16). 첨부는 미리보기 팝업(사진·동영상·PDF).
 // - canProcess(ticket): 처리 시작·완료 버튼을 보일지(지금 소유 중인 호실인지).
 // - onChanged(ticket): 상태가 바뀌면 표·개수를 새로 고치게 알린다. onLoaded(ticket): 처음 불러왔을 때.
+// 대화를 열 수 없을 때(임차인이 연결되지 않은 요청 등) 버튼 아래 안내.
+const THREAD_OPEN_ERROR_TEXT = { THREAD_CONTEXT_NOT_SUPPORTED: '임차인이 연결되지 않아 대화를 시작할 수 없어요.' };
+
 export const TicketInspector = ({ ticketId, canProcess = () => false, onClose, onComplete, onChanged, onLoaded, onNavigate, onUnauthorized }) => {
   const { data: ticket, error, setData } = useGetTicket(ticketId, { onUnauthorized });
   const loadedId = ticket?.id;
@@ -61,6 +65,8 @@ export const TicketInspector = ({ ticketId, canProcess = () => false, onClose, o
   }, [loadedId]);
   const { updateTicket, isLoading: isSaving, error: saveError } = usePatchTicket({ onUnauthorized });
   const { openPreview, preview } = useDocumentPreview({ onUnauthorized });
+  // 대화 팝업(레이아웃 안에서만). 임차인이 만든 요청이면 상태와 상관없이 [임차인과 대화](앱과 같은 기준).
+  const dock = useThreadDock();
 
   const frame = (children) => (
     <aside aria-label="요청 상세" className="tickets-page__inspector-panel sticky top-6 col-span-3 self-start overflow-hidden rounded-card border border-line bg-surface">
@@ -157,11 +163,14 @@ export const TicketInspector = ({ ticketId, canProcess = () => false, onClose, o
           <p className="text-body text-ink-3">첨부가 없어요.</p>
         )}
       </div>
-      {ticket.requester?.role === 'TENANT' && !isDone && ticket.status !== 'CANCELED' && (
-        <p className="mx-5 mb-4 flex items-center gap-1.5 rounded-input border border-line px-3.5 py-2.5 text-sub text-ink-2">
-          <MessageCircle size={16} className="shrink-0 text-ink-3" aria-hidden="true" />
-          임차인과의 대화는 앱에서 볼 수 있어요
-        </p>
+      {dock && canOpenTicketThread(ticket) && (
+        <div className="mx-5 mb-4 space-y-1.5">
+          <Button variant="secondary" className="w-full" disabled={dock.isOpening} onClick={() => dock.openContext('TICKET', ticket.id)}>
+            <MessageCircle size={16} className="-ml-0.5 mr-1.5 inline-block" aria-hidden="true" />
+            임차인과 대화
+          </Button>
+          {dock.openError?.contextId === ticket.id && <NoticeBox>{THREAD_OPEN_ERROR_TEXT[dock.openError.code] ?? dock.openError.message}</NoticeBox>}
+        </div>
       )}
       {isDone && ticket.cost != null && <p className="px-5 pb-4 text-sub text-ink-3">비용은 임대인에게만 보여요.</p>}
       {saveError && <NoticeBox className="mx-5 mb-4">{saveError.message}</NoticeBox>}

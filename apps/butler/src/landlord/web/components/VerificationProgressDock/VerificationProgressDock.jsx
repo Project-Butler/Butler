@@ -87,7 +87,17 @@ const GroupCard = ({ isExpanded, runningCount, finishedCount, onToggle }) => {
 };
 
 // currentPropertyId: 지금 보고 있는 호실 상세(없으면 undefined). refreshKey: 화면이 바뀔 때마다 다시 읽게 넘기는 값(경로)
-export const VerificationProgressDock = ({ currentPropertyId, refreshKey, onNavigate, onUnauthorized }) => {
+// 오른쪽 아래 대화 팝업과 겹치지 않게 비킨다(docs/19 11-4). open: 1024 이상에서 팝업(380) + 여백(24) + 간격(24) 왼쪽,
+// collapsed: 접힘 막대(bottom-6 · 높이 56) 위로 16px. 1024 미만 오른쪽 패널이 열리면 가려져도 된다.
+const CHAT_DOCK_POSITION = {
+  none: 'bottom-8 right-8',
+  open: 'bottom-8 right-8 lg:right-[428px]',
+  collapsed: 'bottom-24 right-8',
+};
+export const chatDockPositionClass = (chatDock) => CHAT_DOCK_POSITION[chatDock] ?? CHAT_DOCK_POSITION.none;
+
+// chatDock: 대화 팝업 상태('none'|'open'|'collapsed').
+export const VerificationProgressDock = ({ currentPropertyId, refreshKey, onNavigate, onUnauthorized, chatDock = 'none' }) => {
   const { running, finished, dismiss } = useInProgressOwnershipVerifications({ refreshKey, onUnauthorized });
   // 진행 중 카드를 ×로 끈 호실. 그 호실 상세에 다시 들어가면 풀려서, 상세를 나가면 다시 보인다.
   const [hiddenPropertyIds, setHiddenPropertyIds] = useState(() => new Set());
@@ -149,7 +159,7 @@ export const VerificationProgressDock = ({ currentPropertyId, refreshKey, onNavi
 
   return (
     // 폭을 정해 두려고 왼쪽 끝까지 펼치되, 빈 곳은 아래 화면을 누를 수 있게 둔다(pointer-events-none).
-    <aside aria-label="권리자 인증 진행" className="pointer-events-none fixed bottom-8 left-8 right-8 z-20 flex flex-col items-end gap-2">
+    <aside aria-label="권리자 인증 진행" className={`pointer-events-none fixed left-8 z-20 flex flex-col items-end gap-2 ${chatDockPositionClass(chatDock)}`}>
       {shownCards.map(({ key, ...card }) => (
         <DockCard key={key} {...card} />
       ))}

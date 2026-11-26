@@ -16,9 +16,16 @@ vi.mock('@butler/api-client', () => ({
   postDocument: vi.fn(),
   deleteDocument: vi.fn(),
   postDocumentDownloadUrl: vi.fn(),
+  postThread: vi.fn(),
+  getThread: vi.fn(),
+  getThreadMessageList: vi.fn(),
+  postThreadRead: vi.fn(),
+  getThreadList: vi.fn(),
 }));
 
-import { getPropertyList, getTicket, getTicketList, patchTicket, postTicket } from '@butler/api-client';
+import { getPropertyList, getThread, getThreadList, getThreadMessageList, getTicket, getTicketList, patchTicket, postThread, postThreadRead, postTicket } from '@butler/api-client';
+import { ThreadDock } from '../../../../src/landlord/web/components/ThreadDock/ThreadDock';
+import { ThreadDockProvider } from '../../../../src/landlord/web/components/ThreadDock/ThreadDockContext';
 import { TicketListPage } from '../../../../src/landlord/web/pages/TicketListPage';
 
 const HOME = { id: 'p1', buildingNo: '101', unitNo: '1001', displayName: '버틀러 단지 101동 1001호', myRelation: { verificationStatus: 'VERIFIED' } };
@@ -47,7 +54,13 @@ const COUNTS = { 'OPEN,IN_PROGRESS': 3, DONE: 2, CANCELED: 1 };
 
 const renderPage = (props = {}) => {
   const handlers = { onNavigate: vi.fn(), onOpenRegister: vi.fn(), onCloseRegister: vi.fn(), onUnauthorized: vi.fn() };
-  render(<TicketListPage {...handlers} {...props} />);
+  // 실제 화면처럼 레이아웃의 대화 팝업 안에서 그린다(유지보수 상세 [임차인과 대화]).
+  render(
+    <ThreadDockProvider userId="l-1" onUnauthorized={handlers.onUnauthorized} onNavigate={handlers.onNavigate}>
+      <TicketListPage {...handlers} {...props} />
+      <ThreadDock />
+    </ThreadDockProvider>,
+  );
   return handlers;
 };
 const listCalls = () => vi.mocked(getTicketList).mock.calls.map(([params]) => params).filter((params) => params.size !== 1);
@@ -132,13 +145,37 @@ describe('거르기 카드와 표', () => {
 });
 
 describe('상세 패널과 처리', () => {
-  it('행을 누르면 패널: 요청자·내용·대화 안내, [처리 시작]이면 처리 중으로 바꾼다', async () => {
+  it('임차인 요청이면 [임차인과 대화] → 그 요청 대화가 오른쪽 아래 팝업으로 열린다', async () => {
+    window.sessionStorage.clear();
+    vi.mocked(postThread).mockResolvedValue({ id: 'th-1' });
+    vi.mocked(getThread).mockResolvedValue({
+      id: 'th-1',
+      contextType: 'TICKET',
+      contextId: 't1',
+      title: '101동 1001호 · 싱크대 아래 물이 새요',
+      isReadOnly: false,
+      participants: [{ id: 'l-1', name: '김주인', role: 'LANDLORD' }, { id: 'tn', name: '큐에이', role: 'TENANT' }],
+    });
+    vi.mocked(getThreadMessageList).mockResolvedValue({ data: [], meta: { nextCursor: null, hasNext: false } });
+    vi.mocked(postThreadRead).mockResolvedValue({});
+    vi.mocked(getThreadList).mockResolvedValue({ data: [], meta: { page: 1, size: 100, total: 0, hasNext: false } });
+    renderPage();
+    await userEvent.click(await screen.findByText('싱크대 아래 물이 새요'));
+    const panel = await screen.findByRole('complementary', { name: '요청 상세' });
+    await userEvent.click(await within(panel).findByRole('button', { name: '임차인과 대화' }));
+    expect(postThread).toHaveBeenCalledWith({ contextType: 'TICKET', contextId: 't1' });
+    const dialog = await screen.findByRole('dialog', { name: /큐에이/ });
+    expect(dialog).toHaveAttribute('aria-modal', 'false');
+    window.sessionStorage.clear();
+  });
+
+  it('행을 누르면 패널: 요청자·내용·대화 버튼, [처리 시작]이면 처리 중으로 바꾼다', async () => {
     vi.mocked(patchTicket).mockResolvedValue(ticket({ status: 'IN_PROGRESS' }));
     renderPage();
     await userEvent.click(await screen.findByText('싱크대 아래 물이 새요'));
     const panel = await screen.findByRole('complementary', { name: '요청 상세' });
     expect(await within(panel).findByText('임차인 큐에이 요청')).toBeInTheDocument();
-    expect(within(panel).getByText('임차인과의 대화는 앱에서 볼 수 있어요')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: '임차인과 대화' })).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole('button', { name: '처리 시작' }));
     expect(patchTicket).toHaveBeenCalledWith('t1', { status: 'IN_PROGRESS' });
   });
