@@ -284,7 +284,7 @@ describe('임차인 초대 가입', { skip: dbTestSkip }, () => {
     return { callback, sealed };
   };
   const googleProfile = (email) => ({ sub: randomUUID(), email, email_verified: true, name: '소셜 임차인' });
-  const signupBody = { birthDate: '1990-01-31', termsAgreed: true, privacyAgreed: true };
+  const signupBody = { phone: '010-1234-5678', birthDate: '1990-01-31', termsAgreed: true, privacyAgreed: true };
 
   test('OAuth 시작: 확인 세션이 그 초대 것일 때만 bt_oi(암호화·HttpOnly·Lax·oauth 경로·30분)를 둔다', async () => {
     const context = await issueAndVerify();
