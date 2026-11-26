@@ -109,7 +109,6 @@ describe('임대인 앱: 하단 탭', () => {
 
 describe('임대인 앱: 준비 중 화면', () => {
   it.each([
-    '/landlord/settings',
     '/landlord/contracts',
     '/landlord/logs/l-1',
     '/landlord/no-such-page',
@@ -121,8 +120,8 @@ describe('임대인 앱: 준비 중 화면', () => {
   });
 
   it('탭 화면은 그 이름을 제목으로 보여 준다', () => {
-    renderAt('/landlord/settings');
-    expect(within(screen.getByRole('region', { name: '준비 중' })).getByRole('heading', { name: '내 정보' })).toBeInTheDocument();
+    renderAt('/landlord/logs/l-1');
+    expect(within(screen.getByRole('region', { name: '준비 중' })).getByRole('heading', { name: '내 자산' })).toBeInTheDocument();
   });
 
   it('/landlord 로 들어오면 /landlord/home 으로 간다', () => {
@@ -186,7 +185,7 @@ describe('임대인 앱: 내 자산·상세 화면의 셸', () => {
   });
 });
 
-describe('임대인 앱: 내 정보 (준비 중 + 로그아웃)', () => {
+describe('임대인 앱: 내 정보 (계정 + 로그아웃)', () => {
   it('내 정보 탭에는 계정 정보와 [로그아웃]이 있고, 누르면 onLogout 이 불린다', async () => {
     const { onLogout } = renderAt('/landlord/settings');
     const main = within(screen.getByRole('main'));
