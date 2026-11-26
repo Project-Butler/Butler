@@ -8,6 +8,7 @@ import {
   getUser,
   getVerificationSetting,
   listAuditLogs,
+  listDocuments,
   listJobs,
   listOwnerships,
   listUsers,
@@ -43,6 +44,8 @@ router.patch('/settings/ownership-verification', patchVerificationSetting);
 router.get('/ownership-verification-attempts', listVerificationAttempts);
 router.post('/complexes', postComplex);
 router.get('/audit-logs', listAuditLogs);
+// 문서 목록(메타데이터만). 파일 내용은 이 API로 열 수 없다.
+router.get('/documents', listDocuments);
 router.get('/jobs', listJobs);
 router.post('/jobs/:jobId/retry', postJobRetry);
 

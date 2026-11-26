@@ -10,6 +10,8 @@ import { isUuid } from '../../platform/uuid.js';
 import { decodeCreatedAtCursor } from '../../platform/createdAtCursor.js';
 import { ATTEMPT_STATUSES, MAX_VALIDITY_YEARS, parseValidityYears, VERIFICATION_REASON_CODES } from '../../platform/ownershipVerificationRules.js';
 import { parseComplexBody } from './complexInput.js';
+import { findAdminDocuments } from './documentList.js';
+import { parseDocumentListQuery } from './documentListQuery.js';
 import { OWNERSHIP_FILTER_STATUSES } from './ownershipFilter.js';
 import {
   changeUserStatus,
@@ -262,6 +264,16 @@ export const patchUserStatus = async (req, res, next) => {
 export const listAuditLogs = async (req, res, next) => {
   try {
     const { items, meta } = await findAuditLogs(parseAuditLogQuery(req.query));
+    sendList(res, items, meta);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/documents?resourceType=&uploaderId=&from=&until=&page=&size= — 메타데이터만(파일 내용으로 가는 값 없음).
+export const listDocuments = async (req, res, next) => {
+  try {
+    const { items, meta } = await findAdminDocuments(parseDocumentListQuery(req.query));
     sendList(res, items, meta);
   } catch (error) {
     next(error);
