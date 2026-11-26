@@ -36,6 +36,9 @@ const NEAR_B = '훼휘훠테스트어';
 const TYPE_WORD = '쮀쮜쭤테스트어';
 const COMMON_WORD = '노도로테스트어';
 const REL_WORD = '뤠뤼뤄테스트어';
+// 조건 완화 + 주택·상가 필터 확인용
+const KIND_A = '뭐뮈뭬테스트어';
+const KIND_B = '붜뷔붸테스트어';
 // 흔한 단어 가중치 확인용: COMMON_WORD만 든 자료를 많이 넣어 그 단어를 흔하게 만든다(로컬 DB가 비어 있어도 같은 결과).
 const COMMON_FILLER_COUNT = 200;
 
@@ -91,6 +94,10 @@ const REFERENCES = [
   reference('partial-both', { content: `${WORD_H} 그리고 ${WORD_I}` }),
   reference('partial-h', { title: `${WORD_H} 사례` }),
   reference('partial-i', { type: 'PRECEDENT', content: `${WORD_I} 본문` }),
+  // 조건 완화 + 주택·상가 필터: 상가에만 두 단어 다 / 주택에 A만 / 공통(property_kind 없음)에 B만
+  reference('kind-commercial', { propertyKind: 'COMMERCIAL', content: `${KIND_A} 그리고 ${KIND_B}` }),
+  reference('kind-housing', { propertyKind: 'HOUSING', title: `${KIND_A} 사례` }),
+  reference('kind-common', { content: `${KIND_B} 본문` }),
   // 동사 확인용(단어 J): 자료에는 동사 대신 법률 명사 "반환"만 / 동사 형태 "돌려받"이 그대로 있음 / J만 있음
   reference('verb-noun', { title: `${WORD_J} 보증금 반환` }),
   reference('verb-form', { content: `${WORD_J} 보증금을 돌려받지 못함` }),
@@ -345,6 +352,18 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     const { keys, meta } = await search(`${WORD_H} 안 ${MISSING_WORD}`);
     assert.deepEqual(keys, ['partial-h', 'partial-both']);
     assert.deepEqual(meta.partialMatch, { matchedTermCount: 1, termCount: 3 });
+  });
+
+  test('조건 완화 + 주택·상가 필터: 다른 종류 건물의 자료는 빼고 단어 수도 남은 자료로 센다', async () => {
+    const all = await search(`${KIND_A} ${KIND_B} ${MISSING_WORD}`);
+    assert.equal(all.keys[0], 'kind-commercial');
+    assert.deepEqual(new Set(all.keys), new Set(['kind-commercial', 'kind-housing', 'kind-common']));
+    assert.deepEqual(all.meta.partialMatch, { matchedTermCount: 2, termCount: 3 });
+
+    const housing = await search(`${KIND_A} ${KIND_B} ${MISSING_WORD}`, { filters: { propertyKind: 'HOUSING' } });
+    assert.deepEqual(new Set(housing.keys), new Set(['kind-housing', 'kind-common']));
+    assert.equal(housing.meta.total, 2);
+    assert.deepEqual(housing.meta.partialMatch, { matchedTermCount: 1, termCount: 3 });
   });
 
   test('조건 완화 안 함: 모두 맞는 자료가 있거나, 단어가 하나거나, 종류 필터 때문에 0건이면 partialMatch는 null', async () => {
