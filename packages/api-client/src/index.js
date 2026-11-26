@@ -97,6 +97,7 @@ export { getAdminUserList } from './apis/admin/getAdminUserList';
 export { getAdminUser } from './apis/admin/getAdminUser';
 export { patchAdminUserStatus } from './apis/admin/patchAdminUserStatus';
 export { getAdminAuditLogList } from './apis/admin/getAdminAuditLogList';
+export { getAdminDocumentList } from './apis/admin/getAdminDocumentList';
 export { getAdminOwnershipList } from './apis/admin/getAdminOwnershipList';
 export { postAdminOwnershipRevoke } from './apis/admin/postAdminOwnershipRevoke';
 export { postAdminOwnershipEnd } from './apis/admin/postAdminOwnershipEnd';

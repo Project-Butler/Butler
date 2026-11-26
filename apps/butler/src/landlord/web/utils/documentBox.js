@@ -11,20 +11,8 @@ export const MAX_DOCUMENTS_PER_TARGET = 30;
 export const MAX_FILES_PER_BATCH = 10;
 export const MAX_FILE_SIZE_TEXT = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)}MB`;
 
-// documentType → 화면 라벨. 서버 apps/api documents/fileRules.js DOCUMENT_TYPES 전체를 덮는다.
-export const DOCUMENT_TYPE_LABELS = {
-  REGISTRY_CERTIFICATE: '등기부',
-  SALE_CONTRACT: '매매계약서',
-  INSURANCE: '보험',
-  CONTRACT_DOCUMENT: '계약서·특약',
-  LEASE_REPORT: '신고필증·확정일자',
-  RECEIPT: '영수증',
-  MOVE_PHOTO: '입주·퇴거 사진',
-  PHOTO: '사진',
-  OTHER: '기타',
-};
-
-export const getDocumentTypeLabel = (documentType) => DOCUMENT_TYPE_LABELS[documentType] ?? DOCUMENT_TYPE_LABELS.OTHER;
+// documentType 라벨은 관리자 문서 목록도 쓰므로 shared에 두고 여기서는 다시 내보낸다.
+export { DOCUMENT_TYPE_LABELS, getDocumentTypeLabel } from '../../../shared/documentTypeLabels';
 
 // 보관할 곳별 고를 수 있는 종류(칩 순서). 서버 fileRules.js OWNERSHIP_DOCUMENT_TYPES·CONTRACT_DOCUMENT_TYPES와 같은 값이다.
 export const DOCUMENT_TYPES_BY_TARGET = {

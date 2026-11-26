@@ -166,3 +166,15 @@ export const TICKET_STATUS_TONE = {
   DONE: 'success',
   CANCELED: 'default',
 };
+
+// 문서 목록의 첨부 위치(서버 resourceType, documents/resourcePolicies.js SUPPORTED_RESOURCE_TYPES). 칩 순서도 이 순서다.
+export const DOCUMENT_RESOURCE_TYPES = ['CONTRACT', 'OWNERSHIP', 'TICKET', 'MANAGEMENT_LOG', 'THREAD_MESSAGE', 'RENEWAL_NOTICE'];
+
+export const DOCUMENT_RESOURCE_LABEL = {
+  CONTRACT: '계약',
+  OWNERSHIP: '소유 서류',
+  TICKET: '수리 요청',
+  MANAGEMENT_LOG: '하우스 로그',
+  THREAD_MESSAGE: '메시지',
+  RENEWAL_NOTICE: '갱신 통지',
+};
