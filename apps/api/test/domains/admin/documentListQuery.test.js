@@ -13,7 +13,7 @@ const expectInvalid = (query, field) =>
 
 describe('parseDocumentListQuery', () => {
   test('비어 있으면 모든 종류·기본 쪽', () => {
-    assert.deepEqual(parseDocumentListQuery({}), { resourceTypes: null, uploaderId: null, from: null, until: null, page: 1, size: 20 });
+    assert.deepEqual(parseDocumentListQuery({}), { resourceTypes: null, uploaderId: null, uploaderQuery: null, from: null, until: null, page: 1, size: 20 });
   });
 
   test('첨부 위치는 쉼표로 여러 개, 정책 표에 있는 값만', () => {
@@ -26,6 +26,12 @@ describe('parseDocumentListQuery', () => {
   test('등록자는 UUID', () => {
     assert.equal(parseDocumentListQuery({ uploaderId: UUID }).uploaderId, UUID);
     expectInvalid({ uploaderId: 'abc' }, 'uploaderId');
+  });
+
+  test('등록자 검색어는 앞뒤 공백을 빼고 100자까지', () => {
+    assert.equal(parseDocumentListQuery({ uploaderQuery: '  kim@butler  ' }).uploaderQuery, 'kim@butler');
+    assert.equal(parseDocumentListQuery({ uploaderQuery: '   ' }).uploaderQuery, null);
+    expectInvalid({ uploaderQuery: 'a'.repeat(101) }, 'uploaderQuery');
   });
 
   test('등록일은 YYYY-MM-DD, from이 until보다 늦으면 안 된다', () => {

@@ -23,7 +23,7 @@ const doc = (overrides = {}) => ({
   resourceId: 'c1',
   property: { id: 'p1', displayName: '버틀러 단지 101동 1001호' },
   link: { type: 'CONTRACT', id: 'c1' },
-  uploader: { id: 'u1', name: '김임대', role: 'LANDLORD' },
+  uploader: { id: 'u1', name: '김임대', email: 'kim@butler.test', role: 'LANDLORD' },
   createdAt: '2026-11-25T05:02:00Z',
   ...overrides,
 });
@@ -54,15 +54,15 @@ beforeEach(() => {
 describe('관리자 문서 목록', () => {
   it('URL 쿼리 조건으로 부르고, 표에 등록일·파일 이름·종류·크기·첨부 위치·호실·등록자를 보여 준다', async () => {
     vi.mocked(getAdminDocumentList).mockResolvedValue(page([doc()]));
-    renderList(`/documents?resourceType=CONTRACT,TICKET&from=2026-11-01&until=2026-11-26&uploaderId=${UUID}&page=2`);
+    renderList('/documents?resourceType=CONTRACT,TICKET&from=2026-11-01&until=2026-11-26&uploaderQuery=kim&page=2');
 
     const row = (await screen.findByText('임대차계약서.pdf')).closest('tr');
     expect(getAdminDocumentList).toHaveBeenCalledWith({
-      resourceType: 'CONTRACT,TICKET', uploaderId: UUID, from: '2026-11-01', until: '2026-11-26', page: 2, size: 20,
+      resourceType: 'CONTRACT,TICKET', uploaderId: undefined, uploaderQuery: 'kim', from: '2026-11-01', until: '2026-11-26', page: 2, size: 20,
     });
     const cells = within(row).getAllByRole('cell').map((cell) => cell.textContent);
     expect(cells).toEqual([
-      '2026-11-25 14:02', '임대차계약서.pdf', '계약서·특약', '2.3MB', '계약', '버틀러 단지 101동 1001호', '임대인 · 김임대',
+      '2026-11-25 14:02', '임대차계약서.pdf', '계약서·특약', '2.3MB', '계약', '버틀러 단지 101동 1001호', '임대인 · 김임대kim@butler.test',
     ]);
     expect(screen.getByText('파일 내용은 이 화면에서 열 수 없어요.', { exact: false })).toBeInTheDocument();
   });
@@ -89,20 +89,34 @@ describe('관리자 문서 목록', () => {
     ]);
   });
 
-  it('등록자는 회원 ID(UUID)만 받는다', async () => {
+  it('등록자는 이메일·이름 검색어로 찾고, 회원 상세에서 고른 회원 조건은 그때 푼다', async () => {
+    vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
+    renderList(`/documents?uploaderId=${UUID}`);
+    expect(await screen.findByText('회원 상세에서 고른 회원')).toBeInTheDocument();
+    expect(getAdminDocumentList).toHaveBeenCalledWith(expect.objectContaining({ uploaderId: UUID, uploaderQuery: undefined }));
+
+    await userEvent.type(screen.getByPlaceholderText('등록자 (이메일 또는 이름)'), '  김임대 ');
+    await userEvent.click(screen.getByRole('button', { name: '찾기' }));
+    expect(location()).toBe(`/documents?uploaderQuery=${encodeURIComponent('김임대')}`);
+    expect(screen.queryByText('회원 상세에서 고른 회원')).toBeNull();
+  });
+
+  it('회원 상세에서 고른 회원 조건은 [x]로 푼다', async () => {
+    vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
+    renderList(`/documents?uploaderId=${UUID}&resourceType=CONTRACT`);
+    await userEvent.click(await screen.findByRole('button', { name: '고른 회원 조건 풀기' }));
+    expect(location()).toBe('/documents?resourceType=CONTRACT');
+  });
+
+  it('등록자 검색어는 100자까지', async () => {
     vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
     renderList();
-    const input = await screen.findByPlaceholderText('등록자 (회원 ID)');
-
-    await userEvent.type(input, 'abc');
+    const input = await screen.findByPlaceholderText('등록자 (이메일 또는 이름)');
+    await userEvent.click(input);
+    await userEvent.paste('a'.repeat(101));
     await userEvent.click(screen.getByRole('button', { name: '찾기' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('회원 ID(UUID) 형식이 아닙니다.');
+    expect(screen.getByRole('alert')).toHaveTextContent('100자 이하로 입력해 주세요.');
     expect(location()).toBe('/documents');
-
-    await userEvent.clear(input);
-    await userEvent.type(input, UUID);
-    await userEvent.click(screen.getByRole('button', { name: '찾기' }));
-    expect(location()).toBe(`/documents?uploaderId=${UUID}`);
   });
 
   it('이동 대상이 있으면 계약·수리 요청 상세로 가고, 없으면 글자만 보인다', async () => {
@@ -141,8 +155,8 @@ describe('관리자 문서 목록', () => {
   it('[찾기]를 누르지 않은 등록자 입력은 다른 조건을 바꾸면 적용된 값으로 돌아간다', async () => {
     vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
     renderList();
-    const input = await screen.findByPlaceholderText('등록자 (회원 ID)');
-    await userEvent.type(input, UUID);
+    const input = await screen.findByPlaceholderText('등록자 (이메일 또는 이름)');
+    await userEvent.type(input, 'kim');
     await userEvent.click(screen.getByRole('button', { name: '메시지' }));
     expect(location()).toBe('/documents?resourceType=THREAD_MESSAGE');
     expect(input).toHaveValue('');

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card, FilterChip, Pagination } from '@butler/ui';
-import { ArrowUpRight, FileImage, FileText, FileVideo, Info } from 'lucide-react';
+import { ArrowUpRight, FileImage, FileText, FileVideo, Info, X } from 'lucide-react';
 import { StatusMessage } from '../components/StatusMessage/StatusMessage';
 import { DOCUMENT_RESOURCE_LABEL, DOCUMENT_RESOURCE_TYPES, ROLE_LABEL } from '../constants/labels';
 import { useGetAdminDocumentList } from '../hooks/useGetAdminDocumentList';
@@ -9,7 +9,8 @@ import { formatDateTime } from '../utils/formatDate';
 import { getDocumentTypeLabel } from '../../shared/documentTypeLabels';
 
 const PAGE_SIZE = 20;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 서버 MAX_UPLOADER_QUERY_LENGTH와 같다(회원 목록 검색어와 같은 길이).
+const MAX_UPLOADER_QUERY_LENGTH = 100;
 
 const inputClass =
   'h-11 rounded-input border border-line bg-surface px-3 font-num text-body text-ink outline-none placeholder:text-ink-3 focus:border-accent';
@@ -42,30 +43,32 @@ const ResourceCell = ({ document, onNavigate }) => {
 };
 
 // 관리자 문서 목록(docs/18 계획 v3). 올라온 문서의 메타데이터만 보여 준다 — 파일을 여는 버튼·링크는 두지 않는다.
-// 첨부 위치·등록일·등록자 조건과 쪽 번호는 URL 쿼리에 둔다(회원 상세의 '이 회원이 등록한 문서'가 ?uploaderId=로 들어온다).
+// 첨부 위치·등록일·등록자 조건과 쪽 번호는 URL 쿼리에 둔다.
+// 등록자는 이메일·이름 검색어(uploaderQuery)로 찾는다. 회원 상세의 '이 회원이 등록한 문서'는 정확한 회원(uploaderId)으로 들어온다.
 export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const resourceType = searchParams.get('resourceType') ?? '';
   const from = searchParams.get('from') ?? '';
   const until = searchParams.get('until') ?? '';
   const uploaderId = searchParams.get('uploaderId') ?? '';
+  const uploaderQuery = searchParams.get('uploaderQuery') ?? '';
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
   const selectedTypes = resourceType ? resourceType.split(',') : [];
 
-  const [uploaderInput, setUploaderInput] = useState(uploaderId);
+  const [uploaderInput, setUploaderInput] = useState(uploaderQuery);
   const [uploaderError, setUploaderError] = useState(null);
-  useEffect(() => setUploaderInput(uploaderId), [uploaderId]);
+  useEffect(() => setUploaderInput(uploaderQuery), [uploaderQuery]);
 
   const { data, error, isLoading, refetch } = useGetAdminDocumentList(
-    { resourceType, uploaderId, from, until, page, size: PAGE_SIZE },
+    { resourceType, uploaderId, uploaderQuery, from, until, page, size: PAGE_SIZE },
     { onUnauthorized },
   );
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 빈 값은 URL에서 뺀다.
   // [찾기]를 누르지 않은 등록자 입력은 지금 적용된 값으로 되돌려, 입력칸과 실제 조건이 어긋나 보이지 않게 한다.
   const updateParams = (changes) => {
-    if (!('uploaderId' in changes)) {
-      setUploaderInput(uploaderId);
+    if (!('uploaderQuery' in changes)) {
+      setUploaderInput(uploaderQuery);
       setUploaderError(null);
     }
     const next = new URLSearchParams(searchParams);
@@ -85,12 +88,13 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
   const handleUploaderSubmit = (event) => {
     event.preventDefault();
     const trimmed = uploaderInput.trim();
-    if (trimmed && !UUID_PATTERN.test(trimmed)) {
-      setUploaderError('회원 ID(UUID) 형식이 아닙니다.');
+    if (trimmed.length > MAX_UPLOADER_QUERY_LENGTH) {
+      setUploaderError(`${MAX_UPLOADER_QUERY_LENGTH}자 이하로 입력해 주세요.`);
       return;
     }
     setUploaderError(null);
-    updateParams({ uploaderId: trimmed });
+    // 검색어로 찾으면 회원 상세에서 고른 회원 조건은 푼다(두 조건이 겹쳐 헷갈리지 않게).
+    updateParams({ uploaderQuery: trimmed, uploaderId: '' });
   };
 
   // 기간이 뒤바뀌면 서버가 400으로 거절하므로, 반대쪽 날짜를 방금 고른 날로 맞춘다(입력을 말없이 버리지 않는다).
@@ -146,16 +150,16 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
           />
           <form onSubmit={handleUploaderSubmit} noValidate className="flex items-start gap-2" role="search">
             <label className="flex flex-col gap-1">
-              <span className="sr-only">등록자 회원 ID</span>
+              <span className="sr-only">등록자 이메일 또는 이름</span>
               <input
                 value={uploaderInput}
                 onChange={(event) => {
                   setUploaderInput(event.target.value);
                   setUploaderError(null);
                 }}
-                placeholder="등록자 (회원 ID)"
+                placeholder="등록자 (이메일 또는 이름)"
                 aria-invalid={Boolean(uploaderError)}
-                className={`${inputClass} w-80 ${uploaderError ? 'border-crit-ink' : ''}`}
+                className={`${inputClass} w-72 font-sans ${uploaderError ? 'border-crit-ink' : ''}`}
               />
               {uploaderError && (
                 <span role="alert" className="text-chip text-crit-ink">
@@ -167,6 +171,19 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
               찾기
             </Button>
           </form>
+          {uploaderId && (
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-accent bg-accent-soft pl-3.5 pr-2 text-chip font-semibold text-accent-strong">
+              회원 상세에서 고른 회원
+              <button
+                type="button"
+                aria-label="고른 회원 조건 풀기"
+                onClick={() => updateParams({ uploaderId: '' })}
+                className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </span>
+          )}
         </div>
       </Card>
 
@@ -210,6 +227,7 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
                     <td className="px-3 py-3 text-chip text-ink-2">{document.property?.displayName ?? '-'}</td>
                     <td className="whitespace-nowrap px-5 py-3 text-chip text-ink-2">
                       {ROLE_LABEL[document.uploader.role] ?? document.uploader.role} · {document.uploader.name}
+                      <span className="block text-ink-3">{document.uploader.email}</span>
                     </td>
                   </tr>
                 ))}

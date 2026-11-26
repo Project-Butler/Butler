@@ -16,13 +16,21 @@ const parseResourceTypes = (value, details) => {
   return types;
 };
 
+// 등록자 검색어(이메일·이름 부분 일치)는 회원 목록 검색(GET /admin/users?query=)과 같은 길이 제한.
+export const MAX_UPLOADER_QUERY_LENGTH = 100;
+
 // from·until은 KST 날짜(YYYY-MM-DD)이고 그날을 포함한다(하우스 로그 목록과 같은 규칙).
+// uploaderQuery는 이메일·이름 부분 일치, uploaderId는 정확한 회원(회원 상세의 바로가기가 쓴다). 둘 다 오면 둘 다 만족해야 한다.
 export const parseDocumentListQuery = (query) => {
   assertSingleValues(query);
   const details = [];
   const resourceTypes = parseResourceTypes(query.resourceType, details);
   if (query.uploaderId !== undefined && !isUuid(query.uploaderId)) {
     details.push({ field: 'uploaderId', reason: 'UUID 형식이어야 합니다.' });
+  }
+  const uploaderQuery = query.uploaderQuery?.trim() || null;
+  if (uploaderQuery && uploaderQuery.length > MAX_UPLOADER_QUERY_LENGTH) {
+    details.push({ field: 'uploaderQuery', reason: `${MAX_UPLOADER_QUERY_LENGTH}자 이하여야 합니다.` });
   }
   for (const field of ['from', 'until']) {
     if (query[field] !== undefined && !isValidLogDate(query[field])) details.push({ field, reason: 'YYYY-MM-DD 날짜여야 합니다.' });
@@ -36,6 +44,7 @@ export const parseDocumentListQuery = (query) => {
   return {
     resourceTypes,
     uploaderId: query.uploaderId ?? null,
+    uploaderQuery,
     from: query.from ?? null,
     until: query.until ?? null,
     page,

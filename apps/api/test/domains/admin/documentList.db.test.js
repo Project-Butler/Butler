@@ -10,7 +10,7 @@ import { prisma } from '../../../src/platform/prismaClient.js';
 
 const RESPONSE_KEYS = ['createdAt', 'documentType', 'fileName', 'id', 'link', 'mimeType', 'property', 'resourceId', 'resourceType', 'sizeBytes', 'uploader'];
 const PAGE = { page: 1, size: 100 };
-const query = (overrides) => ({ resourceTypes: null, uploaderId: null, from: null, until: null, ...PAGE, ...overrides });
+const query = (overrides) => ({ resourceTypes: null, uploaderId: null, uploaderQuery: null, from: null, until: null, ...PAGE, ...overrides });
 
 describe('관리자 문서 목록', { skip: dbTestSkip }, () => {
   const fixture = createDbFixture();
@@ -176,7 +176,7 @@ describe('관리자 문서 목록', { skip: dbTestSkip }, () => {
   test('응답에는 허용한 칸만 있다(저장 경로·업로드 id·다운로드 주소 없음)', async () => {
     const [item] = await listFor([landlord]);
     assert.deepEqual(Object.keys(item).sort(), RESPONSE_KEYS);
-    assert.deepEqual(Object.keys(item.uploader).sort(), ['id', 'name', 'role']);
+    assert.deepEqual(Object.keys(item.uploader).sort(), ['email', 'id', 'name', 'role']);
     assert.equal(typeof item.sizeBytes, 'number');
   });
 
@@ -187,6 +187,14 @@ describe('관리자 문서 목록', { skip: dbTestSkip }, () => {
     assert.deepEqual(new Set(several.map((item) => item.id)), new Set([docs.notice.id, docs.log.id]));
     const byTenant = await listFor([tenant]);
     assert.ok(byTenant.every((item) => item.uploader.id === tenant.id));
+  });
+
+  test('등록자 검색어로 이메일 일부(대소문자 무시)를 찾는다', async () => {
+    const part = `DBTEST-${tenant.id}`.toUpperCase();
+    const { items } = await findAdminDocuments(query({ uploaderQuery: part }));
+    assert.ok(items.length > 0);
+    assert.ok(items.every((item) => item.uploader.id === tenant.id));
+    assert.ok(findItem(items, docs.ticket));
   });
 
   test('등록일은 KST 날짜 경계로 거른다(그날 포함)', async () => {

@@ -75,6 +75,7 @@ export const PROPERTY_RESOLVERS = {
 };
 
 // 응답 한 건. 여기 적은 칸만 내보낸다(storagePath·uploadId·isLocked·다운로드 주소 없음).
+// 등록자 이메일은 동명이인을 가리려고 보낸다(관리자는 회원 목록에서 이미 이메일을 본다).
 export const toAdminDocumentResponse = (document, resolved) => ({
   id: document.id,
   documentType: document.type,
@@ -85,7 +86,7 @@ export const toAdminDocumentResponse = (document, resolved) => ({
   resourceId: document.resourceId,
   property: resolved?.property ?? null,
   link: resolved?.link ?? null,
-  uploader: { id: document.uploader.id, name: document.uploader.name, role: document.uploader.role },
+  uploader: { id: document.uploader.id, name: document.uploader.name, email: document.uploader.email, role: document.uploader.role },
   createdAt: document.createdAt.toISOString(),
 });
 
@@ -98,11 +99,15 @@ const toCreatedAtWhere = (from, until) => {
   };
 };
 
-export const toAdminDocumentWhere = ({ resourceTypes, uploaderId, from, until }) => ({
+// 등록자 검색어는 회원 목록 검색과 같은 규칙(이메일·이름 부분 일치, 대소문자 무시).
+export const toAdminDocumentWhere = ({ resourceTypes, uploaderId, uploaderQuery, from, until }) => ({
   deletedAt: null,
   resourceType: { in: resourceTypes ?? SUPPORTED_RESOURCE_TYPES },
   evidenceFor: { none: {} },
   ...(uploaderId && { uploaderId }),
+  ...(uploaderQuery && {
+    uploader: { OR: [{ email: { contains: uploaderQuery, mode: 'insensitive' } }, { name: { contains: uploaderQuery, mode: 'insensitive' } }] },
+  }),
   ...(toCreatedAtWhere(from, until) && { createdAt: toCreatedAtWhere(from, until) }),
 });
 
@@ -125,7 +130,7 @@ export const findAdminDocuments = async (query) => {
   const [documents, total] = await prisma.$transaction([
     prisma.document.findMany({
       where,
-      include: { uploader: { select: { id: true, name: true, role: true } } },
+      include: { uploader: { select: { id: true, name: true, email: true, role: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * size,
       take: size,

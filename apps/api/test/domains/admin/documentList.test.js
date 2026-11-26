@@ -12,10 +12,17 @@ describe('관리자 문서 목록 — 종류 지도', () => {
 
 describe('toAdminDocumentWhere', () => {
   test('삭제·임시·증빙 문서를 빼고, 종류를 안 고르면 정책 표 전체', () => {
-    assert.deepEqual(toAdminDocumentWhere({ resourceTypes: null, uploaderId: null, from: null, until: null }), {
+    assert.deepEqual(toAdminDocumentWhere({ resourceTypes: null, uploaderId: null, uploaderQuery: null, from: null, until: null }), {
       deletedAt: null,
       resourceType: { in: SUPPORTED_RESOURCE_TYPES },
       evidenceFor: { none: {} },
+    });
+  });
+
+  test('등록자 검색어는 이메일·이름 부분 일치(대소문자 무시)', () => {
+    const where = toAdminDocumentWhere({ resourceTypes: null, uploaderId: null, uploaderQuery: 'Kim', from: null, until: null });
+    assert.deepEqual(where.uploader, {
+      OR: [{ email: { contains: 'Kim', mode: 'insensitive' } }, { name: { contains: 'Kim', mode: 'insensitive' } }],
     });
   });
 
@@ -32,15 +39,15 @@ describe('toAdminDocumentResponse', () => {
   const row = {
     id: 'd1', uploadId: 'up1', type: 'CONTRACT_DOCUMENT', fileName: '계약서.pdf', mimeType: 'application/pdf', sizeBytes: 2048n,
     resourceType: 'CONTRACT', resourceId: 'c1', storagePath: 'uploads/up1', isLocked: false, deletedAt: null,
-    createdAt: new Date('2026-11-26T01:00:00Z'), uploader: { id: 'u1', name: '임대인', role: 'LANDLORD', email: 'x@test' },
+    createdAt: new Date('2026-11-26T01:00:00Z'), uploader: { id: 'u1', name: '임대인', role: 'LANDLORD', email: 'x@test', phone: '010' },
   };
 
-  test('허용한 칸만 내보낸다', () => {
+  test('허용한 칸만 내보낸다(등록자 연락처 같은 다른 칸은 버린다)', () => {
     const response = toAdminDocumentResponse(row, { property: null, link: { type: 'CONTRACT', id: 'c1' } });
     assert.deepEqual(response, {
       id: 'd1', documentType: 'CONTRACT_DOCUMENT', fileName: '계약서.pdf', mimeType: 'application/pdf', sizeBytes: 2048,
       resourceType: 'CONTRACT', resourceId: 'c1', property: null, link: { type: 'CONTRACT', id: 'c1' },
-      uploader: { id: 'u1', name: '임대인', role: 'LANDLORD' }, createdAt: '2026-11-26T01:00:00.000Z',
+      uploader: { id: 'u1', name: '임대인', email: 'x@test', role: 'LANDLORD' }, createdAt: '2026-11-26T01:00:00.000Z',
     });
   });
 
