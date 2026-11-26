@@ -154,7 +154,7 @@ const toWeightedVariants = (term) => {
 export const toTermVariants = (term) => toWeightedVariants(term).map(({ text }) => text);
 
 // ── 찾는 말이 필드에 있는지 ──
-// 대소문자 무시 포함 검색(ILIKE, Prisma contains와 같음)에 단어 경계 규칙(searchSynonyms.js MATCH_RULES)을 더한다:
+// 대소문자 무시 포함 검색(ILIKE, Prisma contains와 같음 — 대소문자가 없는 말은 LIKE)에 단어 경계 규칙(searchSynonyms.js MATCH_RULES)을 더한다:
 // excludes 낱말은 지우고 찾고("수선"을 찾을 때 "장기수선충당금"은 빼고), wordStart면 낱말 첫머리일 때만 인정한다("하자"는 "요구하자"에 안 걸림).
 // 검색 조건·관련도 점수·조건 완화 단어 수·흔한 단어 건수가 모두 이 규칙을 쓴다. FAQ(JS)는 containsSearchText가 같은 규칙.
 
@@ -176,13 +176,18 @@ const SPACELESS_MIN_LENGTH = 4;
 const WHITESPACE_CHARS = ' \n\r\t';
 const isSpacelessText = (text) => !/\s/.test(text) && [...text].length >= SPACELESS_MIN_LENGTH;
 
+// 대소문자가 있는 글자(영문·전각 영문 등)가 하나도 없는 말(한글·숫자·부호)은 ILIKE 대신 LIKE로 비교한다 —
+// 결과는 같고, 한글에서 ILIKE는 LIKE보다 2~3배 느리다("보증금" 본문 87ms → 31ms).
+const hasLetterCase = (text) => text.toLowerCase() !== text.toUpperCase();
+const toLikeOperator = (text) => Prisma.raw(hasLetterCase(text) ? 'ILIKE' : 'LIKE');
+
 const toColumnMatchSql = (column, text) => {
   // 사건번호·조문은 경계를 지켜 찾는다("2020다22645" ✕ "2020다226452", "제6조" ✕ "제6조의3")
   const legalPattern = toLegalReferencePattern(text);
   if (legalPattern) return Prisma.sql`${Prisma.raw(column)} ~ ${legalPattern}`;
   const rule = findMatchRule(text);
   if (!rule && isSpacelessText(text)) {
-    return Prisma.sql`translate(${Prisma.raw(column)}, ${WHITESPACE_CHARS}, '') ILIKE ${`%${escapeLike(text)}%`}`;
+    return Prisma.sql`translate(${Prisma.raw(column)}, ${WHITESPACE_CHARS}, '') ${toLikeOperator(text)} ${`%${escapeLike(text)}%`}`;
   }
   const target = (rule?.excludes ?? []).reduce(
     (expression, excluded) => Prisma.sql`replace(${expression}, ${excluded}, ' ')`,
@@ -190,7 +195,7 @@ const toColumnMatchSql = (column, text) => {
   );
   return rule?.wordStart
     ? Prisma.sql`${target} ~ ${WORD_START_PATTERN + escapeRegex(text)}`
-    : Prisma.sql`${target} ILIKE ${`%${escapeLike(text)}%`}`;
+    : Prisma.sql`${target} ${toLikeOperator(text)} ${`%${escapeLike(text)}%`}`;
 };
 
 // 키워드와 같은지. 네 글자 이상은 키워드도 공백을 지우고 비교한다(키워드 "묵시적 갱신" = "묵시적갱신").
@@ -311,6 +316,12 @@ let totalDocCount = null; // { count, countedAt }
 
 const isFresh = (entry, now) => entry && now - entry.countedAt < TERM_STATS_TTL_MS;
 
+const storeTermDocCounts = (total, docCountByTerm, now) => {
+  if (termDocCounts.size + docCountByTerm.size > TERM_STATS_MAX_ENTRIES) termDocCounts.clear();
+  totalDocCount = { count: total, countedAt: now };
+  docCountByTerm.forEach((docCount, term) => termDocCounts.set(term, { docCount, countedAt: now }));
+};
+
 const countTermDocs = async (terms) => {
   const now = Date.now();
   const missing = terms.filter((term) => !isFresh(termDocCounts.get(term), now));
@@ -321,9 +332,7 @@ const countTermDocs = async (terms) => {
     ...missing.map((term, index) => Prisma.sql`(count(*) FILTER (WHERE ${toTermMatchSql(term)}))::int AS ${Prisma.raw(`t${index}`)}`),
   ];
   const [row] = await prisma.$queryRaw`SELECT ${Prisma.join(columns, ', ')} FROM dispute_references`;
-  if (termDocCounts.size + missing.length > TERM_STATS_MAX_ENTRIES) termDocCounts.clear();
-  totalDocCount = { count: row.total, countedAt: now };
-  missing.forEach((term, index) => termDocCounts.set(term, { docCount: row[`t${index}`], countedAt: now }));
+  storeTermDocCounts(row.total, new Map(missing.map((term, index) => [term, row[`t${index}`]])), now);
 };
 
 const toIdf = (docCount, total) => Math.log(1 + (total - docCount + 0.5) / (docCount + 0.5));
@@ -442,20 +451,40 @@ const findReferencePageByRelevance = async (matchedIds, keyword, { direction }, 
 // 가장 많이 맞은 자료만 남기면 "곰팡이 냄새 원룸"에서 곰팡이·원룸이 우연히 함께 나온 1건만 남고 곰팡이 사례 19건이 빠져서 모두 보여 준다.
 // 단어를 하나씩 빼며 다시 찾는 대신(단어 조합마다 전체를 훑어야 함) 한 번 훑으면서 자료마다 들어 있는 단어 수를 센다.
 // 한 글자 단어("안", "꼭", "집")는 거의 모든 자료에 글자로 들어 있어 셀 때 뺀다.
+// 같은 스캔으로 단어별 자료 수(흔한 단어 가중치, countTermDocs와 같은 조건·같은 전체 기준)도 센다 —
+// 바로 뒤 관련도 점수가 그 수를 쓰는데, 따로 세면 같은 조건으로 전체를 한 번 더 훑는다(긴 문장에서 0.8초 안팎).
+// 그래서 주택·상가 필터는 SQL이 아니라 받은 뒤에 건다(자료 수는 필터 전 전체 기준).
 const findPartialMatchIds = async (propertyKind, terms) => {
-  const matchedCount = Prisma.join(
-    terms.map((term) => Prisma.sql`(CASE WHEN ${toTermMatchSql(term)} THEN 1 ELSE 0 END)`),
-    ' + ',
+  const flags = terms.map((term, index) => Prisma.sql`(${toTermMatchSql(term)}) AS ${Prisma.raw(`t${index}`)}`);
+  const anyMatch = Prisma.join(
+    terms.map((_term, index) => Prisma.raw(`t${index}`)),
+    ' OR ',
   );
-  const propertyKindSql = propertyKind
-    ? Prisma.sql`WHERE property_kind::text = ${propertyKind} OR property_kind IS NULL`
-    : Prisma.empty;
+  const now = Date.now();
   const rows = await prisma.$queryRaw`
-    SELECT id, matched FROM (SELECT id, (${matchedCount})::int AS matched FROM dispute_references ${propertyKindSql}) counted
-    WHERE matched > 0`;
+    SELECT id, property_kind::text AS "propertyKind", ${Prisma.join(
+      terms.map((_term, index) => Prisma.raw(`t${index}`)),
+      ', ',
+    )}, (SELECT count(*)::int FROM dispute_references) AS total
+    FROM (SELECT id, property_kind, ${Prisma.join(flags, ', ')} FROM dispute_references) flagged
+    WHERE ${anyMatch}`;
+
+  const docCountByTerm = new Map(terms.map((term, index) => [term, rows.filter((row) => row[`t${index}`]).length]));
+  // 걸린 자료가 없으면 단어별 자료 수는 모두 0이고, 전체 자료 수만 따로 센다(LIKE 없는 count라 가볍다).
+  const total =
+    rows.length > 0
+      ? rows[0].total
+      : (await prisma.$queryRaw`SELECT count(*)::int AS total FROM dispute_references`)[0].total;
+  storeTermDocCounts(total, docCountByTerm, now);
+
+  const matchedCountById = new Map();
+  for (const row of rows) {
+    if (propertyKind && row.propertyKind !== null && row.propertyKind !== propertyKind) continue;
+    matchedCountById.set(row.id, terms.filter((_term, index) => row[`t${index}`]).length);
+  }
   return {
-    matchedCountById: new Map(rows.map((row) => [row.id, row.matched])),
-    matchedTermCount: rows.reduce((best, row) => Math.max(best, row.matched), 0),
+    matchedCountById,
+    matchedTermCount: Math.max(0, ...matchedCountById.values()),
   };
 };
 
