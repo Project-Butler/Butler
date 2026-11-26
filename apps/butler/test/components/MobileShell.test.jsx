@@ -92,3 +92,42 @@ describe('MobileShell', () => {
     expect(within(screen.getByRole('banner')).queryAllByRole('button')).toHaveLength(0);
   });
 });
+
+describe('TopBar 말풍선(대화) 버튼', () => {
+  const renderTopBar = (topBar) =>
+    render(
+      <MobileShell shell="test-shell" topBar={topBar} tabs={tabs('home')}>
+        <p>본문</p>
+      </MobileShell>,
+    );
+
+  it('message 를 주지 않으면 말풍선 버튼이 없다(지금 화면 그대로)', () => {
+    renderTopBar({ notification: { count: 0, onClick: () => {} } });
+    expect(screen.queryByRole('button', { name: /^대화/ })).not.toBeInTheDocument();
+  });
+
+  it('안 읽은 대화 수를 숫자로 붙이고, 99개 넘으면 99+ 로 줄인다', () => {
+    const { unmount } = renderTopBar({ message: { count: 3, onClick: () => {} } });
+    expect(screen.getByRole('button', { name: '대화, 안 읽은 대화 3개' })).toHaveTextContent('3');
+    unmount();
+    renderTopBar({ message: { count: 120, onClick: () => {} } });
+    expect(screen.getByRole('button', { name: '대화, 안 읽은 대화 120개' })).toHaveTextContent('99+');
+  });
+
+  it('0이면 숫자 없이 버튼만 두고, 누르면 onClick 을 부른다', async () => {
+    const onClick = vi.fn();
+    renderTopBar({ message: { count: 0, onClick } });
+    const button = screen.getByRole('button', { name: '대화' });
+    expect(button).toHaveTextContent('');
+    await userEvent.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('말풍선은 종 바로 왼쪽에 있다', () => {
+    renderTopBar({ message: { count: 0, onClick: () => {} }, notification: { count: 0, onClick: () => {} } });
+    const names = within(screen.getByRole('banner'))
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(names.indexOf('대화')).toBe(names.indexOf('알림') - 1);
+  });
+});
