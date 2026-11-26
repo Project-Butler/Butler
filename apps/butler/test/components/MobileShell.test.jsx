@@ -150,7 +150,7 @@ describe('BackTopBar 둘째 줄(대화 제목)', () => {
     const onSubtitleClick = vi.fn();
     renderBar({ titleNote: '임차인', subtitle: '101동 1001호 · 싱크대 누수', onSubtitleClick });
     expect(screen.getByRole('heading', { name: '이세입 임차인' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '101동 1001호 · 싱크대 누수' }));
+    await userEvent.click(screen.getByRole('button', { name: '101동 1001호 · 싱크대 누수, 상세 보기' }));
     expect(onSubtitleClick).toHaveBeenCalledTimes(1);
   });
 

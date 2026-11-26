@@ -29,6 +29,7 @@ const TitleBlock = ({ title, titleNote, subtitle, onSubtitleClick }) => {
         (onSubtitleClick ? (
           <button type="button" onClick={onSubtitleClick} className="flex max-w-full items-center gap-0.5 text-m-sub text-accent-strong">
             <span className="truncate">{subtitle}</span>
+            <span className="sr-only">, 상세 보기</span>
             <SubtitleChevron />
           </button>
         ) : (

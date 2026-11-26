@@ -80,6 +80,7 @@ beforeEach(() => {
     seq += 1;
     return { id: `doc-${seq}` };
   });
+  api.deleteDocument.mockResolvedValue(undefined);
   api.getTicket.mockImplementation(() => new Promise(() => {}));
   api.getContract.mockImplementation(() => new Promise(() => {}));
 });
@@ -137,14 +138,14 @@ describe('A2~A4 대화', () => {
   it('위 막대: 상대 이름(임차인) + 둘째 줄 대화 제목, 누르면 요청 상세', async () => {
     renderAt('/landlord/threads/a');
     expect(await screen.findByRole('heading', { name: '이세입 임차인' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '101동 1001호 · 요청 a' }));
+    await userEvent.click(screen.getByRole('button', { name: '101동 1001호 · 요청 a, 상세 보기' }));
     expect(where()).toBe('/landlord/tickets/ticket-a');
   });
 
   it('계약 대화의 제목을 누르면 계약 상세', async () => {
     api.getThread.mockResolvedValue(thread('c', { contextType: 'CONTRACT', contextId: 'c-1', title: '101동 1001호 계약' }));
     renderAt('/landlord/threads/c');
-    await userEvent.click(await screen.findByRole('button', { name: '101동 1001호 계약' }));
+    await userEvent.click(await screen.findByRole('button', { name: '101동 1001호 계약, 상세 보기' }));
     expect(where()).toBe('/landlord/contracts/c-1');
   });
 
@@ -174,6 +175,40 @@ describe('A2~A4 대화', () => {
     expect(await screen.findByText('끝난 계약·요청의 대화라 지금은 읽기만 할 수 있어요.')).toBeInTheDocument();
     expect(screen.queryByLabelText('메시지')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '보내기' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '1108동 502호 계약 · 지난 대화' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1108동 502호 계약 · 지난 대화, 상세 보기' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('끝난 계약·요청의 대화라 지금은 읽기만 할 수 있어요.');
+    expect(api.getUploadRules).not.toHaveBeenCalled();
+  });
+
+  it('메시지가 없는 끝난 대화는 인사를 권하지 않는다', async () => {
+    api.getThread.mockResolvedValue(thread('old', { isReadOnly: true }));
+    api.getThreadMessageList.mockResolvedValue({ data: [], meta: { nextCursor: null, hasNext: false } });
+    renderAt('/landlord/threads/old');
+    expect(await screen.findByText('주고받은 메시지가 없어요.')).toBeInTheDocument();
+    expect(screen.queryByText(/먼저 인사를 건네 보세요/)).not.toBeInTheDocument();
+  });
+
+  it('대화를 읽은 뒤 목록을 다시 받아 말풍선 숫자가 줄어든다', async () => {
+    api.getThreadList.mockResolvedValueOnce(page([thread('a', { unreadCount: 2 })])).mockResolvedValue(page([thread('a', { unreadCount: 0 })]));
+    renderAt('/landlord/somewhere');
+    await userEvent.click(await screen.findByRole('button', { name: '대화, 안 읽은 대화 1개' }));
+    await userEvent.click(await screen.findByRole('button', { name: /요청 a/ }));
+    await waitFor(() => expect(api.postThreadRead).toHaveBeenCalledWith('a', 'm1'));
+    // 읽음이 성공하면 목록을 낡은 것으로 표시하고, 목록으로 돌아오면 새로 받는다
+    await userEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
+    await waitFor(() => expect(api.getThreadList.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: /요청 a/ })).not.toHaveTextContent('안 읽은 메시지'));
+  });
+
+  it('보내다가 끝난 대화가 되면 잠금 안내로 바뀌고 올려 둔 첨부를 지운다', async () => {
+    api.postThreadMessage.mockRejectedValue(
+      Object.assign(new Error('x'), { response: { status: 409, data: { error: { code: 'THREAD_READ_ONLY', message: '끝난 대화예요' } } } }),
+    );
+    renderAt('/landlord/threads/a');
+    await userEvent.upload(await screen.findByLabelText('첨부 파일 선택'), jpeg('a.jpg'));
+    await waitFor(() => expect(screen.getByRole('button', { name: '보내기' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('끝난 계약·요청의 대화라 지금은 읽기만 할 수 있어요.');
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith('doc-1'));
   });
 });

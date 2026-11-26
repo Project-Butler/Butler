@@ -4,7 +4,7 @@ import { Button, MobileFormLayout } from '@butler/ui';
 import { NoticeBox } from '../../../shared/NoticeBox';
 import { MessageList } from '../../../shared/threads/MessageList';
 import { ThreadComposer } from '../../../shared/threads/ThreadComposer';
-import { IMMUTABLE_NOTICE, READ_ONLY_NOTICE } from '../../../shared/threads/threadRules';
+import { EMPTY_READ_ONLY_THREAD_TEXT, IMMUTABLE_NOTICE, READ_ONLY_NOTICE } from '../../../shared/threads/threadRules';
 import { getThreadCounterpartName, getThreadCounterpartRoleLabel } from '../../../shared/threads/threadView';
 import { useThreadComposer } from '../../../shared/threads/useThreadComposer';
 import { useThreadConversation } from '../../../shared/threads/useThreadConversation';
@@ -27,7 +27,8 @@ export const ThreadPage = ({ threadId, user, onUnauthorized }) => {
   const endRef = useRef(null);
   const conversation = useThreadConversation(threadId, { onUnauthorized });
   const { thread, messages, error, hasOlder, isLoadingOlder, olderError, loadOlder } = conversation;
-  const composer = useThreadComposer(conversation, { onUnauthorized });
+  // 끝난 대화는 첨부를 쓰지 않으니 업로드 규칙도 받지 않는다(대화를 받은 뒤 보낼 수 있는 대화일 때만 받는다).
+  const composer = useThreadComposer(conversation, { onUnauthorized, attachEnabled: Boolean(thread) && !thread.isReadOnly });
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
   // 새 메시지가 붙으면 맨 아래로 내린다(이전 메시지를 위에 붙일 때는 마지막 메시지가 그대로라 움직이지 않는다).
@@ -65,7 +66,7 @@ export const ThreadPage = ({ threadId, user, onUnauthorized }) => {
       onSubmit={readOnly ? undefined : composer.submit}
       cta={
         readOnly ? (
-          <p className="flex flex-1 items-start gap-2 rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">
+          <p role="status" className="flex flex-1 items-start gap-2 rounded-input bg-surface-2 px-4 py-3 text-m-sub text-ink-2">
             <Lock size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
             {READ_ONLY_NOTICE}
           </p>
@@ -83,7 +84,12 @@ export const ThreadPage = ({ threadId, user, onUnauthorized }) => {
       )}
       {olderError && <NoticeBox>{olderError.message}</NoticeBox>}
 
-      <MessageList messages={messages} myUserId={user?.id} onUnauthorized={onUnauthorized} />
+      <MessageList
+        messages={messages}
+        myUserId={user?.id}
+        onUnauthorized={onUnauthorized}
+        emptyText={readOnly ? EMPTY_READ_ONLY_THREAD_TEXT : undefined}
+      />
 
       {composer.errorText && <NoticeBox>{composer.errorText}</NoticeBox>}
       <div ref={endRef} />
