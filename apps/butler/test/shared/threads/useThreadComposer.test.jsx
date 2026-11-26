@@ -19,12 +19,12 @@ const apiError = (status, code, message = '오류') =>
 
 let latest;
 // 대화 훅 대신 필요한 값만 가진 가짜 conversation 을 넘긴다.
-const Probe = ({ conversation, showAttach = true }) => {
-  const composer = useThreadComposer(conversation);
+const Probe = ({ conversation, showAttach = true, showCounter = false }) => {
+  const composer = useThreadComposer(conversation, { attachEnabled: showAttach });
   latest = composer;
   return (
     <form onSubmit={composer.submit}>
-      <ThreadComposer composer={composer} showAttach={showAttach} />
+      <ThreadComposer composer={composer} showAttach={showAttach} showCounter={showCounter} />
       <output data-testid="error">{composer.errorText ?? ''}</output>
     </form>
   );
@@ -155,14 +155,21 @@ describe('useThreadComposer', () => {
 });
 
 describe('ThreadComposer', () => {
-  it('showAttach 가 없으면 [사진] 버튼도 첨부 칸도 없다(지금 앱 대화 화면 그대로)', () => {
+  it('showAttach 가 없으면 [사진] 버튼도 첨부 칸도 없고, 업로드 규칙도 받지 않는다(지금 앱 대화 화면 그대로)', () => {
     render(<Probe conversation={conversationOf()} showAttach={false} />);
     expect(screen.queryByRole('button', { name: '사진·파일 첨부' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('첨부 파일 선택')).not.toBeInTheDocument();
+    expect(api.getUploadRules).not.toHaveBeenCalled();
   });
 
-  it('입력칸은 2,000자까지 받고, 100자 이하로 남으면 남은 글자 수를 보인다', async () => {
+  it('showCounter 를 켜지 않으면 남은 글자 수를 보이지 않는다', () => {
     render(<Probe conversation={conversationOf()} showAttach={false} />);
+    act(() => latest.setDraft('가'.repeat(1990)));
+    expect(screen.queryByText(/남은 글자/)).not.toBeInTheDocument();
+  });
+
+  it('입력칸은 2,000자까지 받고, showCounter 면 100자 이하로 남을 때 남은 글자 수를 보인다', async () => {
+    render(<Probe conversation={conversationOf()} showAttach={false} showCounter />);
     const input = screen.getByLabelText('메시지');
     expect(input).toHaveAttribute('maxLength', '2000');
     expect(screen.queryByText(/남은 글자/)).not.toBeInTheDocument();

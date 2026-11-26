@@ -44,13 +44,14 @@ const toExistingItem = (attachment) => ({
 // maxCount: 붙일 수 있는 최대 개수(기본 하우스 로그 10장). 갱신 거절 통지 증빙은 5개다.
 // resourceType: 붙일 곳(예: 'TICKET'). 주면 그 곳이 받는 형식(동영상 포함 여부)을 업로드 규칙에서 찾고 세션에 targetResourceType으로 보낸다.
 // 빼면 지금처럼 사진·PDF만 받는다(하우스 로그·갱신 거절 통지).
+// fetchRules: false 면 업로드 규칙을 받지 않고 기본값(사진·PDF)을 쓴다(첨부를 아직 켜지 않은 화면에서 요청을 늘리지 않게).
 // countNotice: 개수를 넘을 때 안내(문자열 또는 (maxCount) => 문자열). 빼면 하우스 로그 문구 그대로.
 // clear(): 보낸 뒤(대화 메시지처럼 이미 붙은 뒤) 목록을 비운다. 문서는 지우지 않는다. 올리는 중인 칸이 있을 때는 부르지 않는다.
 export const useAttachmentUploads = (
   initialAttachments = [],
-  { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType, countNotice } = {},
+  { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType, countNotice, fetchRules = true } = {},
 ) => {
-  const rules = useGetUploadRules();
+  const rules = useGetUploadRules({ enabled: fetchRules });
   const kinds = useMemo(() => allowedFileKinds(rules, resourceType), [rules, resourceType]);
   const [items, setItems] = useState(() => initialAttachments.map(toExistingItem));
   const [storageUnavailable, setStorageUnavailable] = useState(false);
@@ -176,14 +177,9 @@ export const useAttachmentUploads = (
 
   // 붙은 뒤 비우기: 미리보기 주소를 돌려주고, 뺀 표시·안내도 지운다(서버 문서는 그대로 둔다).
   const clear = useCallback(() => {
-    setItems((prev) => {
-      for (const item of prev) {
-        if (!item.previewUrl) continue;
-        URL.revokeObjectURL(item.previewUrl);
-        previewUrls.current.delete(item.previewUrl);
-      }
-      return [];
-    });
+    for (const url of previewUrls.current) URL.revokeObjectURL(url);
+    previewUrls.current.clear();
+    setItems([]);
     cancelledKeys.current.clear();
     setNotice(null);
   }, []);

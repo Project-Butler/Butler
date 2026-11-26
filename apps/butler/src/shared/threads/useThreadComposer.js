@@ -7,7 +7,8 @@ import { ATTACHMENT_COUNT_NOTICE, ATTACHMENT_MISSING_TEXT, MAX_MESSAGE_ATTACHMEN
 // 보내기 조건: 읽기 전용 아님 · 보내는 중 아님 · 올리는 중/실패 칸 없음 · (글 1~2,000자 또는 첨부 1개 이상).
 // 성공하면 글과 첨부 줄을 비운다(문서는 이미 메시지에 붙었다). 실패하면 그대로 둔다.
 // 보내다 끝난 대화(THREAD_READ_ONLY)가 되면 올려 둔 미연결 문서를 지운다.
-export const useThreadComposer = (conversation, { onUnauthorized } = {}) => {
+// attachEnabled: false 면 첨부를 쓰지 않는 화면(업로드 규칙도 받지 않음). ThreadComposer showAttach 와 맞춘다.
+export const useThreadComposer = (conversation, { onUnauthorized, attachEnabled = true } = {}) => {
   const { thread, sendMessage, isSending, sendError } = conversation;
   const [draft, setDraft] = useState('');
   const uploads = useAttachmentUploads([], {
@@ -15,6 +16,7 @@ export const useThreadComposer = (conversation, { onUnauthorized } = {}) => {
     resourceType: 'THREAD_MESSAGE',
     maxCount: MAX_MESSAGE_ATTACHMENTS,
     countNotice: ATTACHMENT_COUNT_NOTICE,
+    fetchRules: attachEnabled,
   });
   const { clear, remove, items, documentIds, isUploading, hasFailed } = uploads;
 

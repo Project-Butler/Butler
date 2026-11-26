@@ -43,7 +43,9 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
   const lastReadRef = useRef(null);
   const wasActiveRef = useRef(isActive);
   // 펼친 직후 따라잡기 폴링 중에는 읽음을 미뤘다가, 끝나면 마지막 메시지까지 한 번만 보낸다.
-  const catchingUpRef = useRef(false);
+  const catchingUpRef = useRef(null);
+  // 진행 중인 폴링(effect 가 다시 돌아도 겹쳐 돌지 않게 훅 단위로 하나만 둔다)
+  const inflightRef = useRef(null);
   const [catchUpRound, setCatchUpRound] = useState(0);
   const invalidateThreadList = useInvalidateThreadList();
 
@@ -95,11 +97,8 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
     if (!thread || !isActive) return undefined;
     const becameActive = !wasActiveRef.current;
     let ignore = false;
-    let running = false;
 
-    const poll = async () => {
-      if (running || document.hidden) return;
-      running = true;
+    const run = async () => {
       try {
         // 아직 메시지가 없는 대화면 after 기준이 없으므로 최신 페이지를 받는다.
         if (!lastIdRef.current) {
@@ -119,23 +118,34 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
       } catch (requestError) {
         // 폴링 실패는 다음 차례에 다시 시도한다. 로그인이 풀린 경우만 알린다.
         if (!ignore && isUnauthorizedError(requestError)) onUnauthorized?.();
-      } finally {
-        running = false;
       }
+    };
+    // 이미 받는 중이면 그 요청을 같이 기다린다(새로 보내지 않는다).
+    const poll = () => {
+      if (document.hidden) return Promise.resolve();
+      if (!inflightRef.current) {
+        inflightRef.current = run().finally(() => {
+          inflightRef.current = null;
+        });
+      }
+      return inflightRef.current;
     };
 
     const timer = setInterval(poll, pollIntervalMs);
     // 접혀 있다가 펼쳐진 때만 기다리지 않고 바로 받는다(그동안 읽음은 미룬다).
+    // 빠르게 접었다 펼쳐도 마지막 따라잡기만 표시를 지우게 토큰으로 구분한다.
     if (becameActive) {
-      catchingUpRef.current = true;
+      const token = {};
+      catchingUpRef.current = token;
       poll().finally(() => {
-        catchingUpRef.current = false;
+        if (catchingUpRef.current !== token) return;
+        catchingUpRef.current = null;
         if (!ignore) setCatchUpRound((round) => round + 1);
       });
     }
     return () => {
       ignore = true;
-      catchingUpRef.current = false;
+      catchingUpRef.current = null;
       clearInterval(timer);
     };
   }, [thread, threadId, pollIntervalMs, onUnauthorized, isActive]);

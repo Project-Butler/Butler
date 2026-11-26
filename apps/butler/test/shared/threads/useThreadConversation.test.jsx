@@ -211,4 +211,42 @@ describe('isActive (PC 팝업 접기)', () => {
     await waitFor(() => expect(api.getThreadMessageList).toHaveBeenCalledTimes(2));
     expect(api.postThreadRead).toHaveBeenCalledTimes(1);
   });
+
+  it('빠르게 펼침 → 접음 → 펼침이어도 따라잡기는 겹쳐 돌지 않고, 끝난 뒤 마지막 메시지로 읽음 1번', async () => {
+    const { rerender } = renderHook({ options: { isActive: false, pollIntervalMs: 5000 } });
+    await waitFor(() => expect(latest.messages).toHaveLength(3));
+    let release;
+    api.getThreadMessageList.mockImplementation(
+      (_id, params) =>
+        new Promise((resolve) => {
+          release = () => resolve(params.after ? page([msg('m4'), msg('m5')]) : page([]));
+        }),
+    );
+
+    rerender({ options: { isActive: true, pollIntervalMs: 5000 } });
+    rerender({ options: { isActive: false, pollIntervalMs: 5000 } });
+    rerender({ options: { isActive: true, pollIntervalMs: 5000 } });
+    // 첫 따라잡기 요청 하나만 나간다
+    expect(api.getThreadMessageList).toHaveBeenCalledTimes(2);
+    expect(api.postThreadRead).not.toHaveBeenCalled();
+
+    api.getThreadMessageList.mockImplementation(async () => page([]));
+    await act(async () => release());
+    await waitFor(() => expect(api.postThreadRead).toHaveBeenCalled());
+    await tick(100);
+    expect(api.postThreadRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('따라잡기가 여러 쪽(hasNext)이어도 끝까지 받은 뒤 마지막 id 로 읽음 1번', async () => {
+    const { rerender } = renderHook({ options: { isActive: false, pollIntervalMs: 5000 } });
+    await waitFor(() => expect(latest.messages).toHaveLength(3));
+    api.getThreadMessageList.mockImplementation(async (_id, params) => {
+      if (params.after === 'm3') return page([msg('m4')], { hasNext: true });
+      if (params.after === 'm4') return page([msg('m5')]);
+      return page([]);
+    });
+    rerender({ options: { isActive: true, pollIntervalMs: 5000 } });
+    await waitFor(() => expect(api.postThreadRead).toHaveBeenCalledWith('t1', 'm5'));
+    expect(api.postThreadRead).toHaveBeenCalledTimes(1);
+  });
 });

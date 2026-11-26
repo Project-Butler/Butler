@@ -17,7 +17,7 @@ export const ThreadPage = ({ threadId, user, onUnauthorized }) => {
   const endRef = useRef(null);
   const conversation = useThreadConversation(threadId, { onUnauthorized });
   const { thread, messages, error, hasOlder, isLoadingOlder, olderError, loadOlder } = conversation;
-  const composer = useThreadComposer(conversation, { onUnauthorized });
+  const composer = useThreadComposer(conversation, { onUnauthorized, attachEnabled: false });
 
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
   // 새 메시지가 붙으면 맨 아래로 내린다(이전 메시지를 위에 붙일 때는 마지막 메시지가 그대로라 움직이지 않는다).

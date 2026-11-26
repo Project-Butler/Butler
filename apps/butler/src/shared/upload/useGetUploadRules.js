@@ -32,10 +32,12 @@ export const resetUploadRulesCache = () => {
   pending = null;
 };
 
-export const useGetUploadRules = () => {
+// enabled: false 면 받지 않는다(이미 받아 둔 규칙이 있으면 그것을 쓴다).
+export const useGetUploadRules = ({ enabled = true } = {}) => {
   const [rules, setRules] = useState(() => cachedRules ?? DEFAULT_UPLOAD_RULES);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     if (cachedRules) {
       setRules(cachedRules);
       return undefined;
@@ -46,7 +48,7 @@ export const useGetUploadRules = () => {
     return () => {
       listeners.delete(listener);
     };
-  }, []);
+  }, [enabled]);
 
   return rules;
 };

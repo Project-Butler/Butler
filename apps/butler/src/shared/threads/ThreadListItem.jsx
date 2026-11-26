@@ -8,14 +8,12 @@ export const ThreadListItem = ({ thread, myUserId, onOpen, now }) => {
   const time = formatThreadListTime(thread.lastMessage?.sentAt ?? thread.createdAt, now);
   const unread = thread.unreadCount > 0 ? thread.unreadCount : 0;
   const readOnly = thread.isReadOnly;
-  const label = [heading, unread > 0 ? `안 읽은 메시지 ${unread}개` : null, readOnly ? '지난 대화' : null].filter(Boolean).join(', ');
 
   return (
     <li>
       <button
         type="button"
         onClick={() => onOpen(thread)}
-        aria-label={label}
         className={`flex w-full items-start gap-3 px-4 py-3.5 text-left hover:bg-surface-2 ${readOnly ? 'opacity-80' : ''}`}
       >
         <span
@@ -36,6 +34,7 @@ export const ThreadListItem = ({ thread, myUserId, onOpen, now }) => {
             <span className={`min-w-0 flex-1 truncate text-m-sub ${unread > 0 ? 'text-ink-2' : 'text-ink-3'}`}>
               {getLastMessagePreview(thread, myUserId)}
             </span>
+            {unread > 0 && <span className="sr-only">{`안 읽은 메시지 ${unread}개`}</span>}
             {unread > 0 && (
               <span
                 aria-hidden="true"

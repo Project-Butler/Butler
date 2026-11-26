@@ -71,7 +71,8 @@ describe('ThreadList · ThreadListItem', () => {
   it('한 줄에 상대 이름 · 제목, 마지막 메시지, 시각, 안 읽은 수를 보이고 누르면 onOpen', async () => {
     const onOpen = vi.fn();
     render(<ThreadList threads={[thread({ unreadCount: 2 })]} myUserId={ME} onOpen={onOpen} now={NOW} />);
-    const row = screen.getByRole('button', { name: '이세입 · 101동 1001호 · 싱크대 누수, 안 읽은 메시지 2개' });
+    // 버튼 이름 = 보이는 글 전체(미리보기·시각 포함) + 스크린리더용 안 읽은 수
+    const row = screen.getByRole('button', { name: /^이세입 · 101동 1001호 · 싱크대 누수.*14:20.*네 괜찮아요!.*안 읽은 메시지 2개$/ });
     expect(within(row).getByText('네 괜찮아요!')).toBeInTheDocument();
     expect(within(row).getByText('14:20')).toBeInTheDocument();
     expect(within(row).getByText('2')).toBeInTheDocument();
@@ -81,9 +82,10 @@ describe('ThreadList · ThreadListItem', () => {
 
   it('읽기 전용이면 "지난 대화" 칩, 안 읽은 게 없으면 숫자 없음', () => {
     render(<ThreadList threads={[thread({ id: 'old', isReadOnly: true, title: '1108동 502호 계약' })]} myUserId={ME} onOpen={() => {}} now={NOW} />);
-    const row = screen.getByRole('button', { name: '이세입 · 1108동 502호 계약, 지난 대화' });
+    const row = screen.getByRole('button', { name: /^이세입 · 1108동 502호 계약.*지난 대화/ });
     expect(within(row).getByText('지난 대화')).toBeInTheDocument();
     expect(within(row).queryByText(/^\d+$/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/안 읽은 메시지/)).not.toBeInTheDocument();
   });
 
   it('임차인이 보면 상대는 임대인(역할을 따지지 않고 나 아닌 참여자)', () => {

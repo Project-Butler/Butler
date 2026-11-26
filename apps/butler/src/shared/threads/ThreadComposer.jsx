@@ -9,8 +9,8 @@ import { ATTACHMENT_UNAVAILABLE_TEXT, MAX_MESSAGE_LENGTH, MESSAGE_COUNTER_THRESH
 // 대화 입력칸(아래 고정 칸 안에 넣는다). composer 는 useThreadComposer() 반환값.
 // 보내기 버튼은 type="submit" 이라 감싸는 form(MobileFormLayout onSubmit 등)이 composer.send 를 부른다.
 // showAttach: [사진] 버튼과 첨부 줄을 켠다(첨부 보내기를 붙이는 화면만). 끄면 글 입력과 보내기만 — 지금 앱 대화 화면 그대로.
-// 남은 글자 수는 100자 이하로 남았을 때만 보인다.
-export const ThreadComposer = ({ composer, showAttach = false, inputId = 'thread-message' }) => {
+// showCounter: 100자 이하로 남았을 때 남은 글자 수를 보인다(끄면 지금 앱 대화 화면 그대로).
+export const ThreadComposer = ({ composer, showAttach = false, showCounter = false, inputId = 'thread-message' }) => {
   const fileRef = useRef(null);
   const { draft, setDraft, readOnly, isSending, canSend, remaining, uploads } = composer;
   const isFull = uploads.items.length >= uploads.maxCount;
@@ -66,7 +66,7 @@ export const ThreadComposer = ({ composer, showAttach = false, inputId = 'thread
           <Send size={18} aria-hidden="true" />
         </Button>
       </div>
-      {remaining <= MESSAGE_COUNTER_THRESHOLD && (
+      {showCounter && remaining <= MESSAGE_COUNTER_THRESHOLD && (
         <p aria-live="polite" className="text-right font-num text-chip tabular-nums text-ink-3">
           남은 글자 {remaining}
         </p>
