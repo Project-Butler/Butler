@@ -18,6 +18,11 @@ import { pickRelated, rankByWeightedOverlap, toRelatedQuery } from './related.js
 export const SORTABLE_FIELDS = ['createdAt', 'title', 'sourcePage'];
 // 관련도 순은 컬럼이 아니라 검색어로 계산한 점수라 검색어가 있을 때만 쓴다(controller.js).
 export const RELEVANCE_SORT_FIELD = 'relevance';
+// 검색어가 없을 때 기본 정렬: 쉬운 자료(조정 사례·가이드) 먼저, 판례는 그 뒤 — 각각 최신순.
+// 판례가 7,365건(93%)이고 가장 늦게 넣은 묶음이라 최신순만 쓰면 첫 화면이 세금·행정 판례로 채워진다(검색의 EASY_TYPE_FACTOR와 같은 생각).
+// 사용자가 sort로 고를 수 있는 값은 아니고, 정렬을 따로 고르지 않았을 때만 쓴다(controller.js).
+export const EASY_FIRST_SORT_FIELD = 'easyFirst';
+const HARD_TYPE = DisputeReferenceType.PRECEDENT;
 // Prisma는 nullable 컬럼에만 nulls 옵션을 받는다.
 const NULLABLE_SORT_FIELDS = ['sourcePage'];
 
@@ -488,6 +493,36 @@ const findPartialMatchIds = async (propertyKind, terms) => {
   };
 };
 
+// 쉬운 자료 먼저: [쉬운 자료 최신순 easyCount건] 뒤에 [판례 최신순]을 이어 붙인 목록에서 한 페이지를 자른다.
+// 페이지가 두 묶음에 걸치면 쉬운 자료 끝부분 + 판례 앞부분으로 채운다.
+const NEWEST_ORDER = buildOrderBy({ field: 'createdAt', direction: 'desc' });
+
+const findEasyFirstPage = async (where, easyCount, page, size) => {
+  const skip = (page - 1) * size;
+  const easy =
+    skip < easyCount
+      ? await prisma.disputeReference.findMany({
+          where: { AND: [where, { type: { not: HARD_TYPE } }] },
+          select: LIST_SELECT,
+          orderBy: NEWEST_ORDER,
+          skip,
+          take: size,
+        })
+      : [];
+  const remaining = size - easy.length;
+  const hard =
+    remaining > 0
+      ? await prisma.disputeReference.findMany({
+          where: { AND: [where, { type: HARD_TYPE }] },
+          select: LIST_SELECT,
+          orderBy: NEWEST_ORDER,
+          skip: Math.max(0, skip - easyCount),
+          take: remaining,
+        })
+      : [];
+  return [...easy, ...hard].map(toListItem);
+};
+
 // 검색 조건(match)에 맞는 한 페이지와 화면 숫자. scoreKeyword는 관련도 점수를 매길 검색어.
 // matchedCountById(조건 완화 때만)가 있으면 관련도 순에서 단어 수를 먼저 본다.
 const searchReferences = async ({ filters, match, scoreKeyword, page, size, orderBy, matchedCountById }) => {
@@ -495,19 +530,23 @@ const searchReferences = async ({ filters, match, scoreKeyword, page, size, orde
   const { type: _type, category, ...baseFilters } = filters;
   // 관련도 순이면 조건에 맞는 id만 먼저 받고, 점수 계산·페이지 자르기는 SQL로 한다.
   const byRelevance = orderBy.field === RELEVANCE_SORT_FIELD;
+  // 쉬운 자료 먼저면 쉬운 자료 수를 먼저 세고, 페이지는 두 묶음을 이어 붙여 자른다(findEasyFirstPage).
+  const easyFirst = orderBy.field === EASY_FIRST_SORT_FIELD;
 
   // 화면 숫자용 개수. 종류 탭(countsByType)은 고른 종류만 빼고, 상황 타일(countsByCategory)은
   // 종류·유형을 둘 다 빼고 같은 검색 조건으로 센다.
   const [found, total, typeGroups, categoryGroups] = await prisma.$transaction([
     byRelevance
       ? prisma.disputeReference.findMany({ where, select: { id: true } })
-      : prisma.disputeReference.findMany({
-          where,
-          select: LIST_SELECT,
-          orderBy: buildOrderBy(orderBy),
-          skip: (page - 1) * size,
-          take: size,
-        }),
+      : easyFirst
+        ? prisma.disputeReference.count({ where: { AND: [where, { type: { not: HARD_TYPE } }] } })
+        : prisma.disputeReference.findMany({
+            where,
+            select: LIST_SELECT,
+            orderBy: buildOrderBy(orderBy),
+            skip: (page - 1) * size,
+            take: size,
+          }),
     prisma.disputeReference.count({ where }),
     prisma.disputeReference.groupBy({
       by: ['type'],
@@ -532,7 +571,9 @@ const searchReferences = async ({ filters, match, scoreKeyword, page, size, orde
         size,
         matchedCountById,
       )
-    : found.map(toListItem);
+    : easyFirst
+      ? await findEasyFirstPage(where, found, page, size)
+      : found.map(toListItem);
 
   return {
     items,
