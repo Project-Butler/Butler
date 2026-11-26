@@ -10,7 +10,6 @@ import { clearVerificationCookie, requireVerification, throwInvitationUnusable }
 import { consumeVerificationToken } from './emailVerificationService.js';
 import { normalizeEmail } from './registerValidation.js';
 
-const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000; // 15분 (api-contract.md 1장)
 const REFRESH_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14일
 // 교체된 지 이 시간 안에 같은 refresh 토큰이 또 오면 탭 두 개가 동시에 갱신한 것으로 보고 그 요청만 거절한다.
 // 이보다 늦게 오면 탈취된 토큰의 재사용으로 보고 그 사용자의 모든 세션을 폐기한다.
@@ -89,8 +88,9 @@ export const revokeSessionByToken = (token) =>
   });
 
 export const setCookies = (res, user, refreshToken) => {
-  res.cookie('access_token', signAccessToken(user), { ...cookieOptions, maxAge: ACCESS_TOKEN_TTL_MS });
-  res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_TTL_MS });
+  // maxAge 를 주지 않는 세션 쿠키: 브라우저를 닫으면 사라져 다음 방문은 로그인부터 시작한다. 만료는 토큰 exp 와 DB 세션이 지킨다.
+  res.cookie('access_token', signAccessToken(user), cookieOptions);
+  res.cookie('refresh_token', refreshToken, cookieOptions);
 };
 
 // 세션 행을 만들고 refresh 토큰 원문을 돌려준다. db는 prisma 또는 트랜잭션 tx(가입이 사용자와 같이 만든다).

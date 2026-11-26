@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { FullScreenStatus } from './auth/FullScreenStatus';
 import { GuestOnly } from './auth/GuestOnly';
+import { prepareSession, useIdleLogout, useSessionSync, useTabHeartbeat } from './auth/idleSession';
 import { getInviteTokenFromPath } from './auth/invitePath';
 import { LoginPage } from './auth/LoginPage';
 import { OAuthSignupPage } from './auth/OAuthSignupPage';
@@ -45,9 +46,16 @@ export const App = () => {
   const logout = useLogout();
 
   // 새로고침해도 로그인이 풀리지 않게, 처음 열 때 쿠키 세션(GET /auth/me)을 확인한다.
+  // 그 전에 열린 탭이 없거나(창을 모두 닫았다 옴) 30분 넘게 조작이 없었다면 남은 세션부터 끊는다(idleSession.js).
   useEffect(() => {
-    restoreSession();
+    prepareSession().then(restoreSession);
   }, [restoreSession]);
+
+  useTabHeartbeat();
+  // 로그인 중 30분 무조작이면 로그아웃한다. 실패하면 다음 점검(30초 뒤)에 다시 시도한다.
+  useIdleLogout(Boolean(user), () => logout().catch(() => {}));
+  // 다른 탭의 로그아웃은 이 탭도 로그인 화면으로, 다른 탭의 로그인은 이 탭이 로그아웃 상태일 때 세션을 다시 읽는다.
+  useSessionSync(user, { onRemoteLogout: clearSession, onRemoteLogin: restoreSession });
 
   if (isRestoring) return WAITING;
 
