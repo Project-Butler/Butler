@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card, FilterChip, Pagination } from '@butler/ui';
-import { ArrowUpRight, FileImage, FileText, FileVideo, Lock } from 'lucide-react';
+import { ArrowUpRight, FileImage, FileText, FileVideo, Info } from 'lucide-react';
 import { StatusMessage } from '../components/StatusMessage/StatusMessage';
 import { DOCUMENT_RESOURCE_LABEL, DOCUMENT_RESOURCE_TYPES, ROLE_LABEL } from '../constants/labels';
 import { useGetAdminDocumentList } from '../hooks/useGetAdminDocumentList';
@@ -62,7 +62,12 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
   );
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 빈 값은 URL에서 뺀다.
+  // [찾기]를 누르지 않은 등록자 입력은 지금 적용된 값으로 되돌려, 입력칸과 실제 조건이 어긋나 보이지 않게 한다.
   const updateParams = (changes) => {
+    if (!('uploaderId' in changes)) {
+      setUploaderInput(uploaderId);
+      setUploaderError(null);
+    }
     const next = new URLSearchParams(searchParams);
     Object.entries({ page: undefined, ...changes }).forEach(([key, value]) => {
       if (value) next.set(key, String(value));
@@ -88,11 +93,14 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
     updateParams({ uploaderId: trimmed });
   };
 
-  // 기간이 뒤바뀌면 서버가 400으로 거절하므로 화면에서 먼저 막는다.
+  // 기간이 뒤바뀌면 서버가 400으로 거절하므로, 반대쪽 날짜를 방금 고른 날로 맞춘다(입력을 말없이 버리지 않는다).
   const handleDateChange = (field, value) => {
     const nextFrom = field === 'from' ? value : from;
     const nextUntil = field === 'until' ? value : until;
-    if (nextFrom && nextUntil && nextFrom > nextUntil) return;
+    if (nextFrom && nextUntil && nextFrom > nextUntil) {
+      updateParams({ from: value, until: value });
+      return;
+    }
     updateParams({ [field]: value });
   };
 
@@ -214,7 +222,7 @@ export const DocumentListPage = ({ onNavigate, onUnauthorized }) => {
       <Pagination page={page} totalPages={totalPages} onChange={(next) => updateParams({ page: next })} />
 
       <p className="flex items-center gap-1.5 text-chip text-ink-3">
-        <Lock size={14} aria-hidden="true" />
+        <Info size={14} aria-hidden="true" />
         아직 첨부되지 않은 임시 파일과 삭제한 문서는 목록에 나오지 않아요.
       </p>
     </div>

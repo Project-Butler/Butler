@@ -26,9 +26,14 @@ const target = (property, link = null) => ({ property: property ? toPropertySumm
 // 메시지 방이 붙은 계약·티켓의 호실. 그 밖의 contextType(등록형)은 호실을 모른다.
 const findThreadContextProperties = async (threads) => {
   const idsOf = (type) => [...new Set(threads.filter((thread) => thread.contextType === type).map((thread) => thread.contextId))];
+  const contractIds = idsOf('CONTRACT');
+  const ticketIds = idsOf('TICKET');
+  // 빈 묶음이면 쿼리를 보내지 않는다.
   const [contracts, tickets] = await Promise.all([
-    prisma.contract.findMany({ where: { id: { in: idsOf('CONTRACT') } }, select: { id: true, ownership: { select: { property: PROPERTY_INCLUDE } } } }),
-    prisma.ticket.findMany({ where: { id: { in: idsOf('TICKET') } }, select: { id: true, property: PROPERTY_INCLUDE } }),
+    contractIds.length
+      ? prisma.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, ownership: { select: { property: PROPERTY_INCLUDE } } } })
+      : [],
+    ticketIds.length ? prisma.ticket.findMany({ where: { id: { in: ticketIds } }, select: { id: true, property: PROPERTY_INCLUDE } }) : [],
   ]);
   return {
     CONTRACT: new Map(contracts.map((contract) => [contract.id, contract.ownership.property])),
@@ -108,7 +113,8 @@ const resolveTargets = async (documents) => {
     idsByType.get(document.resourceType).add(document.resourceId);
   }
   const entries = await Promise.all(
-    [...idsByType].map(async ([type, ids]) => [type, await PROPERTY_RESOLVERS[type]([...ids])]),
+    // 지도에 없는 종류(새로 생겼는데 아직 안 넣은 것)는 목록을 막지 않고 호실·이동 대상만 null로 둔다. 키 일치는 테스트가 지킨다.
+    [...idsByType].map(async ([type, ids]) => [type, (await PROPERTY_RESOLVERS[type]?.([...ids])) ?? new Map()]),
   );
   return new Map(entries);
 };

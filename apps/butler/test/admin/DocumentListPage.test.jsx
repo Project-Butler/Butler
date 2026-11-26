@@ -128,6 +128,26 @@ describe('관리자 문서 목록', () => {
     expect(within(messageRow).getByText('메시지')).toBeInTheDocument();
   });
 
+  it('시작일을 끝일보다 늦게 고르면 끝일을 같은 날로 맞춘다', async () => {
+    vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
+    renderList('/documents?from=2026-11-01&until=2026-11-10');
+    const start = await screen.findByLabelText('등록일 시작');
+    await userEvent.clear(start);
+    await userEvent.type(start, '2026-11-20');
+    const params = new URLSearchParams(location().split('?')[1]);
+    expect(Object.fromEntries(params)).toEqual({ from: '2026-11-20', until: '2026-11-20' });
+  });
+
+  it('[찾기]를 누르지 않은 등록자 입력은 다른 조건을 바꾸면 적용된 값으로 돌아간다', async () => {
+    vi.mocked(getAdminDocumentList).mockResolvedValue(page([]));
+    renderList();
+    const input = await screen.findByPlaceholderText('등록자 (회원 ID)');
+    await userEvent.type(input, UUID);
+    await userEvent.click(screen.getByRole('button', { name: '메시지' }));
+    expect(location()).toBe('/documents?resourceType=THREAD_MESSAGE');
+    expect(input).toHaveValue('');
+  });
+
   it('파일을 여는 버튼·다운로드 링크가 없다', async () => {
     vi.mocked(getAdminDocumentList).mockResolvedValue(page([doc({ link: null, resourceType: 'OWNERSHIP' })]));
     renderList();
