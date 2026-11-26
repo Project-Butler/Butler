@@ -4,10 +4,10 @@
 // 역할 화면은 가벼운 대역으로 바꾸고, "렌더된 횟수"와 "모듈이 로드된 횟수"를 센다. 보호 화면이 잠깐이라도 그려지거나
 // 다른 역할 청크가 로드되면 0이 아니게 되어 실패한다. 테스트마다 vi.resetModules()로 모듈 그래프를 새로 만든다.
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   queryKey: new Proxy({}, { get: (_, name) => String(name) }),
@@ -145,8 +145,14 @@ const loginAs = async (user) => {
   await userEvent.click(await screen.findByRole('button', { name: '로그인하기' }));
 };
 
+// 기본은 "다른 탭이 열려 있는" 방문이다(열린 탭 기록이 최근). 열린 탭이 없는 방문은 T7 에서 따로 만든다.
+const markTabOpen = () => localStorage.setItem('butler.tabAliveAt', String(Date.now()));
+
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+  markTabOpen();
   api.getOAuthStartUrl.mockReturnValue('#');
   api.postLogout.mockResolvedValue();
 });
@@ -376,6 +382,144 @@ describe('가입 (임대인만)', () => {
     api.postOAuthSignup.mockResolvedValue({ user: USERS.LANDLORD });
     await open('/register/oauth');
     await userEvent.click(await screen.findByRole('button', { name: '소셜 가입하기' }));
+    expect(await screen.findByLabelText('임대인 웹 화면')).toBeInTheDocument();
+    expect(where()).toBe('/landlord/home');
+  });
+});
+
+// 같은 이름의 채널끼리 메시지를 주고받는 최소 BroadcastChannel (보낸 인스턴스에는 돌려주지 않는다)
+const channels = [];
+class FakeChannel {
+  constructor(name) { this.name = name; this.onmessage = null; this.closed = false; channels.push(this); }
+  postMessage(data) { channels.filter((c) => c !== this && c.name === this.name && !c.closed).forEach((c) => c.onmessage?.({ data })); }
+  close() { this.closed = true; }
+}
+
+describe('T7 세션 수명 (#247)', () => {
+  const MIN = 60 * 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    channels.length = 0;
+  });
+
+  it('열린 탭이 없으면(모든 창을 닫았다 다시 옴) 세션을 서버에서 끊은 뒤에 세션을 확인하고, 로그인 화면으로 간다', async () => {
+    localStorage.clear();
+    const order = [];
+    api.postLogout.mockImplementation(async () => { order.push('postLogout'); });
+    await open('/', { user: null });
+    api.getMe.mockImplementation(async () => { order.push('getMe'); throw Object.assign(new Error('401'), { response: { status: 401 } }); });
+    expect(await screen.findByLabelText('로그인 화면')).toBeInTheDocument();
+    expect(where()).toBe('/login');
+    expect(order[0]).toBe('postLogout');
+  });
+
+  it('열린 탭이 없으면 쿠키가 살아 있어도 홈으로 가지 않는다 (서버가 세션을 끊은 뒤라 getMe 가 401)', async () => {
+    localStorage.clear();
+    let cookieAlive = true;
+    api.postLogout.mockImplementation(async () => { cookieAlive = false; });
+    api.getMe.mockImplementation(async () => {
+      if (!cookieAlive) throw Object.assign(new Error('401'), { response: { status: 401 } });
+      return { user: USERS.LANDLORD, verifiedLegalDongCodes: [] };
+    });
+    const App = await importApp();
+    render(<MemoryRouter initialEntries={['/']} useTransitions={false}><App /><LocationProbe /></MemoryRouter>);
+    expect(await screen.findByLabelText('로그인 화면')).toBeInTheDocument();
+    expect(where()).toBe('/login');
+    expect(rendered.landlordWeb).toBe(0);
+  });
+
+  it('소셜 로그인에 갔다 돌아온 같은 탭은(열린 탭 기록이 끊겼어도) 방금 만든 세션을 끊지 않고 홈으로 간다', async () => {
+    localStorage.clear();
+    sessionStorage.setItem('butler.tabSeen', '1');
+    await open('/', { user: USERS.LANDLORD });
+    expect(await screen.findByLabelText('임대인 웹 화면')).toBeInTheDocument();
+    expect(where()).toBe('/landlord/home');
+    expect(api.postLogout).not.toHaveBeenCalled();
+  });
+
+  it('다른 탭이 열려 있으면 새 탭도 로그아웃 없이 로그인이 이어진다 (홈으로)', async () => {
+    markTabOpen();
+    await open('/', { user: USERS.LANDLORD });
+    expect(await screen.findByLabelText('임대인 웹 화면')).toBeInTheDocument();
+    expect(where()).toBe('/landlord/home');
+    expect(api.postLogout).not.toHaveBeenCalled();
+  });
+
+  it('로그인 중 30분 동안 조작이 없으면 자동 로그아웃되어 /login 으로 간다', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    await open('/landlord/home', { user: USERS.LANDLORD });
+    expect(await screen.findByLabelText('임대인 웹 화면')).toBeInTheDocument();
+
+    await act(async () => { vi.advanceTimersByTime(29 * MIN); });
+    expect(screen.getByLabelText('임대인 웹 화면')).toBeInTheDocument();
+    expect(api.postLogout).not.toHaveBeenCalled();
+
+    await act(async () => { vi.advanceTimersByTime(MIN + 30 * 1000); });
+    expect(await screen.findByLabelText('로그인 화면')).toBeInTheDocument();
+    expect(where()).toBe('/login');
+    expect(from()).toBe('');
+    expect(api.postLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('조작이 있으면 30분이 다시 시작된다', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    await open('/landlord/home', { user: USERS.LANDLORD });
+    await screen.findByLabelText('임대인 웹 화면');
+    await act(async () => { vi.advanceTimersByTime(25 * MIN); });
+    act(() => { window.dispatchEvent(new Event('keydown')); });
+    await act(async () => { vi.advanceTimersByTime(25 * MIN); });
+    expect(screen.getByLabelText('임대인 웹 화면')).toBeInTheDocument();
+    expect(api.postLogout).not.toHaveBeenCalled();
+  });
+
+  it('앱이 열려 있는 동안 열린 탭 기록을 계속 갱신한다 (그래서 1분 뒤 새로 연 탭도 열린 탭을 찾는다)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    await open('/landlord/home', { user: USERS.LANDLORD });
+    await screen.findByLabelText('임대인 웹 화면');
+    await act(async () => { vi.advanceTimersByTime(MIN); });
+    expect(Date.now() - Number(localStorage.getItem('butler.tabAliveAt'))).toBeLessThan(15 * 1000);
+  });
+
+  it('로그인 전(로그인 화면)에서는 30분이 지나도 로그아웃 호출을 하지 않는다', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    await open('/login');
+    await screen.findByLabelText('로그인 화면');
+    await act(async () => { vi.advanceTimersByTime(60 * MIN); });
+    expect(api.postLogout).not.toHaveBeenCalled();
+  });
+
+  it('다른 탭에서 로그아웃하면 이 탭도 /login 으로 간다', async () => {
+    vi.stubGlobal('BroadcastChannel', FakeChannel);
+    await open('/landlord/home', { user: USERS.LANDLORD });
+    await screen.findByLabelText('임대인 웹 화면');
+    const other = new FakeChannel('butler-session');
+    act(() => { other.postMessage('logout'); });
+    expect(await screen.findByLabelText('로그인 화면')).toBeInTheDocument();
+    expect(where()).toBe('/login');
+  });
+
+  it('이 탭에서 로그아웃하면 다른 탭에 알린다', async () => {
+    vi.stubGlobal('BroadcastChannel', FakeChannel);
+    await open('/landlord/home', { user: USERS.LANDLORD });
+    const other = new FakeChannel('butler-session');
+    const received = [];
+    other.onmessage = ({ data }) => received.push(data);
+    await screen.findByLabelText('임대인 웹 화면');
+    received.length = 0; // 처음 세션 복원 때 보낸 login 알림은 제외
+    await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }));
+    await screen.findByLabelText('로그인 화면');
+    expect(received).toEqual(['logout']);
+  });
+
+  it('다른 탭에서 로그인하면 로그인 화면에 있던 이 탭도 세션을 읽어 홈으로 간다', async () => {
+    vi.stubGlobal('BroadcastChannel', FakeChannel);
+    await open('/login');
+    await screen.findByLabelText('로그인 화면');
+    api.getMe.mockResolvedValue({ user: USERS.LANDLORD, verifiedLegalDongCodes: [] });
+    const other = new FakeChannel('butler-session');
+    act(() => { other.postMessage('login'); });
     expect(await screen.findByLabelText('임대인 웹 화면')).toBeInTheDocument();
     expect(where()).toBe('/landlord/home');
   });
