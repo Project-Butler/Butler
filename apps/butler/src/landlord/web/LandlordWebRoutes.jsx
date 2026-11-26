@@ -30,6 +30,9 @@ import { DisputeSearchPage } from './pages/DisputeSearchPage';
 import { DisputeTopicPage } from './pages/DisputeTopicPage';
 import { NoticeBox } from './components/NoticeBox/NoticeBox';
 import { RenewalDialog, toRenewalNotifications } from './components/RenewalDialog/RenewalDialog';
+import { THREAD_DOCK_TRIGGER_ID, ThreadDock } from './components/ThreadDock/ThreadDock';
+import { ThreadDockProvider, useThreadDock } from './components/ThreadDock/ThreadDockContext';
+import { useGetThreadUnreadCount } from '../../shared/threads/useGetThreadUnreadCount';
 import { VerificationProgressDock } from './components/VerificationProgressDock/VerificationProgressDock';
 import { useGetContract } from '../../shared/useGetContract';
 import { useGetContractList } from './hooks/useGetContractList';
@@ -256,7 +259,7 @@ const DisputeChatRoute = () => <DisputeChatPage initialDraft={useHistoryDraft()}
 // 사이드바 '계약' 배지 = 만료 임박(EXPIRING_SOON) 계약 수(D-17). 로그인한 뒤에만 그려서 조회한다.
 // 계약 메뉴 배지 = 만료 임박 건수. 화면을 옮길 때마다 다시 세어 등록·해지 뒤에도 맞게 한다.
 // 재인증 안내(종 아이콘 목록·만료 팝업)도 여기서 읽는다. 인증을 끝내거나 만료되면 다음 화면 이동 때 맞춰진다.
-const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAuthMe, children, ...layoutProps }) => {
+const LayoutWithBadgesInner = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAuthMe, children, ...layoutProps }) => {
   const { pathname } = useLocation();
   const expiringSoon = useGetContractList({ status: 'EXPIRING_SOON', size: 1, activeOwnership: 'true' }, { onUnauthorized });
   const renewal = useGetOwnershipRenewalNoticeList({ verifiedLegalDongCodes }, { onUnauthorized });
@@ -289,9 +292,19 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
     refetchUnread();
   }, [refetchTickets, refetchUnread]);
 
+  // 위 막대 말풍선 = 안 읽은 메시지가 있는 대화 수(30초마다). 누르면 오른쪽 아래 대화 팝업을 열고, 열려 있으면 닫는다.
+  const dock = useThreadDock();
+  const threadUnreadCount = useGetThreadUnreadCount({ onUnauthorized });
+  const toggleDock = () => {
+    if (dock.status === 'open') dock.close();
+    else if (dock.status === 'collapsed') dock.expand();
+    else dock.openList();
+  };
+
   const { onNavigate, user } = layoutProps;
   return (
     <LandlordLayout
+      messages={{ count: threadUnreadCount, onClick: toggleDock, expanded: dock.status === 'open', id: THREAD_DOCK_TRIGGER_ID }}
       navBadges={{ leases: expiringSoon.data?.meta.total ?? 0, tickets: openTicketCount }}
       notifications={buildNotificationMenu({
         unread: unread.items,
@@ -309,10 +322,20 @@ const LayoutWithBadges = ({ onUnauthorized, verifiedLegalDongCodes, onRefreshAut
         refreshKey={pathname}
         onNavigate={onNavigate}
         onUnauthorized={onUnauthorized}
+        chatDock={dock.status === 'closed' ? 'none' : dock.status}
       />
+      {/* 임대인·임차인 대화 팝업(오른쪽 아래, docs/19 P1~P4). 화면을 옮겨도 그대로다. */}
+      <ThreadDock />
     </LandlordLayout>
   );
 };
+
+// 대화 팝업 상태는 레이아웃 안에서 화면을 옮겨도 유지되도록 여기서 감싼다.
+const LayoutWithBadges = (props) => (
+  <ThreadDockProvider userId={props.user.id} onUnauthorized={props.onUnauthorized} onNavigate={props.onNavigate}>
+    <LayoutWithBadgesInner {...props} />
+  </ThreadDockProvider>
+);
 
 export const LandlordWebRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUnauthorized, onRefreshMe }) => {
   const location = useLocation();

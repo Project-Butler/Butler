@@ -19,7 +19,8 @@ const SETTINGS_ITEM = { key: 'settings', label: '설정', icon: Settings };
 // subTitle은 하위 화면(상세·등록)일 때 breadcrumb 끝에 붙는다.
 // navBadges: 메뉴 key → 오른쪽 끝 숫자(예: { leases: 만료 임박 계약 수 }). 0이나 값이 없으면 숨긴다.
 // notifications: 종 아이콘 목록({ items, emptyText, footer }, @butler/ui NotificationMenu).
-export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate, subTitle, navBadges = {}, notifications }) => {
+// messages: 종 왼쪽 말풍선({ count, onClick, expanded, id }) — 오른쪽 아래 대화 팝업을 연다.
+export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate, subTitle, navBadges = {}, notifications, messages }) => {
   const { settings } = useDisplaySettings();
   const active = [...NAV_ITEMS, SETTINGS_ITEM].find((item) => item.key === activeKey);
   const breadcrumb = ['버틀러의 자산', active?.label, subTitle].filter(Boolean);
@@ -31,6 +32,7 @@ export const LandlordLayout = ({ children, user, onLogout, activeKey, onNavigate
       brandSubtitle="버틀러의 자산"
       breadcrumb={breadcrumb}
       notifications={notifications}
+      messages={messages}
       user={{ name: `${user?.name}님`, role: '임대인', onLogout }}
       nav={NAV_ITEMS.map((item) => ({
         ...item,

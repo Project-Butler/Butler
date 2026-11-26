@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, Home, Search } from 'lucide-react';
+import { Bell, ChevronRight, Home, MessageCircle, Search } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { NotificationMenu } from '../NotificationMenu/NotificationMenu';
 import { PropertySwitcher } from '../PropertySwitcher/PropertySwitcher';
@@ -70,6 +70,28 @@ const NavItem = ({ icon: Icon, label, badge, active, onClick, style }) => (
   </button>
 );
 
+// 위 막대 말풍선(대화 팝업 열기). messages: { count, onClick, expanded, id } — count(안 읽은 메시지가 있는 대화 수)가 1 이상이면 빨간 숫자.
+const MessagesButton = ({ count = 0, onClick, expanded, id }) => (
+  <button
+    type="button"
+    id={id}
+    aria-label={count > 0 ? `대화, 안 읽은 대화 ${count}개` : '대화'}
+    aria-expanded={expanded}
+    onClick={onClick}
+    className={`relative flex h-9 w-9 items-center justify-center rounded-btn transition-colors hover:bg-surface-2 ${expanded ? 'bg-accent-soft text-accent-strong' : 'text-ink-2'}`}
+  >
+    <MessageCircle size={18} aria-hidden="true" />
+    {count > 0 && (
+      <span
+        aria-hidden="true"
+        className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-crit px-1 text-center font-num text-[11px] font-semibold leading-[18px] text-white tabular-nums"
+      >
+        {count > 99 ? '99+' : count}
+      </span>
+    )}
+  </button>
+);
+
 export const AppShell = ({
   brand,
   brandSubtitle,
@@ -80,6 +102,7 @@ export const AppShell = ({
   propertySwitcher,
   notificationCount,
   notifications,
+  messages,
   user,
   primaryAction,
   sidebar = 'expanded',
@@ -139,6 +162,8 @@ export const AppShell = ({
                 </span>
               </button>
             )}
+
+            {messages && <MessagesButton {...messages} />}
 
             {notifications ? (
               <NotificationMenu {...notifications} />

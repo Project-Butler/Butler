@@ -77,3 +77,15 @@
     @apply bg-ground font-sans text-ink;
   }
 }
+
+/* 임대인 PC 대화 팝업·접힘 막대가 아래에서 올라온다(0.2초). prefers-reduced-motion 이면 motion-safe 로 끈다. */
+@keyframes thread-dock-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
