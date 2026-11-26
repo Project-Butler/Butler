@@ -22,6 +22,7 @@ import { MyInfoPage } from './pages/MyInfoPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
 import { SchedulePage } from './pages/SchedulePage';
+import { ThreadListPage } from './pages/ThreadListPage';
 import { ThreadPage } from './pages/ThreadPage';
 import { TenantInvitePage } from './pages/TenantInvitePage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
@@ -29,6 +30,7 @@ import { TicketListPage } from './pages/TicketListPage';
 import { TicketRegisterPage } from './pages/TicketRegisterPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { useNotificationUnreadCount } from '../../shared/notifications/useNotificationUnreadCount';
+import { useGetThreadUnreadCount } from '../../shared/threads/useGetThreadUnreadCount';
 import { isTabActive, SETTINGS_PATH, TABS } from './tabs';
 import { parseCategoryParam } from './utils/documentBoxView';
 import { useGoBack, useGoTo } from './utils/navigation';
@@ -36,11 +38,14 @@ import { useGoBack, useGoTo } from './utils/navigation';
 // 탭이 있는 앱 화면(홈형 상단 바 + 하단 탭). 앱 화면이 아직 없는 주소는 모두 앱 셸 안의 "준비 중"이다.
 // 상단 바 아바타의 이름은 '내 계정'이다(하단 탭 '내 정보'와 같은 이름의 버튼이 둘 생기지 않게).
 // 홈형 상단 바: 종(안 읽은 알림 수)을 누르면 일정·알림의 알림 탭으로, 아바타(내 계정)를 누르면 내 정보로 간다.
+// 말풍선(안 읽은 메시지가 있는 대화 수, 30초마다 새로 받음)을 누르면 대화 목록으로 간다.
 export const useHomeTopBar = (user, onUnauthorized) => {
   const navigate = useNavigate();
   const unreadCount = useNotificationUnreadCount({ onUnauthorized });
+  const threadUnreadCount = useGetThreadUnreadCount({ onUnauthorized });
   return {
     search: { onClick: () => navigate(buildLocation('search')) },
+    message: { count: threadUnreadCount, onClick: () => navigate(buildLocation('threads')) },
     notification: { count: unreadCount, onClick: () => navigate(buildLocation('schedules', { tab: 'notifications' })) },
     avatar: { name: user.name, label: '내 계정', onClick: () => navigate(SETTINGS_PATH) },
   };
@@ -241,6 +246,7 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
     {/* /tickets/:ticketId 가 'new'를 요청 id 로 읽지 않게 앞에 둔다. */}
     <Route path="/tickets/new" element={<TicketRegisterRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/tickets/:ticketId" element={<TicketDetailRoute onUnauthorized={onUnauthorized} />} />
+    <Route path="/threads" element={<ThreadListPage user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="/threads/:threadId" element={<ThreadRoute user={user} onUnauthorized={onUnauthorized} />} />
     <Route path="/documents" element={<DocumentBoxRoute onUnauthorized={onUnauthorized} />} />
     <Route path="/schedules" element={<ScheduleRoute onUnauthorized={onUnauthorized} />} />

@@ -77,3 +77,7 @@ export const getLastMessagePreview = (thread, myUserId) => {
   const preview = parts.join(' · ');
   return isMyMessage(message, myUserId) ? `나: ${preview}` : preview;
 };
+
+// 대화 상대 역할 표시('임차인'·'임대인'). 모르는 역할이면 null.
+const ROLE_LABEL = { TENANT: '임차인', LANDLORD: '임대인' };
+export const getThreadCounterpartRoleLabel = (thread, myUserId) => ROLE_LABEL[getCounterpart(thread, myUserId)?.role] ?? null;

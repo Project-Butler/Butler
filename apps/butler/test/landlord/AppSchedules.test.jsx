@@ -11,6 +11,8 @@ const api = vi.hoisted(() => ({
   getNotificationPreference: vi.fn(),
   patchNotificationPreference: vi.fn(),
   getNotificationList: vi.fn(),
+  // 위 막대 말풍선(안 읽은 대화 수, docs/19 A0)
+  getThreadList: vi.fn(async () => ({ data: [], meta: { page: 1, size: 100, total: 0, hasNext: false } })),
   getNotificationUnreadCount: vi.fn(),
   postNotificationRead: vi.fn(),
   postNotificationReadAll: vi.fn(),
