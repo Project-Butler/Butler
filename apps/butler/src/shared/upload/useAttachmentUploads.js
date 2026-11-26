@@ -11,6 +11,11 @@ import {
 } from './attachment';
 import { useGetUploadRules } from './useGetUploadRules';
 
+const describeCountNotice = (countNotice, maxCount) => {
+  if (typeof countNotice === 'function') return countNotice(maxCount);
+  return countNotice ?? `사진은 기록 하나에 ${maxCount}장까지 붙일 수 있어요.`;
+};
+
 let nextKey = 0;
 const newKey = () => {
   nextKey += 1;
@@ -39,7 +44,12 @@ const toExistingItem = (attachment) => ({
 // maxCount: 붙일 수 있는 최대 개수(기본 하우스 로그 10장). 갱신 거절 통지 증빙은 5개다.
 // resourceType: 붙일 곳(예: 'TICKET'). 주면 그 곳이 받는 형식(동영상 포함 여부)을 업로드 규칙에서 찾고 세션에 targetResourceType으로 보낸다.
 // 빼면 지금처럼 사진·PDF만 받는다(하우스 로그·갱신 거절 통지).
-export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType } = {}) => {
+// countNotice: 개수를 넘을 때 안내(문자열 또는 (maxCount) => 문자열). 빼면 하우스 로그 문구 그대로.
+// clear(): 보낸 뒤(대화 메시지처럼 이미 붙은 뒤) 목록을 비운다. 문서는 지우지 않는다. 올리는 중인 칸이 있을 때는 부르지 않는다.
+export const useAttachmentUploads = (
+  initialAttachments = [],
+  { onUnauthorized, maxCount = MAX_LOG_ATTACHMENTS, resourceType, countNotice } = {},
+) => {
   const rules = useGetUploadRules();
   const kinds = useMemo(() => allowedFileKinds(rules, resourceType), [rules, resourceType]);
   const [items, setItems] = useState(() => initialAttachments.map(toExistingItem));
@@ -116,7 +126,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
       const files = Array.from(fileList);
       const room = maxCount - items.length;
       const messages = [];
-      if (files.length > room) messages.push(`사진은 기록 하나에 ${maxCount}장까지 붙일 수 있어요.`);
+      if (files.length > room) messages.push(describeCountNotice(countNotice, maxCount));
       const accepted = [];
       for (const file of files.slice(0, Math.max(room, 0))) {
         const problem = checkAttachmentFile(file, { rules, kinds });
@@ -148,7 +158,7 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
       setItems((prev) => [...prev, ...added.map(({ item }) => item)]);
       for (const { item, file } of added) upload(item.key, file, item.mimeType);
     },
-    [items.length, maxCount, upload, rules, kinds],
+    [items.length, maxCount, upload, rules, kinds, countNotice],
   );
 
   // 이번에 새로 올린 문서는 바로 지운다(미연결이라 남겨 둬도 24시간 뒤 정리되지만 빨리 치운다). 이미 붙은 문서는 저장할 때 서버가 지운다.
@@ -164,11 +174,26 @@ export const useAttachmentUploads = (initialAttachments = [], { onUnauthorized, 
     [dropItem, items],
   );
 
+  // 붙은 뒤 비우기: 미리보기 주소를 돌려주고, 뺀 표시·안내도 지운다(서버 문서는 그대로 둔다).
+  const clear = useCallback(() => {
+    setItems((prev) => {
+      for (const item of prev) {
+        if (!item.previewUrl) continue;
+        URL.revokeObjectURL(item.previewUrl);
+        previewUrls.current.delete(item.previewUrl);
+      }
+      return [];
+    });
+    cancelledKeys.current.clear();
+    setNotice(null);
+  }, []);
+
   const doneItems = items.filter((item) => item.status === 'done');
   return {
     items,
     addFiles,
     remove,
+    clear,
     notice,
     storageUnavailable,
     isUploading: items.some((item) => item.status === 'uploading'),
