@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   getCommunityNewsList: vi.fn(),
   getCommunityComplexNewsList: vi.fn(),
   getComplexMarketPrices: vi.fn(),
+  // 위 막대 말풍선(안 읽은 대화 수, docs/19 A0)
+  getThreadList: vi.fn(async () => ({ data: [], meta: { page: 1, size: 100, total: 0, hasNext: false } })),
   getNotificationUnreadCount: vi.fn(),
 }));
 

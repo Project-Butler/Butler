@@ -198,4 +198,22 @@ describe('ThreadComposer', () => {
     expect(api.deleteDocument).toHaveBeenCalledWith('doc-1');
     expect(screen.queryByRole('list', { name: '보낼 첨부' })).not.toBeInTheDocument();
   });
+
+  it('서버 규칙이 대화에 동영상을 받으면 [사진·파일 첨부]가 MP4·MOV 도 고른다', async () => {
+    api.getUploadRules.mockResolvedValue({
+      kinds: {
+        IMAGE: { mimeTypes: ['image/jpeg'], extensions: ['jpg'], maxBytes: 20 * 1024 * 1024 },
+        PDF: { mimeTypes: ['application/pdf'], extensions: ['pdf'], maxBytes: 20 * 1024 * 1024 },
+        VIDEO: { mimeTypes: ['video/mp4', 'video/quicktime'], extensions: ['mp4', 'mov'], maxBytes: 50 * 1024 * 1024 },
+      },
+      resourceKinds: { THREAD_MESSAGE: ['IMAGE', 'PDF', 'VIDEO'] },
+    });
+    const { resetUploadRulesCache } = await import('../../../src/shared/upload/useGetUploadRules');
+    resetUploadRulesCache();
+    render(<Probe conversation={conversationOf()} />);
+    await waitFor(() => expect(screen.getByLabelText('첨부 파일 선택').getAttribute('accept')).toContain('video/mp4'));
+    await userEvent.upload(screen.getByLabelText('첨부 파일 선택'), new File(['mp4'], '누수.mp4', { type: 'video/mp4' }));
+    expect(api.postUploadSession).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'video/mp4', targetResourceType: 'THREAD_MESSAGE' }));
+    resetUploadRulesCache();
+  });
 });

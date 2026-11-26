@@ -64,6 +64,9 @@ describe('수리·점검 (M09)', () => {
     expect(resolveViewKey('/landlord/tickets/new')).toBe('ticketRegister');
     expect(resolveViewKey('/landlord/tickets/abc')).toBe('ticketDetail');
     expect(resolveViewKey('/landlord/threads/abc')).toBe('thread');
+    // 대화 목록(위 막대 말풍선)은 대화방 주소와 겹치지 않는다
+    expect(buildLocation('threads')).toEqual(expect.objectContaining({ pathname: '/landlord/threads' }));
+    expect(resolveViewKey('/landlord/threads')).toBe('threads');
     expect(buildLocation('tickets', { propertyId: 'p1' })).toEqual({ pathname: '/landlord/tickets', search: '?propertyId=p1' });
     expect(buildLocation('ticketDetail', { ticketId: 't1', complete: true }).state).toEqual({ complete: true });
   });

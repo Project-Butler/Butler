@@ -7,6 +7,7 @@ export const MESSAGE_COUNTER_THRESHOLD = 100;
 export const IMMUTABLE_NOTICE = '보낸 메시지는 수정·삭제할 수 없어요.';
 export const READ_ONLY_NOTICE = '끝난 계약·요청의 대화라 지금은 읽기만 할 수 있어요.';
 export const EMPTY_THREAD_TEXT = '아직 메시지가 없어요. 먼저 인사를 건네 보세요.';
+export const EMPTY_READ_ONLY_THREAD_TEXT = '주고받은 메시지가 없어요.';
 export const HIDDEN_MESSAGE_TEXT = '운영자가 숨긴 메시지입니다';
 export const ATTACHMENT_COUNT_NOTICE = `첨부는 메시지 하나에 ${MAX_MESSAGE_ATTACHMENTS}개까지 보낼 수 있어요.`;
 export const ATTACHMENT_MISSING_TEXT = '첨부를 다시 골라 주세요.';

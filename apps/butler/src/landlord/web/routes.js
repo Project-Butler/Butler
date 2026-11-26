@@ -34,6 +34,7 @@ export const ROUTE_TABLE = [
   { key: 'tickets', path: '/tickets' },
   { key: 'ticketRegister', path: '/tickets/new' },
   { key: 'ticketDetail', path: '/tickets/:ticketId' },
+  { key: 'threads', path: '/threads' },
   { key: 'thread', path: '/threads/:threadId' },
   { key: 'setup', path: '/setup' },
   { key: 'schedules', path: '/schedules' },
@@ -130,7 +131,8 @@ const BUILDERS = {
   ticketRegister: ({ propertyId } = {}) => ({ pathname: '/tickets/new', search: propertyId ? `?propertyId=${propertyId}` : '' }),
   // complete: 목록의 [완료 처리]로 들어와 완료 시트를 바로 연다(history state 로만 넘긴다).
   ticketDetail: ({ ticketId, complete }) => ({ pathname: `/tickets/${ticketId}`, state: complete ? { complete: true } : undefined }),
-  // 소통(M10) 대화방
+  // 소통(M10) 대화 목록(임대인 앱 위 막대 말풍선) · 대화방
+  threads: () => ({ pathname: '/threads' }),
   thread: ({ threadId }) => ({ pathname: `/threads/${threadId}` }),
   setup: () => ({ pathname: '/setup' }),
   // 일정·알림(임대인 앱). 알림 탭이면 ?tab=notifications 를 주소에 남긴다(새로고침·뒤로 가기에도 같은 탭).

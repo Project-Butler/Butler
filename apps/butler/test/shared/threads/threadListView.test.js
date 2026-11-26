@@ -89,6 +89,9 @@ describe('getLastMessagePreview', () => {
     const pdf = { id: 'd2', mimeType: 'application/pdf' };
     expect(getLastMessagePreview(thread({ lastMessage: message({ body: '', attachments: [photo] }) }), ME)).toBe('사진');
     expect(getLastMessagePreview(thread({ lastMessage: message({ body: '', attachments: [photo, pdf] }) }), ME)).toBe('파일');
+    const video = { id: 'd3', mimeType: 'video/mp4' };
+    expect(getLastMessagePreview(thread({ lastMessage: message({ body: '', attachments: [video] }) }), ME)).toBe('동영상');
+    expect(getLastMessagePreview(thread({ lastMessage: message({ body: '', attachments: [video, photo] }) }), ME)).toBe('파일');
     expect(getLastMessagePreview(thread({ lastMessage: message({ body: '영수증이에요', attachments: [photo], sender: { id: ME } }) }), ME)).toBe(
       '나: 영수증이에요 · 사진',
     );

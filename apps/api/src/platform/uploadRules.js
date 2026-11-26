@@ -4,7 +4,7 @@
 // 회사가 바꾸는 값은 환경 변수로 받는다(요청마다 다시 읽는다 — storage/index.js와 같은 방식).
 //   UPLOAD_MAX_DOCUMENT_MB      사진·PDF 최대 크기(기본 20)
 //   UPLOAD_MAX_VIDEO_MB         동영상 최대 크기(기본 50, Supabase Free 업로드 상한)
-//   UPLOAD_VIDEO_RESOURCE_TYPES 동영상을 받는 곳(쉼표 구분, 비우면 기본 OWNERSHIP,CONTRACT,TICKET, none이면 동영상 끔)
+//   UPLOAD_VIDEO_RESOURCE_TYPES 동영상을 받는 곳(쉼표 구분, 비우면 기본 OWNERSHIP,CONTRACT,TICKET,THREAD_MESSAGE, none이면 동영상 끔)
 // 저장소(Supabase 버킷·프로젝트 전역 업로드 한도)보다 크게 두면 저장소 업로드가 실패한다(README).
 import { AppError } from './AppError.js';
 
@@ -15,7 +15,8 @@ const HOUR = 60 * MINUTE;
 export const MAX_CONFIGURABLE_MB = 5120;
 
 export const KNOWN_RESOURCE_TYPES = ['PROPERTY', 'OWNERSHIP', 'CONTRACT', 'TICKET', 'MANAGEMENT_LOG', 'THREAD_MESSAGE', 'RENEWAL_NOTICE'];
-export const DEFAULT_VIDEO_RESOURCE_TYPES = ['OWNERSHIP', 'CONTRACT', 'TICKET'];
+// 대화 메시지(THREAD_MESSAGE)도 동영상을 받는다(2026-11-26, docs/19).
+export const DEFAULT_VIDEO_RESOURCE_TYPES = ['OWNERSHIP', 'CONTRACT', 'TICKET', 'THREAD_MESSAGE'];
 // 표에 없는 곳이 받는 묶음
 export const DEFAULT_FILE_KINDS = ['IMAGE', 'PDF'];
 

@@ -17,7 +17,6 @@ import {
   attachDocumentsInTx,
   MANAGEMENT_LOG_RESOURCE,
   RENEWAL_NOTICE_RESOURCE,
-  THREAD_MESSAGE_RESOURCE,
   TICKET_RESOURCE,
 } from '../../../src/platform/documentAttachments.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
@@ -195,11 +194,13 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
     const noTarget = await createSession(user, { targetResourceType: undefined });
     assert.equal(noTarget.status, 422);
     assert.equal(noTarget.body.error.code, 'FILE_TYPE_NOT_ALLOWED');
-    for (const target of ['MANAGEMENT_LOG', 'THREAD_MESSAGE', 'RENEWAL_NOTICE', 'PROPERTY']) {
+    for (const target of ['MANAGEMENT_LOG', 'RENEWAL_NOTICE', 'PROPERTY']) {
       const rejected = await createSession(user, { targetResourceType: target });
       assert.equal(rejected.status, 422, target);
       assert.equal(rejected.body.error.message, '이 곳에는 동영상을 올릴 수 없습니다.');
     }
+    // 대화 메시지는 동영상을 받는다(50MB)
+    assert.equal((await createSession(user, { targetResourceType: 'THREAD_MESSAGE' })).status, 201);
     const unknown = await createSession(user, { targetResourceType: 'NOPE' });
     assert.equal(unknown.status, 400);
     assert.equal(unknown.body.error.details[0].field, 'targetResourceType');
@@ -319,7 +320,7 @@ describe('동영상 업로드', { skip: dbTestSkip }, () => {
       'FILE_TYPE_NOT_ALLOWED',
     );
     // 메시지·갱신 통지(같은 공용 함수). 막히면 문서는 미연결로 남는다(트랜잭션 되돌림).
-    for (const resourceType of [MANAGEMENT_LOG_RESOURCE, THREAD_MESSAGE_RESOURCE, RENEWAL_NOTICE_RESOURCE]) {
+    for (const resourceType of [MANAGEMENT_LOG_RESOURCE, RENEWAL_NOTICE_RESOURCE]) {
       await rejectsWith(
         prisma.$transaction((tx) =>
           attachDocumentsInTx(tx, landlord, { resourceType, resourceId: randomUUID(), documentIds: [logVideo.body.data.id], now: new Date() }),

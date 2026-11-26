@@ -131,3 +131,31 @@ describe('TopBar 말풍선(대화) 버튼', () => {
     expect(names.indexOf('대화')).toBe(names.indexOf('알림') - 1);
   });
 });
+
+describe('BackTopBar 둘째 줄(대화 제목)', () => {
+  const renderBar = (backBar) =>
+    render(
+      <MobileShell shell="test-shell" backBar={{ title: '이세입', onBack: () => {}, ...backBar }} tabs={tabs('assets')}>
+        <p>본문</p>
+      </MobileShell>,
+    );
+
+  it('subtitle·titleNote 가 없으면 지금처럼 한 줄 제목', () => {
+    renderBar({});
+    expect(screen.getByRole('heading', { name: '이세입' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toContain('뒤로 가기');
+  });
+
+  it('titleNote 는 제목 옆 작은 글, subtitle 은 둘째 줄, onSubtitleClick 이면 버튼', async () => {
+    const onSubtitleClick = vi.fn();
+    renderBar({ titleNote: '임차인', subtitle: '101동 1001호 · 싱크대 누수', onSubtitleClick });
+    expect(screen.getByRole('heading', { name: '이세입 임차인' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '101동 1001호 · 싱크대 누수, 상세 보기' }));
+    expect(onSubtitleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('onSubtitleClick 이 없으면 둘째 줄은 글만', () => {
+    renderBar({ subtitle: '1108동 502호 계약 · 지난 대화' });
+    expect(screen.getByText('1108동 502호 계약 · 지난 대화').tagName).toBe('P');
+  });
+});
