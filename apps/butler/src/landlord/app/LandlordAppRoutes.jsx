@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { AccountCard } from '../../shared/AccountCard';
 import { ComingSoon } from '../../shared/ComingSoon';
 import { SearchPage } from '../../shared/search/SearchPage';
 import { buildLocation, HOME_PATH } from '../web/routes';
@@ -19,6 +18,7 @@ import { ContractRegisterPage } from './pages/ContractRegisterPage';
 import { DocumentBoxPage } from './pages/DocumentBoxPage';
 import { HomePage } from './pages/HomePage';
 import { ManagementLogListPage } from './pages/ManagementLogListPage';
+import { MyInfoPage } from './pages/MyInfoPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { PropertyRegisterPage } from './pages/PropertyRegisterPage';
 import { SchedulePage } from './pages/SchedulePage';
@@ -54,7 +54,7 @@ const BuildingListRoute = ({ user, onUnauthorized }) => (
   <BuildingListPage topBar={useHomeTopBar(user, onUnauthorized)} onUnauthorized={onUnauthorized} />
 );
 
-const TabScreens = ({ user, onLogout, onUnauthorized }) => {
+const TabScreens = ({ user, verifiedLegalDongCodes, onLogout, onUnauthorized }) => {
   const { pathname } = useLocation();
   const current = TABS.find((tab) => isTabActive(tab, pathname));
 
@@ -65,11 +65,7 @@ const TabScreens = ({ user, onLogout, onUnauthorized }) => {
         <Route path="/home" element={<HomePage user={user} onUnauthorized={onUnauthorized} />} />
         <Route
           path="/settings"
-          element={
-            <ComingSoon title="내 정보">
-              <AccountCard user={user} onLogout={onLogout} />
-            </ComingSoon>
-          }
+          element={<MyInfoPage user={user} verifiedLegalDongCodes={verifiedLegalDongCodes} onLogout={onLogout} onUnauthorized={onUnauthorized} />}
         />
         <Route path="*" element={<ComingSoon title={current?.label ?? '준비 중인 화면'} />} />
       </Routes>
@@ -258,6 +254,9 @@ export const LandlordAppRoutes = ({ user, verifiedLegalDongCodes, onLogout, onUn
       <Route path="references/:referenceId" element={<DisputeReferenceDetailPage />} />
     </Route>
     <Route path="/community/*" element={<CommunityAppLayout user={user} onUnauthorized={onUnauthorized} />} />
-    <Route path="*" element={<TabScreens user={user} onLogout={onLogout} onUnauthorized={onUnauthorized} />} />
+    <Route
+      path="*"
+      element={<TabScreens user={user} verifiedLegalDongCodes={verifiedLegalDongCodes} onLogout={onLogout} onUnauthorized={onUnauthorized} />}
+    />
   </Routes>
 );
