@@ -17,6 +17,7 @@ import {
   findReferenceById,
   findReferenceForRelated,
   cleanSearchKeyword,
+  EASY_FIRST_SORT_FIELD,
   findReferences,
   findRelatedCandidates,
   findRelatedByKeyword,
@@ -120,8 +121,9 @@ const parseListQuery = (query) => {
     }
   }
 
-  // 검색어가 있으면 기본은 관련도 순, 없으면 최신순. 검색어 없이 relevance를 고르면 매길 점수가 없어 최신순으로 둔다.
-  const defaultOrderBy = { field: 'createdAt', direction: 'desc' };
+  // 검색어가 있으면 기본은 관련도 순, 없으면 쉬운 자료(사례·가이드) 먼저 → 판례, 각각 최신순(EASY_FIRST_SORT_FIELD).
+  // 검색어 없이 relevance를 고르면 매길 점수가 없어 같은 기본 순서로 둔다. createdAt 등을 직접 고르면 그 순서 그대로.
+  const defaultOrderBy = { field: EASY_FIRST_SORT_FIELD, direction: 'desc' };
   let orderBy = keyword ? { field: RELEVANCE_SORT_FIELD, direction: 'desc' } : defaultOrderBy;
   if (sort !== undefined) {
     const [field, direction] = sort.split(':');

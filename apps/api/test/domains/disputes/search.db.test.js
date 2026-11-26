@@ -4,7 +4,7 @@ import { dbTestSkip } from '../../helpers/dbTest.js';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { prisma } from '../../../src/platform/prismaClient.js';
-import { findReferences, findRelatedByKeyword } from '../../../src/domains/disputes/service.js';
+import { EASY_FIRST_SORT_FIELD, findReferences, findRelatedByKeyword } from '../../../src/domains/disputes/service.js';
 
 const KEY_PREFIX = 'dbtest-dispute-';
 const WORD_A = '가나다테스트어';
@@ -98,6 +98,11 @@ const REFERENCES = [
   reference('kind-commercial', { propertyKind: 'COMMERCIAL', content: `${KIND_A} 그리고 ${KIND_B}` }),
   reference('kind-housing', { propertyKind: 'HOUSING', title: `${KIND_A} 사례` }),
   reference('kind-common', { content: `${KIND_B} 본문` }),
+  // 검색어 없을 때 기본 정렬(쉬운 자료 먼저): 판례 하나를 가장 최신으로 둬서 최신순과 갈리게 한다
+  reference('order-case-old', { type: 'CASE', createdAt: new Date('2020-01-01T00:00:00Z') }),
+  reference('order-prec-old', { type: 'PRECEDENT', createdAt: new Date('2020-01-02T00:00:00Z') }),
+  reference('order-guide-new', { type: 'GUIDELINE', createdAt: new Date('2020-01-03T00:00:00Z') }),
+  reference('order-prec-newest', { type: 'PRECEDENT', createdAt: new Date('2020-01-05T00:00:00Z') }),
   // 동사 확인용(단어 J): 자료에는 동사 대신 법률 명사 "반환"만 / 동사 형태 "돌려받"이 그대로 있음 / J만 있음
   reference('verb-noun', { title: `${WORD_J} 보증금 반환` }),
   reference('verb-form', { content: `${WORD_J} 보증금을 돌려받지 못함` }),
@@ -447,6 +452,36 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
       orderBy: { field: 'createdAt', direction: 'desc' },
     });
     assert.deepEqual(result.items.map((item) => item.sourceKey).sort(), [...keys].sort());
+  });
+
+  test('검색어 없을 때 기본 정렬: 사례·가이드를 최신순으로 먼저, 판례는 그 뒤 최신순. 페이지를 이어 붙여도 같고 createdAt을 고르면 순수 최신순', async () => {
+    const ORDER_KEYS = ['order-case-old', 'order-prec-old', 'order-guide-new', 'order-prec-newest'];
+    const list = async ({ field = EASY_FIRST_SORT_FIELD, page = 1, size = 20, type } = {}) => {
+      const result = await findReferences({
+        filters: { sourceKey: { in: ORDER_KEYS.map((key) => `${KEY_PREFIX}${key}`) }, ...(type ? { type } : {}) },
+        keyword: undefined,
+        page,
+        size,
+        orderBy: { field, direction: 'desc' },
+      });
+      return { keys: result.items.map((item) => item.sourceKey.slice(KEY_PREFIX.length)), meta: result.meta };
+    };
+
+    const easyFirst = await list();
+    assert.deepEqual(easyFirst.keys, ['order-guide-new', 'order-case-old', 'order-prec-newest', 'order-prec-old']);
+    assert.equal(easyFirst.meta.total, 4);
+    assert.equal(easyFirst.meta.countsByType.PRECEDENT, 2);
+
+    // 페이지가 쉬운 자료와 판례에 걸쳐도(크기 3: 쉬운 2 + 판례 1 / 판례 1) 이어 붙이면 한 번에 받은 순서와 같다
+    const pagedBy3 = [...(await list({ size: 3 })).keys, ...(await list({ size: 3, page: 2 })).keys];
+    assert.deepEqual(pagedBy3, easyFirst.keys);
+    const pagedBy1 = [];
+    for (let page = 1; page <= 4; page += 1) pagedBy1.push(...(await list({ size: 1, page })).keys);
+    assert.deepEqual(pagedBy1, easyFirst.keys);
+    assert.equal((await list({ size: 3, page: 2 })).meta.hasNext, false);
+
+    assert.deepEqual((await list({ type: 'PRECEDENT' })).keys, ['order-prec-newest', 'order-prec-old']);
+    assert.deepEqual((await list({ field: 'createdAt' })).keys, ['order-prec-newest', 'order-guide-new', 'order-prec-old', 'order-case-old']);
   });
 
   test('관련도 점수에서 %는 와일드카드가 아니라 글자 그대로 찾는다', async () => {
