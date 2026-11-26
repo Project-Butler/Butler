@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button, MobileFormLayout } from '@butler/ui';
-import { DocumentThumbnail } from '../../web/components/DocumentThumbnail/DocumentThumbnail';
-import { NoticeBox } from '../../web/components/NoticeBox/NoticeBox';
-import { useThreadConversation } from '../../web/hooks/useThreadConversation';
-import { formatMessageTime, getThreadTitle, groupMessagesByDay, isMyMessage } from '../utils/threadView';
+import { DocumentThumbnail } from '../../../shared/documentViewer/DocumentThumbnail';
+import { NoticeBox } from '../../../shared/NoticeBox';
+import { useThreadConversation } from '../../../shared/threads/useThreadConversation';
+import { formatMessageTime, getThreadTitle, groupMessagesByDay, isMyMessage } from '../../../shared/threads/threadView';
 import { useGoBack } from '../utils/navigation';
 
 const MAX_MESSAGE_LENGTH = 2000;
