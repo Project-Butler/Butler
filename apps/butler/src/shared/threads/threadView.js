@@ -1,4 +1,6 @@
 // 대화(소통) 표시 계산 — 임대인 앱·임대인 PC·임차인 앱이 같이 쓴다. 화면 밖에서 테스트할 수 있게 순수 함수로 둔다.
+import { HIDDEN_MESSAGE_TEXT } from './threadRules';
+
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -41,3 +43,37 @@ export const getThreadTitle = (thread, myUserId) =>
   [getCounterpart(thread, myUserId)?.name, thread.title].filter(Boolean).join(' · ') || '대화';
 
 export const isMyMessage = (message, myUserId) => message.sender?.id === myUserId;
+
+// ── 대화 목록(2-2) ──
+
+// 대화 상대 이름(나 아닌 참여자). 역할을 따지지 않아 임대인·임차인이 같이 쓴다. 없으면 null.
+export const getThreadCounterpartName = (thread, myUserId) => getCounterpart(thread, myUserId)?.name ?? null;
+
+// 서버 순서(최근 메시지 순)를 지키되, 읽기 전용(지난 대화)만 맨 아래로 내린다.
+export const sortThreadsForList = (threads) => [...threads.filter((thread) => !thread.isReadOnly), ...threads.filter((thread) => thread.isReadOnly)];
+
+// 안 읽은 메시지가 있는 대화 수
+export const countUnreadThreads = (threads) => threads.filter((thread) => thread.unreadCount > 0).length;
+
+// 목록 시각: 오늘이면 '14:05', 올해면 '11월 20일', 그 전이면 '2025.11.20' (한국 시간)
+export const formatThreadListTime = (isoString, now = new Date()) => {
+  if (!isoString) return '';
+  const kst = toKst(isoString);
+  if (toMessageDayKey(isoString) === toMessageDayKey(now.toISOString())) return formatMessageTime(isoString);
+  if (kst.getUTCFullYear() === toKst(now.toISOString()).getUTCFullYear()) return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
+  return `${kst.getUTCFullYear()}.${pad(kst.getUTCMonth() + 1)}.${pad(kst.getUTCDate())}`;
+};
+
+const describeAttachments = (attachments) => (attachments.every((attachment) => attachment.mimeType?.startsWith('image/')) ? '사진' : '파일');
+
+// 마지막 메시지 한 줄: 내가 보냈으면 '나: ', 첨부가 있으면 ' · 사진'(사진만) / ' · 파일', 첨부만이면 '사진'/'파일'.
+export const getLastMessagePreview = (thread, myUserId) => {
+  const message = thread.lastMessage;
+  if (!message) return '아직 메시지가 없어요';
+  if (message.isHidden) return HIDDEN_MESSAGE_TEXT;
+  const text = (message.body ?? '').replace(/\s+/g, ' ').trim();
+  const attachments = message.attachments ?? [];
+  const parts = [text, attachments.length > 0 ? describeAttachments(attachments) : null].filter(Boolean);
+  const preview = parts.join(' · ');
+  return isMyMessage(message, myUserId) ? `나: ${preview}` : preview;
+};

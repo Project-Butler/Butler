@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getThread, getThreadMessageList, postThreadMessage, postThreadRead } from '@butler/api-client';
 import { isUnauthorizedError, toApiError } from '../apiError';
+import { useInvalidateThreadList } from './useInvalidateThreadList';
 
 const PAGE_SIZE = 30;
 // 새 메시지를 한 번에 받는 최대 개수(서버 최대). 더 있으면(hasNext) 이어서 받는다.
@@ -14,12 +15,24 @@ const appendUnique = (current, incoming) => {
   return [...current, ...incoming.filter((message) => !seen.has(message.id))];
 };
 
+// 글만이면 지금처럼 { body }, 첨부가 있으면 attachmentDocumentIds 를 같이 보낸다(첨부만이면 body 는 빈 글).
+const toMessageBody = (input) => {
+  if (typeof input === 'string') return { body: input };
+  const attachmentDocumentIds = input?.attachmentDocumentIds ?? [];
+  const body = input?.body ?? '';
+  return attachmentDocumentIds.length > 0 ? { body, attachmentDocumentIds } : { body };
+};
+
 // 대화방 한 개(GET /threads/:id + 메시지). 메시지는 오래된 것 → 최신 순(화면 위 → 아래)으로 둔다.
 // - 처음: 최신 30개(cursor 방식은 최신순이라 뒤집는다). [이전 메시지 더 보기]는 nextCursor 로 앞에 붙인다.
 // - 새 메시지: 10초마다 after(마지막 메시지 id)로 받는다. 창이 가려져 있으면 건너뛴다.
 // - 읽음: 마지막 메시지가 바뀌면 POST /threads/:id/read 로 읽은 위치를 옮긴다(실패해도 화면은 그대로).
+// - 보낸 뒤·읽은 뒤에는 대화 목록(안 읽은 수)을 새로 받게 한다(QueryClientProvider 안에서만 쓴다).
+// - isActive(기본 true): false 면(PC 팝업을 접은 동안) 폴링·읽음을 멈춘다. 처음 불러오기는 한다.
+//   false → true 로 바뀌면 그때만 곧바로 한 번 받고 읽음까지 옮긴다. 처음부터 true 면 첫 폴링은 지금처럼 간격 뒤.
+// sendMessage(input): 글(문자열) 또는 { body, attachmentDocumentIds }. 성공하면 true.
 // 401이면 오류 대신 onUnauthorized(로그인 화면으로)를 부른다.
-export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs = THREAD_POLL_INTERVAL_MS } = {}) => {
+export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs = THREAD_POLL_INTERVAL_MS, isActive = true } = {}) => {
   const [thread, setThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [older, setOlder] = useState({ cursor: null, hasNext: false, isLoading: false, error: null });
@@ -28,6 +41,11 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
   const lastIdRef = useRef(null);
   const sendingRef = useRef(false);
   const lastReadRef = useRef(null);
+  const wasActiveRef = useRef(isActive);
+  // 펼친 직후 따라잡기 폴링 중에는 읽음을 미뤘다가, 끝나면 마지막 메시지까지 한 번만 보낸다.
+  const catchingUpRef = useRef(false);
+  const [catchUpRound, setCatchUpRound] = useState(0);
+  const invalidateThreadList = useInvalidateThreadList();
 
   const handleError = useCallback(
     (requestError) => {
@@ -72,9 +90,10 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
     };
   }, [threadId, handleError]);
 
-  // 새 메시지 폴링
+  // 새 메시지 폴링(isActive 일 때만)
   useEffect(() => {
-    if (!thread) return undefined;
+    if (!thread || !isActive) return undefined;
+    const becameActive = !wasActiveRef.current;
     let ignore = false;
     let running = false;
 
@@ -106,20 +125,36 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
     };
 
     const timer = setInterval(poll, pollIntervalMs);
+    // 접혀 있다가 펼쳐진 때만 기다리지 않고 바로 받는다(그동안 읽음은 미룬다).
+    if (becameActive) {
+      catchingUpRef.current = true;
+      poll().finally(() => {
+        catchingUpRef.current = false;
+        if (!ignore) setCatchUpRound((round) => round + 1);
+      });
+    }
     return () => {
       ignore = true;
+      catchingUpRef.current = false;
       clearInterval(timer);
     };
-  }, [thread, threadId, pollIntervalMs, onUnauthorized]);
+  }, [thread, threadId, pollIntervalMs, onUnauthorized, isActive]);
 
-  // 읽음 표시
+  // 지난 isActive 값(위 폴링 effect 가 "펼쳐진 순간"을 알 수 있게, 그 뒤에 갱신한다)
   useEffect(() => {
-    if (!thread || !lastMessageId || lastReadRef.current === lastMessageId) return;
+    wasActiveRef.current = isActive;
+  }, [isActive]);
+
+  // 읽음 표시(isActive 일 때만)
+  useEffect(() => {
+    if (!thread || !isActive || catchingUpRef.current || !lastMessageId || lastReadRef.current === lastMessageId) return;
     lastReadRef.current = lastMessageId;
-    postThreadRead(threadId, lastMessageId).catch((requestError) => {
-      if (isUnauthorizedError(requestError)) onUnauthorized?.();
-    });
-  }, [thread, threadId, lastMessageId, onUnauthorized]);
+    postThreadRead(threadId, lastMessageId)
+      .then(() => invalidateThreadList())
+      .catch((requestError) => {
+        if (isUnauthorizedError(requestError)) onUnauthorized?.();
+      });
+  }, [thread, threadId, lastMessageId, onUnauthorized, isActive, invalidateThreadList, catchUpRound]);
 
   const loadOlder = useCallback(async () => {
     if (!older.hasNext || older.isLoading) return;
@@ -139,14 +174,15 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
 
   // 보내기. 성공하면 true. 이미 보내는 중이면 다시 보내지 않는다.
   const sendMessage = useCallback(
-    async (body) => {
+    async (input) => {
       if (sendingRef.current) return false;
       sendingRef.current = true;
       setSend({ isSending: true, error: null });
       try {
-        const message = await postThreadMessage(threadId, { body });
+        const message = await postThreadMessage(threadId, toMessageBody(input));
         setMessages((prev) => appendUnique(prev, [message]));
         setSend({ isSending: false, error: null });
+        invalidateThreadList();
         return true;
       } catch (requestError) {
         const apiError = handleError(requestError);
@@ -158,7 +194,7 @@ export const useThreadConversation = (threadId, { onUnauthorized, pollIntervalMs
         sendingRef.current = false;
       }
     },
-    [threadId, handleError],
+    [threadId, handleError, invalidateThreadList],
   );
 
   return {
