@@ -1,6 +1,7 @@
-import { FileText, X } from 'lucide-react';
+import { FileText, FileVideo, X } from 'lucide-react';
+import { isVideoMimeType } from '../upload/attachment';
 
-// 입력칸 위 첨부 줄(시안 A3): 사진은 미리보기, PDF는 아이콘+이름. 올리는 중이면 아래 진행 막대, 실패면 붉은 테두리. [×]로 뺀다.
+// 입력칸 위 첨부 줄(시안 A3): 사진은 미리보기, PDF·동영상은 아이콘+이름. 올리는 중이면 아래 진행 막대, 실패면 붉은 테두리. [×]로 뺀다.
 // uploads 는 useAttachmentUploads() 반환값(items·remove·maxCount).
 export const ThreadAttachmentTray = ({ uploads, disabled = false }) => {
   const { items, remove, maxCount } = uploads;
@@ -20,7 +21,7 @@ export const ThreadAttachmentTray = ({ uploads, disabled = false }) => {
               <img src={item.previewUrl} alt={item.fileName} className="h-full w-full object-cover" />
             ) : (
               <span className="flex flex-col items-center gap-0.5 px-1">
-                <FileText size={18} aria-hidden="true" />
+                {isVideoMimeType(item.mimeType) ? <FileVideo size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}
                 <span className="w-full truncate text-center text-[10px] text-ink-2">{item.fileName}</span>
               </span>
             )}

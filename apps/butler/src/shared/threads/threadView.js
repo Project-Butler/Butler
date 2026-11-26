@@ -64,9 +64,13 @@ export const formatThreadListTime = (isoString, now = new Date()) => {
   return `${kst.getUTCFullYear()}.${pad(kst.getUTCMonth() + 1)}.${pad(kst.getUTCDate())}`;
 };
 
-const describeAttachments = (attachments) => (attachments.every((attachment) => attachment.mimeType?.startsWith('image/')) ? '사진' : '파일');
+const describeAttachments = (attachments) => {
+  if (attachments.every((attachment) => attachment.mimeType?.startsWith('image/'))) return '사진';
+  if (attachments.every((attachment) => attachment.mimeType?.startsWith('video/'))) return '동영상';
+  return '파일';
+};
 
-// 마지막 메시지 한 줄: 내가 보냈으면 '나: ', 첨부가 있으면 ' · 사진'(사진만) / ' · 파일', 첨부만이면 '사진'/'파일'.
+// 마지막 메시지 한 줄: 내가 보냈으면 '나: ', 첨부가 있으면 ' · 사진'(사진만) / ' · 동영상'(동영상만) / ' · 파일', 첨부만이면 그 낱말만.
 export const getLastMessagePreview = (thread, myUserId) => {
   const message = thread.lastMessage;
   if (!message) return '아직 메시지가 없어요';

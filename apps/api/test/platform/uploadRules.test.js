@@ -29,15 +29,15 @@ const silenceWarn = (fn) => {
   }
 };
 
-test('기본값: 사진·PDF 20MB, 동영상 50MB, 동영상은 OWNERSHIP·CONTRACT·TICKET만', () => {
+test('기본값: 사진·PDF 20MB, 동영상 50MB, 동영상은 OWNERSHIP·CONTRACT·TICKET·THREAD_MESSAGE만', () => {
   const rules = getUploadRules({});
   assert.equal(rules.kinds.IMAGE.maxBytes, 20 * MB);
   assert.equal(rules.kinds.PDF.maxBytes, 20 * MB);
   assert.equal(rules.kinds.VIDEO.maxBytes, 50 * MB);
-  for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET']) {
+  for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET', 'THREAD_MESSAGE']) {
     assert.deepEqual(kindsForResource(rules, resourceType), ['IMAGE', 'PDF', 'VIDEO']);
   }
-  for (const resourceType of ['MANAGEMENT_LOG', 'THREAD_MESSAGE', 'RENEWAL_NOTICE', 'PROPERTY', 'UNKNOWN', undefined]) {
+  for (const resourceType of ['MANAGEMENT_LOG', 'RENEWAL_NOTICE', 'PROPERTY', 'UNKNOWN', undefined]) {
     assert.deepEqual(kindsForResource(rules, resourceType), ['IMAGE', 'PDF']);
   }
   assert.equal(isKindAllowedFor(rules, 'TICKET', 'VIDEO'), true);
@@ -70,7 +70,7 @@ test('환경 변수로 크기·동영상 위치를 바꾼다(요청마다 읽음
 test('UPLOAD_VIDEO_RESOURCE_TYPES: none이면 동영상을 어디에도 받지 않고, 빈 값은 기본값', () => {
   for (const value of ['none', 'NONE', ' none ']) {
     const rules = getUploadRules({ UPLOAD_VIDEO_RESOURCE_TYPES: value });
-    for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET']) assert.equal(isKindAllowedFor(rules, resourceType, 'VIDEO'), false);
+    for (const resourceType of ['OWNERSHIP', 'CONTRACT', 'TICKET', 'THREAD_MESSAGE']) assert.equal(isKindAllowedFor(rules, resourceType, 'VIDEO'), false);
   }
   // .env.example을 그대로 복사한 빈 값은 기본값(동영상 켜짐)
   for (const value of ['', '  ']) assert.equal(isKindAllowedFor(getUploadRules({ UPLOAD_VIDEO_RESOURCE_TYPES: value }), 'TICKET', 'VIDEO'), true);
