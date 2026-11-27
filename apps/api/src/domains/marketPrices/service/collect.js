@@ -1,5 +1,6 @@
 // 실거래가 수집(정기 실행 GET /api/cron/market-prices) — 시세 계획서 5절. 규칙 값은 marketPriceRules.js.
-// 한 번 실행에서(우선순위 순): ① 처음 보는 묶음(한 번도 못 모은 달)의 13개월 채우기 ② 최근 3개월 다시 모으기.
+// 한 번 실행에서(우선순위 순): ① 처음 보는 묶음(한 번도 못 모은 달)의 13개월 채우기 — 대기 작업(사용자가 시세 화면을 연 곳)이 있는 시군구 먼저
+// ② 최근 3개월 다시 모으기. 대기 작업 구를 앞에 세우는 것은 시간 한도의 절반까지(규칙 파일 "모으는 순서").
 // 묶음 = (시군구, 계약월, 매매/전월세). 묶음마다 그 행을 지우고 새로 넣는다(한 트랜잭션 — 해제된 거래가 빠지게).
 // 시간이 모자라면 오래 안 시도한 묶음부터 하고 남은 것은 다음 번. 끝에 원천을 다시 부르지 않고 나중에 등록된 단지를 잇는다.
 // 원천은 하나씩 부르고(CONCURRENCY), 시간 초과 · 23 은 실행 한도 안에서 한 번 더 부른다(rtmsProvider.fetchRtmsMonth).
@@ -7,7 +8,7 @@
 import { prisma } from '../../../platform/prismaClient.js';
 import { listAllOwnedLegalDongCodes } from '../../community/platformBridge.js';
 import { buildLinkIndex, dealLotKey, linkDeals, linkStoredKeys, roadKeyOf, usableKeys } from '../linkComplex.js';
-import { CONCURRENCY, REFRESH_MIN_AGE_MS, REFRESH_MONTHS, REQUEST_TIMEOUT_MS, RUN_BUDGET_MS, safeErrorCode } from '../marketPriceRules.js';
+import { CONCURRENCY, REFRESH_MIN_AGE_MS, REFRESH_MONTHS, REQUEST_TIMEOUT_MS, RUN_BUDGET_MS, TASK_GROUPS, WAITING_FIRST_BUDGET_SHARE, safeErrorCode } from '../marketPriceRules.js';
 import { retentionMonths } from '../months.js';
 import { fetchRtmsMonth } from '../rtmsProvider.js';
 import { completeBackfillJobs, listPendingBackfillSigunguCodes } from './backfillJobs.js';
@@ -16,41 +17,68 @@ const KINDS = ['TRADE', 'RENT'];
 const clip = (text, length) => (text ? String(text).slice(0, length) : null);
 const toBigInt = (won) => (won === null || won === undefined ? null : BigInt(won));
 
-// 대상 시군구 — 커뮤니티를 읽을 수 있는 임대인(활성 소유, 인증 취소 아님)의 단지가 있는 곳 + 대기 작업이 걸린 곳
-export const listTargetSigunguCodes = async () => {
+// 대상 시군구 — 커뮤니티를 읽을 수 있는 임대인(활성 소유, 인증 취소 아님)의 단지가 있는 곳 + 대기 작업이 걸린 곳.
+// pending: 이미 읽은 대기 작업 시군구(없으면 여기서 읽는다)
+export const listTargetSigunguCodes = async (pending) => {
   const legalDongCodes = await listAllOwnedLegalDongCodes();
-  const pending = await listPendingBackfillSigunguCodes();
-  return [...new Set([...legalDongCodes.map((code) => code.slice(0, 5)), ...pending])].sort();
+  const waiting = pending ?? (await listPendingBackfillSigunguCodes());
+  return [...new Set([...legalDongCodes.map((code) => code.slice(0, 5)), ...waiting])].sort();
 };
 
-// 할 일 고르기(순수 함수). collections: 그 시군구들 · 달들의 market_collections 행
-// 반환: [{ sigunguCode, yearMonth, kind, reason: 'BACKFILL' | 'REFRESH' }] — 앞에서부터 한다
-export const planCollectionTasks = ({ sigunguCodes, months, collections, now }) => {
+// 할 일 고르기(순수 함수). collections: 그 시군구들 · 달들의 market_collections 행, waitingSigunguCodes: 대기 작업이 걸린 시군구
+// 반환: [{ sigunguCode, yearMonth, kind, reason: 'BACKFILL' | 'REFRESH', waiting, usualRank }] — 앞에서부터 한다(규칙 파일 "모으는 순서"):
+//   대기 작업 구의 채우기(waiting true) → 나머지 채우기 → 다시 모으기.
+//   usualRank = 대기 작업을 따지지 않은 순서(채우기 → 다시 모으기)의 자리 — 시간 한도의 절반이 지나면 남은 것을 이 순서로 섞는다(createTaskQueue)
+export const planCollectionTasks = ({ sigunguCodes, months, collections, now, waitingSigunguCodes = [] }) => {
   const byKey = new Map(collections.map((row) => [`${row.sigunguCode}|${row.yearMonth}|${row.dealKind}`, row]));
   const recent = new Set(months.slice(-REFRESH_MONTHS));
+  const waiting = new Set(waitingSigunguCodes);
   const tasks = [];
   for (const sigunguCode of sigunguCodes) {
     for (const yearMonth of months) {
       for (const kind of KINDS) {
         const row = byKey.get(`${sigunguCode}|${yearMonth}|${kind}`);
         const attemptedAt = row?.attemptedAt ? new Date(row.attemptedAt).getTime() : 0;
-        if (!row?.collectedAt) tasks.push({ sigunguCode, yearMonth, kind, reason: 'BACKFILL', priority: 0, attemptedAt });
+        if (!row?.collectedAt) tasks.push({ sigunguCode, yearMonth, kind, reason: 'BACKFILL', waiting: waiting.has(sigunguCode), attemptedAt });
         else if (recent.has(yearMonth) && now - new Date(row.collectedAt).getTime() >= REFRESH_MIN_AGE_MS) {
-          tasks.push({ sigunguCode, yearMonth, kind, reason: 'REFRESH', priority: 1, attemptedAt });
+          tasks.push({ sigunguCode, yearMonth, kind, reason: 'REFRESH', waiting: false, attemptedAt });
         }
       }
     }
   }
-  // 채우기 먼저, 그 안에서 오래 안 시도한 묶음(한 번도 안 한 것 = 0)부터, 같으면 시군구 · 최근 달 · 매매 먼저
+  // 대기 작업을 따지지 않은 순서: 채우기 먼저, 그 안에서 오래 안 시도한 묶음(한 번도 안 한 것 = 0)부터, 같으면 시군구 · 최근 달 · 매매 먼저
   tasks.sort(
     (a, b) =>
-      a.priority - b.priority ||
+      TASK_GROUPS.indexOf(a.reason) - TASK_GROUPS.indexOf(b.reason) ||
       a.attemptedAt - b.attemptedAt ||
       a.sigunguCode.localeCompare(b.sigunguCode) ||
       b.yearMonth.localeCompare(a.yearMonth) ||
       KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind),
   );
-  return tasks.map(({ priority, attemptedAt, ...task }) => task);
+  tasks.forEach((task, index) => {
+    task.usualRank = index;
+  });
+  // 대기 작업 구의 채우기를 맨 앞으로 — 그 밖의 묶음 사이 순서는 그대로
+  const groupOf = (task) => TASK_GROUPS.indexOf(task.waiting ? 'WAITING_BACKFILL' : task.reason);
+  tasks.sort((a, b) => groupOf(a) - groupOf(b) || a.usualRank - b.usualRank);
+  return tasks.map(({ attemptedAt, ...task }) => task);
+};
+
+// 할 일 꺼내기 — 처음에는 planCollectionTasks 순서(대기 작업 구의 채우기 먼저), waitingUntil(밀리초 시각)이 지나면
+// 아직 시작하지 않은 묶음을 usualRank 순서로 다시 세운다(대기 작업 구가 다른 구를 밀어내지 않게 — 규칙 파일 WAITING_FIRST_BUDGET_SHARE)
+export const createTaskQueue = (tasks, { now, waitingUntil }) => {
+  const queue = [...tasks];
+  let mixed = false;
+  return {
+    remaining: () => queue.length,
+    take: () => {
+      if (!mixed && now() >= waitingUntil) {
+        queue.sort((a, b) => a.usualRank - b.usualRank);
+        mixed = true;
+      }
+      return queue.shift();
+    },
+  };
 };
 
 // 시군구 하나의 잇기 색인 — 그 시군구 단지 · 법정동 · 앞서 도로명 · 지번으로 이어진 거래의 aptSeq
@@ -171,10 +199,12 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
   const startedAt = now();
   const deadline = startedAt + budgetMs;
   const nowDate = () => new Date(now());
-  const targets = sigunguCodes ?? (await listTargetSigunguCodes());
+  const pending = await listPendingBackfillSigunguCodes();
+  const targets = sigunguCodes ?? (await listTargetSigunguCodes(pending));
   const months = retentionMonths(new Date(startedAt));
   const collections = await prisma.marketCollection.findMany({ where: { sigunguCode: { in: targets }, yearMonth: { in: months } } });
-  const tasks = planCollectionTasks({ sigunguCodes: targets, months, collections, now: startedAt });
+  const tasks = planCollectionTasks({ sigunguCodes: targets, months, collections, now: startedAt, waitingSigunguCodes: pending });
+  const queue = createTaskQueue(tasks, { now, waitingUntil: startedAt + budgetMs * WAITING_FIRST_BUDGET_SHARE });
 
   const indexes = new Map();
   const getIndex = (sigunguCode) => {
@@ -183,12 +213,10 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
   };
   const summary = { targets: targets.length, planned: tasks.length, backfill: tasks.filter((t) => t.reason === 'BACKFILL').length, done: 0, failed: 0, skipped: 0, calls: 0, saved: 0, linked: 0, cancelled: 0, failures: [] };
 
-  let next = 0;
   const worker = async () => {
     // 요청 하나 + 저장 몫이 남아 있을 때만 새 묶음을 시작한다
-    while (next < tasks.length && now() + REQUEST_TIMEOUT_MS <= deadline) {
-      const task = tasks[next];
-      next += 1;
+    while (queue.remaining() > 0 && now() + REQUEST_TIMEOUT_MS <= deadline) {
+      const task = queue.take();
       const result = await collectOne(task, { fetchImpl, getIndex, nowDate, now, deadline, sleep });
       summary.calls += result.calls;
       if (result.ok) {

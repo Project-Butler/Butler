@@ -76,7 +76,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
         <div className="overflow-hidden rounded-card border border-line bg-surface">
           {prices.isPending && <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>}
           {prices.isError && <AppNote tone="error">{getErrorMessage(prices.error)}</AppNote>}
-          {/* 아직 모으지 못한 시군구 — 실패한 달이 있으면 PC 와 같은 실패 문구(utils/communityMarketCollecting) */}
+          {/* 아직 다 모으지 못한 시군구 — 일부 모음 · 받기 실패 · 시도 전 셋 다 PC 와 같은 문구(utils/communityMarketCollecting) */}
           {collecting && (
             <AppNote>
               <span className="block font-semibold text-ink-2">{collecting.title}</span>

@@ -10,7 +10,7 @@ import { prisma } from '../../../src/platform/prismaClient.js';
 import { formatCollectionLog } from '../../../src/domains/marketPrices/controller.js';
 import { roadKeyOf } from '../../../src/domains/marketPrices/linkComplex.js';
 import { retentionMonths } from '../../../src/domains/marketPrices/months.js';
-import { BACKFILL_JOB_TYPE, REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
+import { BACKFILL_JOB_TYPE, REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS, RETRY_DELAY_MS } from '../../../src/domains/marketPrices/marketPriceRules.js';
 import { normalizeItem, parseRtmsXml } from '../../../src/domains/marketPrices/rtmsProvider.js';
 import { collectMarketPrices, loadLinkIndex, rebuildSigunguLinks, relinkSigungu } from '../../../src/domains/marketPrices/service/collect.js';
 import { findComplexMarketPrices } from '../../../src/domains/marketPrices/service/prices.js';
@@ -355,6 +355,55 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.deepEqual(after.map((r) => r.id).sort(), before.map((r) => r.id).sort()); // 같은 행 그대로
   });
 
+  test('수집 순서: 대기 작업 구의 채우기가 먼저 — 그 구가 시간 초과로 계속 실패해도 시간 한도의 절반이 지나면 다른 구 채우기가 같은 실행 안에서 시작된다 (#267)', async () => {
+    // 실제 단지 · 법정동이 없는 시군구 둘(이 테스트만 쓴다). 대기 작업이 없으면 시군구 순이라 OTHER 가 먼저다
+    const OTHER = '99001';
+    const WAITING = '99002';
+    for (const code of [OTHER, WAITING]) {
+      sigungus.add(code);
+      await clearSigungu(code);
+    }
+    const pendingOther = await prisma.job.count({ where: { type: BACKFILL_JOB_TYPE, status: 'PENDING', payload: { path: ['sigunguCode'], equals: OTHER } } });
+    assert.equal(pendingOther, 0);
+    // 사용자가 WAITING 의 시세 화면을 열었다(COLLECTING → 대기 작업)
+    await prisma.job.create({ data: { type: BACKFILL_JOB_TYPE, status: 'PENDING', payload: { sigunguCode: WAITING }, requestedById: landlord.id } });
+    const originalKey = process.env.DATA_GO_KR_SERVICE_KEY;
+    process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key'; // 가짜 fetch 만 부른다
+    // 시계는 가짜: WAITING 은 부를 때마다 8초 걸려 시간 초과, OTHER 는 0.3초에 0건 정상. 다시 시도 전 쉬기도 시계만 민다
+    let clock = NOW;
+    const calls = [];
+    const fetchImpl = async (url) => {
+      const code = new URL(url).searchParams.get('LAWD_CD');
+      calls.push({ code, at: clock - NOW });
+      if (code === WAITING) {
+        clock += REQUEST_TIMEOUT_MS;
+        throw new DOMException('timeout', 'TimeoutError');
+      }
+      clock += 300;
+      return { ok: true, status: 200, headers: new Headers(), text: async () => EMPTY_XML };
+    };
+    try {
+      const summary = await collectMarketPrices({ sigunguCodes: [OTHER, WAITING], fetchImpl, now: () => clock, sleep: async (ms) => { clock += ms; } });
+      // 절반(22.5초) 전에 시작한 묶음은 모두 WAITING — 0초 · 17.5초(8 + 1.5 + 8)에 둘, 둘 다 다시 시도까지 시간 초과
+      const firstOther = calls.findIndex((call) => call.code === OTHER);
+      assert.ok(firstOther > 0, JSON.stringify(calls));
+      assert.ok(calls.slice(0, firstOther).every((call) => call.code === WAITING));
+      assert.equal(firstOther, 4);
+      // 35초에 남은 묶음이 지금 순서로 섞여 OTHER 채우기가 같은 실행 안에서 시작된다(안전장치가 없으면 35초에도 WAITING — OTHER 는 0)
+      assert.equal(calls[firstOther].at, 2 * (REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS));
+      assert.equal(summary.failed, 2);
+      assert.ok(summary.failures.every((line) => line.startsWith(`${WAITING} `) && line.endsWith(' TIMEOUT')), summary.failures.join(' / '));
+      assert.ok(summary.done >= 1, JSON.stringify(summary));
+      const otherDone = await prisma.marketCollection.count({ where: { sigunguCode: OTHER, status: 'SUCCEEDED' } });
+      assert.equal(otherDone, summary.done);
+      // 대기 작업은 그대로(WAITING 을 다 채우지 못했다)
+      assert.equal(summary.jobsCompleted, 0);
+    } finally {
+      if (originalKey === undefined) delete process.env.DATA_GO_KR_SERVICE_KEY;
+      else process.env.DATA_GO_KR_SERVICE_KEY = originalKey;
+    }
+  });
+
   describe('COLLECTING 의 모으기 진행(collectionProgress) — 시군구 · 종류마다, 보관 기간의 달 기준', () => {
     // 가짜 키 — 요청 주소에만 들어가고 응답 · 요약 · 로그에는 없어야 한다. 끝나면 원래 값(.env)으로 되돌린다
     const FAKE_KEY = 'TEST-ONLY+fake/key==';
@@ -383,6 +432,8 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     };
     const lastAttemptOf = async (sigunguCode, dealKind) =>
       (await prisma.marketCollection.findFirst({ where: { sigunguCode, dealKind }, orderBy: { attemptedAt: 'desc' } })).attemptedAt.toISOString();
+    const lastFailureOf = async (sigunguCode, dealKind) =>
+      (await prisma.marketCollection.findFirst({ where: { sigunguCode, dealKind, collectedAt: null }, orderBy: { attemptedAt: 'desc' } })).attemptedAt.toISOString();
 
     test('한 번도 안 시도함 → 모두 성공 전(일부만 모음) → 일부 FAILED(코드 30), 매매 · 전월세는 따로 — 응답 · 요약 · 로그에 키 · 요청 주소 없음', async () => {
       const dong = await pickFreshDong();
@@ -406,7 +457,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       // 1) 한 번도 안 시도함
       const untried = await regionPrices(dong, 'SALE');
       assert.equal(untried.data.collectionStatus, 'COLLECTING');
-      assert.deepEqual(untried.data.collectionProgress, { requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastErrorCode: null });
+      assert.deepEqual(untried.data.collectionProgress, { requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastFailedAt: null, lastErrorCode: null });
 
       // 2) 모두 성공 전 — 시간 한도로 최근 몇 묶음만(실패 없음)
       const partial = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: tick, budgetMs: REQUEST_TIMEOUT_MS + 3000 });
@@ -416,7 +467,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       const inProgress = await regionPrices(dong, 'SALE');
       assert.equal(inProgress.data.collectionStatus, 'COLLECTING');
       assert.deepEqual(inProgress.data.collectionProgress, {
-        requiredMonths: 13, collectedMonths: tradeDone, failedMonths: 0, notTriedMonths: 13 - tradeDone, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastErrorCode: null,
+        requiredMonths: 13, collectedMonths: tradeDone, failedMonths: 0, notTriedMonths: 13 - tradeDone, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastFailedAt: null, lastErrorCode: null,
       });
 
       // 3) 나머지를 모으다 가장 오래된 달의 매매만 30 으로 실패
@@ -428,7 +479,7 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       // 키 오류(30)라 키 모양이 붙는다(#233) — FAKE_KEY 그대로(20자, 공백 · 따옴표 · % 없음, 16진수 아님)
       const noMark = { hadWhitespace: false, hadQuotes: false, hadPercent: false };
       assert.deepEqual(failed.data.collectionProgress, {
-        requiredMonths: 13, collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastErrorCode: '30',
+        requiredMonths: 13, collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: await lastAttemptOf(sgg, 'TRADE'), lastFailedAt: await lastFailureOf(sgg, 'TRADE'), lastErrorCode: '30',
         keyShape: { rawLength: FAKE_KEY.length, cleanedLength: FAKE_KEY.length, ...noMark, cleanedIsHex: false },
       });
       // 환경 변수를 바꾸면 다시 모으지 않아도 다음 응답의 키 모양이 바로 바뀐다(표에 적지 않음) — 따옴표 + 줄바꿈이 붙은 값
@@ -474,13 +525,14 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       for (const dealType of ['SALE', 'JEONSE', 'MONTHLY']) {
         const { data, text } = await regionPrices(dong, dealType);
         assert.equal(data.collectionStatus, 'COLLECTING');
-        const { lastAttemptedAt, ...counts } = data.collectionProgress;
+        const { lastAttemptedAt, lastFailedAt, ...counts } = data.collectionProgress;
         // NO_KEY 라 키 모양이 붙는다 — 키가 없으니 길이 0 · 모두 false(#233)
         assert.deepEqual(counts, {
           requiredMonths: 13, collectedMonths: 0, failedMonths: 13, notTriedMonths: 0, lastErrorCode: 'NO_KEY',
           keyShape: { rawLength: 0, cleanedLength: 0, hadWhitespace: false, hadQuotes: false, hadPercent: false, cleanedIsHex: false },
         });
         assert.equal(lastAttemptedAt, await lastAttemptOf(sgg, dealType === 'SALE' ? 'TRADE' : 'RENT'));
+        assert.equal(lastFailedAt, lastAttemptedAt); // 모든 달이 실패만 — 마지막 실패 = 마지막 시도
         assertNoLeak(text, dealType);
       }
     });
