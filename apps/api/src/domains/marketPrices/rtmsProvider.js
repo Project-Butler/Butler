@@ -8,6 +8,7 @@ import {
   MANWON,
   MAX_PAGES,
   MAX_RESPONSE_BYTES,
+  NEXT_PAGE_NEEDS_MS,
   PAGE_SIZE,
   REQUEST_TIMEOUT_MS,
   RESULT_NO_DATA,
@@ -28,6 +29,16 @@ export class RtmsError extends Error {
     super(`실거래가 받기 실패 ${kind ?? ''} ${sigunguCode ?? ''} ${yearMonth ?? ''} — ${code}${detail ? ` ${detail}` : ''}`.replace(/\s+/g, ' ').trim());
     this.name = 'RtmsError';
     this.code = code;
+  }
+}
+
+// 미룸(#272, 규칙 파일 NEXT_PAGE_NEEDS_MS) — 둘째 쪽부터 부르기 전에 요청 하나 몫이 안 남았을 때. 실패가 아니다(code 가 없다):
+// 부르는 쪽(service/collect.js)은 이 묶음에 아무것도 쓰지 않고 다음 실행으로 넘긴다. fetchRtmsMonth 가 던질 때 calls 가 붙는다
+export class RtmsDeferred extends Error {
+  constructor({ kind, sigunguCode, yearMonth } = {}) {
+    super(`실거래가 다음 쪽 미룸(시간 모자람) ${kind ?? ''} ${sigunguCode ?? ''} ${yearMonth ?? ''}`.replace(/\s+/g, ' ').trim());
+    this.name = 'RtmsDeferred';
+    this.deferred = true;
   }
 }
 
@@ -244,7 +255,9 @@ const fetchPageWithRetry = async (params, { fetchImpl, sleep, now, deadline }) =
 
 // 한 묶음(시군구 · 계약월 · 종류) 전부. totalCount 를 넘을 때까지 다음 페이지. 거래로 바꿔 돌려준다(해제 표시 포함 — 거르는 것은 부르는 쪽).
 // calls = 원천을 실제로 부른 횟수(다시 시도 포함). 실패하면 그 수를 오류의 calls 에 붙여 던진다.
-// sleep · now · deadline 은 다시 시도용(테스트가 바꾼다). deadline 이 없으면 시간 한도 없이 한 번 더 한다
+// sleep · now · deadline 은 다시 시도 · 다음 쪽용(테스트가 바꾼다). deadline 이 없으면 시간 한도 없이 한 번 더 하고 끝까지 넘긴다.
+// 둘째 쪽부터는 요청 하나 몫(NEXT_PAGE_NEEDS_MS)이 남았을 때만 부르고, 모자라면 RtmsDeferred 를 던진다(#272 — 받은 쪽은 버린다).
+// 첫 쪽은 보지 않는다 — 부르는 쪽이 묶음을 시작할 때 같은 조건으로 본다
 export const fetchRtmsMonth = async (
   { kind, sigunguCode, yearMonth },
   { fetchImpl = globalThis.fetch, pageSize = PAGE_SIZE, sleep = wait, now = Date.now, deadline = Number.POSITIVE_INFINITY } = {},
@@ -258,6 +271,7 @@ export const fetchRtmsMonth = async (
   let totalCount = 0;
   try {
     for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo += 1) {
+      if (pageNo > 1 && now() + NEXT_PAGE_NEEDS_MS > deadline) throw new RtmsDeferred({ kind, sigunguCode, yearMonth });
       const page = await fetchPageWithRetry({ kind, sigunguCode, yearMonth, pageNo, numOfRows: pageSize }, { fetchImpl: countedFetch, sleep, now, deadline });
       totalCount = page.totalCount;
       fields.push(...page.items);
@@ -267,7 +281,7 @@ export const fetchRtmsMonth = async (
     }
     throw new RtmsError('TOO_MANY_PAGES', `${MAX_PAGES}쪽 넘음`, { kind, sigunguCode, yearMonth });
   } catch (error) {
-    if (error instanceof RtmsError) error.calls = calls;
+    if (error instanceof RtmsError || error instanceof RtmsDeferred) error.calls = calls;
     throw error;
   }
 };

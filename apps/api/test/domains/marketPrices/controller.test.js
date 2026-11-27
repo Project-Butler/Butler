@@ -38,6 +38,13 @@ describe('정기 실행 결과 로그 한 줄', () => {
     assert.deepEqual(logged.relinkFirst, relinkFirst);
   });
 
+  test('미룬 묶음 수(deferred)도 같은 줄에, 실패(failed) 다음 — 미룬 묶음은 failures 에 없다 (#272)', () => {
+    const logged = JSON.parse(formatCollectionLog({ ...summary, failed: 0, failures: [], deferred: 1 }).slice('[market-prices] cron '.length));
+    assert.deepEqual(Object.keys(logged), ['targets', 'planned', 'backfill', 'done', 'failed', 'deferred', 'failures', 'calls', 'elapsedMs']);
+    assert.equal(logged.deferred, 1);
+    assert.deepEqual(logged.failures, []);
+  });
+
   test('실패 없음 · failures 가 없어도 한 줄(빈 배열)', () => {
     const logged = JSON.parse(formatCollectionLog({ ...summary, failed: 0, failures: undefined }).slice('[market-prices] cron '.length));
     assert.deepEqual(logged.failures, []);

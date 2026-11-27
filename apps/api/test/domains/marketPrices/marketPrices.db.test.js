@@ -513,7 +513,8 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key'; // 가짜 fetch 만 부른다
       try {
         const complex = await road17Complex();
-        // 느린 공급자: 한 번 부르는 데 30초, 한 묶음이 두 쪽(둘째 쪽은 마감을 보지 않는다) → 첫 묶음만으로 60초 — 53초(45 + 8)를 넘긴다
+        // 느린 공급자: 한 번 부르는 데 30초(가짜라 8초에 끊기지 않는다), 한 묶음이 두 쪽(30초에는 요청 하나 몫이 남아 둘째 쪽도 부른다 — #272)
+        // → 첫 묶음만으로 60초 — 53초(45 + 8)를 넘긴다
         let clock = START;
         const fetchImpl = async () => {
           clock += 30 * 1000;
@@ -556,6 +557,173 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
       } finally {
         await clearSigungu(empty);
         await cleanUp();
+      }
+    });
+  });
+
+  describe('시간이 모자란 묶음은 미룬다(기록 없음) · 대기 작업은 다 채운 자리에서 끝낸다 (#272)', () => {
+    const originalKey = process.env.DATA_GO_KR_SERVICE_KEY;
+    const restoreKey = () => {
+      if (originalKey === undefined) delete process.env.DATA_GO_KR_SERVICE_KEY;
+      else process.env.DATA_GO_KR_SERVICE_KEY = originalKey;
+    };
+    // 마감 9초 — 첫 묶음은 0초에 시작(요청 하나 몫 8초가 남음), 한 쪽에 2초라 둘째 쪽 앞에서는 7초만 남는다
+    const TIGHT = REQUEST_TIMEOUT_MS + 1000;
+    const collectionKey = (sigunguCode, yearMonth, dealKind) => ({ sigunguCode_yearMonth_dealKind: { sigunguCode, yearMonth, dealKind } });
+    const rowState = async (sigunguCode, yearMonth, dealKind) =>
+      prisma.marketCollection.findUnique({
+        where: collectionKey(sigunguCode, yearMonth, dealKind),
+        select: { status: true, lastErrorCode: true, attemptedAt: true, collectedAt: true, dealCount: true },
+      });
+    // 모은 기록 26행(13개월 × 매매 · 전월세) — rowOf(달, 종류) 가 상태를 정한다
+    const seedCollections = (sigunguCode, months, rowOf) =>
+      prisma.marketCollection.createMany({ data: months.flatMap((yearMonth) => ['TRADE', 'RENT'].map((dealKind) => ({ sigunguCode, yearMonth, dealKind, ...rowOf(yearMonth, dealKind) }))) });
+    // 가짜 공급자: 한 번에 시계 2초, 묶음마다 totalCount 건(한 쪽 1건 — 2 면 두 쪽). 부른 것을 "종류 시군구 달 p쪽" 으로 센다
+    const pagedFetch = ({ clock, totalCount }) => {
+      const asked = [];
+      const fetchImpl = async (url) => {
+        const params = new URL(url).searchParams;
+        const kind = url.includes('RTMSDataSvcAptTradeDev') ? 'TRADE' : 'RENT';
+        asked.push(`${kind} ${params.get('LAWD_CD')} ${params.get('DEAL_YMD')} p${params.get('pageNo')}`);
+        clock.at += 2000;
+        const xml = kind === 'TRADE' ? wrapResponse([tradeItems[0]], { totalCount }) : wrapResponse([rentItems[2]], { totalCount });
+        return { ok: true, status: 200, headers: new Headers(), text: async () => xml };
+      };
+      return { fetchImpl, asked };
+    };
+
+    test('마감 직전에 시작한 두 쪽 묶음: 둘째 쪽을 부르지 않고 미룬다 — 실패 기록 · 시도 시각 · 예전 데이터 그대로, 다음 실행에서 맨 앞 · 한 쪽 묶음은 그대로 저장', async () => {
+      const sgg = '99004';
+      sigungus.add(sgg);
+      await clearSigungu(sgg);
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key'; // 가짜 fetch 만 부른다
+      try {
+        const months = retentionMonths(new Date(NOW)); // 2025-11 ~ 2026-11
+        const recent = new Set(months.slice(-3));
+        // 최근 3개월은 이틀 전에 모아 다시 모으기 대상(6묶음), 나머지는 한 시간 전에 모음. 2026-10 매매는 사흘 전에 모았고 그 뒤 다시 모으기가 TIMEOUT —
+        // 가장 오래 안 시도한 묶음이라 맨 앞이다
+        const at = (ms) => new Date(NOW - ms);
+        await seedCollections(sgg, months, (yearMonth, dealKind) => {
+          if (yearMonth === '2026-10' && dealKind === 'TRADE') return { status: 'FAILED', lastErrorCode: 'TIMEOUT', dealCount: 1, collectedAt: at(72 * HOUR), attemptedAt: at(72 * HOUR) };
+          const age = recent.has(yearMonth) ? 48 * HOUR : HOUR;
+          return { status: 'SUCCEEDED', dealCount: 0, collectedAt: at(age), attemptedAt: at(age) };
+        });
+        // 사흘 전에 모은 2026-10 매매 한 건(예전 데이터)
+        await prisma.marketDeal.create({
+          data: {
+            dealKind: 'TRADE', dealType: 'SALE', sigunguCode: sgg, contractYearMonth: '2026-10', aptName: '미룸 테스트 예전 거래',
+            exclusiveArea: 84.9, contractDate: new Date('2026-10-05T00:00:00Z'), price: 1_000_000_000n, collectedAt: at(72 * HOUR),
+          },
+        });
+        const oldDeals = await prisma.marketDeal.findMany({ where: { sigunguCode: sgg }, select: { id: true } });
+        const before = await rowState(sgg, '2026-10', 'TRADE');
+
+        const clock = { at: NOW };
+        const twoPages = pagedFetch({ clock, totalCount: 2 });
+        const summary = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl: twoPages.fetchImpl, now: () => clock.at, budgetMs: TIGHT });
+        assert.deepEqual(twoPages.asked, [`TRADE ${sgg} 202610 p1`]); // 둘째 쪽은 부르지 않았다
+        assert.deepEqual(
+          [summary.planned, summary.done, summary.failed, summary.deferred, summary.skipped, summary.calls, summary.failures],
+          [6, 0, 0, 1, 5, 1, []],
+        );
+        assert.deepEqual(await rowState(sgg, '2026-10', 'TRADE'), before); // 상태 FAILED · 코드 TIMEOUT · 시도 시각 · 모은 시각 · 건수 그대로
+        assert.deepEqual(await prisma.marketDeal.findMany({ where: { sigunguCode: sgg }, select: { id: true } }), oldDeals); // 예전 거래 그대로
+
+        // 다음 실행: 같은 묶음이 맨 앞(시도 시각이 그대로라). 이번엔 한 쪽 묶음 — 마감이 같아도 지금처럼 끝까지 저장한다
+        clock.at = NOW + HOUR;
+        const onePage = pagedFetch({ clock, totalCount: 1 });
+        const next = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl: onePage.fetchImpl, now: () => clock.at, budgetMs: TIGHT });
+        assert.equal(onePage.asked[0], `TRADE ${sgg} 202610 p1`);
+        assert.deepEqual([next.done, next.deferred, next.failed], [1, 0, 0]);
+        const saved = await rowState(sgg, '2026-10', 'TRADE');
+        assert.deepEqual([saved.status, saved.lastErrorCode, saved.dealCount], ['SUCCEEDED', null, 1]);
+        const newDeals = await prisma.marketDeal.findMany({ where: { sigunguCode: sgg }, select: { id: true } });
+        assert.equal(newDeals.length, 1);
+        assert.notEqual(newDeals[0].id, oldDeals[0].id); // 지우고 새로 넣었다
+      } finally {
+        await clearSigungu(sgg);
+        restoreKey();
+      }
+    });
+
+    test('미룬 묶음은 collectionProgress(failedMonths · lastErrorCode · lastFailedAt)를 바꾸지 않는다 — 응답 그대로', async () => {
+      // 아직 아무도 모으지 않은 시군구의 법정동 하나(다른 테스트는 1 · 4 · 5 로 시작하는 곳을 쓴다)
+      const collected = new Set((await prisma.marketCollection.findMany({ distinct: ['sigunguCode'], select: { sigunguCode: true } })).map((row) => row.sigunguCode));
+      const regions = await prisma.region.findMany({ where: { id: { startsWith: '3' } }, select: { id: true }, orderBy: { id: 'asc' }, take: 300 });
+      const dong = regions.find((row) => !collected.has(row.id.slice(0, 5)) && !sigungus.has(row.id.slice(0, 5))).id;
+      const sgg = dong.slice(0, 5);
+      sigungus.add(sgg);
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key';
+      try {
+        const start = Date.now() + 1000; // 응답은 지금 시각 기준 — 같은 보관 기간
+        const months = retentionMonths(new Date(start));
+        // 매매는 가장 오래된 달만 한 번도 못 모음(어제 코드 30 으로 실패) — 그 묶음 하나만 할 일. 전월세는 다 모음
+        await seedCollections(sgg, months, (yearMonth, dealKind) =>
+          yearMonth === months[0] && dealKind === 'TRADE'
+            ? { status: 'FAILED', lastErrorCode: '30', attemptedAt: new Date(start - 24 * HOUR) }
+            : { status: 'SUCCEEDED', dealCount: 0, collectedAt: new Date(start - HOUR), attemptedAt: new Date(start - HOUR) },
+        );
+        const progressOf = async () => {
+          const res = await api(landlord, `/api/v1/market-prices/regions/${dong}?dealType=SALE`);
+          assert.equal(res.status, 200);
+          const { data } = await res.json();
+          assert.equal(data.collectionStatus, 'COLLECTING');
+          return data.collectionProgress;
+        };
+        const before = await progressOf();
+        assert.deepEqual([before.failedMonths, before.lastErrorCode], [1, '30']);
+
+        const clock = { at: start };
+        const { fetchImpl, asked } = pagedFetch({ clock, totalCount: 2 });
+        const summary = await collectMarketPrices({ sigunguCodes: [sgg], fetchImpl, now: () => clock.at, budgetMs: TIGHT });
+        assert.deepEqual(asked, [`TRADE ${sgg} ${months[0].replace('-', '')} p1`]);
+        assert.deepEqual([summary.deferred, summary.failed, summary.done], [1, 0, 0]);
+        assert.deepEqual(await progressOf(), before); // BUDGET 같은 코드로 덮이지 않고, 실패한 달 수 · 마지막 실패 시각 그대로
+      } finally {
+        await prisma.job.deleteMany({ where: { type: BACKFILL_JOB_TYPE, payload: { path: ['sigunguCode'], equals: sgg } } }); // 조회가 만든 대기 작업
+        await clearSigungu(sgg);
+        restoreKey();
+      }
+    });
+
+    test('시군구 A 를 다 채운 뒤 B 를 모으는 도중에 실행이 끊겨도 A 의 대기 작업은 이미 끝나 있다', async () => {
+      const A = '99005';
+      const B = '99006';
+      for (const code of [A, B]) {
+        sigungus.add(code);
+        await clearSigungu(code);
+      }
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key';
+      // 둘 다 사용자가 연 시군구(대기 작업). 같은 순번이면 시군구 순이라 A 의 26묶음을 먼저 한다
+      const jobA = await prisma.job.create({ data: { type: BACKFILL_JOB_TYPE, status: 'PENDING', payload: { sigunguCode: A }, requestedById: landlord.id } });
+      const jobB = await prisma.job.create({ data: { type: BACKFILL_JOB_TYPE, status: 'PENDING', payload: { sigunguCode: B }, requestedById: landlord.id } });
+      // B 의 첫 요청에서 멈춘다(함수 한도에 끊기는 것과 같다 — 그 뒤 코드는 돌지 않는다). 확인한 뒤 풀어 실행을 끝낸다
+      let reachedB;
+      const atB = new Promise((resolve) => { reachedB = resolve; });
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const fetchImpl = async (url) => {
+        if (new URL(url).searchParams.get('LAWD_CD') === B) {
+          reachedB();
+          await gate;
+        }
+        return { ok: true, status: 200, headers: new Headers(), text: async () => EMPTY_XML };
+      };
+      const start = Date.now() + 1000; // 작업이 실행 시작 전에 만들어졌다
+      const run = collectMarketPrices({ sigunguCodes: [A, B], fetchImpl, now: () => start });
+      try {
+        await atB;
+        assert.equal(await prisma.marketCollection.count({ where: { sigunguCode: A, status: 'SUCCEEDED' } }), 26);
+        assert.equal((await prisma.job.findUnique({ where: { id: jobA.id } })).status, 'SUCCEEDED'); // 맨 끝까지 가지 않아도 끝나 있다
+        assert.equal((await prisma.job.findUnique({ where: { id: jobB.id } })).status, 'PENDING');
+      } finally {
+        release();
+        const summary = await run;
+        assert.equal(summary.jobsCompleted, 2); // B 도 다 채운 자리에서 — 맨 끝 끝내기는 덤(이미 끝낸 작업은 다시 세지 않는다)
+        assert.equal((await prisma.job.findUnique({ where: { id: jobB.id } })).status, 'SUCCEEDED');
+        await prisma.job.deleteMany({ where: { id: { in: [jobA.id, jobB.id] } } });
+        for (const code of [A, B]) await clearSigungu(code);
+        restoreKey();
       }
     });
   });
