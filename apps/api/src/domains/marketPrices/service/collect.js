@@ -2,13 +2,25 @@
 // 한 번 실행에서(우선순위 순): ① 처음 보는 묶음(한 번도 못 모은 달)의 13개월 채우기 — 대기 작업(사용자가 시세 화면을 연 곳)이 있는 시군구 먼저
 // ② 최근 3개월 다시 모으기. 대기 작업 구를 앞에 세우는 것은 시간 한도의 절반까지(규칙 파일 "모으는 순서").
 // 묶음 = (시군구, 계약월, 매매/전월세). 묶음마다 그 행을 지우고 새로 넣는다(한 트랜잭션 — 해제된 거래가 빠지게).
-// 시간이 모자라면 오래 안 시도한 묶음부터 하고 남은 것은 다음 번. 끝에 원천을 다시 부르지 않고 나중에 등록된 단지를 잇는다.
+// 시간이 모자라면 오래 안 시도한 묶음부터 하고 남은 것은 다음 번.
+// 저장된 거래 다시 잇기(원천을 다시 부르지 않고 나중에 등록된 단지 · 바뀐 규칙으로 잇기)는 실행을 시작하자마자 먼저(8초 상한) —
+// 수집은 시간 한도를 넘길 수 있어 끝에 두면 건너뛰어진다(#270). 끝의 다시 잇기는 시간이 남을 때만 하는 덤.
 // 원천은 하나씩 부르고(CONCURRENCY), 시간 초과 · 23 은 실행 한도 안에서 한 번 더 부른다(rtmsProvider.fetchRtmsMonth).
 
 import { prisma } from '../../../platform/prismaClient.js';
 import { listAllOwnedLegalDongCodes } from '../../community/platformBridge.js';
 import { buildLinkIndex, dealLotKey, linkDeals, linkStoredKeys, roadKeyOf, usableKeys } from '../linkComplex.js';
-import { CONCURRENCY, REFRESH_MIN_AGE_MS, REFRESH_MONTHS, REQUEST_TIMEOUT_MS, RUN_BUDGET_MS, TASK_GROUPS, WAITING_FIRST_BUDGET_SHARE, safeErrorCode } from '../marketPriceRules.js';
+import {
+  CONCURRENCY,
+  REFRESH_MIN_AGE_MS,
+  REFRESH_MONTHS,
+  RELINK_FIRST_BUDGET_MS,
+  REQUEST_TIMEOUT_MS,
+  RUN_BUDGET_MS,
+  TASK_GROUPS,
+  WAITING_FIRST_BUDGET_SHARE,
+  safeErrorCode,
+} from '../marketPriceRules.js';
 import { retentionMonths } from '../months.js';
 import { fetchRtmsMonth } from '../rtmsProvider.js';
 import { completeBackfillJobs, listPendingBackfillSigunguCodes } from './backfillJobs.js';
@@ -204,13 +216,53 @@ export const rebuildSigunguLinks = async (sigunguCode) => {
   return { unlinked, relinked };
 };
 
-// 정기 실행 한 번. sigunguCodes 를 주면 그곳만(로컬 확인용), budgetMs 로 시간 한도를, sleep 으로 다시 시도 전 쉬기를 바꾼다(테스트).
-export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs = RUN_BUDGET_MS, sigunguCodes, sleep } = {}) => {
+// ===== 다시 잇기 먼저(#270, 규칙 파일 RELINK_FIRST_BUDGET_MS) =====
+// 수집은 시간 한도를 넘길 수 있어 끝에 두면 건너뛰어진다. 다시 잇기는 DB 만 써서 가벼우니 실행을 시작하자마자 먼저 한다.
+
+// 다시 이을 시군구 순서(순수 함수) — 안 이어진 거래가 있는 시군구만, 대기 작업이 있는 시군구(사용자가 연 곳)부터, 그다음 나머지(대상 순서 그대로)
+export const planRelink = ({ targets, waiting = [], withUnlinked }) => {
+  const unlinked = new Set(withUnlinked);
+  const waitingSet = new Set(waiting);
+  const list = targets.filter((code) => unlinked.has(code));
+  return [...list.filter((code) => waitingSet.has(code)), ...list.filter((code) => !waitingSet.has(code))];
+};
+
+// 순서대로 다시 잇기 — 시군구 하나를 시작하기 전에 쓴 시간을 보고, budgetMs 를 넘었으면 거기서 멈춘다(남은 시군구는 다음 실행).
+// relinkOne(시군구) → 이어진 거래 수. 반환 { sigungus(다시 이은 시군구 수), relinked(이어진 거래 수), elapsedMs, capped(상한에 걸렸나) }
+export const runRelink = async ({ order, now, budgetMs, relinkOne }) => {
   const startedAt = now();
+  const result = { sigungus: 0, relinked: 0, elapsedMs: 0, capped: false };
+  for (const sigunguCode of order) {
+    if (now() - startedAt >= budgetMs) {
+      result.capped = true;
+      break;
+    }
+    result.relinked += await relinkOne(sigunguCode);
+    result.sigungus += 1;
+  }
+  result.elapsedMs = now() - startedAt;
+  return result;
+};
+
+// 정기 실행 한 번. sigunguCodes 를 주면 그곳만(로컬 확인용), budgetMs 로 시간 한도를, sleep 으로 다시 시도 전 쉬기를,
+// relinkBudgetMs 로 먼저 하는 다시 잇기의 상한을 바꾼다(테스트).
+export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs = RUN_BUDGET_MS, sigunguCodes, sleep, relinkBudgetMs = RELINK_FIRST_BUDGET_MS } = {}) => {
+  const startedAt = now();
+  // 수집 마감은 실행 시작 기준 그대로 — 먼저 하는 다시 잇기에 쓴 시간만큼 수집이 줄어든다
   const deadline = startedAt + budgetMs;
   const nowDate = () => new Date(now());
   const pending = await listPendingBackfillSigunguCodes();
   const targets = sigunguCodes ?? (await listTargetSigunguCodes(pending));
+
+  // 다시 잇기 먼저(DB 만) — 안 이어진 거래가 있는 시군구만, 대기 작업 시군구부터, 상한까지
+  const unlinked = await prisma.marketDeal.groupBy({ by: ['sigunguCode'], where: { sigunguCode: { in: targets }, complexId: null }, _count: { _all: true } });
+  const relinkFirst = await runRelink({
+    order: planRelink({ targets, waiting: pending, withUnlinked: unlinked.map((row) => row.sigunguCode) }),
+    now,
+    budgetMs: relinkBudgetMs,
+    relinkOne: async (sigunguCode) => relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode)),
+  });
+
   const months = retentionMonths(new Date(startedAt));
   const collections = await prisma.marketCollection.findMany({ where: { sigunguCode: { in: targets }, yearMonth: { in: months } } });
   const tasks = planCollectionTasks({ sigunguCodes: targets, months, collections, now: startedAt, waitingSigunguCodes: pending });
@@ -221,7 +273,10 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
     if (!indexes.has(sigunguCode)) indexes.set(sigunguCode, loadLinkIndex(sigunguCode));
     return indexes.get(sigunguCode);
   };
-  const summary = { targets: targets.length, planned: tasks.length, backfill: tasks.filter((t) => t.reason === 'BACKFILL').length, done: 0, failed: 0, skipped: 0, calls: 0, saved: 0, linked: 0, cancelled: 0, failures: [] };
+  const summary = {
+    targets: targets.length, planned: tasks.length, backfill: tasks.filter((t) => t.reason === 'BACKFILL').length, done: 0, failed: 0, skipped: 0, calls: 0, saved: 0, linked: 0, cancelled: 0, failures: [],
+    relinkFirst,
+  };
 
   const worker = async () => {
     // 요청 하나 + 저장 몫이 남아 있을 때만 새 묶음을 시작한다
@@ -243,7 +298,8 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   summary.skipped = tasks.length - summary.done - summary.failed;
 
-  // 잇기 다시(DB 만) — 이번에 배운 aptSeq 까지 쓰도록 색인을 새로 읽는다
+  // 끝의 다시 잇기(DB 만) — 시간이 남을 때만 하는 덤. 이번에 배운 aptSeq 까지 쓰도록 색인을 새로 읽는다.
+  // 저장된 거래는 위에서 먼저 이었고(relinkFirst), 이번에 새로 모은 거래는 수집할 때 같은 규칙으로 이어졌다
   summary.relinked = 0;
   for (const sigunguCode of targets) {
     if (now() > deadline + REQUEST_TIMEOUT_MS) break;

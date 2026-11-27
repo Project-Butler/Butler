@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS, RETRY_DELAY_MS, RUN_BUDGET_MS, WAITING_FIRST_BUDGET_SHARE } from '../../../../src/domains/marketPrices/marketPriceRules.js';
+import {
+  REFRESH_MIN_AGE_MS,
+  RELINK_FIRST_BUDGET_MS,
+  REQUEST_TIMEOUT_MS,
+  RETRY_DELAY_MS,
+  RUN_BUDGET_MS,
+  WAITING_FIRST_BUDGET_SHARE,
+} from '../../../../src/domains/marketPrices/marketPriceRules.js';
 import { retentionMonths } from '../../../../src/domains/marketPrices/months.js';
-import { createTaskQueue, planCollectionTasks } from '../../../../src/domains/marketPrices/service/collect.js';
+import { createTaskQueue, planCollectionTasks, planRelink, runRelink } from '../../../../src/domains/marketPrices/service/collect.js';
 
 const NOW = Date.parse('2026-11-17T03:00:00Z'); // 한국 시간 11/17 12:00
 const months = retentionMonths(new Date(NOW));
@@ -142,5 +149,41 @@ describe('수집 순서 — 대기 작업(사용자가 시세 화면을 연 곳)
     assert.deepEqual(rest.map((t) => t.usualRank), [...rest.map((t) => t.usualRank)].sort((a, b) => a - b));
     assert.deepEqual([...first, ...rest].map(label).sort(), tasks.map(label).sort());
     assert.equal(queue.take(), undefined);
+  });
+});
+
+describe('다시 잇기 먼저 — 순서 · 상한 (#270)', () => {
+  test('안 이어진 거래가 있는 시군구만, 대기 작업이 있는 시군구(사용자가 연 곳)부터, 그다음 나머지(대상 순서 그대로)', () => {
+    const order = planRelink({ targets: ['11350', '11440', '11710', '26350'], waiting: ['26350', '11440'], withUnlinked: ['11350', '11710', '26350', '11440'] });
+    assert.deepEqual(order, ['11440', '26350', '11350', '11710']);
+    // 안 이어진 거래가 없는 시군구는 빠진다(대기 작업이 있어도)
+    assert.deepEqual(planRelink({ targets: ['11350', '11710'], waiting: ['11710'], withUnlinked: ['11350'] }), ['11350']);
+    assert.deepEqual(planRelink({ targets: ['11350'], waiting: [], withUnlinked: [] }), []);
+  });
+
+  test('상한을 넘으면 거기서 멈춘다 — 시군구 하나를 시작하기 전에만 보고(안에서는 끊지 않음), 남은 시군구는 다음 실행으로', async () => {
+    let clock = 0;
+    const done = [];
+    const relinkOne = async (code) => {
+      clock += 5000; // 한 시군구에 5초
+      done.push(code);
+      return 3;
+    };
+    const result = await runRelink({ order: ['a', 'b', 'c', 'd'], now: () => clock, budgetMs: 8000, relinkOne });
+    // 0초에 a(→5초), 5초에 b(→10초), 10초 ≥ 8초라 c 는 시작하지 않는다
+    assert.deepEqual(done, ['a', 'b']);
+    assert.deepEqual(result, { sigungus: 2, relinked: 6, elapsedMs: 10000, capped: true });
+  });
+
+  test('안 이어진 거래가 없으면(순서가 비면) 바로 끝난다 — 상한에 걸리지 않음', async () => {
+    let calls = 0;
+    const result = await runRelink({ order: [], now: () => 0, budgetMs: 8000, relinkOne: async () => (calls += 1) });
+    assert.deepEqual(result, { sigungus: 0, relinked: 0, elapsedMs: 0, capped: false });
+    assert.equal(calls, 0);
+  });
+
+  test('상한은 규칙 파일 값(8초) — 실행 한도 45초 안', () => {
+    assert.equal(RELINK_FIRST_BUDGET_MS, 8000);
+    assert.ok(RELINK_FIRST_BUDGET_MS < RUN_BUDGET_MS);
   });
 });

@@ -484,6 +484,82 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     }
   });
 
+  describe('다시 잇기 먼저 — 정기 실행을 시작하자마자 저장된 거래를 다시 잇는다 (#270)', () => {
+    // 수집 시계는 2028-01 — 보관 기간이 2027-01 ~ 2028-01 이라 저장해 둔 2026-11 중계그린 거래를 수집이 지우지 않는다
+    const START = Date.parse('2028-01-15T03:00:00Z');
+    const originalKey = process.env.DATA_GO_KR_SERVICE_KEY;
+    const greenRows = () =>
+      parseRtmsXml(JUNGGYE_GREEN_XML)
+        .items.map((item) => normalizeItem('TRADE', item))
+        .filter((item) => !item.cancelled)
+        .map((item) => ({
+          dealKind: 'TRADE', dealType: 'SALE', sigunguCode: SGG, contractYearMonth: item.contractDate.slice(0, 7), legalDongCode: DONG,
+          roadKey: roadKeyOf(item.road), lotKey: `${DONG}|0|502|1`, aptSeq: item.aptSeq, aptName: item.aptName, jibun: item.jibun,
+          exclusiveArea: item.exclusiveArea, contractDate: new Date(`${item.contractDate}T00:00:00Z`), price: BigInt(item.price), collectedAt: new Date(),
+        }));
+    // 17 번지 줄로 등록한 단지 — 앞 테스트가 같은 sourceKey(유일)로 이미 만들었으면 그것을 쓴다(지우는 것은 fixture.cleanup)
+    const road17Complex = async () =>
+      (await prisma.complex.findUnique({ where: { sourceKey: JUNGGYE_GREEN_LINES.road17.sourceKey } })) ??
+      (await fixture.createComplex({ name: '중계그린아파트', buildingName: '중계그린아파트', isMountain: false, ...JUNGGYE_GREEN_LINES.road17 }));
+    const cleanUp = async () => {
+      await prisma.marketDeal.deleteMany({ where: { sigunguCode: SGG, OR: [{ aptSeq: '11350-120' }, { contractYearMonth: { gte: '2027-01' } }] } });
+      await prisma.marketCollection.deleteMany({ where: { sigunguCode: SGG, yearMonth: { gte: '2027-01' } } });
+      if (originalKey === undefined) delete process.env.DATA_GO_KR_SERVICE_KEY;
+      else process.env.DATA_GO_KR_SERVICE_KEY = originalKey;
+    };
+
+    test('수집이 시간 한도를 다 써도(느린 공급자 · 여러 쪽) 먼저 한 다시 잇기로 중계그린 거래가 이어진다 — 끝의 다시 잇기는 건너뛰어져도', async () => {
+      await prisma.marketDeal.createMany({ data: greenRows() });
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key'; // 가짜 fetch 만 부른다
+      try {
+        const complex = await road17Complex();
+        // 느린 공급자: 한 번 부르는 데 30초, 한 묶음이 두 쪽(둘째 쪽은 마감을 보지 않는다) → 첫 묶음만으로 60초 — 53초(45 + 8)를 넘긴다
+        let clock = START;
+        const fetchImpl = async () => {
+          clock += 30 * 1000;
+          return { ok: true, status: 200, headers: new Headers(), text: async () => wrapResponse([tradeItems[0]], { totalCount: 2 }) };
+        };
+        const summary = await collectMarketPrices({ sigunguCodes: [SGG], fetchImpl, now: () => clock, sleep: async (ms) => { clock += ms; } });
+        assert.ok(summary.elapsedMs >= 60 * 1000, String(summary.elapsedMs));
+        assert.equal(summary.relinked, 0); // 끝의 다시 잇기는 시간 한도에 밀려 건너뛰었다
+        assert.equal(summary.relinkFirst.capped, false);
+        assert.ok(summary.relinkFirst.relinked >= 7, JSON.stringify(summary.relinkFirst));
+        const rows = await prisma.marketDeal.findMany({ where: { sigunguCode: SGG, aptSeq: '11350-120', contractYearMonth: '2026-11' }, select: { complexId: true } });
+        assert.equal(rows.length, 7);
+        assert.ok(rows.every((row) => row.complexId === complex.id));
+      } finally {
+        await cleanUp();
+      }
+    });
+
+    test('다시 잇기 상한에 걸리면 멈추고(남은 시군구는 다음 실행), 수집은 남은 시간으로 진행된다', async () => {
+      await prisma.marketDeal.createMany({ data: greenRows() }); // 안 이어진 거래가 있는 시군구
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key';
+      try {
+        const { fetchImpl } = fakeFetch({ month: 'none' });
+        const summary = await collectMarketPrices({ sigunguCodes: [SGG], fetchImpl, now: () => START, relinkBudgetMs: 0 });
+        assert.deepEqual(summary.relinkFirst, { sigungus: 0, relinked: 0, elapsedMs: 0, capped: true });
+        assert.equal(summary.done, 26); // 수집은 그대로(2027-01 ~ 2028-01 × 매매 · 전월세)
+      } finally {
+        await cleanUp();
+      }
+    });
+
+    test('안 이어진 거래가 없는 시군구면 다시 잇기는 바로 끝난다', async () => {
+      const empty = '99003';
+      sigungus.add(empty);
+      process.env.DATA_GO_KR_SERVICE_KEY = 'TEST-ONLY-fake-key';
+      try {
+        const { fetchImpl } = fakeFetch({ month: 'none' });
+        const summary = await collectMarketPrices({ sigunguCodes: [empty], fetchImpl, now: () => START });
+        assert.deepEqual(summary.relinkFirst, { sigungus: 0, relinked: 0, elapsedMs: 0, capped: false });
+      } finally {
+        await clearSigungu(empty);
+        await cleanUp();
+      }
+    });
+  });
+
   describe('COLLECTING 의 모으기 진행(collectionProgress) — 시군구 · 종류마다, 보관 기간의 달 기준', () => {
     // 가짜 키 — 요청 주소에만 들어가고 응답 · 요약 · 로그에는 없어야 한다. 끝나면 원래 값(.env)으로 되돌린다
     const FAKE_KEY = 'TEST-ONLY+fake/key==';
