@@ -58,9 +58,19 @@ const loadCoverage = async (sigunguCode, kind) => {
 // 셋을 더하면 requiredMonths(= 보관 기간 달 수). 왜: 배포 DB · 로그를 못 보는 사람도 응답만으로 "처음 모으는 중" 과 "받기가 계속 실패" 를 가리게(11/25).
 // lastAttemptedAt = 그 달들의 마지막 시도 시각(ISO, 성공 · 실패 모두). lastErrorCode = 실패만 한 달 중 가장 최근에 시도한 달의 코드 그대로
 // (예: NO_KEY · 30 · TIMEOUT — 실패한 달이 없으면 null). 요청 주소 · 키는 담지 않는다(safeErrorCode 를 한 번 더 거친다)
+// lastFailedAt = 그 가장 최근 실패의 시도 시각(ISO, 실패한 달이 없으면 null). 왜: lastAttemptedAt 과 비교하면 lastErrorCode 가 오늘 실행의 것인지
+// 옛 실행에 남은 것인지 개발자 도구로 가를 수 있다(11/27 배포 노원구 — 키를 바꾼 뒤에도 11/25 의 "30" 이 남아 있었다, #267)
 export const summarizeCollectionProgress = (rows, months) => {
   const byMonth = new Map(rows.map((row) => [row.yearMonth, row]));
-  const progress = { requiredMonths: months.length, collectedMonths: 0, failedMonths: 0, notTriedMonths: 0, lastAttemptedAt: null, lastErrorCode: null };
+  const progress = {
+    requiredMonths: months.length,
+    collectedMonths: 0,
+    failedMonths: 0,
+    notTriedMonths: 0,
+    lastAttemptedAt: null,
+    lastFailedAt: null,
+    lastErrorCode: null,
+  };
   let lastAttemptedAt = null;
   let lastFailure = null;
   for (const month of months) {
@@ -78,6 +88,7 @@ export const summarizeCollectionProgress = (rows, months) => {
     }
   }
   progress.lastAttemptedAt = lastAttemptedAt ? new Date(lastAttemptedAt).toISOString() : null;
+  progress.lastFailedAt = lastFailure ? new Date(lastFailure.attemptedAt).toISOString() : null;
   progress.lastErrorCode = lastFailure ? safeErrorCode(lastFailure.lastErrorCode ?? 'UNKNOWN') : null;
   return progress;
 };

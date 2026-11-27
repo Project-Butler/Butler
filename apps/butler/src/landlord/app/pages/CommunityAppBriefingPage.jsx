@@ -27,9 +27,9 @@ const MarketCard = ({ building, band, onMore }) => {
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
   else if (data.collectionStatus === 'COLLECTING') {
-    // PC 와 같은 판단: 받기가 실패한 달이 있으면 두 줄, 처음 모으는 중이면 한 줄(utils/communityMarketCollecting)
+    // PC 와 같은 판단: 일부 모음 · 받기 실패면 두 줄, 아직 시도 전이면 한 줄(utils/communityMarketCollecting)
     const notice = collectingNotice(data);
-    body = notice.failed ? (
+    body = notice.kind !== 'FIRST' ? (
       <AppNote>
         <span className="block font-semibold text-ink-2">{notice.title}</span>
         <span className="block">

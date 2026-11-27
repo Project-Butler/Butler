@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { REFRESH_MIN_AGE_MS } from '../../../../src/domains/marketPrices/marketPriceRules.js';
+import { REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS, RETRY_DELAY_MS, RUN_BUDGET_MS, WAITING_FIRST_BUDGET_SHARE } from '../../../../src/domains/marketPrices/marketPriceRules.js';
 import { retentionMonths } from '../../../../src/domains/marketPrices/months.js';
-import { planCollectionTasks } from '../../../../src/domains/marketPrices/service/collect.js';
+import { createTaskQueue, planCollectionTasks } from '../../../../src/domains/marketPrices/service/collect.js';
 
 const NOW = Date.parse('2026-11-17T03:00:00Z'); // 한국 시간 11/17 12:00
 const months = retentionMonths(new Date(NOW));
@@ -54,5 +54,93 @@ describe('수집 할 일 고르기', () => {
     assert.ok(order.indexOf('2026-01 TRADE') > order.indexOf('2026-11 TRADE'));
     assert.ok(order.indexOf('2026-02 TRADE') > order.indexOf('2026-01 TRADE'));
     assert.equal(order.at(-1), '2026-02 TRADE');
+  });
+});
+
+describe('수집 순서 — 대기 작업(사용자가 시세 화면을 연 곳)이 있는 시군구 먼저 (#267)', () => {
+  const label = (t) => `${t.sigunguCode} ${t.yearMonth} ${t.kind} ${t.reason}`;
+  // 11/27 배포 노원구 모양: 11350 은 8개월 모음(다시 모으기 대상) · 5개월은 이틀 전 실패(30), 11710 · 26350 은 한 번도 안 함
+  const nowonCollections = () => {
+    const rows = [];
+    months.forEach((month, index) => {
+      for (const kind of ['TRADE', 'RENT']) {
+        if (index < 5) rows.push({ sigunguCode: '11350', yearMonth: month, dealKind: kind, collectedAt: null, attemptedAt: new Date(NOW - 50 * HOUR) });
+        else rows.push(done('11350', month, kind, { collectedAgo: REFRESH_MIN_AGE_MS }));
+      }
+    });
+    return rows;
+  };
+  const plan = (waitingSigunguCodes) =>
+    planCollectionTasks({ sigunguCodes: ['11350', '11710', '26350'], months, collections: nowonCollections(), now: NOW, ...(waitingSigunguCodes ? { waitingSigunguCodes } : {}) });
+
+  test('대기 작업 있는 구의 채우기가 맨 앞 → 나머지 채우기 → 다시 모으기, 같은 묶음 안은 오래전에 시도한 것부터', () => {
+    const tasks = plan(['11350']);
+    // 대기 작업이 없으면 한 번도 안 한 11710 · 26350 (시도 시각 0)이 이틀 전 실패한 11350 보다 앞이다 — 그래서 11/27 새벽에 차례가 안 왔다
+    assert.equal(plan().findIndex((t) => t.sigunguCode === '11350' && t.reason === 'BACKFILL'), 52);
+    const groups = tasks.map((t) => (t.waiting ? 'WAITING_BACKFILL' : t.reason));
+    assert.deepEqual([...new Set(groups)], ['WAITING_BACKFILL', 'BACKFILL', 'REFRESH']);
+    assert.equal(groups.filter((g) => g === 'WAITING_BACKFILL').length, 10); // 노원구 5개월 × 매매 · 전월세
+    assert.ok(tasks.slice(0, 10).every((t) => t.sigunguCode === '11350' && t.reason === 'BACKFILL'));
+    // 같은 묶음 안: 시도 시각이 같으면 최근 달 · 매매 먼저(지금 규칙 그대로)
+    assert.deepEqual(tasks.slice(0, 3).map(label), [`11350 ${months[4]} TRADE BACKFILL`, `11350 ${months[4]} RENT BACKFILL`, `11350 ${months[3]} TRADE BACKFILL`]);
+    // 나머지 채우기는 시군구 순, 다시 모으기는 맨 뒤(대기 작업 구의 다시 모으기도 뒤 — 앞에 세우는 것은 채우기만)
+    assert.deepEqual([...new Set(tasks.filter((t) => t.reason === 'BACKFILL' && !t.waiting).map((t) => t.sigunguCode))], ['11710', '26350']);
+    assert.ok(tasks.slice(-6).every((t) => t.sigunguCode === '11350' && t.reason === 'REFRESH' && !t.waiting));
+  });
+
+  test('대기 작업이 없으면(또는 대상 밖 구뿐이면) 지금 순서와 같고, usualRank 가 그 자리', () => {
+    const usual = plan();
+    assert.deepEqual(plan([]).map(label), usual.map(label));
+    assert.deepEqual(plan(['41135']).map(label), usual.map(label));
+    assert.ok(usual.every((t, index) => t.usualRank === index && t.waiting === false));
+    // 지금 순서: 채우기(한 번도 안 한 것 → 이틀 전 실패) → 다시 모으기
+    assert.deepEqual([...new Set(usual.map((t) => `${t.sigunguCode} ${t.reason}`))], ['11710 BACKFILL', '26350 BACKFILL', '11350 BACKFILL', '11350 REFRESH']);
+    // 대기 작업이 있으면 usualRank 는 이 순서의 자리 그대로
+    const byLabel = new Map(usual.map((t) => [label(t), t.usualRank]));
+    assert.ok(plan(['11350']).every((t) => byLabel.get(label(t)) === t.usualRank));
+  });
+
+  test('대기 작업 구가 시간 초과로 계속 실패해도, 시간 한도의 절반이 지나면 다른 구 채우기가 같은 실행 안에서 시작된다', () => {
+    // 수집 한 번을 흉내: 대기 작업 구(26350)는 묶음마다 8초 시간 초과 → 1.5초 쉬고 → 다시 8초 시간 초과, 다른 구(11710)는 한 묶음 0.3초
+    const tasks = planCollectionTasks({ sigunguCodes: ['11710', '26350'], months, collections: [], now: NOW, waitingSigunguCodes: ['26350'] });
+    let clock = NOW;
+    const deadline = NOW + RUN_BUDGET_MS;
+    const queue = createTaskQueue(tasks, { now: () => clock, waitingUntil: NOW + RUN_BUDGET_MS * WAITING_FIRST_BUDGET_SHARE });
+    const started = [];
+    while (queue.remaining() > 0 && clock + REQUEST_TIMEOUT_MS <= deadline) {
+      const task = queue.take();
+      started.push({ sigunguCode: task.sigunguCode, at: clock - NOW });
+      clock += task.sigunguCode === '26350' ? REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS : 300;
+    }
+    const other = started.filter((s) => s.sigunguCode === '11710');
+    // 절반(22.5초) 전에 시작한 것은 모두 대기 작업 구 — 0초 · 17.5초에 둘
+    assert.deepEqual(started.filter((s) => s.at < RUN_BUDGET_MS * WAITING_FIRST_BUDGET_SHARE).map((s) => s.sigunguCode), ['26350', '26350']);
+    // 그 뒤(35초)부터는 지금 순서로 섞여 다른 구 채우기가 시작된다(시군구 순이라 11710 이 먼저)
+    assert.ok(other.length >= 1, JSON.stringify(started));
+    assert.equal(other[0].at, 2 * (REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS));
+    // 안전장치가 없었다면(계속 대기 작업 구 먼저) 같은 시간에 다른 구는 하나도 시작하지 못한다
+    let noGuardClock = NOW;
+    const noGuard = createTaskQueue(tasks, { now: () => noGuardClock, waitingUntil: Number.POSITIVE_INFINITY });
+    const noGuardStarted = [];
+    while (noGuard.remaining() > 0 && noGuardClock + REQUEST_TIMEOUT_MS <= deadline) {
+      const task = noGuard.take();
+      noGuardStarted.push(task.sigunguCode);
+      noGuardClock += task.sigunguCode === '26350' ? REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS : 300;
+    }
+    assert.deepEqual(noGuardStarted, ['26350', '26350', '26350']);
+  });
+
+  test('꺼내기: 절반이 지나기 전에는 planCollectionTasks 순서, 지난 뒤에는 남은 것만 usualRank 순서 — 하나도 빠지거나 겹치지 않는다', () => {
+    const tasks = plan(['11350']);
+    let clock = NOW;
+    const queue = createTaskQueue(tasks, { now: () => clock, waitingUntil: NOW + 1000 });
+    const first = [queue.take(), queue.take()];
+    assert.deepEqual(first.map(label), tasks.slice(0, 2).map(label));
+    clock = NOW + 1000;
+    const rest = [];
+    while (queue.remaining() > 0) rest.push(queue.take());
+    assert.deepEqual(rest.map((t) => t.usualRank), [...rest.map((t) => t.usualRank)].sort((a, b) => a - b));
+    assert.deepEqual([...first, ...rest].map(label).sort(), tasks.map(label).sort());
+    assert.equal(queue.take(), undefined);
   });
 });

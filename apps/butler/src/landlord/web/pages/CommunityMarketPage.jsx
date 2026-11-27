@@ -196,7 +196,8 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
       {prices.isPending && <LoadingStatus />}
       {prices.isError && <NoticeBox>{getErrorMessage(prices.error)}</NoticeBox>}
       {/* 아직 모으지 못한 시군구(처음 보는 단지). 정기 실행이 하루 한 번 채운다 — 빈 상태(거래 없음)와 다른 문구.
-          받기가 실패한 달이 있으면 "하루 안에" 대신 "아직 못 불러옴 · 매일 새벽 다시 시도 · 마지막 시도 날짜"(문구 · 이유는 utils/communityMarketCollecting) */}
+          일부 모음이면 "모으는 중 · 최근 13개월 중 n개월을 모았어요 · 매일 새벽 이어서", 하나도 못 모았는데 받기가 실패한 달이 있으면
+          "아직 못 불러옴 · 매일 새벽 다시 시도 · 마지막 시도 날짜"(문구 · 이유는 utils/communityMarketCollecting) */}
       {collecting && <EmptyState title={collecting.title} description={<CollectingDescription notice={collecting} />} />}
       {isEmpty && <EmptyState title={`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`} />}
       {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다. 차트 카드 바로 아래(스크롤 없이 보이게) */}

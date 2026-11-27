@@ -72,11 +72,23 @@ const marketReady = (dealType) => ({
 });
 const marketCollecting = { ...marketReady('SALE'), coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [] };
 // 모으기 진행(COLLECTING 에만 온다). 받기 실패 — 마지막 시도 UTC 11/24 17:00 = 한국 11/25 02:00
-const collectionProgress = (values) => ({ requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastErrorCode: null, ...values });
-const marketCollectingFirst = { ...marketCollecting, collectionProgress: collectionProgress({ collectedMonths: 2, notTriedMonths: 11, lastAttemptedAt: '2026-11-24T17:00:01.000Z' }) };
+// 세 상태(#267): 아직 시도 전 · 일부 모음(실패 없음 / 실패한 달도 있음) · 하나도 못 모음 + 실패
+const collectionProgress = (values) => ({
+  requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastFailedAt: null, lastErrorCode: null, ...values,
+});
+const marketCollectingNotTried = { ...marketCollecting, collectionProgress: collectionProgress() };
+const marketCollectingPartial = { ...marketCollecting, collectionProgress: collectionProgress({ collectedMonths: 2, notTriedMonths: 11, lastAttemptedAt: '2026-11-24T17:00:01.000Z' }) };
+const marketCollectingPartialFailed = {
+  ...marketCollecting,
+  collectionProgress: collectionProgress({
+    collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastFailedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: '30',
+  }),
+};
 const marketCollectFailed = {
   ...marketCollecting,
-  collectionProgress: collectionProgress({ collectedMonths: 12, failedMonths: 1, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: '30' }),
+  collectionProgress: collectionProgress({
+    failedMonths: 13, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastFailedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: '30',
+  }),
 };
 
 const LocationProbe = () => <output data-testid="location">{useLocation().pathname}</output>;
@@ -191,15 +203,36 @@ describe('브리핑', () => {
     expect(await within(await section('최근 게시글')).findAllByRole('button', { name: /게시글 \d/ })).toHaveLength(5);
   });
 
-  it('모으는 중 · 실패한 달 없음이면 "하루 안에" 한 줄 그대로', async () => {
-    api.getComplexMarketPrices.mockResolvedValue(marketCollectingFirst);
+  it('모으는 중 · 아직 시도 전(모은 달 · 실패한 달 0)이면 "하루 안에" 한 줄 그대로', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(marketCollectingNotTried);
     renderAt('/community/briefing');
     const market = await section('시세');
     expect(await within(market).findByText('실거래를 모으는 중이에요. 하루 안에 채워집니다')).toBeInTheDocument();
-    expect(within(market).queryByText('시세를 아직 불러오지 못했어요')).not.toBeInTheDocument();
+    expect(within(market).queryByText(/불러오지 못했어요|개월을 모았어요/)).not.toBeInTheDocument();
   });
 
-  it('모으는 중 · 받기가 실패한 달이 있으면 "아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜(두 줄)', async () => {
+  it('모으는 중 · 실패 없이 일부만 모았으면 "시세를 모으는 중이에요" + 최근 13개월 중 n개월 · 매일 새벽 이어서(두 줄)', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(marketCollectingPartial);
+    renderAt('/community/briefing');
+    const market = await section('시세');
+    const note = (await within(market).findByText('시세를 모으는 중이에요')).closest('p');
+    expect(note).toHaveAttribute('role', 'status');
+    expect(note).toHaveTextContent('시세를 모으는 중이에요최근 13개월 중 2개월을 모았어요 · 매일 새벽 이어서 모아요');
+    expect(within(note).getByText('시세를 모으는 중이에요')).toHaveClass('block');
+    expect(within(note).getByText('2')).toHaveClass('font-num', 'tabular-nums');
+    expect(within(market).queryByText(/하루 안에|불러오지 못했어요|마지막 시도|출처:/)).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 일부 모았으면 실패한 달이 있어도 실패 안내가 아니라 모은 개월 수(실패 코드 · 날짜 없음)', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(marketCollectingPartialFailed);
+    renderAt('/community/briefing');
+    const market = await section('시세');
+    const note = (await within(market).findByText('시세를 모으는 중이에요')).closest('p');
+    expect(note).toHaveTextContent('시세를 모으는 중이에요최근 13개월 중 12개월을 모았어요 · 매일 새벽 이어서 모아요');
+    expect(within(market).queryByText(/불러오지 못했어요|마지막 시도|30/)).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 하나도 못 모았는데 받기가 실패한 달이 있으면 "아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜(두 줄)', async () => {
     api.getComplexMarketPrices.mockResolvedValue(marketCollectFailed);
     renderAt('/community/briefing');
     const market = await section('시세');

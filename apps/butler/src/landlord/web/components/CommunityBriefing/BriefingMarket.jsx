@@ -35,9 +35,9 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
   else if (data.collectionStatus === 'COLLECTING') {
-    // 처음 모으는 중이면 한 줄 그대로, 받기가 실패한 달이 있으면 두 줄(문구 · 이유는 utils/communityMarketCollecting — 시세 탭과 같은 판단)
+    // 아직 시도 전이면 한 줄 그대로, 일부 모음 · 받기 실패면 제목 · 설명 두 줄(문구 · 이유는 utils/communityMarketCollecting — 시세 탭과 같은 판단)
     const notice = collectingNotice(data);
-    body = notice.failed ? (
+    body = notice.kind !== 'FIRST' ? (
       <BriefingNote>
         <span className="block">{notice.title}</span>
         <span className="block">

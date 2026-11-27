@@ -326,6 +326,81 @@ describe('앱 커뮤니티: PC 와 같은 상태 · 규칙', () => {
   });
 });
 
+describe('앱 커뮤니티: 시세 "모으는 중" 안내는 PC 와 같은 세 상태 — 일부 모음 · 하나도 못 모음 + 실패 · 시도 전 (#267)', () => {
+  const progress = (values) => ({
+    requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastFailedAt: null, lastErrorCode: null, ...values,
+  });
+  const collecting = (values) => ({ ...MARKET_COLLECTING, collectionProgress: progress(values) });
+  // 11/27 배포 노원구 모양 — 8개월 모음 · 5개월은 키 교체 전 실패(30)
+  const PARTIAL = collecting({
+    collectedMonths: 8, failedMonths: 5, notTriedMonths: 0, lastAttemptedAt: '2026-11-26T17:32:00.000Z', lastFailedAt: '2026-11-24T17:32:00.000Z', lastErrorCode: '30',
+  });
+  // UTC 11/24 17:00 = 한국 11/25 02:00
+  const FAILED = collecting({ failedMonths: 13, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastFailedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: '30' });
+  const NOT_TRIED = collecting({});
+  const noteOf = async (title, scope = document.body) => (await within(scope).findByText(title, {}, FIRST_RENDER)).closest('p');
+  const marketSection = () => screen.findByRole('region', { name: '시세' }, FIRST_RENDER);
+
+  // 일부 모음 · 실패의 설명 줄은 덩어리 둘(DotLine — 사이 점은 CSS ::before 라 글에는 없다)
+  const expectPartial = (note) => {
+    expect(note).toHaveAttribute('role', 'status');
+    expect(note).toHaveTextContent('시세를 모으는 중이에요최근 13개월 중 8개월을 모았어요매일 새벽 이어서 모아요');
+    expect(within(note).getByText('시세를 모으는 중이에요')).toHaveClass('block', 'font-semibold');
+    expect(within(note).getByText('매일 새벽 이어서 모아요')).toHaveClass('whitespace-nowrap');
+    expect(within(note).getByText('13')).toHaveClass('font-num', 'tabular-nums');
+    expect(within(note).getByText('8')).toHaveClass('font-num', 'tabular-nums');
+    expect(note.textContent).not.toMatch(/불러오지 못했어요|마지막 시도|하루 안에|30/);
+  };
+  const expectFailed = (note) => {
+    expect(note).toHaveTextContent('시세를 아직 불러오지 못했어요매일 새벽 다시 시도하고 있어요마지막 시도 2026-11-25');
+    expect(within(note).getByText('2026-11-25')).toHaveClass('font-num', 'tabular-nums');
+    expect(within(note).getByText('2026-11-25').parentElement).toHaveClass('whitespace-nowrap');
+    expect(note.textContent).not.toMatch(/개월을 모았어요|하루 안에|30/);
+  };
+
+  it('시세 탭 · 일부 모음: "시세를 모으는 중이에요" + 최근 13개월 중 8개월을 모았어요 · 매일 새벽 이어서 모아요(실패한 달이 있어도)', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(PARTIAL);
+    renderAt('/landlord/community/market');
+    expectPartial(await noteOf('시세를 모으는 중이에요'));
+    expect(screen.queryByRole('list', { name: '최근 거래' })).not.toBeInTheDocument();
+  });
+
+  it('시세 탭 · 하나도 못 모음 + 실패: "시세를 아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(FAILED);
+    renderAt('/landlord/community/market');
+    expectFailed(await noteOf('시세를 아직 불러오지 못했어요'));
+  });
+
+  it('시세 탭 · 아직 시도 전: 11/17 문구 그대로("하루 안에 채워집니다")', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(NOT_TRIED);
+    renderAt('/landlord/community/market');
+    const note = await noteOf('이 단지의 실거래를 모으는 중이에요');
+    expect(note).toHaveTextContent('이 단지의 실거래를 모으는 중이에요하루 안에 채워집니다. 그때 다시 열어 주세요.');
+    expect(note.textContent).not.toMatch(/개월을 모았어요|불러오지 못했어요|마지막 시도/);
+  });
+
+  it('브리핑 시세 카드 · 일부 모음: 두 줄(제목 · 모은 개월 수)', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(PARTIAL);
+    renderAt('/landlord/community/briefing');
+    expectPartial(await noteOf('시세를 모으는 중이에요', await marketSection()));
+  });
+
+  it('브리핑 시세 카드 · 하나도 못 모음 + 실패: 두 줄(제목 · 다시 시도 · 마지막 시도)', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(FAILED);
+    renderAt('/landlord/community/briefing');
+    expectFailed(await noteOf('시세를 아직 불러오지 못했어요', await marketSection()));
+  });
+
+  it('브리핑 시세 카드 · 아직 시도 전: 한 줄 그대로', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(NOT_TRIED);
+    renderAt('/landlord/community/briefing');
+    const market = await marketSection();
+    const note = await noteOf('실거래를 모으는 중이에요. 하루 안에 채워집니다', market);
+    expect(note).toHaveAttribute('role', 'status');
+    expect(market.textContent).not.toMatch(/개월을 모았어요|불러오지 못했어요|마지막 시도/);
+  });
+});
+
 describe('앱 커뮤니티: 좁은 폭에서도 목록 제목이 보인다', () => {
   const LONG_TITLE = '공동현관 도어락 교체 비용을 세대별로 똑같이 나눌지 평형별로 나눌지 관리단 회의 전에 다른 단지 사례를 여쭙니다';
   // 제목 줄: 줄의 맨 위에 혼자(옆에 폭을 다투는 칩 · 날짜가 없다) · 한 줄 말줄임(truncate)이 아니라 최대 2줄 · 글자는 다 들어 있다

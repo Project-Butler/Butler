@@ -54,8 +54,18 @@ const ready = ({ dealType, areaMin = 60, areaMax = 85 }) => {
 };
 const collecting = { ...ready({ dealType: 'SALE' }), coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId: 'job-1', monthly: [], recentDeals: [] };
 // 모으기 진행(서버가 COLLECTING 에만 준다) — 처음 모으는 중(실패 없음) · 받기 실패(UTC 11/24 17:00 = 한국 11/25 02:00 마지막 시도)
-const progress = (values) => ({ requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastErrorCode: null, ...values });
-const collectingFirst = { ...collecting, collectionProgress: progress({ collectedMonths: 4, notTriedMonths: 9, lastAttemptedAt: '2026-11-24T17:00:03.000Z' }) };
+// 일부 모음(실패 없음 · 11/27 배포 노원구처럼 실패한 달도 있음)도 더함(#267)
+const progress = (values) => ({
+  requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastFailedAt: null, lastErrorCode: null, ...values,
+});
+const collectingNotTried = { ...collecting, collectionProgress: progress() };
+const collectingPartial = { ...collecting, collectionProgress: progress({ collectedMonths: 4, notTriedMonths: 9, lastAttemptedAt: '2026-11-24T17:00:03.000Z' }) };
+const collectingPartialFailed = {
+  ...collecting,
+  collectionProgress: progress({
+    collectedMonths: 8, failedMonths: 5, notTriedMonths: 0, lastAttemptedAt: '2026-11-26T17:32:00.000Z', lastFailedAt: '2026-11-24T17:32:00.000Z', lastErrorCode: '30',
+  }),
+};
 const collectingFailed = { ...collecting, collectionProgress: progress({ failedMonths: 13, notTriedMonths: 0, lastAttemptedAt: '2026-11-24T17:00:05.000Z', lastErrorCode: 'NO_KEY' }) };
 const empty = { ...ready({ dealType: 'SALE' }), monthly: [], recentDeals: [] };
 
@@ -125,13 +135,36 @@ describe('시세 탭(국토교통부 실거래가)', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('모으는 중 · 실패한 달 없음(처음 모으는 중)이면 "하루 안에" 문구 그대로 — 마지막 시도 날짜 없음', async () => {
-    api.getComplexMarketPrices.mockResolvedValue(collectingFirst);
+  it('모으는 중 · 아직 시도 전(모은 달 · 실패한 달 0)이면 "하루 안에" 문구 그대로 — 마지막 시도 날짜 없음', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collectingNotTried);
     renderMarket();
     expect(await screen.findByText('이 단지의 실거래를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.getByText('하루 안에 채워집니다. 그때 다시 열어 주세요.')).toBeInTheDocument();
     expect(screen.queryByText('시세를 아직 불러오지 못했어요')).not.toBeInTheDocument();
-    expect(screen.queryByText(/마지막 시도/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/마지막 시도|개월을 모았어요/)).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 실패 없이 일부만 모았으면 "시세를 모으는 중이에요" + 최근 13개월 중 n개월(숫자 글꼴) · 매일 새벽 이어서 — "하루 안에" 없음', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collectingPartial);
+    renderMarket();
+    expect(await screen.findByText('시세를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
+    const description = screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '최근 13개월 중 4개월을 모았어요 · 매일 새벽 이어서 모아요');
+    expect(within(description).getByText('13')).toHaveClass('font-num', 'tabular-nums');
+    expect(within(description).getByText('4')).toHaveClass('font-num', 'tabular-nums');
+    expect(screen.queryByText(/하루 안에|불러오지 못했어요|마지막 시도/)).not.toBeInTheDocument();
+    expect(screen.queryByText('이 단지의 실거래를 모으는 중이에요')).not.toBeInTheDocument();
+    // 일부만 모였을 때 숫자(평균 · 차트 · 표)는 그리지 않는다 — READY 가 될 때까지
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByText(/출처:/)).not.toBeInTheDocument();
+  });
+
+  it('모으는 중 · 일부 모았으면 실패한 달이 있어도(노원구 8 · 5 · 0, 옛 코드 30) 실패 안내가 아니라 모은 개월 수', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(collectingPartialFailed);
+    renderMarket();
+    expect(await screen.findByText('시세를 모으는 중이에요', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '최근 13개월 중 8개월을 모았어요 · 매일 새벽 이어서 모아요')).toBeInTheDocument();
+    expect(screen.queryByText(/불러오지 못했어요|마지막 시도|30/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
   it('모으는 중 · 받기가 실패한 달이 있으면 "아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜 — "하루 안에" · 실패 코드 없음', async () => {
