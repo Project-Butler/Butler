@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { collectingNotice } from '../../src/landlord/web/utils/communityMarketCollecting';
+import {
+  collectingNotice,
+  hasNoPartialDeals,
+  partialBasisParts,
+  partialCoverage,
+  partialDealsEmptyText,
+  partialMarketEmptyText,
+} from '../../src/landlord/web/utils/communityMarketCollecting';
 
 const progress = (values) => ({
   requiredMonths: 13, collectedMonths: 0, failedMonths: 0, notTriedMonths: 13, lastAttemptedAt: null, lastFailedAt: null, lastErrorCode: null, ...values,
@@ -55,5 +62,42 @@ describe('시세 모으는 중 안내(collectingNotice) — 일부 모음 · 하
     expect(notice.kind).toBe('FAILED');
     expect(notice.lastAttemptDate).toBeNull();
     expect(JSON.stringify(notice)).not.toContain('30');
+  });
+});
+
+describe('일부 모음 데이터 보이기(partialCoverage · 문구) — #267 2차', () => {
+  const month = (yearMonth, dealCount, collected) => ({ yearMonth, dealCount, avgPrice: dealCount ? 1 : null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null, collected });
+  const partialPrices = (values) => ({
+    collectionStatus: 'COLLECTING',
+    collectionProgress: progress({ collectedMonths: 8, failedMonths: 5, notTriedMonths: 0 }),
+    monthly: [month('2026-09', null, false), month('2026-10', 2, true), month('2026-11', 0, true)],
+    recentDeals: [{ contractDate: '2026-10-03' }],
+    ...values,
+  });
+
+  it('모은 달 데이터가 있으면 { collectedMonths, requiredMonths } — 숫자는 collectionProgress(서버와 같은 보관 기간 기준)', () => {
+    expect(partialCoverage(partialPrices())).toEqual({ collectedMonths: 8, requiredMonths: 13 });
+    // collectionProgress 가 없으면 monthly 에서 센다
+    expect(partialCoverage(partialPrices({ collectionProgress: undefined }))).toEqual({ collectedMonths: 2, requiredMonths: 3 });
+  });
+
+  it('READY · 하나도 못 모음 · 이전 서버(monthly 빈 배열)이면 null — 그때는 데이터 대신 #268 안내', () => {
+    expect(partialCoverage({ collectionStatus: 'READY', monthly: [month('2026-10', 2)] })).toBeNull();
+    expect(partialCoverage(partialPrices({ monthly: [] }))).toBeNull();
+    expect(partialCoverage(partialPrices({ monthly: [month('2026-10', null, false)] }))).toBeNull();
+    expect(partialCoverage(undefined)).toBeNull();
+  });
+
+  it('카드 아래 한 줄 "최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요"(숫자는 조각 그대로 — 화면이 숫자 글꼴로)', () => {
+    const parts = partialBasisParts({ collectedMonths: 8, requiredMonths: 13 });
+    expect(parts.join('')).toBe('최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요');
+    expect(parts.filter((part) => typeof part === 'number')).toEqual([13, 8]);
+  });
+
+  it('모은 달에 거래가 0건이면 본 범위를 밝힌다(최근 거래 · 시세 칸)', () => {
+    expect(partialDealsEmptyText({ collectedMonths: 8 })).toBe('모은 8개월 동안 거래가 없습니다');
+    expect(partialMarketEmptyText({ collectedMonths: 8 }, '60–85㎡', '매매')).toBe('모은 8개월 동안 60–85㎡ 매매 거래가 없습니다');
+    expect(hasNoPartialDeals(partialPrices())).toBe(false);
+    expect(hasNoPartialDeals(partialPrices({ recentDeals: [], monthly: [month('2026-09', null, false), month('2026-10', 0, true)] }))).toBe(true);
   });
 });

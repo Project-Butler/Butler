@@ -716,3 +716,112 @@ describe('앱 커뮤니티: 시트는 다른 앱 시트처럼 내려간 뒤 닫�
     expect(await screen.findByRole('heading', { level: 1, name: /해운대서강아파트/ })).toBeInTheDocument();
   });
 });
+
+describe('앱 커뮤니티: 시세를 일부만 모았을 때 모은 달의 데이터 — PC 와 같은 규칙 (#267 2차)', () => {
+  const MONTHS = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+  const row = (yearMonth, dealCount, avgPrice = null) => ({ yearMonth, dealCount, avgPrice, minPrice: avgPrice, maxPrice: avgPrice, avgDeposit: null, avgMonthlyRent: null });
+  const deal = (contractDate, price) => ({ contractDate, dealType: 'SALE', complexName: '잠실한빛아파트', exclusiveArea: 84.79, floor: 9, price, deposit: null, monthlyRent: null });
+  const DEALS = { '2026-05': [2, 2000000000], '2026-07': [1, 2100000000], '2026-08': [1, 2200000000], '2026-10': [2, 2400000000], '2026-11': [1, 3000000000] };
+  const RECENT = [deal('2026-11-05', 3000000000), deal('2026-10-28', 2400000000), deal('2026-05-20', 2000000000)];
+  const partialSale = (missing, deals = DEALS) => ({
+    ...MARKET_COLLECTING,
+    asOf: '2026-11-16',
+    collectionProgress: {
+      requiredMonths: 13, collectedMonths: 13 - missing.length, failedMonths: missing.length, notTriedMonths: 0,
+      lastAttemptedAt: '2026-11-26T17:32:00.000Z', lastFailedAt: '2026-11-24T17:32:00.000Z', lastErrorCode: '30',
+    },
+    monthly: MONTHS.map((yearMonth) => {
+      if (missing.includes(yearMonth)) return { ...row(yearMonth, null), collected: false };
+      return deals[yearMonth] ? { ...row(yearMonth, ...deals[yearMonth]), collected: true } : { ...row(yearMonth, 0), collected: true };
+    }),
+    recentDeals: RECENT.filter((item) => !missing.includes(item.contractDate.slice(0, 7)) && deals[item.contractDate.slice(0, 7)]),
+  });
+  const BASIS = '최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요';
+  const basisIn = (scope) => within(scope).getByText((_, el) => el?.tagName === 'P' && el.textContent === BASIS);
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T03:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('시세 화면 · 오래된 5개월 빠짐: 안내 대신 대표 숫자 · 증감 · 차트("수집 중" 띠 · 범례) · 최근 거래, 출처 아래 "N개월 기준"', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(partialSale(MONTHS.slice(0, 5)));
+    renderAt('/landlord/community/market');
+    const card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    expect(within(card).getByText('23억 3,300만')).toBeInTheDocument();
+    expect(within(card).getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
+    expect(within(card).getByRole('img').querySelector('[data-missing-band]')).toHaveAttribute('data-missing-band', '2025-11~2026-03');
+    expect(within(card).getByText('매매 수집 중', { selector: 'span' })).toBeInTheDocument();
+    expect(basisIn(document.body)).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: '최근 거래' })).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.queryByText(/시세를 모으는 중이에요|불러오지 못했어요/)).not.toBeInTheDocument();
+  });
+
+  it('시세 화면 · 띠는 주 선(매매) 기준 한 겹, 글자 "매매 수집 중" — 비교 선(전세)만 못 모으면 띠 없이 전세 선만 끊긴다(PC 와 같다)', async () => {
+    const jeonseOf = (missing) => ({
+      ...MARKET_COLLECTING,
+      dealType: 'JEONSE',
+      asOf: '2026-11-16',
+      collectionStatus: missing.length ? 'COLLECTING' : 'READY',
+      monthly: MONTHS.map((yearMonth) => {
+        if (missing.includes(yearMonth)) return { ...row(yearMonth, null), collected: false };
+        return { ...row(yearMonth, 2), avgDeposit: 1100000000, ...(missing.length ? { collected: true } : {}) };
+      }),
+      recentDeals: [],
+    });
+    // ⓐ 매매만 오래된 5개월 못 모음, 전세는 다 모음 → 띠 하나 "매매 수집 중", 전세 선은 띠 안에서도 이어진다
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonseOf([]) : partialSale(MONTHS.slice(0, 5))));
+    const first = renderAt('/landlord/community/market');
+    let card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    let chart = within(card).getByRole('img');
+    expect(chart.querySelectorAll('[data-missing-band]')).toHaveLength(1);
+    expect(chart.querySelector('[data-missing-label]')).toHaveTextContent('매매 수집 중');
+    expect(chart.querySelector('[data-series="전세"]').querySelector('circle[data-month="2025-12"]')).not.toBeNull();
+    first.unmount();
+
+    // ⓑ 매매는 다 모음(READY), 전세만 2026-09 못 모음 → 띠 · 범례 없음, 전세 선만 09 에서 끊김
+    const saleReady = { ...partialSale([]), collectionStatus: 'READY', jobId: null, monthly: partialSale([]).monthly.map(({ collected, ...rest }) => rest) };
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonseOf(['2026-09']) : saleReady));
+    renderAt('/landlord/community/market');
+    card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    chart = within(card).getByRole('img');
+    expect(chart.querySelector('[data-missing-band]')).toBeNull();
+    expect(within(card).queryByText(/수집 중/)).not.toBeInTheDocument();
+    const jeonseLine = chart.querySelector('[data-series="전세"]');
+    expect(jeonseLine.querySelector('circle[data-month="2026-09"]')).toBeNull();
+    expect(jeonseLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(0);
+  });
+
+  it('시세 화면 · 최근 달 빠짐(7 ~ 11월): "최근 3개월 평균은 모으는 중" · 큰 숫자 · 증감 없음, 최근 거래는 모은 달(5월)만', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(partialSale(MONTHS.slice(8)));
+    renderAt('/landlord/community/market');
+    const card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    expect(within(card).getByText('최근 3개월 평균은 모으는 중 · 60–85㎡')).toBeInTheDocument();
+    expect(card.querySelector('.text-num-kpi')).toBeNull();
+    expect(within(card).queryByText(/직전 3개월/)).not.toBeInTheDocument();
+    const items = within(screen.getByRole('list', { name: '최근 거래' })).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent('2026-05-20');
+  });
+
+  it('브리핑 · 오래된 5개월 빠짐: 시세 카드는 평균 · 증감 · "N개월 기준", 최근 거래 카드는 거래 + "N개월 기준"', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(partialSale(MONTHS.slice(0, 5)));
+    renderAt('/landlord/community/briefing');
+    const market = await screen.findByRole('region', { name: '시세' }, FIRST_RENDER);
+    expect(await within(market).findByText('23억 3,300만')).toBeInTheDocument();
+    expect(within(market).getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
+    expect(basisIn(market)).toBeInTheDocument();
+    const deals = screen.getByRole('region', { name: '최근 거래' });
+    expect(within(within(deals).getByRole('list', { name: '최근 거래' })).getAllByRole('listitem')).toHaveLength(3);
+    expect(basisIn(deals)).toBeInTheDocument();
+  });
+
+  it('브리핑 · 모은 달에 거래 없음: 최근 거래 "모은 8개월 동안 거래가 없습니다", 시세 "모은 8개월 동안 60–85㎡ 매매 거래가 없습니다"', async () => {
+    api.getComplexMarketPrices.mockResolvedValue(partialSale(MONTHS.slice(0, 5), {}));
+    renderAt('/landlord/community/briefing');
+    const deals = await screen.findByRole('region', { name: '최근 거래' }, FIRST_RENDER);
+    expect(await within(deals).findByText('모은 8개월 동안 거래가 없습니다')).toHaveAttribute('role', 'status');
+    expect(within(deals).queryByText('최근 거래가 없습니다')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: '시세' })).getByText('모은 8개월 동안 60–85㎡ 매매 거래가 없습니다')).toBeInTheDocument();
+  });
+});

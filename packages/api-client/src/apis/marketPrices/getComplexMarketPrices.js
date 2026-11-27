@@ -9,5 +9,6 @@ export const getComplexMarketPrices = async ({ complexId, ...params }) => {
   // COLLECTING 일 때만 collectionProgress(그 시군구 · 그 종류, 보관 기간의 달 기준 — READY 에는 없음):
   //   { requiredMonths, collectedMonths, failedMonths, notTriedMonths(셋을 더하면 requiredMonths), lastAttemptedAt(ISO | null),
   //     lastFailedAt(가장 최근 실패의 시도 시각, ISO | null — lastAttemptedAt 과 비교해 실패 코드가 오늘 것인지 가린다), lastErrorCode('NO_KEY' · '30' · 'TIMEOUT' … | null) }
+  // COLLECTING 이어도 모은 달이 있으면 monthly = 요청 기간의 모든 달 + collected(못 모은 달은 dealCount · 평균 null), recentDeals = 모은 달의 거래, asOf = 모은 달 기준
   return data.data;
 };

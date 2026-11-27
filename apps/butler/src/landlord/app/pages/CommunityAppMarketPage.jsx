@@ -1,9 +1,10 @@
 import { BRIEFING_LOADING_TEXT } from '../../web/components/CommunityBriefing/BriefingNote';
 import { AppCollectingDescription } from '../components/CommunityApp/AppCollectingDescription';
 import { MarketSource } from '../../web/components/CommunityMarket/MarketSource';
-import { ChartLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
-import { AMOUNT_HEADER, useMarketBodyState, useMarketDealType } from '../../web/pages/CommunityMarketPage';
-import { AREA_BANDS, chartMonths, chartValue, DEAL_TYPES, getDealTypeLabel, recentSummary } from '../../web/utils/communityMarketSummary';
+import { PartialBasis } from '../../web/components/CommunityMarket/PartialBasis';
+import { ChartLegend, MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
+import { AMOUNT_HEADER, priceSeries, useMarketBodyState, useMarketDealType } from '../../web/pages/CommunityMarketPage';
+import { AREA_BANDS, chartMonths, DEAL_TYPES, getDealTypeLabel, recentSummary } from '../../web/utils/communityMarketSummary';
 import { getErrorMessage } from '../../web/utils/getErrorMessage';
 import { AppCard, AppNote } from '../components/CommunityApp/AppCard';
 import { AppChipGroup, AppSegment } from '../components/CommunityApp/AppControls';
@@ -17,26 +18,11 @@ import { CommunityAppFrame } from '../components/CommunityApp/CommunityAppFrame'
 const AREA_OPTIONS = AREA_BANDS.map((band) => ({ value: band.key, label: band.label }));
 
 // 대표 숫자 카드: "{유형} 시세" · 계산에 쓴 마지막 달 / 큰 숫자 / 증감 · 설명 / 차트(매매면 전세 선도) / 범례 — PC PriceCard 와 같은 내용
+// 일부만 모았을 때(#267 2차)도 PC 와 같다 — 차트 줄 · 못 모은 달은 priceSeries(PC 와 같은 함수), 큰 숫자 · 증감 조건은 recentSummary
 const SummaryCard = ({ prices, jeonse, dealType, band }) => {
   const summary = recentSummary({ prices, jeonse, dealType, band });
   const months = chartMonths(prices.coveredFromYearMonth);
-  const valuesOf = (data, type) =>
-    months.map((month) => {
-      const row = data.monthly.find((item) => item.yearMonth === month);
-      return row ? chartValue(row, type) : null;
-    });
-  const series = [
-    {
-      label: dealType === 'MONTHLY' ? '월세(월)' : getDealTypeLabel(dealType),
-      strokeClass: 'stroke-accent',
-      fillClass: 'fill-accent',
-      dotClass: 'bg-accent',
-      values: valuesOf(prices, dealType),
-    },
-  ];
-  if (dealType === 'SALE' && jeonse?.monthly.length) {
-    series.push({ label: '전세', strokeClass: 'stroke-ink-3', fillClass: 'fill-ink-3', dotClass: 'bg-ink-3', values: valuesOf(jeonse, 'JEONSE') });
-  }
+  const series = priceSeries({ prices, jeonse, dealType, months });
   return (
     <section aria-label={`${getDealTypeLabel(dealType)} 시세`} className="space-y-1 rounded-card border border-line bg-surface px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
@@ -55,14 +41,22 @@ const SummaryCard = ({ prices, jeonse, dealType, band }) => {
         {series.map((line) => (
           <ChartLegend key={line.label} colorClass={line.dotClass} label={line.label} />
         ))}
+        <MissingLegend series={series} />
       </div>
     </section>
   );
 };
 
 const MarketBody = ({ building, dealType, onDealTypeChange }) => {
-  const { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, isEmpty } = useMarketBodyState({ building, dealType });
-  const source = data?.source && data.asOf ? <MarketSource source={data.source} asOf={data.asOf} /> : null;
+  const { owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
+  // 출처 줄 + (일부만 모았으면) "최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요" — PC 와 같은 부품
+  const source =
+    data?.source && data.asOf ? (
+      <>
+        <MarketSource source={data.source} asOf={data.asOf} />
+        <PartialBasis prices={data} />
+      </>
+    ) : null;
 
   return (
     <>
@@ -72,11 +66,11 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
         {owned.size > 0 && <p className="text-m-sub text-ink-3">내 호실이 있는 면적대입니다</p>}
       </div>
 
-      {(prices.isPending || prices.isError || isCollecting || isEmpty) && (
+      {(prices.isPending || prices.isError || collecting || isEmpty) && (
         <div className="overflow-hidden rounded-card border border-line bg-surface">
           {prices.isPending && <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>}
           {prices.isError && <AppNote tone="error">{getErrorMessage(prices.error)}</AppNote>}
-          {/* 아직 다 모으지 못한 시군구 — 일부 모음 · 받기 실패 · 시도 전 셋 다 PC 와 같은 문구(utils/communityMarketCollecting) */}
+          {/* 하나도 못 모은 시군구(일부 모음이면 아래 데이터) — 받기 실패 · 시도 전 PC 와 같은 문구(utils/communityMarketCollecting) */}
           {collecting && (
             <AppNote>
               <span className="block font-semibold text-ink-2">{collecting.title}</span>
@@ -85,12 +79,13 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
               </span>
             </AppNote>
           )}
-          {isEmpty && <AppNote>{`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`}</AppNote>}
+          {/* 다 모았는데 거래 없음 / 일부 모음인데 모은 달에 거래 없음(범위를 밝힌 문구 — PC 와 같다) */}
+          {isEmpty && <AppNote>{emptyTitle}</AppNote>}
         </div>
       )}
       {isEmpty && source}
 
-      {data && !isCollecting && !isEmpty && (
+      {showData && (
         <>
           <div className="space-y-2">
             <SummaryCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} band={band} />

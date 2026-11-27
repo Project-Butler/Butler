@@ -1,13 +1,14 @@
 import { useNavigate } from 'react-router-dom';
-import { BRIEFING_DEALS_EMPTY_TEXT, useBriefingDeals } from '../../web/components/CommunityBriefing/BriefingDeals';
-import { briefingMarketEmptyText, useBriefingMarket } from '../../web/components/CommunityBriefing/BriefingMarket';
+import { useBriefingDeals } from '../../web/components/CommunityBriefing/BriefingDeals';
+import { useBriefingMarket } from '../../web/components/CommunityBriefing/BriefingMarket';
 import { BRIEFING_NEWS_EMPTY_TEXT, useBriefingNews } from '../../web/components/CommunityBriefing/BriefingNews';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT } from '../../web/components/CommunityBriefing/BriefingNote';
 import { BRIEFING_POLLS_EMPTY_TEXT, useBriefingPolls } from '../../web/components/CommunityBriefing/BriefingPolls';
 import { BRIEFING_POSTS_EMPTY_TEXT, useBriefingPosts } from '../../web/components/CommunityBriefing/BriefingPosts';
 import { AppCollectingDescription } from '../components/CommunityApp/AppCollectingDescription';
 import { MarketSource } from '../../web/components/CommunityMarket/MarketSource';
-import { PriceChart } from '../../web/components/CommunityMarket/PriceChart';
+import { PartialBasis } from '../../web/components/CommunityMarket/PartialBasis';
+import { MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { splitRegionName } from '../../web/utils/communityFormat';
 import { COLLECTING_BRIEFING_TEXT, collectingNotice } from '../../web/utils/communityMarketCollecting';
@@ -36,13 +37,15 @@ const CollectingNote = ({ prices }) => {
 };
 
 // 시세 카드(참고 시안 B-1 첫 카드): 큰 숫자(최근 3개월 평균) · "직전 3개월보다 ▲▼" · 무엇의 평균인지 한 줄 · 작은 흐름선 · 출처 줄
+// 일부만 모았을 때(#267 2차)도 PC 와 같은 판단(useBriefingMarket state) — 큰 숫자 · 증감 조건, 못 모은 달 비우기, 맨 아래 "N개월 기준"
 const MarketCard = ({ building, band, onMore }) => {
-  const { prices, data, summary, months, values } = useBriefingMarket({ building, band });
+  const { prices, data, state, emptyText, summary, months, line } = useBriefingMarket({ building, band });
+  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', ...line }];
   let body;
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
-  else if (data.collectionStatus === 'COLLECTING') body = <CollectingNote prices={data} />;
-  else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <AppNote>{briefingMarketEmptyText(band)}</AppNote>;
+  else if (state === 'COLLECTING') body = <CollectingNote prices={data} />;
+  else if (state === 'EMPTY') body = <AppNote>{emptyText}</AppNote>;
   else {
     body = (
       <div className="space-y-1 px-4 py-3">
@@ -52,14 +55,11 @@ const MarketCard = ({ building, band, onMore }) => {
           <span className="font-num text-m-sub tabular-nums text-ink-3">{summary.caption}</span>
         </p>
         <div className="pt-1">
-          <PriceChart
-            months={months}
-            width={316}
-            height={96}
-            series={[{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values }]}
-          />
+          <PriceChart months={months} width={316} height={96} series={series} />
         </div>
+        <MissingLegend series={series} />
         {data.asOf && <MarketSource source={data.source} asOf={data.asOf} className="pt-1" />}
+        <PartialBasis prices={data} />
       </div>
     );
   }
@@ -71,20 +71,24 @@ const MarketCard = ({ building, band, onMore }) => {
 };
 
 const DealsCard = ({ building, band, onMore }) => {
-  const { prices, deals } = useBriefingDeals({ building, band });
+  const { prices, deals, state, emptyText } = useBriefingDeals({ building, band });
   let body;
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
-  // 모으는 중이면 시세 카드와 같은 안내, "최근 거래가 없습니다" 는 다 모았는데(READY) 0건일 때만
-  else if (prices.data.collectionStatus === 'COLLECTING') body = <CollectingNote prices={prices.data} />;
-  else if (deals.length === 0) body = <AppNote>{BRIEFING_DEALS_EMPTY_TEXT}</AppNote>;
+  // 하나도 못 모았으면 시세 카드와 같은 안내. 거래 0건이면 다 모았을 때만 "최근 거래가 없습니다", 일부 모음이면 "모은 N개월 동안 거래가 없습니다"(PC 와 같다)
+  else if (state === 'COLLECTING') body = <CollectingNote prices={prices.data} />;
+  else if (state === 'EMPTY') body = <AppNote>{emptyText}</AppNote>;
   else {
     body = (
-      <ul aria-label="최근 거래">
-        {deals.map((deal) => (
-          <AppDealRow key={`${deal.contractDate}-${deal.floor}-${deal.exclusiveArea}`} deal={deal} dateFormat="short" />
-        ))}
-      </ul>
+      <>
+        <ul aria-label="최근 거래">
+          {deals.map((deal) => (
+            <AppDealRow key={`${deal.contractDate}-${deal.floor}-${deal.exclusiveArea}`} deal={deal} dateFormat="short" />
+          ))}
+        </ul>
+        {/* 일부만 모았을 때만 "N개월 기준"(PC 와 같은 부품) */}
+        <PartialBasis prices={prices.data} className="border-t border-line px-4 py-3" />
+      </>
     );
   }
   return (

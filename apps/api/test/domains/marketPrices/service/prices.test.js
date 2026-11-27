@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { retentionMonths } from '../../../../src/domains/marketPrices/months.js';
-import { parseMarketQuery, summarizeCollectionProgress, toMonthly, withKeyShape } from '../../../../src/domains/marketPrices/service/prices.js';
+import { parseMarketQuery, summarizeCollectionProgress, toMonthly, toPartialMonthly, withKeyShape } from '../../../../src/domains/marketPrices/service/prices.js';
 
 const NOW = new Date('2026-11-17T03:00:00Z');
 const row = (yearMonth, values) => ({ contractYearMonth: yearMonth, price: null, deposit: null, monthlyRent: null, ...values });
@@ -59,6 +59,36 @@ describe('달별 집계', () => {
       { yearMonth: '2026-10', dealCount: 2, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: 150000000, avgMonthlyRent: 2500000 },
     ]);
     assert.deepEqual(toMonthly([], 'SALE'), []);
+  });
+});
+
+describe('일부 모음(COLLECTING) 의 monthly — 요청 기간의 모든 달 + collected (#267 2차)', () => {
+  const MONTHS = ['2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+  const EMPTY = { avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null };
+
+  test('모은 달: 거래가 있으면 toMonthly 값, 없으면 dealCount 0 · 평균 null / 못 모은 달: dealCount 도 null — 달 순서대로 빠짐없이', () => {
+    // 모은 달 = 07 · 08 · 10(08 은 거래 0건), 못 모은 달 = 09 · 11
+    const monthly = toPartialMonthly([row('2026-10', { price: 100n }), row('2026-07', { price: 300n })], 'SALE', MONTHS, ['2026-07', '2026-08', '2026-10']);
+    assert.deepEqual(monthly, [
+      { yearMonth: '2026-07', dealCount: 1, avgPrice: 300, minPrice: 300, maxPrice: 300, avgDeposit: null, avgMonthlyRent: null, collected: true },
+      { yearMonth: '2026-08', dealCount: 0, ...EMPTY, collected: true },
+      { yearMonth: '2026-09', dealCount: null, ...EMPTY, collected: false },
+      { yearMonth: '2026-10', dealCount: 1, avgPrice: 100, minPrice: 100, maxPrice: 100, avgDeposit: null, avgMonthlyRent: null, collected: true },
+      { yearMonth: '2026-11', dealCount: null, ...EMPTY, collected: false },
+    ]);
+    // 칸 순서는 READY 의 한 줄과 같고 끝에 collected 만 더한다
+    assert.deepEqual(Object.keys(monthly[0]), [...Object.keys(toMonthly([row('2026-07', { price: 1n })], 'SALE')[0]), 'collected']);
+  });
+
+  test('못 모은 달은 "거래 없음"(0)과 다르다 — 모은 달 거래 0건은 0, 못 모은 달은 null', () => {
+    const monthly = toPartialMonthly([], 'JEONSE', MONTHS, ['2026-07']);
+    assert.deepEqual(monthly.map((m) => [m.yearMonth, m.dealCount, m.collected]), [
+      ['2026-07', 0, true],
+      ['2026-08', null, false],
+      ['2026-09', null, false],
+      ['2026-10', null, false],
+      ['2026-11', null, false],
+    ]);
   });
 });
 

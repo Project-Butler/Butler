@@ -1,5 +1,17 @@
 // 시세 화면 계산 — 시세 응답(api-contract "시세" 모양)에서 대표 숫자 · 증감률 · 차트 값을 뽑는다. 순수 함수.
 // 데이터는 시세 API(국토교통부 실거래가, GET /market-prices/complexes/:complexId)의 응답이다.
+//
+// ┌ 일부만 모았을 때(#267 2차) ─────────────────────────────────────────────────────────────────────────────┐
+// │ 원칙: 모은 달의 사실(거래 · 월별 평균)은 다 보이고, 빠진 달이 들어가면 틀리는 숫자만 조건이 맞을 때 보인다          │
+// │ 못 모은 달 = monthly 에서 collected 가 false 인 달(일부 모음 응답에만 있다 — READY 는 칸이 없고 모두 모은 달)          │
+// │ 최근 3개월 평균   그 3개월(지난달까지)이 모두 모은 달일 때만. 아니면 큰 숫자 없이 "최근 3개월 평균은 모으는 중"      │
+// │ 직전 3개월 대비   최근 3개월 + 직전 3개월, 6개월이 모두 모은 달일 때만. 아니면 증감 줄을 숨긴다                     │
+// │ 대신 계산 안 함   "모은 달 중 가장 최근 3개월" 로 바꿔 계산하지 않는다 — 기간이 바뀌어 보여 오해를 산다              │
+// │ 왜: 빠진 달을 0 이나 "거래 없음" 처럼 넘기면 평균 · 증감이 조용히 틀린다(거래 없는 달은 원래 평균에서 빠지는 게 맞다) │
+// │ 차트            못 모은 달은 선을 끊고 비운다(점선으로 잇지 않음) — 거래 없는 달(점선)과 구분(chartSeries)           │
+// │                 줄마다 자기 응답 기준(비교 선도), 띠 · 범례는 주 선만 — 글자는 "매매 수집 중"(missingMonthsLabel)       │
+// └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+import { AVERAGE_COLLECTING_TEXT, missingMonthsLabel } from './communityMarketCollecting';
 
 export const DEAL_TYPES = [
   { value: 'SALE', label: '매매' },
@@ -68,6 +80,24 @@ export const chartMonths = (coveredFromYearMonth, now = new Date(), count = 12) 
 };
 
 
+// ===== 모은 달인지(#267 2차) =====
+// 그 달을 모았는지 — monthly 에 collected false 로 있는 달만 못 모은 달(READY 는 칸이 없고, 거래 없는 달은 줄이 없다 → 모은 달)
+export const isCollectedMonth = (monthly, yearMonth) => monthly.find((row) => row.yearMonth === yearMonth)?.collected !== false;
+// endMonth 까지 거꾸로 count 개월이 모두 모은 달인지
+export const allCollected = (monthly, endMonth, count) =>
+  Array.from({ length: count }, (_, index) => shiftMonth(endMonth, -index)).every((month) => isCollectedMonth(monthly, month));
+
+// 차트 한 줄의 값 — values(반올림한 평균, 거래 없는 달 · 못 모은 달은 null) · missing(못 모은 달 true, 그 줄의 응답 기준) · missingLabel("매매 수집 중").
+// months 와 같은 길이. 비교 선(매매 화면의 전세 선)도 자기 응답으로 만든다 — 매매와 전월세는 따로 모으므로 못 모은 달이 다를 수 있다
+export const chartSeries = (data, months, dealType) => ({
+  values: months.map((month) => {
+    const row = data.monthly.find((item) => item.yearMonth === month);
+    return row && row.collected !== false ? chartValue(row, dealType) : null;
+  }),
+  missing: months.map((month) => !isCollectedMonth(data.monthly, month)),
+  missingLabel: missingMonthsLabel(getDealTypeLabel(dealType)),
+});
+
 // 최근 3개월(endMonth 까지, 그 달 포함) 평균 — 건수 가중, 반올림 전. 거래가 없으면 null.
 export const recentAverage = (monthly, endMonth, field) => {
   const from = shiftMonth(endMonth, -(RECENT_MONTHS - 1));
@@ -92,9 +122,15 @@ export const formatChange = (rate) => {
 // 대표 숫자 · 설명 한 줄 · 증감(시세 탭 · 브리핑이 같이 쓴다). 모두 지난달까지, 평균은 반올림(roundAverage).
 // headline: 매매 · 전세는 최근 3개월 평균 금액, 월세는 "보증금 X / 월 Y". caption: "최근 3개월 평균 · 60–85㎡ · 전세 4억 6,000만"
 // — 큰 숫자에 나온 금액은 되풀이하지 않고, 매매 화면에서만 전세 평균을 덧붙인다(jeonse 가 있을 때)
+// 일부만 모았으면(맨 위 상자): 최근 3개월이 다 모이지 않았으면 headline 없이 caption "최근 3개월 평균은 모으는 중 · 60–85㎡" · 증감 없음,
+// 6개월이 다 모이지 않았으면 증감만 없음. 전세 덧붙임도 전세 응답의 최근 3개월이 다 모였을 때만
 export const recentSummary = ({ prices, jeonse = null, dealType, band, now = new Date() }) => {
   const endMonth = lastCompleteMonth(now);
-  const average = (data, field) => (data ? roundAverage(recentAverage(data.monthly, endMonth, field), field) : null);
+  const recentCovered = (data) => allCollected(data.monthly, endMonth, RECENT_MONTHS);
+  if (!recentCovered(prices)) {
+    return { endMonth, headline: null, caption: `${AVERAGE_COLLECTING_TEXT} · ${band.label}`, rate: null, changeText: null, averagePending: true };
+  }
+  const average = (data, field) => (data && recentCovered(data) ? roundAverage(recentAverage(data.monthly, endMonth, field), field) : null);
   const extras = [];
   let headline = null;
   if (dealType === 'SALE') {
@@ -113,8 +149,9 @@ export const recentSummary = ({ prices, jeonse = null, dealType, band, now = new
   const caption = headline
     ? [`최근 ${RECENT_MONTHS}개월 평균`, band.label, ...extras].join(' · ')
     : `최근 ${RECENT_MONTHS}개월 ${getDealTypeLabel(dealType)} 거래 없음 · ${band.label}`;
-  const rate = periodChange(prices.monthly, endMonth, MONTHLY_FIELD[dealType]);
-  return { endMonth, headline, caption, rate, changeText: formatChange(rate) };
+  // 증감은 최근 3개월 + 직전 3개월이 모두 모은 달일 때만
+  const rate = allCollected(prices.monthly, endMonth, RECENT_MONTHS * 2) ? periodChange(prices.monthly, endMonth, MONTHLY_FIELD[dealType]) : null;
+  return { endMonth, headline, caption, rate, changeText: formatChange(rate), averagePending: false };
 };
 
 // 원 → "12억 3,000만" / "12억 500만" / "9억" / "8,000만" / "280만" (만원 아래는 반올림)

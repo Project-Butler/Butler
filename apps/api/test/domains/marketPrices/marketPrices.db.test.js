@@ -180,6 +180,58 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     assert.ok(names.includes('한강극동') && names.includes('시세 테스트 현대1'));
   });
 
+  test('일부 모음(COLLECTING): 모은 달의 데이터 — monthly 는 요청 기간의 모든 달 + collected(못 모은 달은 null), 거래는 모은 달의 것만, asOf 는 모은 달 기준 (#267 2차)', async () => {
+    // 전월세 2026-10 에는 거래가 5건 있다(앞 테스트). 모은 기록만 잠깐 바꿨다가 그대로 되돌린다
+    const saved = await prisma.marketCollection.findMany({ where: { sigunguCode: SGG, dealKind: 'RENT' } });
+    const uncollect = (yearMonth) =>
+      prisma.marketCollection.update({
+        where: { sigunguCode_yearMonth_dealKind: { sigunguCode: SGG, yearMonth, dealKind: 'RENT' } },
+        data: { collectedAt: null, status: 'FAILED', lastErrorCode: 'TIMEOUT' },
+      });
+    const restore = async () => {
+      for (const row of saved) await prisma.marketCollection.update({ where: { id: row.id }, data: { collectedAt: row.collectedAt, status: row.status, attemptedAt: row.attemptedAt, lastErrorCode: row.lastErrorCode } });
+    };
+    const regionJeonse = async () => (await (await api(tenant, `/api/v1/market-prices/regions/${DONG}?dealType=JEONSE&fromYearMonth=2025-12&toYearMonth=2026-11`)).json()).data;
+    const expectedAsOf = (excluded) => {
+      const latest = saved.filter((row) => row.yearMonth !== excluded && row.collectedAt).reduce((max, row) => (row.collectedAt > max ? row.collectedAt : max), new Date(0));
+      return new Date(latest.getTime() + 9 * HOUR).toISOString().slice(0, 10);
+    };
+    try {
+      // ① 거래가 있는 달(2026-10)을 못 모음 → 그 달은 collected false · null, 그 달 거래는 저장돼 있어도 내보내지 않는다
+      await uncollect('2026-10');
+      const missingDealMonth = await regionJeonse();
+      assert.equal(missingDealMonth.collectionStatus, 'COLLECTING');
+      assert.deepEqual(Object.keys(missingDealMonth).sort(), ['areaMax', 'areaMin', 'asOf', 'collectionProgress', 'collectionStatus', 'complexId', 'coveredFromYearMonth', 'dealType', 'jobId', 'legalDongCode', 'monthly', 'recentDeals', 'scope', 'source'].sort());
+      assert.equal(missingDealMonth.monthly.length, 12); // 요청 기간 2025-12 ~ 2026-11 의 모든 달
+      assert.deepEqual(missingDealMonth.monthly.map((row) => row.yearMonth), retentionMonths(new Date()).slice(1));
+      const october = missingDealMonth.monthly.find((row) => row.yearMonth === '2026-10');
+      assert.deepEqual(october, { yearMonth: '2026-10', dealCount: null, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null, collected: false });
+      assert.ok(missingDealMonth.monthly.filter((row) => row.yearMonth !== '2026-10').every((row) => row.collected === true && row.dealCount === 0));
+      assert.deepEqual(missingDealMonth.recentDeals, []);
+      assert.equal(missingDealMonth.asOf, expectedAsOf('2026-10'));
+      assert.equal(missingDealMonth.coveredFromYearMonth, null);
+      assert.deepEqual([missingDealMonth.collectionProgress.collectedMonths, missingDealMonth.collectionProgress.failedMonths], [12, 1]);
+
+      // ② 거래 없는 달(2026-09)을 못 모음 → 2026-10 의 거래 · 평균은 그대로 보인다
+      await restore();
+      await uncollect('2026-09');
+      const missingQuietMonth = await regionJeonse();
+      assert.equal(missingQuietMonth.collectionStatus, 'COLLECTING');
+      const byMonth = new Map(missingQuietMonth.monthly.map((row) => [row.yearMonth, row]));
+      assert.deepEqual([byMonth.get('2026-09').collected, byMonth.get('2026-09').dealCount], [false, null]);
+      assert.deepEqual([byMonth.get('2026-10').collected, byMonth.get('2026-10').dealCount, typeof byMonth.get('2026-10').avgDeposit], [true, 5, 'number']);
+      assert.deepEqual([byMonth.get('2026-08').collected, byMonth.get('2026-08').dealCount], [true, 0]);
+      assert.equal(missingQuietMonth.recentDeals.length, 5);
+      assert.ok(missingQuietMonth.recentDeals.every((deal) => deal.contractDate.startsWith('2026-10')));
+    } finally {
+      await restore();
+    }
+    // 되돌리면 READY 그대로(collected 칸 없음, 거래 있는 달만)
+    const ready = await regionJeonse();
+    assert.equal(ready.collectionStatus, 'READY');
+    assert.deepEqual(ready.monthly.map((row) => [row.yearMonth, row.dealCount, 'collected' in row]), [['2026-10', 5, false]]);
+  });
+
   test('면적 경계: areaMin < 전용면적 ≤ areaMax — 정확히 60 · 85 · 105㎡ 거래는 한 칩에만', async () => {
     const boundary = [60, 85, 105].map((exclusiveArea) => ({
       dealKind: 'TRADE', dealType: 'SALE', sigunguCode: SGG, contractYearMonth: '2026-10', legalDongCode: DONG, aptName: `경계 ${exclusiveArea}`,
