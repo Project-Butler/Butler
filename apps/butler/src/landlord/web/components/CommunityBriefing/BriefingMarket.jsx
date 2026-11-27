@@ -1,7 +1,9 @@
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
-import { chartMonths, chartValue, recentSummary } from '../../utils/communityMarketSummary';
+import { hasNoPartialDeals, partialCoverage, partialMarketEmptyText } from '../../utils/communityMarketCollecting';
+import { chartMonths, chartSeries, recentSummary } from '../../utils/communityMarketSummary';
 import { MarketSource } from '../CommunityMarket/MarketSource';
-import { PriceChart } from '../CommunityMarket/PriceChart';
+import { PartialBasis } from '../CommunityMarket/PartialBasis';
+import { hasMissingMonths, MissingLegend, PriceChart } from '../CommunityMarket/PriceChart';
 import { BriefingCollectingNote } from './BriefingCollectingNote';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
 import { BriefingSection } from './BriefingSection';
@@ -13,30 +15,39 @@ import { BriefingSection } from './BriefingSection';
 // 빈 상태 문구(면적대마다) — 앱 브리핑 시세 카드도 같은 문구
 export const briefingMarketEmptyText = (band) => `${band.label}에는 최근 매매 거래가 없습니다`;
 
-// 데이터 · 계산(대표 숫자 · 차트 값) — 앱 브리핑 시세 카드도 같은 것을 쓴다
+// 데이터 · 계산(대표 숫자 · 차트 값) — 앱 브리핑 시세 카드도 같은 것을 쓴다.
+// state: 'COLLECTING'(하나도 못 모음 — 안내) · 'EMPTY'(거래 없음) · 'DATA'(다 모았거나 일부 모음 — 대표 숫자 · 차트). 일부 모음이면 partial 이 있다(#267 2차)
 export const useBriefingMarket = ({ building, band }) => {
   const prices = useGetMarketPrices({ complexId: building.complexId, dealType: 'SALE', areaMin: band.areaMin, areaMax: band.areaMax });
   const data = prices.data;
+  const partial = data ? partialCoverage(data) : null;
   const summary = data ? recentSummary({ prices: data, dealType: 'SALE', band }) : null;
-  // 아직 수집 안 된 단지(COLLECTING)는 asOf 가 없다 — 그때는 차트를 그리지 않는다
+  // 하나도 못 모은 단지(COLLECTING)는 asOf 가 없다 — 그때는 차트를 그리지 않는다. 일부 모음이면 못 모은 달은 비운다(missing)
   const months = data?.asOf ? chartMonths(data.coveredFromYearMonth) : [];
-  const values = months.map((month) => {
-    const row = data.monthly.find((item) => item.yearMonth === month);
-    return row ? chartValue(row, 'SALE') : null;
-  });
-  return { prices, data, summary, months, values };
+  const { values, missing } = data?.asOf ? chartSeries(data, months, 'SALE') : { values: [], missing: [] };
+  let state = null;
+  if (data) {
+    if (data.collectionStatus === 'COLLECTING' && !partial) state = 'COLLECTING';
+    else if (partial ? hasNoPartialDeals(data) : data.recentDeals.length === 0 && data.monthly.length === 0) state = 'EMPTY';
+    else state = 'DATA';
+  }
+  // 빈 상태 문구 — 일부 모음이면 본 범위를 밝힌다("모은 8개월 동안 60–85㎡ 매매 거래가 없습니다")
+  const emptyText = partial ? partialMarketEmptyText(partial, band.label, '매매') : briefingMarketEmptyText(band);
+  return { prices, data, partial, state, emptyText, summary, months, values, missing };
 };
 
 export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
-  const { prices, data, summary, months, values } = useBriefingMarket({ building, band });
+  const { prices, data, state, emptyText, summary, months, values, missing } = useBriefingMarket({ building, band });
+  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values, missing }];
 
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  // 아직 시도 전이면 한 줄, 일부 모음 · 받기 실패면 제목 · 설명 두 줄 — 최근 거래 칸도 같은 안내(BriefingCollectingNote)
-  else if (data.collectionStatus === 'COLLECTING') body = <BriefingCollectingNote prices={data} />;
-  else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <BriefingNote>{briefingMarketEmptyText(band)}</BriefingNote>;
+  // 하나도 못 모았으면 안내(시도 전 한 줄 / 받기 실패 두 줄) — 최근 거래 칸도 같은 안내(BriefingCollectingNote)
+  else if (state === 'COLLECTING') body = <BriefingCollectingNote prices={data} />;
+  else if (state === 'EMPTY') body = <BriefingNote>{emptyText}</BriefingNote>;
   else {
+    // 다 모았거나 일부 모음 — 일부 모음이면 큰 숫자 · 증감은 조건이 맞을 때만(recentSummary), 차트는 못 모은 달을 비우고, 맨 아래 "N개월 기준"
     body = (
       <div className="space-y-1 px-5 py-4">
         {summary.headline && <div className="font-num text-kpi font-bold tabular-nums leading-tight text-ink">{summary.headline}</div>}
@@ -45,13 +56,11 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
           <span className="font-num text-sub leading-tight tabular-nums text-ink-3">{summary.caption}</span>
         </div>
         <div className="pt-2">
-          <PriceChart
-            months={months}
-            height={160}
-            series={[{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values }]}
-          />
+          <PriceChart months={months} height={160} series={series} />
         </div>
+        {hasMissingMonths(series) && <MissingLegend />}
         {data.asOf && <MarketSource source={data.source} asOf={data.asOf} className="pt-1" />}
+        <PartialBasis prices={data} />
       </div>
     );
   }

@@ -1,5 +1,7 @@
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
+import { partialCoverage, partialDealsEmptyText } from '../../utils/communityMarketCollecting';
 import { formatWon } from '../../utils/communityMarketSummary';
+import { PartialBasis } from '../CommunityMarket/PartialBasis';
 import { BriefingCollectingNote } from './BriefingCollectingNote';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
 import { BriefingSection } from './BriefingSection';
@@ -7,40 +9,51 @@ import { BriefingSection } from './BriefingSection';
 const MAX_DEALS = 5;
 export const BRIEFING_DEALS_EMPTY_TEXT = '최근 거래가 없습니다';
 
-// 데이터 · 계산 — 앱 브리핑 카드(app CommunityAppBriefingPage)도 같은 것을 쓴다(같은 요청 · 같은 5건)
+// 데이터 · 계산 — 앱 브리핑 카드(app CommunityAppBriefingPage)도 같은 것을 쓴다(같은 요청 · 같은 5건).
+// state: 'COLLECTING'(하나도 못 모음 — 안내) · 'EMPTY'(거래 없음 — emptyText) · 'DATA'. 일부 모음이면 partial(#267 2차 — 모은 달의 거래만 온다)
 export const useBriefingDeals = ({ building, band }) => {
   const prices = useGetMarketPrices({ complexId: building.complexId, dealType: 'SALE', areaMin: band.areaMin, areaMax: band.areaMax });
-  const deals = prices.data?.recentDeals.slice(0, MAX_DEALS) ?? [];
-  return { prices, deals };
+  const data = prices.data;
+  const deals = data?.recentDeals.slice(0, MAX_DEALS) ?? [];
+  const partial = data ? partialCoverage(data) : null;
+  let state = null;
+  if (data) state = data.collectionStatus === 'COLLECTING' && !partial ? 'COLLECTING' : deals.length === 0 ? 'EMPTY' : 'DATA';
+  // "최근 거래가 없습니다" 는 다 모았을 때만 — 일부 모음이면 본 범위를 밝힌다("모은 8개월 동안 거래가 없습니다")
+  const emptyText = partial ? partialDealsEmptyText(partial) : BRIEFING_DEALS_EMPTY_TEXT;
+  return { prices, deals, partial, state, emptyText };
 };
 
 // 브리핑 — 최근 거래: 시세 섹션과 같은 기준(내 면적대 · 매매)의 거래 최대 5건. 한 줄 = 날짜 · 전용 · 층 | 금액.
 // 같은 훅 · 같은 키라 시세 섹션과 요청을 한 번만 한다.
-// 시세를 아직 모으는 중(COLLECTING)이면 서버가 거래를 비워 준다 — "최근 거래가 없습니다" 가 아니라 시세 칸과 같은 안내(BriefingCollectingNote).
-// "최근 거래가 없습니다" 는 다 모았는데(READY) 그 면적대 거래가 0건일 때만
+// 시세를 하나도 못 모았으면(COLLECTING) 서버가 거래를 비워 준다 — "최근 거래가 없습니다" 가 아니라 시세 칸과 같은 안내(BriefingCollectingNote).
+// 일부만 모았으면 모은 달의 거래 + 맨 아래 "N개월 기준"(PartialBasis). "최근 거래가 없습니다" 는 다 모았는데(READY) 0건일 때만
 export const BriefingDeals = ({ building, band, onMore, className = '' }) => {
-  const { prices, deals } = useBriefingDeals({ building, band });
+  const { prices, deals, state, emptyText } = useBriefingDeals({ building, band });
 
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (prices.data.collectionStatus === 'COLLECTING') body = <BriefingCollectingNote prices={prices.data} />;
-  else if (deals.length === 0) body = <BriefingNote>{BRIEFING_DEALS_EMPTY_TEXT}</BriefingNote>;
+  else if (state === 'COLLECTING') body = <BriefingCollectingNote prices={prices.data} />;
+  else if (state === 'EMPTY') body = <BriefingNote>{emptyText}</BriefingNote>;
   else {
     body = (
-      <ul>
-        {deals.map((deal) => (
-          <li
-            key={`${deal.contractDate}-${deal.floor}-${deal.exclusiveArea}`}
-            className="flex items-center justify-between gap-3 border-b border-line px-5 py-3 last:border-b-0"
-          >
-            <span className="font-num text-sub tabular-nums text-ink-2">
-              {deal.contractDate.slice(5)} · {Math.floor(deal.exclusiveArea)}㎡ · {deal.floor}층
-            </span>
-            <span className="whitespace-nowrap font-num text-body font-medium tabular-nums text-ink">{formatWon(deal.price)}</span>
-          </li>
-        ))}
-      </ul>
+      <>
+        <ul>
+          {deals.map((deal) => (
+            <li
+              key={`${deal.contractDate}-${deal.floor}-${deal.exclusiveArea}`}
+              className="flex items-center justify-between gap-3 border-b border-line px-5 py-3 last:border-b-0"
+            >
+              <span className="font-num text-sub tabular-nums text-ink-2">
+                {deal.contractDate.slice(5)} · {Math.floor(deal.exclusiveArea)}㎡ · {deal.floor}층
+              </span>
+              <span className="whitespace-nowrap font-num text-body font-medium tabular-nums text-ink">{formatWon(deal.price)}</span>
+            </li>
+          ))}
+        </ul>
+        {/* 일부만 모았을 때만(그 밖에는 그리지 않는다) */}
+        <PartialBasis prices={prices.data} className="border-t border-line px-5 py-3" />
+      </>
     );
   }
 

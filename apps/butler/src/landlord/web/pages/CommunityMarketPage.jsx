@@ -9,19 +9,20 @@ import { EmptyState } from '../components/CommunityLayout/EmptyState';
 import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { CollectingDescription } from '../components/CommunityMarket/CollectingDescription';
 import { MarketSource } from '../components/CommunityMarket/MarketSource';
-import { ChartLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
+import { PartialBasis } from '../components/CommunityMarket/PartialBasis';
+import { ChartLegend, hasMissingMonths, MissingLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
 import { Segment } from '../components/CommunitySegment/Segment';
 import {
   AREA_BANDS,
   chartMonths,
-  chartValue,
+  chartSeries,
   DEAL_TYPES,
   formatWon,
   getDealTypeLabel,
   pickAreaBands,
   recentSummary,
 } from '../utils/communityMarketSummary';
-import { collectingNotice } from '../utils/communityMarketCollecting';
+import { collectingNotice, hasNoPartialDeals, partialCoverage, partialMarketEmptyText } from '../utils/communityMarketCollecting';
 
 // 시세 화면.
 // 데이터는 useGetMarketPrices(시세 API — 국토교통부 실거래가, 연동 규격 2장 모양). 거래 유형 · 면적대를 바꾸면 그 조합으로 다시 가져온다.
@@ -64,27 +65,27 @@ const AreaChips = ({ owned, value, onChange }) => (
 // 대표 숫자 카드: 최근 3개월 평균(지난달까지) + 증감률 + 무엇의 평균인지 한 줄 + 차트(지난달까지).
 // 이번 달은 신고가 덜 들어와 빼고, 이번 달 거래는 오른쪽 "최근 거래" 표에만 보인다(utils/communityMarketSummary "이번 달 빼기").
 // 매매는 디자인대로 전세 선과 전세 평균을 함께(전세 조회를 하나 더 한다), 전세 · 월세는 그 유형만.
-const PriceCard = ({ prices, jeonse, dealType, band }) => {
-  const summary = recentSummary({ prices, jeonse, dealType, band });
-  const months = chartMonths(prices.coveredFromYearMonth);
-  const valuesOf = (data, type) =>
-    months.map((month) => {
-      const row = data.monthly.find((item) => item.yearMonth === month);
-      return row ? chartValue(row, type) : null;
-    });
-
+// 일부만 모았으면(#267 2차) 못 모은 달은 차트에서 비우고("수집 중" 띠 · 범례), 최근 3개월이 다 모이지 않았으면 큰 숫자 대신 "모으는 중"
+export const priceSeries = ({ prices, jeonse, dealType, months }) => {
   const series = [
     {
       label: dealType === 'MONTHLY' ? '월세(월)' : getDealTypeLabel(dealType),
       strokeClass: 'stroke-accent',
       fillClass: 'fill-accent',
       dotClass: 'bg-accent',
-      values: valuesOf(prices, dealType),
+      ...chartSeries(prices, months, dealType),
     },
   ];
   if (dealType === 'SALE' && jeonse?.monthly.length) {
-    series.push({ label: '전세', strokeClass: 'stroke-ink-3', fillClass: 'fill-ink-3', dotClass: 'bg-ink-3', values: valuesOf(jeonse, 'JEONSE') });
+    series.push({ label: '전세', strokeClass: 'stroke-ink-3', fillClass: 'fill-ink-3', dotClass: 'bg-ink-3', ...chartSeries(jeonse, months, 'JEONSE') });
   }
+  return series;
+};
+
+const PriceCard = ({ prices, jeonse, dealType, band }) => {
+  const summary = recentSummary({ prices, jeonse, dealType, band });
+  const months = chartMonths(prices.coveredFromYearMonth);
+  const series = priceSeries({ prices, jeonse, dealType, months });
 
   return (
     <Card className="flex flex-col gap-1 p-6">
@@ -106,6 +107,7 @@ const PriceCard = ({ prices, jeonse, dealType, band }) => {
         {series.map((line) => (
           <ChartLegend key={line.label} colorClass={line.dotClass} label={line.label} />
         ))}
+        {hasMissingMonths(series) && <MissingLegend />}
       </div>
     </Card>
   );
@@ -163,9 +165,16 @@ export const useMarketBodyState = ({ building, dealType }) => {
 
   const data = prices.data;
   const isCollecting = data?.collectionStatus === 'COLLECTING';
-  const collecting = isCollecting ? collectingNotice(data) : null;
-  const isEmpty = Boolean(data) && !isCollecting && data.recentDeals.length === 0 && data.monthly.length === 0;
-  return { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, isEmpty };
+  // 일부만 모았으면(#267 2차) 안내 대신 모은 달의 데이터를 보인다 — 안내(collecting)는 모은 달 데이터가 없을 때만
+  const partial = isCollecting ? partialCoverage(data) : null;
+  const collecting = isCollecting && !partial ? collectingNotice(data) : null;
+  // 빈 상태: 다 모았는데 거래 없음 / 일부 모음인데 모은 달에 거래 없음(범위를 밝힌 문구 — emptyTitle)
+  const isEmpty = Boolean(data) && (partial ? hasNoPartialDeals(data) : !isCollecting && data.recentDeals.length === 0 && data.monthly.length === 0);
+  const emptyTitle = partial
+    ? `${partialMarketEmptyText(partial, band.label, getDealTypeLabel(dealType))}.`
+    : `${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`;
+  const showData = Boolean(data) && (!isCollecting || Boolean(partial)) && !isEmpty;
+  return { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, partial, isEmpty, emptyTitle, showData };
 };
 
 // 거래 유형(?dealType=JEONSE|MONTHLY, 매매는 안 씀) — 앱 시세도 같은 주소 규칙
@@ -179,8 +188,15 @@ export const useMarketDealType = () => {
 
 // 건물마다 새로 시작하도록 key={complexId} 로 그린다(면적대 선택이 건물을 따라가지 않게).
 const MarketBody = ({ building, dealType, onDealTypeChange }) => {
-  const { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, isEmpty } = useMarketBodyState({ building, dealType });
-  const source = data?.source && data.asOf ? <MarketSource source={data.source} asOf={data.asOf} /> : null;
+  const { owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
+  // 출처 줄 + (일부만 모았으면) "최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요" — 감싸지 않고 차트 카드의 형제로(출처 줄이 카드 바로 다음)
+  const source =
+    data?.source && data.asOf ? (
+      <>
+        <MarketSource source={data.source} asOf={data.asOf} />
+        <PartialBasis prices={data} />
+      </>
+    ) : null;
 
   return (
     <>
@@ -199,11 +215,13 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
           일부 모음이면 "모으는 중 · 최근 13개월 중 n개월을 모았어요 · 매일 새벽 이어서", 하나도 못 모았는데 받기가 실패한 달이 있으면
           "아직 못 불러옴 · 매일 새벽 다시 시도 · 마지막 시도 날짜"(문구 · 이유는 utils/communityMarketCollecting) */}
       {collecting && <EmptyState title={collecting.title} description={<CollectingDescription notice={collecting} />} />}
-      {isEmpty && <EmptyState title={`${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`} />}
-      {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 모으는 중에는 없다. 차트 카드 바로 아래(스크롤 없이 보이게) */}
+      {/* 다 모았는데 거래 없음 / 일부 모음인데 모은 달에 거래 없음(범위를 밝힌 문구) */}
+      {isEmpty && <EmptyState title={emptyTitle} />}
+      {/* 출처 줄(활용신청서의 출처 표시). 모은 날(asOf)이 있을 때만 — 하나도 못 모았으면 없다. 차트 카드 바로 아래(스크롤 없이 보이게) */}
       {isEmpty && source}
 
-      {data && !isCollecting && !isEmpty && (
+      {/* 다 모았거나(READY) 일부만 모았을 때(#267 2차 — 모은 달의 데이터, 틀릴 수 있는 숫자는 utils/communityMarketSummary 가 막는다) */}
+      {showData && (
         <div className="grid items-start gap-6 lg:grid-cols-3">
           <div className="space-y-2 lg:col-span-2">
             <PriceCard prices={data} jeonse={dealType === 'SALE' ? jeonse.data : null} dealType={dealType} band={band} />

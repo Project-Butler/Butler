@@ -1,6 +1,11 @@
 // 시세 읽기(요청 경로) — 시세 계획서 6절, 응답은 연동 규격 2장 "시세" 와 같은 모양. **외부 API 를 부르지 않는다**(저장된 표만).
 // 단지 시세 = 그 단지에 이어진 거래, 동 시세 = 그 법정동의 거래 전부(이어진 · 못 이은 것 모두).
-// 아직 그 시군구를 다 모으지 못했으면 COLLECTING(monthly · recentDeals 빈 배열 + 요청한 사람 이름의 작업 id + 모으기 진행 collectionProgress).
+// 아직 그 시군구를 다 모으지 못했으면 COLLECTING(요청한 사람 이름의 작업 id + 모으기 진행 collectionProgress).
+//   · 요청 기간에 모은 달이 하나도 없으면 monthly · recentDeals 빈 배열, asOf null(#268 그대로)
+//   · 모은 달이 있으면 그 달들의 데이터를 준다(#267 2차 — 모은 만큼 보여 주기): monthly = 요청 기간의 모든 달 + collected,
+//     못 모은 달은 dealCount · 평균 모두 null(모은 달의 "거래 없음" = dealCount 0 과 구분), recentDeals = 모은 달의 거래만,
+//     asOf = 모은 달 가운데 가장 최근 수집 날짜. 빠진 달 때문에 틀릴 수 있는 숫자(3개월 평균 · 증감)는 화면이 막는다(utils/communityMarketSummary)
+// READY 응답은 그대로 — collected 칸 없음, 거래 있는 달만(DB 테스트가 칸 목록을 그대로 본다)
 
 import { AppError } from '../../../platform/AppError.js';
 import { prisma } from '../../../platform/prismaClient.js';
@@ -40,7 +45,7 @@ export const parseMarketQuery = (query, now = new Date()) => {
   return { dealType, areaMin, areaMax, from, to };
 };
 
-// 그 시군구 · 종류의 모은 기록 → { coveredMonths(Set), coveredFromYearMonth, lastCollectedAt }
+// 그 시군구 · 종류의 모은 기록 → { coveredMonths(Set), collectedAtOf(Map 달 → 마지막 수집 시각), coveredFromYearMonth, lastCollectedAt }
 const loadCoverage = async (sigunguCode, kind) => {
   const rows = await prisma.marketCollection.findMany({
     where: { sigunguCode, dealKind: kind, collectedAt: { not: null } },
@@ -48,7 +53,8 @@ const loadCoverage = async (sigunguCode, kind) => {
   });
   const months = rows.map((row) => row.yearMonth).sort();
   const lastCollectedAt = rows.reduce((latest, row) => (!latest || row.collectedAt > latest ? row.collectedAt : latest), null);
-  return { coveredMonths: new Set(months), coveredFromYearMonth: months[0] ?? null, lastCollectedAt };
+  const collectedAtOf = new Map(rows.map((row) => [row.yearMonth, row.collectedAt]));
+  return { coveredMonths: new Set(months), collectedAtOf, coveredFromYearMonth: months[0] ?? null, lastCollectedAt };
 };
 
 // COLLECTING 응답의 collectionProgress(순수 함수) — 그 시군구 · 그 종류(매매 / 전월세)의, 보관 기간 months 의 달마다 셋 중 하나:
@@ -133,6 +139,19 @@ export const toMonthly = (deals, dealType) => {
   });
 };
 
+// 일부 모음(COLLECTING)의 monthly(순수 함수) — months(요청 기간의 모든 달, 오름차순)마다 한 줄 + collected.
+// 모은 달: 거래가 있으면 toMonthly 와 같은 값, 없으면 dealCount 0 · 평균 null. 못 모은 달: dealCount 도 null(0 이 아니다 — "거래 없음" 과 구분).
+// deals 는 모은 달의 거래만 들어온다(buildPrices 가 거른다)
+export const toPartialMonthly = (deals, dealType, months, collectedMonths) => {
+  const collected = new Set(collectedMonths);
+  const byMonth = new Map(toMonthly(deals, dealType).map((row) => [row.yearMonth, row]));
+  const empty = { avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null };
+  return months.map((yearMonth) => {
+    if (!collected.has(yearMonth)) return { yearMonth, dealCount: null, ...empty, collected: false };
+    return { ...(byMonth.get(yearMonth) ?? { yearMonth, dealCount: 0, ...empty }), collected: true };
+  });
+};
+
 const toRecentDeal = (deal, complexNames) => ({
   contractDate: deal.contractDate.toISOString().slice(0, 10),
   dealType: deal.dealType,
@@ -143,6 +162,32 @@ const toRecentDeal = (deal, complexNames) => ({
   deposit: toNumber(deal.deposit),
   monthlyRent: toNumber(deal.monthlyRent),
 });
+
+// scope 의 거래(요청 기간 · 면적 · 종류). onlyMonths 를 주면 그 계약월만(일부 모음 — 모은 달). 최근 계약일부터
+const readDeals = ({ scope, complexId, legalDongCode, query, onlyMonths }) => {
+  // 면적: areaMin < 전용면적 ≤ areaMax(규칙 파일 areaRange — 한 거래가 이웃한 두 칩에 나오지 않게)
+  const area = areaRange(query.areaMin, query.areaMax);
+  return prisma.marketDeal.findMany({
+    where: {
+      ...(scope === 'COMPLEX' ? { complexId } : { legalDongCode }),
+      dealType: query.dealType,
+      contractDate: { gte: firstDayOf(query.from), lte: lastDayOf(query.to) },
+      ...(onlyMonths ? { contractYearMonth: { in: onlyMonths } } : {}),
+      ...(Object.keys(area).length ? { exclusiveArea: area } : {}),
+    },
+    select: { contractYearMonth: true, contractDate: true, dealType: true, complexId: true, aptName: true, exclusiveArea: true, floor: true, price: true, deposit: true, monthlyRent: true },
+    orderBy: [{ contractDate: 'desc' }, { id: 'asc' }],
+  });
+};
+
+// 최근 거래 RECENT_DEALS 건(이어진 단지면 우리 단지 이름)
+const toRecentDeals = async (deals) => {
+  const recent = deals.slice(0, RECENT_DEALS);
+  const ids = [...new Set(recent.map((deal) => deal.complexId).filter(Boolean))];
+  const complexes = ids.length ? await prisma.complex.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+  const names = new Map(complexes.map((complex) => [complex.id, complex.name]));
+  return recent.map((deal) => toRecentDeal(deal, names));
+};
 
 // 공통: scope 의 거래를 읽어 규격 모양으로. complexCreatedAt 은 단지 시세에서만(마지막 수집 뒤에 등록된 단지면 읽기 전에 잇는다)
 const buildPrices = async ({ user, scope, complexId, legalDongCode, sigunguCode, complexCreatedAt, query, now }) => {
@@ -162,31 +207,36 @@ const buildPrices = async ({ user, scope, complexId, legalDongCode, sigunguCode,
   const keep = new Set(keepMonths);
   const required = yearMonthsBetween(query.from, query.to).filter((month) => keep.has(month));
   const missing = required.filter((month) => !coverage.coveredMonths.has(month));
+  // 마지막 수집 뒤에 등록된 단지 — 원천을 부르지 않고 저장된 거래를 지금 잇는다(DB 만, 다음 정기 실행 전까지만 일어난다)
+  const relinkIfNew = async () => {
+    if (complexCreatedAt && coverage.lastCollectedAt && complexCreatedAt > coverage.lastCollectedAt) await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));
+  };
   if (missing.length > 0 || !coverage.lastCollectedAt) {
     const jobId = await ensureBackfillJob(user.id, sigunguCode);
     // 진행은 요청 기간이 아니라 보관 기간 전체 기준(정기 실행이 채우는 단위). READY 응답에는 이 칸이 없다(규격 모양 그대로)
     const collectionProgress = await loadCollectionProgress(sigunguCode, kind, keepMonths);
-    return { ...common, coveredFromYearMonth: null, asOf: null, collectionStatus: 'COLLECTING', jobId, collectionProgress, monthly: [], recentDeals: [] };
+    const collecting = { ...common, coveredFromYearMonth: null, collectionStatus: 'COLLECTING', jobId, collectionProgress };
+    // 요청 기간에 모은 달이 하나도 없으면 지금(#268) 그대로
+    const months = yearMonthsBetween(query.from, query.to);
+    const collectedMonths = months.filter((month) => coverage.coveredMonths.has(month));
+    if (collectedMonths.length === 0) return { ...collecting, asOf: null, monthly: [], recentDeals: [] };
+    // 모은 달이 있으면 그 달들의 데이터(#267 2차) — 거래는 모은 달의 것만, asOf 는 모은 달 가운데 가장 최근 수집 날짜.
+    // coveredFromYearMonth 는 null 그대로 — 채우면 화면이 그 앞 달을 차트에서 잘라 "수집 중" 칸이 사라진다
+    await relinkIfNew();
+    const deals = await readDeals({ scope, complexId, legalDongCode, query, onlyMonths: collectedMonths });
+    const lastCollected = collectedMonths.reduce((latest, month) => {
+      const at = coverage.collectedAtOf.get(month);
+      return !latest || at > latest ? at : latest;
+    }, null);
+    return {
+      ...collecting,
+      asOf: kstDate(lastCollected),
+      monthly: toPartialMonthly(deals, query.dealType, months, collectedMonths),
+      recentDeals: await toRecentDeals(deals),
+    };
   }
-  // 마지막 수집 뒤에 등록된 단지 — 원천을 부르지 않고 저장된 거래를 지금 잇는다(DB 만, 다음 정기 실행 전까지만 일어난다)
-  if (complexCreatedAt && complexCreatedAt > coverage.lastCollectedAt) await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));
-
-  // 면적: areaMin < 전용면적 ≤ areaMax(규칙 파일 areaRange — 한 거래가 이웃한 두 칩에 나오지 않게)
-  const area = areaRange(query.areaMin, query.areaMax);
-  const deals = await prisma.marketDeal.findMany({
-    where: {
-      ...(scope === 'COMPLEX' ? { complexId } : { legalDongCode }),
-      dealType: query.dealType,
-      contractDate: { gte: firstDayOf(query.from), lte: lastDayOf(query.to) },
-      ...(Object.keys(area).length ? { exclusiveArea: area } : {}),
-    },
-    select: { contractYearMonth: true, contractDate: true, dealType: true, complexId: true, aptName: true, exclusiveArea: true, floor: true, price: true, deposit: true, monthlyRent: true },
-    orderBy: [{ contractDate: 'desc' }, { id: 'asc' }],
-  });
-  const recent = deals.slice(0, RECENT_DEALS);
-  const ids = [...new Set(recent.map((deal) => deal.complexId).filter(Boolean))];
-  const complexes = ids.length ? await prisma.complex.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
-  const names = new Map(complexes.map((complex) => [complex.id, complex.name]));
+  await relinkIfNew();
+  const deals = await readDeals({ scope, complexId, legalDongCode, query });
   return {
     ...common,
     coveredFromYearMonth: coverage.coveredFromYearMonth,
@@ -194,7 +244,7 @@ const buildPrices = async ({ user, scope, complexId, legalDongCode, sigunguCode,
     collectionStatus: 'READY',
     jobId: null,
     monthly: toMonthly(deals, query.dealType),
-    recentDeals: recent.map((deal) => toRecentDeal(deal, names)),
+    recentDeals: await toRecentDeals(deals),
   };
 };
 

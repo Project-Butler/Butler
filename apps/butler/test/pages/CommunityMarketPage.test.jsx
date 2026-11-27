@@ -251,3 +251,102 @@ describe('차트 · 대표 숫자 — 빈 달은 점선, 이번 달은 빼고 �
     expect(within(screen.getByRole('table')).getAllByRole('row')[1]).toHaveTextContent('2026-11-05');
   });
 });
+
+describe('일부만 모았을 때 — 모은 달의 시세를 보이고 틀릴 수 있는 숫자만 막는다 (#267 2차)', () => {
+  const MONTHS = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+  const row = (yearMonth, dealCount, values) => ({ yearMonth, dealCount, avgPrice: null, minPrice: null, maxPrice: null, avgDeposit: null, avgMonthlyRent: null, ...values });
+  const deal = (contractDate, price) => ({ contractDate, dealType: 'SALE', complexName: '파크리오', exclusiveArea: 84.79, floor: 9, price, deposit: null, monthlyRent: null });
+  // 다 모았을 때의 위 "차트 · 대표 숫자" 와 같은 거래(5월 20억 × 2 · 7월 21억 · 8월 22억 · 10월 24억 × 2 · 11월 30억)
+  const DEALS = { '2026-05': [2, 2000000000], '2026-07': [1, 2100000000], '2026-08': [1, 2200000000], '2026-10': [2, 2400000000], '2026-11': [1, 3000000000] };
+  const RECENT = [deal('2026-11-05', 3000000000), deal('2026-10-28', 2400000000), deal('2026-05-20', 2000000000)];
+  // 서버의 일부 모음 응답 모양: 요청 기간의 모든 달 + collected(못 모은 달은 null), 거래는 모은 달의 것만, asOf 는 모은 달 기준
+  const partialSale = (missing, deals = DEALS) => ({
+    ...ready({ dealType: 'SALE' }),
+    coveredFromYearMonth: null,
+    asOf: '2026-11-16',
+    collectionStatus: 'COLLECTING',
+    jobId: 'job-1',
+    collectionProgress: progress({ collectedMonths: 13 - missing.length, failedMonths: missing.length, notTriedMonths: 0, lastErrorCode: '30' }),
+    monthly: MONTHS.map((yearMonth) => {
+      if (missing.includes(yearMonth)) return { ...row(yearMonth, null), collected: false };
+      return deals[yearMonth] ? { ...row(yearMonth, deals[yearMonth][0], { avgPrice: deals[yearMonth][1] }), collected: true } : { ...row(yearMonth, 0), collected: true };
+    }),
+    recentDeals: RECENT.filter((item) => !missing.includes(item.contractDate.slice(0, 7)) && deals[item.contractDate.slice(0, 7)]),
+  });
+  const jeonse = {
+    ...ready({ dealType: 'JEONSE' }),
+    asOf: '2026-11-16',
+    monthly: [row('2026-09', 2, { avgDeposit: 1100000000 }), row('2026-10', 2, { avgDeposit: 1200000000 })],
+  };
+  const answer = (sale) => api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonse : sale));
+  const basisLine = () => screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T03:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('① 오래된 5개월이 빠짐(최근 6개월은 있음): 안내 대신 데이터 — 평균 · 증감은 다 모았을 때와 같고, 차트 앞쪽은 "수집 중", 출처 아래 "N개월 기준"', async () => {
+    answer(partialSale(MONTHS.slice(0, 5)));
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    expect(screen.queryByText(/시세를 모으는 중이에요|불러오지 못했어요|하루 안에/)).not.toBeInTheDocument();
+    expect(screen.getByText('23억 3,300만')).toBeInTheDocument();
+    expect(screen.getByText('최근 3개월 평균 · 60–85㎡ · 전세 11억 5,000만')).toBeInTheDocument();
+    expect(screen.getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
+    const chart = screen.getByRole('img', { name: /추이/ });
+    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이 · 수집 중 5개월');
+    expect(chart.querySelector('[data-missing-band]')).toHaveAttribute('data-missing-band', '2025-11~2026-03');
+    expect(screen.getByText('수집 중', { selector: 'span' })).toBeInTheDocument(); // 범례
+    // 출처 줄 바로 다음에 "N개월 기준"(숫자는 숫자 글꼴)
+    const basis = basisLine();
+    expect(basis.previousElementSibling).toHaveTextContent('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    expect(within(basis).getByText('8')).toHaveClass('font-num', 'tabular-nums');
+    // 최근 거래 표: 모은 달의 거래
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(4); // 머리 + 3건
+  });
+
+  it('② 최근 달이 빠짐(7 ~ 11월): 큰 숫자 대신 "최근 3개월 평균은 모으는 중" · 증감 숨김 — 모은 다른 달로 대신 계산하지 않는다. 차트 뒤쪽은 "수집 중"', async () => {
+    answer(partialSale(MONTHS.slice(8)));
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    expect(screen.getByText('최근 3개월 평균은 모으는 중 · 60–85㎡')).toBeInTheDocument();
+    // 큰 숫자 자리가 없다(5월 20억 같은 다른 달로 대신 채우지 않는다) · 증감 없음
+    expect(document.querySelector('.text-kpi')).toBeNull();
+    expect(screen.queryByText(/직전 3개월/)).not.toBeInTheDocument();
+    const chart = screen.getByRole('img', { name: /추이/ });
+    expect(chart.querySelector('[data-missing-band]')).toHaveAttribute('data-missing-band', '2026-07~2026-10');
+    expect(chart.querySelector('[data-series="매매"]').querySelectorAll('circle[data-month]')).toHaveLength(1); // 5월만
+    expect(basisLine()).toBeInTheDocument();
+    // 최근 거래 표: 모은 달(5월)의 거래만
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toHaveTextContent('2026-05-20');
+  });
+
+  it('③ 모은 달에 그 면적대 거래가 없으면 "최근 … 거래가 없습니다" 가 아니라 본 범위를 밝힌 빈 상태 + "N개월 기준"', async () => {
+    answer(partialSale(MONTHS.slice(0, 5), {}));
+    renderMarket();
+    expect(await screen.findByText('모은 8개월 동안 60–85㎡ 매매 거래가 없습니다.', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.queryByText(/최근 매매 거래가 없습니다/)).not.toBeInTheDocument();
+    expect(basisLine()).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('하나도 못 모았으면(monthly 빈 배열) 지금(#268) 안내 그대로 — 데이터 · "N개월 기준" 없음', async () => {
+    answer(collectingFailed);
+    renderMarket();
+    expect(await screen.findByText('시세를 아직 불러오지 못했어요', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.queryByText(/개월 기준/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /추이/ })).not.toBeInTheDocument();
+  });
+
+  it('다 모았으면(READY) "N개월 기준" · "수집 중" 없음 — 지금 화면 그대로', async () => {
+    answer({ ...ready({ dealType: 'SALE' }), asOf: '2026-11-16' });
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    expect(screen.queryByText(/개월 기준|수집 중/)).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /추이/ }).querySelector('[data-missing-band]')).toBeNull();
+  });
+});
