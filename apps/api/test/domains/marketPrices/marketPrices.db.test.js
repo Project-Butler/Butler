@@ -14,6 +14,7 @@ import { BACKFILL_JOB_TYPE, REFRESH_MIN_AGE_MS, REQUEST_TIMEOUT_MS, RETRY_DELAY_
 import { normalizeItem, parseRtmsXml } from '../../../src/domains/marketPrices/rtmsProvider.js';
 import { collectMarketPrices, loadLinkIndex, rebuildSigunguLinks, relinkSigungu } from '../../../src/domains/marketPrices/service/collect.js';
 import { findComplexMarketPrices } from '../../../src/domains/marketPrices/service/prices.js';
+import { JUNGGYE_GREEN_LINES, JUNGGYE_GREEN_XML } from './fixtures/junggyeGreenTrades.js';
 import { EMPTY_XML, KEY_ERROR_XML, RENT_ITEMS, TRADE_ITEMS, wrapResponse } from './fixtures/rtmsResponses.js';
 
 const SGG = '11350';
@@ -453,6 +454,33 @@ describe('시세(실거래가)', { skip: dbTestSkip }, () => {
     } finally {
       if (originalKey === undefined) delete process.env.DATA_GO_KR_SERVICE_KEY;
       else process.env.DATA_GO_KR_SERVICE_KEY = originalKey;
+    }
+  });
+
+  test('다시 잇기(정기 실행 끝): 도로명 키가 건물 번호까지 같고 이름이 맞으면 지번이 달라도 잇고, 배운 일련번호로 나머지 도로명 거래도 잇는다 — 중계그린 (#270)', async () => {
+    // 저장된 거래(못 이음) = 국토부 실제 8건 중 해제 1건을 뺀 7건. 우리 단지 = 주소 검색의 17 번지 줄(503)
+    const green = parseRtmsXml(JUNGGYE_GREEN_XML).items.map((item) => normalizeItem('TRADE', item)).filter((item) => !item.cancelled);
+    const rows = green.map((item) => ({
+      dealKind: 'TRADE', dealType: 'SALE', sigunguCode: SGG, contractYearMonth: item.contractDate.slice(0, 7), legalDongCode: DONG,
+      roadKey: roadKeyOf(item.road), lotKey: `${DONG}|0|502|1`, aptSeq: item.aptSeq, aptName: item.aptName, jibun: item.jibun,
+      exclusiveArea: item.exclusiveArea, contractDate: new Date(`${item.contractDate}T00:00:00Z`), price: BigInt(item.price), collectedAt: new Date(),
+    }));
+    await prisma.marketDeal.createMany({ data: rows });
+    try {
+      const complex = await fixture.createComplex({ name: '중계그린아파트', buildingName: '중계그린아파트', isMountain: false, ...JUNGGYE_GREEN_LINES.road17 });
+      const relinked = await relinkSigungu(SGG, await loadLinkIndex(SGG));
+      assert.ok(relinked >= 7, String(relinked));
+      const linked = await prisma.marketDeal.findMany({ where: { sigunguCode: SGG, aptSeq: '11350-120' }, select: { roadKey: true, complexId: true, linkMethod: true } });
+      assert.equal(linked.length, 7);
+      assert.ok(linked.every((row) => row.complexId === complex.id), JSON.stringify(linked));
+      // 동일로207길 17 거래(2건)는 이름 확인으로 도로명, 18 · 섬밭로 285(5건)는 일련번호로
+      const byMethod = (method) => linked.filter((row) => row.linkMethod === method).map((row) => row.roadKey).sort();
+      assert.deepEqual(byMethod('ROAD'), [JUNGGYE_GREEN_LINES.road17.sourceKey, JUNGGYE_GREEN_LINES.road17.sourceKey]);
+      assert.equal(byMethod('APT_SEQ').length, 5);
+      // 단지 시세에도 나온다(모은 달인지와 상관없이 잇기만 본다 — complexId 로 고른 행 수)
+      assert.equal(await prisma.marketDeal.count({ where: { complexId: complex.id } }), 7);
+    } finally {
+      await prisma.marketDeal.deleteMany({ where: { sigunguCode: SGG, aptSeq: '11350-120' } });
     }
   });
 

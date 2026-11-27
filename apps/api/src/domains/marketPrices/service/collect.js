@@ -81,12 +81,16 @@ export const createTaskQueue = (tasks, { now, waitingUntil }) => {
   };
 };
 
-// 시군구 하나의 잇기 색인 — 그 시군구 단지 · 법정동 · 앞서 도로명 · 지번으로 이어진 거래의 aptSeq
+// 시군구 하나의 잇기 색인 — 그 시군구 단지(이름 포함) · 법정동 · 앞서 도로명 · 지번으로 이어진 거래의 aptSeq ·
+// 저장된 거래 이름(같은 법정동의 번호 단지 세기 — 도로명 키가 같고 지번이 다를 때 이름 확인, #270)
 export const loadLinkIndex = async (sigunguCode) => {
-  const [complexes, regions, hints] = await Promise.all([
+  const [complexes, regions, hints, dealNames] = await Promise.all([
     prisma.complex.findMany({
       where: { regionId: { startsWith: sigunguCode } },
-      select: { id: true, sourceKey: true, regionId: true, isMountain: true, mainLot: true, subLot: true, roadCode: true, isUnderground: true, buildingMainNo: true, buildingSubNo: true },
+      select: {
+        id: true, sourceKey: true, regionId: true, isMountain: true, mainLot: true, subLot: true, roadCode: true, isUnderground: true, buildingMainNo: true, buildingSubNo: true,
+        name: true, buildingName: true,
+      },
     }),
     prisma.region.findMany({ where: { id: { startsWith: sigunguCode } }, select: { id: true, dongName: true } }),
     prisma.marketDeal.findMany({
@@ -94,8 +98,13 @@ export const loadLinkIndex = async (sigunguCode) => {
       select: { aptSeq: true, complexId: true },
       distinct: ['aptSeq', 'complexId'],
     }),
+    prisma.marketDeal.findMany({
+      where: { sigunguCode, legalDongCode: { not: null }, aptName: { not: null } },
+      select: { legalDongCode: true, aptName: true },
+      distinct: ['legalDongCode', 'aptName'],
+    }),
   ]);
-  return buildLinkIndex({ complexes, regions, aptSeqHints: hints.map((row) => [row.aptSeq, row.complexId]) });
+  return buildLinkIndex({ complexes, regions, aptSeqHints: hints.map((row) => [row.aptSeq, row.complexId]), dealNames });
 };
 
 // 묶음 하나: 받기 → 해제 빼기 → 잇기 → 지우고 넣기(한 트랜잭션). 받기에 실패하면(다시 시도까지 실패) 묶음은 그대로 두고 실패만 적는다
@@ -175,7 +184,8 @@ export const relinkSigungu = async (sigunguCode, index) => {
       relinked += result.count;
     }
   };
-  const select = { id: true, roadKey: true, lotKey: true, aptSeq: true };
+  // aptName · legalDongCode 는 도로명 키가 같고 지번이 다를 때 이름 확인용(#270 — 수집할 때 잇기와 같은 판정)
+  const select = { id: true, roadKey: true, lotKey: true, aptSeq: true, aptName: true, legalDongCode: true };
   if (roadKeys.length || lotKeys.length) {
     await apply(
       await prisma.marketDeal.findMany({ where: { sigunguCode, complexId: null, OR: [{ roadKey: { in: roadKeys } }, { lotKey: { in: lotKeys } }] }, select }),
