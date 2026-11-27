@@ -4,6 +4,7 @@ import cronRouter from '../../../src/domains/marketPrices/cronRouter.js';
 import {
   CONCURRENCY,
   KEEP_MONTHS,
+  NEXT_PAGE_NEEDS_MS,
   REFRESH_MONTHS,
   REQUEST_TIMEOUT_MS,
   RETRY_CODES,
@@ -50,6 +51,11 @@ describe('시세 규칙 파일', () => {
     assert.equal(RETRY_LIMIT, 1);
     assert.ok(RETRY_DELAY_MS >= 1000 && RETRY_DELAY_MS <= 2000);
     assert.ok(REQUEST_TIMEOUT_MS + RETRY_DELAY_MS + REQUEST_TIMEOUT_MS < RUN_BUDGET_MS);
+  });
+
+  test('다음 쪽은 요청 하나 몫(8초)이 남을 때만 — 새 묶음을 시작하는 조건과 같은 값 (#272)', () => {
+    assert.equal(NEXT_PAGE_NEEDS_MS, REQUEST_TIMEOUT_MS);
+    assert.ok(NEXT_PAGE_NEEDS_MS < RUN_BUDGET_MS);
   });
 
   test('실패 코드: 영문 · 숫자 · 밑줄 30자만 그대로, 주소 · 키 글자가 섞이면 UNKNOWN', () => {

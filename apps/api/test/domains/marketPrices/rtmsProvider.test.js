@@ -7,6 +7,7 @@ import {
   normalizeItem,
   normalizeServiceKey,
   parseRtmsXml,
+  RtmsDeferred,
   RtmsError,
   serviceKeyShape,
   toNumber,
@@ -257,6 +258,45 @@ describe('실거래가 다시 시도(시간 초과 · 23 만 한 번 더)', () =
     await assert.rejects(fetchRtmsMonth(month, { fetchImpl: fake.fetchImpl, sleep, now, deadline }), (error) => error.code === '23' && error.calls === 1);
     assert.equal(fake.count, 1);
     assert.deepEqual(slept, []);
+  });
+
+  test('둘째 쪽부터도 마감을 본다(#272): 요청 하나 몫이 안 남으면 다음 쪽을 부르지 않고 미룸(RtmsDeferred) — 실패 코드가 아니다', async () => {
+    const pages = [wrapResponse(RENT_ITEMS.slice(0, 4), { totalCount: 6, pageNo: 1 }), wrapResponse(RENT_ITEMS.slice(4), { totalCount: 6, pageNo: 2 })];
+    let clock = 0;
+    const asked = [];
+    const fetchImpl = async (url) => {
+      asked.push(new URL(url).searchParams.get('pageNo'));
+      clock += 2000; // 한 쪽에 2초
+      return respond(pages[asked.length - 1]);
+    };
+    // 첫 쪽이 끝나면 2초 — 마감 9.999초까지 남은 7.999초는 요청 하나 몫(8초)보다 적다
+    const deadline = REQUEST_TIMEOUT_MS + 1999;
+    await assert.rejects(fetchRtmsMonth(month, { fetchImpl, pageSize: 4, now: () => clock, deadline }), (error) => {
+      assert.ok(error instanceof RtmsDeferred);
+      assert.ok(!(error instanceof RtmsError));
+      assert.equal(error.deferred, true);
+      assert.equal(error.code, undefined); // 실패 코드가 없다 — 모은 기록에 쓰지 않는다
+      assert.equal(error.calls, 1);
+      assert.ok(!error.message.includes(FAKE_KEY) && !error.message.includes('http'), error.message);
+      return true;
+    });
+    assert.deepEqual(asked, ['1']);
+  });
+
+  test('다음 쪽 몫이 딱 남으면(마감 = 지금 + 8초) 둘째 쪽도 부른다 · 한 쪽 묶음은 마감이 가까워도 그대로 받는다', async () => {
+    const pages = [wrapResponse(RENT_ITEMS.slice(0, 4), { totalCount: 6, pageNo: 1 }), wrapResponse(RENT_ITEMS.slice(4), { totalCount: 6, pageNo: 2 })];
+    let clock = 0;
+    const fake = sequence(...pages);
+    const fetchImpl = async (...args) => {
+      clock += 2000;
+      return fake.fetchImpl(...args);
+    };
+    const both = await fetchRtmsMonth(month, { fetchImpl, pageSize: 4, now: () => clock, deadline: 2000 + REQUEST_TIMEOUT_MS });
+    assert.deepEqual([both.deals.length, both.calls], [6, 2]);
+    // 한 쪽(totalCount 2): 첫 쪽은 여기서 마감을 보지 않는다(부르는 쪽이 묶음을 시작할 때 본다)
+    const single = await fetchRtmsMonth(month, { fetchImpl: async () => respond(RENT_XML), now: () => 10_000, deadline: 10_001 });
+    assert.equal(single.calls, 1);
+    assert.equal(single.deals.length, RENT_ITEMS.length);
   });
 
   test('여러 쪽 묶음: 둘째 쪽에서 23 → 성공이면 부른 횟수 3', async () => {

@@ -6,6 +6,8 @@
 // 저장된 거래 다시 잇기(원천을 다시 부르지 않고 나중에 등록된 단지 · 바뀐 규칙으로 잇기)는 실행을 시작하자마자 먼저(8초 상한) —
 // 수집은 시간 한도를 넘길 수 있어 끝에 두면 건너뛰어진다(#270). 끝의 다시 잇기는 시간이 남을 때만 하는 덤.
 // 원천은 하나씩 부르고(CONCURRENCY), 시간 초과 · 23 은 실행 한도 안에서 한 번 더 부른다(rtmsProvider.fetchRtmsMonth).
+// 한 묶음의 둘째 쪽부터도 요청 하나 몫이 남았을 때만 부르고, 모자라면 그 묶음은 아무것도 쓰지 않고 미룬다(deferred — 실패 아님, #272).
+// 대기 작업은 그 시군구를 다 채운 묶음을 저장한 자리에서 끝낸다(실행이 끊겨도 PENDING 이 남지 않게, #272). 맨 끝의 끝내기는 덤.
 
 import { prisma } from '../../../platform/prismaClient.js';
 import { listAllOwnedLegalDongCodes } from '../../community/platformBridge.js';
@@ -22,7 +24,7 @@ import {
   safeErrorCode,
 } from '../marketPriceRules.js';
 import { retentionMonths } from '../months.js';
-import { fetchRtmsMonth } from '../rtmsProvider.js';
+import { RtmsDeferred, fetchRtmsMonth } from '../rtmsProvider.js';
 import { completeBackfillJobs, listPendingBackfillSigunguCodes } from './backfillJobs.js';
 
 const KINDS = ['TRADE', 'RENT'];
@@ -119,7 +121,8 @@ export const loadLinkIndex = async (sigunguCode) => {
   return buildLinkIndex({ complexes, regions, aptSeqHints: hints.map((row) => [row.aptSeq, row.complexId]), dealNames });
 };
 
-// 묶음 하나: 받기 → 해제 빼기 → 잇기 → 지우고 넣기(한 트랜잭션). 받기에 실패하면(다시 시도까지 실패) 묶음은 그대로 두고 실패만 적는다
+// 묶음 하나: 받기 → 해제 빼기 → 잇기 → 지우고 넣기(한 트랜잭션). 받기에 실패하면(다시 시도까지 실패) 묶음은 그대로 두고 실패만 적는다.
+// 다음 쪽을 부를 시간이 모자라 미루면(RtmsDeferred) 아무것도 쓰지 않는다 — 모은 기록 · 시도 시각 · 예전 거래 그대로(규칙 파일 NEXT_PAGE_NEEDS_MS)
 const collectOne = async (task, { fetchImpl, getIndex, nowDate, now, deadline, sleep }) => {
   const { sigunguCode, yearMonth, kind } = task;
   const where = { sigunguCode_yearMonth_dealKind: { sigunguCode, yearMonth, dealKind: kind } };
@@ -164,6 +167,7 @@ const collectOne = async (task, { fetchImpl, getIndex, nowDate, now, deadline, s
     ]);
     return { ok: true, calls, saved: rows.length, linked: rows.filter((row) => row.complexId).length, cancelled: deals.length - kept.length };
   } catch (error) {
+    if (error instanceof RtmsDeferred) return { ok: false, deferred: true, calls: error.calls ?? calls };
     const attemptedAt = nowDate();
     // 코드만 남긴다(메시지에는 주소가 섞일 수 있다). 영문 · 숫자 · 밑줄 30자가 아니면 UNKNOWN — 규칙 파일 safeErrorCode
     const code = safeErrorCode(error?.code ?? error?.name ?? 'ERROR');
@@ -274,8 +278,25 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
     return indexes.get(sigunguCode);
   };
   const summary = {
-    targets: targets.length, planned: tasks.length, backfill: tasks.filter((t) => t.reason === 'BACKFILL').length, done: 0, failed: 0, skipped: 0, calls: 0, saved: 0, linked: 0, cancelled: 0, failures: [],
-    relinkFirst,
+    targets: targets.length, planned: tasks.length, backfill: tasks.filter((t) => t.reason === 'BACKFILL').length, done: 0, failed: 0, deferred: 0, skipped: 0, calls: 0, saved: 0, linked: 0, cancelled: 0, failures: [],
+    relinkFirst, jobsCompleted: 0,
+  };
+
+  // 보관 기간(months × 매매 · 전월세)을 다 채운 시군구 — 모은 적 있는 묶음(collectedAt)이 다 있는 곳
+  const filledSigungus = async (codes) => {
+    const filled = await prisma.marketCollection.groupBy({
+      by: ['sigunguCode'],
+      where: { sigunguCode: { in: codes }, yearMonth: { in: months }, collectedAt: { not: null } },
+      _count: { _all: true },
+    });
+    return filled.filter((row) => row._count._all >= months.length * KINDS.length).map((row) => row.sigunguCode);
+  };
+  // 대기 작업이 걸린 시군구는 묶음을 저장할 때마다 다 채웠는지 보고, 다 채웠으면 그 자리에서 대기 작업을 끝낸다(#272 — 끊겨도 PENDING 이 남지 않게)
+  const waitingOpen = new Set(pending.filter((code) => targets.includes(code)));
+  const completeIfFilled = async (sigunguCode) => {
+    if (!waitingOpen.has(sigunguCode) || (await filledSigungus([sigunguCode])).length === 0) return;
+    waitingOpen.delete(sigunguCode);
+    summary.jobsCompleted += await completeBackfillJobs([sigunguCode], { startedAt: new Date(startedAt) });
   };
 
   const worker = async () => {
@@ -289,6 +310,9 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
         summary.saved += result.saved;
         summary.linked += result.linked;
         summary.cancelled += result.cancelled;
+        await completeIfFilled(task.sigunguCode);
+      } else if (result.deferred) {
+        summary.deferred += 1; // 실패 아님 — failures 에 넣지 않는다
       } else {
         summary.failed += 1;
         if (summary.failures.length < 10) summary.failures.push(`${task.sigunguCode} ${task.yearMonth} ${task.kind} ${result.code}`);
@@ -296,7 +320,7 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  summary.skipped = tasks.length - summary.done - summary.failed;
+  summary.skipped = tasks.length - summary.done - summary.failed - summary.deferred;
 
   // 끝의 다시 잇기(DB 만) — 시간이 남을 때만 하는 덤. 이번에 배운 aptSeq 까지 쓰도록 색인을 새로 읽는다.
   // 저장된 거래는 위에서 먼저 이었고(relinkFirst), 이번에 새로 모은 거래는 수집할 때 같은 규칙으로 이어졌다
@@ -306,14 +330,9 @@ export const collectMarketPrices = async ({ fetchImpl, now = Date.now, budgetMs 
     summary.relinked += await relinkSigungu(sigunguCode, await loadLinkIndex(sigunguCode));
   }
 
-  // 다 채운 시군구의 대기 작업 끝내기
-  const filled = await prisma.marketCollection.groupBy({
-    by: ['sigunguCode'],
-    where: { sigunguCode: { in: targets }, yearMonth: { in: months }, collectedAt: { not: null } },
-    _count: { _all: true },
-  });
-  const complete = filled.filter((row) => row._count._all >= months.length * KINDS.length).map((row) => row.sigunguCode);
-  summary.jobsCompleted = await completeBackfillJobs(complete, { startedAt: new Date(startedAt) });
+  // 다 채운 시군구의 대기 작업 끝내기 — 덤. 대기 작업 시군구는 다 채운 자리에서 이미 끝냈고(이미 끝낸 작업은 PENDING 이 아니라 다시 바뀌지 않는다),
+  // 여기서는 이번에 모을 묶음이 없던 시군구(이미 다 채워져 있던 곳)의 대기 작업까지 끝낸다
+  summary.jobsCompleted += await completeBackfillJobs(await filledSigungus(targets), { startedAt: new Date(startedAt) });
   summary.elapsedMs = now() - startedAt;
   return summary;
 };
