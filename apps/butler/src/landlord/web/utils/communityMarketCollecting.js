@@ -54,6 +54,10 @@ export const partialMarketEmptyText = ({ collectedMonths }, bandLabel, dealTypeL
 export const hasNoPartialDeals = (prices) => prices.recentDeals.length === 0 && !prices.monthly.some((row) => row.collected && row.dealCount > 0);
 // 최근 3개월이 다 모이지 않아 평균을 보이지 않을 때의 설명(utils/communityMarketSummary recentSummary 가 쓴다)
 export const AVERAGE_COLLECTING_TEXT = '최근 3개월 평균은 모으는 중';
+// 차트의 못 모은 달 띠 · 범례 글자 — "매매 수집 중" · "전세 수집 중" · "월세 수집 중"(거래 이름은 DEAL_TYPES 의 이름 그대로).
+// 왜 거래 이름을 붙이나: 매매와 전월세는 따로 모은다 — 매매 화면의 전세 선(비교 선)은 매매를 못 모은 달에도 데이터가 있을 수 있어,
+// 그냥 "수집 중" 이면 띠 안에 선이 지나가는 것이 모순으로 읽힌다(#267 2차 캡처). 띠는 지금 고른 거래(주 선)의 못 모은 달에만 그린다
+export const missingMonthsLabel = (dealTypeLabel) => `${dealTypeLabel} 수집 중`;
 
 // ===== 하나도 못 모음 + 받기 실패(FAILED — collectedMonths 0 · failedMonths > 0) =====
 // 왜 "하루 안에" 를 쓰지 않나: 실패가 이어지면 하루가 지나도 채워지지 않는다 — 11/19 부터 배포 사이트에서 며칠째 "하루 안에 채워집니다" 가

@@ -751,10 +751,45 @@ describe('앱 커뮤니티: 시세를 일부만 모았을 때 모은 달의 데�
     expect(within(card).getByText('23억 3,300만')).toBeInTheDocument();
     expect(within(card).getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
     expect(within(card).getByRole('img').querySelector('[data-missing-band]')).toHaveAttribute('data-missing-band', '2025-11~2026-03');
-    expect(within(card).getByText('수집 중', { selector: 'span' })).toBeInTheDocument();
+    expect(within(card).getByText('매매 수집 중', { selector: 'span' })).toBeInTheDocument();
     expect(basisIn(document.body)).toBeInTheDocument();
     expect(within(screen.getByRole('list', { name: '최근 거래' })).getAllByRole('listitem')).toHaveLength(3);
     expect(screen.queryByText(/시세를 모으는 중이에요|불러오지 못했어요/)).not.toBeInTheDocument();
+  });
+
+  it('시세 화면 · 띠는 주 선(매매) 기준 한 겹, 글자 "매매 수집 중" — 비교 선(전세)만 못 모으면 띠 없이 전세 선만 끊긴다(PC 와 같다)', async () => {
+    const jeonseOf = (missing) => ({
+      ...MARKET_COLLECTING,
+      dealType: 'JEONSE',
+      asOf: '2026-11-16',
+      collectionStatus: missing.length ? 'COLLECTING' : 'READY',
+      monthly: MONTHS.map((yearMonth) => {
+        if (missing.includes(yearMonth)) return { ...row(yearMonth, null), collected: false };
+        return { ...row(yearMonth, 2), avgDeposit: 1100000000, ...(missing.length ? { collected: true } : {}) };
+      }),
+      recentDeals: [],
+    });
+    // ⓐ 매매만 오래된 5개월 못 모음, 전세는 다 모음 → 띠 하나 "매매 수집 중", 전세 선은 띠 안에서도 이어진다
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonseOf([]) : partialSale(MONTHS.slice(0, 5))));
+    const first = renderAt('/landlord/community/market');
+    let card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    let chart = within(card).getByRole('img');
+    expect(chart.querySelectorAll('[data-missing-band]')).toHaveLength(1);
+    expect(chart.querySelector('[data-missing-label]')).toHaveTextContent('매매 수집 중');
+    expect(chart.querySelector('[data-series="전세"]').querySelector('circle[data-month="2025-12"]')).not.toBeNull();
+    first.unmount();
+
+    // ⓑ 매매는 다 모음(READY), 전세만 2026-09 못 모음 → 띠 · 범례 없음, 전세 선만 09 에서 끊김
+    const saleReady = { ...partialSale([]), collectionStatus: 'READY', jobId: null, monthly: partialSale([]).monthly.map(({ collected, ...rest }) => rest) };
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonseOf(['2026-09']) : saleReady));
+    renderAt('/landlord/community/market');
+    card = await screen.findByRole('region', { name: '매매 시세' }, FIRST_RENDER);
+    chart = within(card).getByRole('img');
+    expect(chart.querySelector('[data-missing-band]')).toBeNull();
+    expect(within(card).queryByText(/수집 중/)).not.toBeInTheDocument();
+    const jeonseLine = chart.querySelector('[data-series="전세"]');
+    expect(jeonseLine.querySelector('circle[data-month="2026-09"]')).toBeNull();
+    expect(jeonseLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(0);
   });
 
   it('시세 화면 · 최근 달 빠짐(7 ~ 11월): "최근 3개월 평균은 모으는 중" · 큰 숫자 · 증감 없음, 최근 거래는 모은 달(5월)만', async () => {

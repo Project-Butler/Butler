@@ -3,7 +3,7 @@ import { hasNoPartialDeals, partialCoverage, partialMarketEmptyText } from '../.
 import { chartMonths, chartSeries, recentSummary } from '../../utils/communityMarketSummary';
 import { MarketSource } from '../CommunityMarket/MarketSource';
 import { PartialBasis } from '../CommunityMarket/PartialBasis';
-import { hasMissingMonths, MissingLegend, PriceChart } from '../CommunityMarket/PriceChart';
+import { MissingLegend, PriceChart } from '../CommunityMarket/PriceChart';
 import { BriefingCollectingNote } from './BriefingCollectingNote';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
 import { BriefingSection } from './BriefingSection';
@@ -24,7 +24,8 @@ export const useBriefingMarket = ({ building, band }) => {
   const summary = data ? recentSummary({ prices: data, dealType: 'SALE', band }) : null;
   // 하나도 못 모은 단지(COLLECTING)는 asOf 가 없다 — 그때는 차트를 그리지 않는다. 일부 모음이면 못 모은 달은 비운다(missing)
   const months = data?.asOf ? chartMonths(data.coveredFromYearMonth) : [];
-  const { values, missing } = data?.asOf ? chartSeries(data, months, 'SALE') : { values: [], missing: [] };
+  // 차트 한 줄(values · missing · missingLabel "매매 수집 중")
+  const line = data?.asOf ? chartSeries(data, months, 'SALE') : { values: [], missing: [] };
   let state = null;
   if (data) {
     if (data.collectionStatus === 'COLLECTING' && !partial) state = 'COLLECTING';
@@ -33,12 +34,12 @@ export const useBriefingMarket = ({ building, band }) => {
   }
   // 빈 상태 문구 — 일부 모음이면 본 범위를 밝힌다("모은 8개월 동안 60–85㎡ 매매 거래가 없습니다")
   const emptyText = partial ? partialMarketEmptyText(partial, band.label, '매매') : briefingMarketEmptyText(band);
-  return { prices, data, partial, state, emptyText, summary, months, values, missing };
+  return { prices, data, partial, state, emptyText, summary, months, line };
 };
 
 export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
-  const { prices, data, state, emptyText, summary, months, values, missing } = useBriefingMarket({ building, band });
-  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values, missing }];
+  const { prices, data, state, emptyText, summary, months, line } = useBriefingMarket({ building, band });
+  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', ...line }];
 
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
@@ -58,7 +59,7 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
         <div className="pt-2">
           <PriceChart months={months} height={160} series={series} />
         </div>
-        {hasMissingMonths(series) && <MissingLegend />}
+        <MissingLegend series={series} />
         {data.asOf && <MarketSource source={data.source} asOf={data.asOf} className="pt-1" />}
         <PartialBasis prices={data} />
       </div>

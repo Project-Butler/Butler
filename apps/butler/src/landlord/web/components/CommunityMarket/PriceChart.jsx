@@ -3,7 +3,8 @@
 // missing(선택, 같은 길이)은 못 모은 달 true(일부 모음 — utils/communityMarketSummary chartSeries).
 // 거래가 있는 달에는 점, 이웃한 달끼리는 실선, 거래 없는 달을 건너 앞뒤 거래 달을 이을 때는 점선(빈 달에는 점을 찍지 않는다).
 // 못 모은 달은 선을 끊고 비운다 — 그 달을 건너는 점선도 긋지 않는다(거래 없는 달과 구분, #267 2차). 첫 줄(대표 유형)의 못 모은 달에는
-// 옅은 배경 띠(surface-2)와 "수집 중" 글자(띠가 글자보다 좁으면 글자 없이 — 범례 MissingLegend 가 알린다).
+// 옅은 배경 띠(surface-2)와 "매매 수집 중" 글자(series[0].missingLabel — 띠가 글자보다 좁으면 글자 없이, 범례 MissingLegend 가 알린다).
+// 비교 선(둘째 줄부터)은 자기 missing 으로 끊기만 하고 띠를 따로 그리지 않는다 — 매매 띠 안을 지나는 전세 선은 모은 전세 데이터다.
 // 세로축: 눈금 2~3개(억 단위 — 월세 금액처럼 1억보다 작으면 만 단위)를 그래프 영역 바깥 왼쪽 여백에(선 · 점과 겹치지 않게).
 // 가로축: 마지막 달에서 거꾸로 3개월마다.
 // 세로 범위는 모든 선의 최소~최대에 위아래 여유를 둔다.
@@ -40,9 +41,11 @@ const xLabelIndexes = (count) => {
   return indexes;
 };
 
+// 띠 · 범례 글자 — 보통은 줄의 missingLabel("매매 수집 중", utils/communityMarketCollecting missingMonthsLabel), 없으면 이것
 export const MISSING_LABEL = '수집 중';
-// "수집 중" 글자가 들어가는 띠 폭(viewBox 단위, 글자 11 × 3자 + 여백)
-const MISSING_LABEL_MIN_WIDTH = 40;
+const missingLabelOf = (series) => series[0]?.missingLabel ?? MISSING_LABEL;
+// 글자가 들어가는 띠 폭(viewBox 단위) — 글자 11 × 글자 수 + 여백
+const labelFits = (label, bandWidth) => bandWidth >= label.length * 11 + 6;
 // 이어진 못 모은 달 묶음들 [{ start, end }](인덱스, 양끝 포함)
 const missingGroupsOf = (missing = []) => {
   const groups = [];
@@ -94,7 +97,8 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
     const x2 = Math.min(right, toX(end) + step / 2);
     return { x: x1, width: Math.max(x2 - x1, 1) };
   };
-  const ariaLabel = `최근 ${months.length}개월 ${series.map((line) => line.label).join('·')} 추이${missingCount ? ` · ${MISSING_LABEL} ${missingCount}개월` : ''}`;
+  const missingLabel = missingLabelOf(series);
+  const ariaLabel = `최근 ${months.length}개월 ${series.map((line) => line.label).join('·')} 추이${missingCount ? ` · ${missingLabel} ${missingCount}개월` : ''}`;
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel} className="block h-auto w-full">
@@ -103,9 +107,9 @@ export const PriceChart = ({ months, series, width = 640, height = 240 }) => {
         return (
           <g key={`missing-${group.start}`} data-missing-band={`${months[group.start]}~${months[group.end]}`}>
             <rect x={band.x} y={top * 0.5} width={band.width} height={bottom - top * 0.5} className="fill-surface-2" />
-            {band.width >= MISSING_LABEL_MIN_WIDTH && (
+            {labelFits(missingLabel, band.width) && (
               <text data-missing-label x={band.x + band.width / 2} y={top * 0.5 + 13} fontSize="11" textAnchor="middle" className="fill-ink-3">
-                {MISSING_LABEL}
+                {missingLabel}
               </text>
             )}
           </g>
@@ -192,12 +196,13 @@ export const ChartLegend = ({ colorClass, label }) => (
   </span>
 );
 
-// 범례의 "수집 중"(못 모은 달의 배경 띠와 같은 색) — 차트 첫 줄에 못 모은 달이 있을 때만 그린다
-export const MissingLegend = () => (
-  <span className="inline-flex items-center gap-1.5 text-sub leading-tight text-ink-3">
-    <i aria-hidden="true" className="block h-[9px] w-[12px] rounded-[2px] border border-line bg-surface-2" />
-    {MISSING_LABEL}
-  </span>
-);
-// 시리즈 목록에서 범례 "수집 중" 을 그릴지(첫 줄 기준 — 띠와 같은 기준)
+// 시리즈 목록에서 범례 "수집 중" 을 그릴지(첫 줄 = 주 선 기준 — 띠와 같은 기준, 비교 선의 못 모은 달은 띠 · 범례 없이 끊기만)
 export const hasMissingMonths = (series) => Boolean(series[0]?.missing?.some(Boolean));
+// 범례의 "매매 수집 중"(못 모은 달의 배경 띠와 같은 색) — 주 선에 못 모은 달이 있을 때만 그린다(없으면 아무것도 그리지 않는다)
+export const MissingLegend = ({ series }) =>
+  hasMissingMonths(series) ? (
+    <span className="inline-flex items-center gap-1.5 text-sub leading-tight text-ink-3">
+      <i aria-hidden="true" className="block h-[9px] w-[12px] rounded-[2px] border border-line bg-surface-2" />
+      {missingLabelOf(series)}
+    </span>
+  ) : null;

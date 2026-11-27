@@ -8,7 +8,7 @@ import { BRIEFING_POSTS_EMPTY_TEXT, useBriefingPosts } from '../../web/component
 import { AppCollectingDescription } from '../components/CommunityApp/AppCollectingDescription';
 import { MarketSource } from '../../web/components/CommunityMarket/MarketSource';
 import { PartialBasis } from '../../web/components/CommunityMarket/PartialBasis';
-import { hasMissingMonths, MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
+import { MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
 import { COMMUNITY_PATH } from '../../web/routes';
 import { splitRegionName } from '../../web/utils/communityFormat';
 import { COLLECTING_BRIEFING_TEXT, collectingNotice } from '../../web/utils/communityMarketCollecting';
@@ -39,8 +39,8 @@ const CollectingNote = ({ prices }) => {
 // 시세 카드(참고 시안 B-1 첫 카드): 큰 숫자(최근 3개월 평균) · "직전 3개월보다 ▲▼" · 무엇의 평균인지 한 줄 · 작은 흐름선 · 출처 줄
 // 일부만 모았을 때(#267 2차)도 PC 와 같은 판단(useBriefingMarket state) — 큰 숫자 · 증감 조건, 못 모은 달 비우기, 맨 아래 "N개월 기준"
 const MarketCard = ({ building, band, onMore }) => {
-  const { prices, data, state, emptyText, summary, months, values, missing } = useBriefingMarket({ building, band });
-  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', values, missing }];
+  const { prices, data, state, emptyText, summary, months, line } = useBriefingMarket({ building, band });
+  const series = [{ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', dotClass: 'bg-accent', ...line }];
   let body;
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
@@ -57,7 +57,7 @@ const MarketCard = ({ building, band, onMore }) => {
         <div className="pt-1">
           <PriceChart months={months} width={316} height={96} series={series} />
         </div>
-        {hasMissingMonths(series) && <MissingLegend />}
+        <MissingLegend series={series} />
         {data.asOf && <MarketSource source={data.source} asOf={data.asOf} className="pt-1" />}
         <PartialBasis prices={data} />
       </div>

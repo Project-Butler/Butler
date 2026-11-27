@@ -9,8 +9,9 @@
 // │ 대신 계산 안 함   "모은 달 중 가장 최근 3개월" 로 바꿔 계산하지 않는다 — 기간이 바뀌어 보여 오해를 산다              │
 // │ 왜: 빠진 달을 0 이나 "거래 없음" 처럼 넘기면 평균 · 증감이 조용히 틀린다(거래 없는 달은 원래 평균에서 빠지는 게 맞다) │
 // │ 차트            못 모은 달은 선을 끊고 비운다(점선으로 잇지 않음) — 거래 없는 달(점선)과 구분(chartSeries)           │
+// │                 줄마다 자기 응답 기준(비교 선도), 띠 · 범례는 주 선만 — 글자는 "매매 수집 중"(missingMonthsLabel)       │
 // └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
-import { AVERAGE_COLLECTING_TEXT } from './communityMarketCollecting';
+import { AVERAGE_COLLECTING_TEXT, missingMonthsLabel } from './communityMarketCollecting';
 
 export const DEAL_TYPES = [
   { value: 'SALE', label: '매매' },
@@ -86,13 +87,15 @@ export const isCollectedMonth = (monthly, yearMonth) => monthly.find((row) => ro
 export const allCollected = (monthly, endMonth, count) =>
   Array.from({ length: count }, (_, index) => shiftMonth(endMonth, -index)).every((month) => isCollectedMonth(monthly, month));
 
-// 차트 한 줄의 값 — values(반올림한 평균, 거래 없는 달 · 못 모은 달은 null) · missing(못 모은 달 true). months 와 같은 길이
+// 차트 한 줄의 값 — values(반올림한 평균, 거래 없는 달 · 못 모은 달은 null) · missing(못 모은 달 true, 그 줄의 응답 기준) · missingLabel("매매 수집 중").
+// months 와 같은 길이. 비교 선(매매 화면의 전세 선)도 자기 응답으로 만든다 — 매매와 전월세는 따로 모으므로 못 모은 달이 다를 수 있다
 export const chartSeries = (data, months, dealType) => ({
   values: months.map((month) => {
     const row = data.monthly.find((item) => item.yearMonth === month);
     return row && row.collected !== false ? chartValue(row, dealType) : null;
   }),
   missing: months.map((month) => !isCollectedMonth(data.monthly, month)),
+  missingLabel: missingMonthsLabel(getDealTypeLabel(dealType)),
 });
 
 // 최근 3개월(endMonth 까지, 그 달 포함) 평균 — 건수 가중, 반올림 전. 거래가 없으면 null.

@@ -10,7 +10,7 @@ import { LoadingStatus } from '../components/CommunityLayout/LoadingStatus';
 import { CollectingDescription } from '../components/CommunityMarket/CollectingDescription';
 import { MarketSource } from '../components/CommunityMarket/MarketSource';
 import { PartialBasis } from '../components/CommunityMarket/PartialBasis';
-import { ChartLegend, hasMissingMonths, MissingLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
+import { ChartLegend, MissingLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
 import { Segment } from '../components/CommunitySegment/Segment';
 import {
   AREA_BANDS,
@@ -107,7 +107,7 @@ const PriceCard = ({ prices, jeonse, dealType, band }) => {
         {series.map((line) => (
           <ChartLegend key={line.label} colorClass={line.dotClass} label={line.label} />
         ))}
-        {hasMissingMonths(series) && <MissingLegend />}
+        <MissingLegend series={series} />
       </div>
     </Card>
   );

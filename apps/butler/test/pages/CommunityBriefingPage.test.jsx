@@ -341,8 +341,8 @@ describe('브리핑 — 일부만 모았을 때 시세 · 최근 거래 카드�
     const market = await section('시세');
     expect(await within(market).findByText('23억 3,300만')).toBeInTheDocument();
     expect(within(market).getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
-    expect(within(market).getByRole('img')).toHaveAttribute('aria-label', '최근 12개월 매매 추이 · 수집 중 5개월');
-    expect(within(market).getByText('수집 중', { selector: 'span' })).toBeInTheDocument();
+    expect(within(market).getByRole('img')).toHaveAttribute('aria-label', '최근 12개월 매매 추이 · 매매 수집 중 5개월');
+    expect(within(market).getByText('매매 수집 중', { selector: 'span' })).toBeInTheDocument();
     expect(within(market).getByText((_, el) => el?.tagName === 'P' && el.textContent === BASIS)).toBeInTheDocument();
     expect(within(market).queryByText(/시세를 모으는 중이에요|불러오지 못했어요/)).not.toBeInTheDocument();
     const deals = await section('최근 거래');

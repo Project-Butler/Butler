@@ -82,7 +82,8 @@ describe('시세 차트 — 못 모은 달(#267 2차)', () => {
     expect(container.querySelectorAll('[data-missing-band]')).toHaveLength(1);
     expect(container.querySelector('[data-missing-label]')).toBeNull();
     expect(hasMissingMonths([line(values, missing)])).toBe(true);
-    render(<MissingLegend />);
+    // 범례는 주 선의 missingLabel(없으면 "수집 중")
+    render(<MissingLegend series={[line(values, missing)]} />);
     expect(screen.getByText('수집 중')).toBeInTheDocument();
   });
 
@@ -93,5 +94,59 @@ describe('시세 차트 — 못 모은 달(#267 2차)', () => {
     expect(container.querySelector('svg')).toHaveAttribute('aria-label', '최근 12개월 매매 추이');
     expect(container.querySelectorAll('[data-segment="gap"]')).toHaveLength(1);
     expect(hasMissingMonths([line(values)])).toBe(false);
+  });
+});
+
+describe('시세 차트 — 주 선 · 비교 선의 못 모은 달은 따로(매매와 전월세는 따로 모은다)', () => {
+  const MONTHS = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
+  const OLD5 = MONTHS.map((_, index) => index < 5);
+  const NONE = MONTHS.map(() => false);
+  const toWon = (values) => values.map((v) => (v === null ? null : v * EOK));
+  const sale = (values, missing) => ({ label: '매매', strokeClass: 'stroke-accent', fillClass: 'fill-accent', values: toWon(values), missing, missingLabel: '매매 수집 중' });
+  const jeonse = (values, missing) => ({ label: '전세', strokeClass: 'stroke-ink-3', fillClass: 'fill-ink-3', values: toWon(values), missing, missingLabel: '전세 수집 중' });
+  const JEONSE_VALUES = [5, 5.1, 5.2, 5.1, 5.3, 5.2, 5.4, 5.3, 5.5, 5.4, 5.6, 5.5];
+  const lineOf = (container, label) => container.querySelector(`[data-series="${label}"]`);
+
+  it('주 선은 못 모음 · 비교 선은 모음: 띠 글자 · 읽어 주는 이름 · 범례가 "매매 수집 중", 비교 선은 띠 안에서도 그대로 이어진다', () => {
+    const series = [sale([null, null, null, null, null, 20.4, 20.5, 20.6, 20.7, 20.8, 21, 21.2], OLD5), jeonse(JEONSE_VALUES, NONE)];
+    const { container } = render(<PriceChart months={MONTHS} series={series} />);
+    expect(container.querySelector('[data-missing-label]')).toHaveTextContent('매매 수집 중');
+    expect(container.querySelector('svg')).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이 · 매매 수집 중 5개월');
+    // 띠는 한 겹(주 선 기준)
+    expect(container.querySelectorAll('[data-missing-band]')).toHaveLength(1);
+    // 전세 선: 12개월 점이 다 있고(띠 안 5개월 포함) 끊김 없이 실선 한 조각
+    const jeonseLine = lineOf(container, '전세');
+    expect(jeonseLine.querySelectorAll('circle[data-month]')).toHaveLength(12);
+    expect(jeonseLine.querySelectorAll('[data-segment="solid"]')).toHaveLength(1);
+    expect(jeonseLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(0);
+    const { container: legend } = render(<MissingLegend series={series} />);
+    expect(legend).toHaveTextContent('매매 수집 중');
+  });
+
+  it('비교 선만 못 모음: 띠 · 범례 없음, 비교 선만 그 달에서 끊긴다(점선으로 잇지 않음) — 주 선은 그대로', () => {
+    // 전세만 2026-09 못 모음
+    const jeonseMissing = MONTHS.map((month) => month === '2026-09');
+    const jeonseValues = JEONSE_VALUES.map((value, index) => (jeonseMissing[index] ? null : value));
+    const series = [sale([20, 20.1, 20.2, 20.3, 20.4, 20.4, 20.5, 20.6, 20.7, 20.8, 21, 21.2], NONE), jeonse(jeonseValues, jeonseMissing)];
+    const { container } = render(<PriceChart months={MONTHS} series={series} />);
+    expect(container.querySelector('[data-missing-band]')).toBeNull();
+    expect(container.querySelector('svg')).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이');
+    const jeonseLine = lineOf(container, '전세');
+    expect(jeonseLine.querySelector('circle[data-month="2026-09"]')).toBeNull();
+    expect(jeonseLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(0); // 08 → 10 을 점선으로 잇지 않는다
+    // 실선은 25-11 ~ 26-08 한 조각, 26-10 은 떨어진 점 하나
+    expect(jeonseLine.querySelectorAll('[data-segment="solid"]')).toHaveLength(1);
+    expect(jeonseLine.querySelector('circle[data-month="2026-10"]')).not.toBeNull();
+    // 주 선은 한 조각 그대로
+    expect(lineOf(container, '매매').querySelectorAll('[data-segment="solid"]')).toHaveLength(1);
+    const { container: legend } = render(<MissingLegend series={series} />);
+    expect(legend.textContent).toBe('');
+  });
+
+  it('비교 선의 거래 없는 달은 지금처럼 점선 — 못 모은 달과 구분', () => {
+    const jeonseValues = JEONSE_VALUES.map((value, index) => (MONTHS[index] === '2026-09' ? null : value)); // 모은 달인데 거래 없음
+    const series = [sale([20, 20.1, 20.2, 20.3, 20.4, 20.4, 20.5, 20.6, 20.7, 20.8, 21, 21.2], NONE), jeonse(jeonseValues, NONE)];
+    const { container } = render(<PriceChart months={MONTHS} series={series} />);
+    expect(lineOf(container, '전세').querySelectorAll('[data-segment="gap"]')).toHaveLength(1);
   });
 });

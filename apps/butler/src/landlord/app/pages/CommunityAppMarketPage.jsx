@@ -2,7 +2,7 @@ import { BRIEFING_LOADING_TEXT } from '../../web/components/CommunityBriefing/Br
 import { AppCollectingDescription } from '../components/CommunityApp/AppCollectingDescription';
 import { MarketSource } from '../../web/components/CommunityMarket/MarketSource';
 import { PartialBasis } from '../../web/components/CommunityMarket/PartialBasis';
-import { ChartLegend, hasMissingMonths, MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
+import { ChartLegend, MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
 import { AMOUNT_HEADER, priceSeries, useMarketBodyState, useMarketDealType } from '../../web/pages/CommunityMarketPage';
 import { AREA_BANDS, chartMonths, DEAL_TYPES, getDealTypeLabel, recentSummary } from '../../web/utils/communityMarketSummary';
 import { getErrorMessage } from '../../web/utils/getErrorMessage';
@@ -41,7 +41,7 @@ const SummaryCard = ({ prices, jeonse, dealType, band }) => {
         {series.map((line) => (
           <ChartLegend key={line.label} colorClass={line.dotClass} label={line.label} />
         ))}
-        {hasMissingMonths(series) && <MissingLegend />}
+        <MissingLegend series={series} />
       </div>
     </section>
   );

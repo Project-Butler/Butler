@@ -150,6 +150,9 @@ describe('일부만 모았을 때 — 빠진 달 때문에 틀릴 수 있는 숫
     expect(values).toEqual([2000000000, 2200000000, null, 2400000000]);
     expect(missing).toEqual([false, false, true, false]);
     // 모은 달인데 거래 없음(06월) — 값 null, missing false
-    expect(chartSeries(partial(DEALS, []), ['2026-06'], 'SALE')).toEqual({ values: [null], missing: [false] });
+    expect(chartSeries(partial(DEALS, []), ['2026-06'], 'SALE')).toEqual({ values: [null], missing: [false], missingLabel: '매매 수집 중' });
+    // 띠 · 범례 글자는 그 줄의 거래 이름(DEAL_TYPES) + "수집 중"
+    expect(chartSeries(partial({}, [], 'avgDeposit'), ['2026-06'], 'JEONSE').missingLabel).toBe('전세 수집 중');
+    expect(chartSeries(partial({}, [], 'avgMonthlyRent'), ['2026-06'], 'MONTHLY').missingLabel).toBe('월세 수집 중');
   });
 });

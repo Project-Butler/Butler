@@ -296,9 +296,9 @@ describe('일부만 모았을 때 — 모은 달의 시세를 보이고 틀릴 �
     expect(screen.getByText('최근 3개월 평균 · 60–85㎡ · 전세 11억 5,000만')).toBeInTheDocument();
     expect(screen.getByText('직전 3개월보다 ▲14.8%')).toBeInTheDocument();
     const chart = screen.getByRole('img', { name: /추이/ });
-    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이 · 수집 중 5개월');
+    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이 · 매매 수집 중 5개월');
     expect(chart.querySelector('[data-missing-band]')).toHaveAttribute('data-missing-band', '2025-11~2026-03');
-    expect(screen.getByText('수집 중', { selector: 'span' })).toBeInTheDocument(); // 범례
+    expect(screen.getByText('매매 수집 중', { selector: 'span' })).toBeInTheDocument(); // 범례
     // 출처 줄 바로 다음에 "N개월 기준"(숫자는 숫자 글꼴)
     const basis = basisLine();
     expect(basis.previousElementSibling).toHaveTextContent('출처: 국토교통부 실거래가 · 기준 2026-11-16');
@@ -340,6 +340,50 @@ describe('일부만 모았을 때 — 모은 달의 시세를 보이고 틀릴 �
     expect(await screen.findByText('시세를 아직 불러오지 못했어요', {}, FIRST_RENDER)).toBeInTheDocument();
     expect(screen.queryByText(/개월 기준/)).not.toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /추이/ })).not.toBeInTheDocument();
+  });
+
+  it('① 의 띠 글자는 "매매 수집 중"(지금 고른 거래), 띠는 한 겹', async () => {
+    answer(partialSale(MONTHS.slice(0, 5)));
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    const chart = screen.getByRole('img', { name: /추이/ });
+    expect(chart.querySelectorAll('[data-missing-band]')).toHaveLength(1);
+    expect(chart.querySelector('[data-missing-label]')).toHaveTextContent('매매 수집 중');
+  });
+
+  it('비교 선(전세)만 못 모음: 띠 · 범례 · "N개월 기준" 없음, 전세 선만 그 달에서 끊기고(점선 없음) 전세 평균 덧붙임도 빠진다', async () => {
+    const sale = {
+      ...ready({ dealType: 'SALE' }),
+      asOf: '2026-11-16',
+      monthly: [row('2026-08', 1, { avgPrice: 2200000000 }), row('2026-09', 1, { avgPrice: 2300000000 }), row('2026-10', 2, { avgPrice: 2400000000 })],
+    };
+    // 전월세만 2026-09 를 못 모음(매매와 따로 모은다)
+    const jeonsePartial = {
+      ...ready({ dealType: 'JEONSE' }),
+      coveredFromYearMonth: null,
+      asOf: '2026-11-16',
+      collectionStatus: 'COLLECTING',
+      jobId: 'job-2',
+      collectionProgress: progress({ collectedMonths: 12, failedMonths: 1, notTriedMonths: 0 }),
+      monthly: MONTHS.map((yearMonth) => {
+        if (yearMonth === '2026-09') return { ...row(yearMonth, null), collected: false };
+        if (yearMonth === '2026-08' || yearMonth === '2026-10') return { ...row(yearMonth, 2, { avgDeposit: 1100000000 }), collected: true };
+        return { ...row(yearMonth, 0), collected: true };
+      }),
+      recentDeals: [],
+    };
+    api.getComplexMarketPrices.mockImplementation(async ({ dealType }) => (dealType === 'JEONSE' ? jeonsePartial : sale));
+    renderMarket();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
+    const chart = screen.getByRole('img', { name: /추이/ });
+    expect(chart).toHaveAttribute('aria-label', '최근 12개월 매매·전세 추이');
+    expect(chart.querySelector('[data-missing-band]')).toBeNull();
+    expect(screen.queryByText(/수집 중|개월 기준/)).not.toBeInTheDocument();
+    const jeonseLine = chart.querySelector('[data-series="전세"]');
+    expect([...jeonseLine.querySelectorAll('circle[data-month]')].map((dot) => dot.getAttribute('data-month'))).toEqual(['2026-08', '2026-10']);
+    expect(jeonseLine.querySelectorAll('[data-segment="gap"]')).toHaveLength(0); // 08 → 10 을 점선으로 잇지 않는다
+    // 매매는 다 모아 큰 숫자 그대로, 전세 평균 덧붙임은 전세 최근 3개월이 다 모이지 않아 빠진다
+    expect(screen.getByText('최근 3개월 평균 · 60–85㎡')).toBeInTheDocument();
   });
 
   it('다 모았으면(READY) "N개월 기준" · "수집 중" 없음 — 지금 화면 그대로', async () => {
