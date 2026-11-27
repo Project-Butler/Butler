@@ -28,7 +28,8 @@ export const getRegionMarketPrices = async (req, res, next) => {
 // 코드는 규칙 파일 safeErrorCode 를 거친 영문 · 숫자 · 밑줄뿐이라 요청 주소 · 키가 들어갈 자리가 없다. 수집이 통째로 실패(던짐)하면 errorHandler 가 남긴다
 // 키 오류(30 · NO_KEY)로 실패한 묶음이 있으면 시세 응답과 같은 keyShape(길이 · 참/거짓만 — rtmsProvider serviceKeyShape)를 끝에 붙인다(11/26, #233).
 // 로그를 남기는 순간의 환경 변수로 계산한다. rawKey 는 테스트용
-const LOGGED_FIELDS = ['targets', 'planned', 'backfill', 'done', 'failed', 'failures', 'calls', 'elapsedMs'];
+// relinkFirst = 실행을 시작하자마자 한 다시 잇기 결과 { sigungus(시군구 수), relinked(이어진 거래 수), elapsedMs, capped(8초 상한에 걸렸나) }(#270)
+const LOGGED_FIELDS = ['targets', 'planned', 'backfill', 'done', 'failed', 'failures', 'calls', 'elapsedMs', 'relinkFirst'];
 export const formatCollectionLog = (summary, rawKey = process.env.DATA_GO_KR_SERVICE_KEY) => {
   const failures = (summary.failures ?? []).slice(0, 10);
   const logged = Object.fromEntries(LOGGED_FIELDS.map((field) => [field, field === 'failures' ? failures : summary[field]]));

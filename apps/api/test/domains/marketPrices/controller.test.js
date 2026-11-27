@@ -31,6 +31,13 @@ describe('정기 실행 결과 로그 한 줄', () => {
     assert.equal(logged.failures[0], '11710 2026-01 RENT TIMEOUT');
   });
 
+  test('먼저 한 다시 잇기 결과도 같은 줄에(#270) — 시군구 수 · 이어진 거래 수 · 걸린 시간 · 상한에 걸렸는지', () => {
+    const relinkFirst = { sigungus: 3, relinked: 7, elapsedMs: 412, capped: false };
+    const logged = JSON.parse(formatCollectionLog({ ...summary, relinkFirst }).slice('[market-prices] cron '.length));
+    assert.deepEqual(Object.keys(logged), ['targets', 'planned', 'backfill', 'done', 'failed', 'failures', 'calls', 'elapsedMs', 'relinkFirst']);
+    assert.deepEqual(logged.relinkFirst, relinkFirst);
+  });
+
   test('실패 없음 · failures 가 없어도 한 줄(빈 배열)', () => {
     const logged = JSON.parse(formatCollectionLog({ ...summary, failed: 0, failures: undefined }).slice('[market-prices] cron '.length));
     assert.deepEqual(logged.failures, []);
