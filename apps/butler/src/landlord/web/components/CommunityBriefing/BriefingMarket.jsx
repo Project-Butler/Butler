@@ -1,9 +1,8 @@
 import { useGetMarketPrices } from '../../hooks/useGetMarketPrices';
-import { COLLECTING_BRIEFING_TEXT, collectingNotice } from '../../utils/communityMarketCollecting';
 import { chartMonths, chartValue, recentSummary } from '../../utils/communityMarketSummary';
-import { CollectingDescription } from '../CommunityMarket/CollectingDescription';
 import { MarketSource } from '../CommunityMarket/MarketSource';
 import { PriceChart } from '../CommunityMarket/PriceChart';
+import { BriefingCollectingNote } from './BriefingCollectingNote';
 import { BRIEFING_ERROR_TEXT, BRIEFING_LOADING_TEXT, BriefingNote } from './BriefingNote';
 import { BriefingSection } from './BriefingSection';
 
@@ -34,20 +33,8 @@ export const BriefingMarket = ({ building, band, onMore, className = '' }) => {
   let body;
   if (prices.isPending) body = <BriefingNote>{BRIEFING_LOADING_TEXT}</BriefingNote>;
   else if (prices.isError) body = <BriefingNote tone="error">{BRIEFING_ERROR_TEXT}</BriefingNote>;
-  else if (data.collectionStatus === 'COLLECTING') {
-    // 아직 시도 전이면 한 줄 그대로, 일부 모음 · 받기 실패면 제목 · 설명 두 줄(문구 · 이유는 utils/communityMarketCollecting — 시세 탭과 같은 판단)
-    const notice = collectingNotice(data);
-    body = notice.kind !== 'FIRST' ? (
-      <BriefingNote>
-        <span className="block">{notice.title}</span>
-        <span className="block">
-          <CollectingDescription notice={notice} />
-        </span>
-      </BriefingNote>
-    ) : (
-      <BriefingNote>{COLLECTING_BRIEFING_TEXT}</BriefingNote>
-    );
-  }
+  // 아직 시도 전이면 한 줄, 일부 모음 · 받기 실패면 제목 · 설명 두 줄 — 최근 거래 칸도 같은 안내(BriefingCollectingNote)
+  else if (data.collectionStatus === 'COLLECTING') body = <BriefingCollectingNote prices={data} />;
   else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <BriefingNote>{briefingMarketEmptyText(band)}</BriefingNote>;
   else {
     body = (

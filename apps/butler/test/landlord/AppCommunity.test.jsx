@@ -362,7 +362,9 @@ describe('앱 커뮤니티: 시세 "모으는 중" 안내는 PC 와 같은 세 �
     api.getComplexMarketPrices.mockResolvedValue(PARTIAL);
     renderAt('/landlord/community/market');
     expectPartial(await noteOf('시세를 모으는 중이에요'));
+    // 시세 탭은 모으는 중이면 최근 거래 목록 자체를 그리지 않는다(빈 상태 문구도 없음)
     expect(screen.queryByRole('list', { name: '최근 거래' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/거래가 없습니다/)).not.toBeInTheDocument();
   });
 
   it('시세 탭 · 하나도 못 모음 + 실패: "시세를 아직 불러오지 못했어요" + 매일 새벽 다시 시도 · 마지막 시도 한국 날짜', async () => {
@@ -398,6 +400,30 @@ describe('앱 커뮤니티: 시세 "모으는 중" 안내는 PC 와 같은 세 �
     const note = await noteOf('실거래를 모으는 중이에요. 하루 안에 채워집니다', market);
     expect(note).toHaveAttribute('role', 'status');
     expect(market.textContent).not.toMatch(/개월을 모았어요|불러오지 못했어요|마지막 시도/);
+  });
+
+  // 서버는 COLLECTING 이면 recentDeals 를 비워 준다 — 거래가 없는 게 아니라 아직 안 보여 주는 것(PC 와 같다)
+  const dealsSection = () => screen.findByRole('region', { name: '최근 거래' }, FIRST_RENDER);
+  it.each([
+    ['일부 모음', PARTIAL, '시세를 모으는 중이에요', expectPartial],
+    ['하나도 못 모음 + 실패', FAILED, '시세를 아직 불러오지 못했어요', expectFailed],
+    ['아직 시도 전', NOT_TRIED, '실거래를 모으는 중이에요. 하루 안에 채워집니다', (note) => expect(note).toHaveAttribute('role', 'status')],
+  ])('브리핑 최근 거래 카드 · 모으는 중(%s)이면 시세 카드와 같은 안내 — "최근 거래가 없습니다" 없음', async (_, prices, title, expectNote) => {
+    api.getComplexMarketPrices.mockResolvedValue(prices);
+    renderAt('/landlord/community/briefing');
+    const deals = await dealsSection();
+    const note = await noteOf(title, deals);
+    expectNote(note);
+    expect(within(deals).queryByText('최근 거래가 없습니다')).not.toBeInTheDocument();
+    expect((await noteOf(title, await marketSection())).textContent).toBe(note.textContent);
+  });
+
+  it('브리핑 최근 거래 카드 · 다 모았는데(READY) 그 면적대 거래가 0건이면 "최근 거래가 없습니다"', async () => {
+    api.getComplexMarketPrices.mockResolvedValue({ ...MARKET_COLLECTING, collectionStatus: 'READY', jobId: null, asOf: '2026-11-17', coveredFromYearMonth: '2025-11' });
+    renderAt('/landlord/community/briefing');
+    const deals = await dealsSection();
+    expect(await within(deals).findByText('최근 거래가 없습니다', {}, FIRST_RENDER)).toHaveAttribute('role', 'status');
+    expect(deals.textContent).not.toMatch(/모으는 중|불러오지 못했어요/);
   });
 });
 

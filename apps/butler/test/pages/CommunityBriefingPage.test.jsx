@@ -193,14 +193,41 @@ describe('브리핑', () => {
     expect(await within(await section('최근 투표')).findAllByRole('button', { name: /투표 \d/ })).toHaveLength(3);
   });
 
-  it('시세를 아직 모으는 단지면 시세 · 거래 섹션에 안내 한 줄(나머지 섹션은 그대로)', async () => {
+  it('시세를 아직 모으는 단지면 시세 · 거래 섹션에 같은 안내 한 줄 — 거래 섹션도 "최근 거래가 없습니다" 가 아니다(나머지 섹션은 그대로)', async () => {
     api.getComplexMarketPrices.mockResolvedValue(marketCollecting);
     renderAt('/community/briefing');
     const market = await section('시세');
     expect(await within(market).findByText('실거래를 모으는 중이에요. 하루 안에 채워집니다')).toBeInTheDocument();
     expect(within(market).queryByText(/출처:/)).not.toBeInTheDocument();
-    expect(await within(await section('최근 거래')).findByText('최근 거래가 없습니다')).toBeInTheDocument();
+    const deals = await section('최근 거래');
+    expect(await within(deals).findByText('실거래를 모으는 중이에요. 하루 안에 채워집니다')).toHaveAttribute('role', 'status');
+    expect(within(deals).queryByText('최근 거래가 없습니다')).not.toBeInTheDocument();
     expect(await within(await section('최근 게시글')).findAllByRole('button', { name: /게시글 \d/ })).toHaveLength(5);
+  });
+
+  // #267: 서버는 COLLECTING 이면 recentDeals 를 비워 준다 — 거래가 없는 게 아니라 아직 안 보여 주는 것
+  it.each([
+    ['일부 모음', marketCollectingPartial, '시세를 모으는 중이에요', '최근 13개월 중 2개월을 모았어요 · 매일 새벽 이어서 모아요'],
+    ['일부 모음 + 실패', marketCollectingPartialFailed, '시세를 모으는 중이에요', '최근 13개월 중 12개월을 모았어요 · 매일 새벽 이어서 모아요'],
+    ['하나도 못 모음 + 실패', marketCollectFailed, '시세를 아직 불러오지 못했어요', '매일 새벽 다시 시도하고 있어요 · 마지막 시도 2026-11-25'],
+    ['아직 시도 전', marketCollectingNotTried, '실거래를 모으는 중이에요. 하루 안에 채워집니다', ''],
+  ])('최근 거래 섹션 · 모으는 중(%s)이면 시세 섹션과 같은 안내 — "최근 거래가 없습니다" 없음', async (_, prices, title, description) => {
+    api.getComplexMarketPrices.mockResolvedValue(prices);
+    renderAt('/community/briefing');
+    const deals = await section('최근 거래');
+    const note = (await within(deals).findByText(title)).closest('p');
+    expect(note).toHaveTextContent(`${title}${description}`);
+    expect(within(deals).queryByText('최근 거래가 없습니다')).not.toBeInTheDocument();
+    // 시세 섹션과 같은 글
+    expect((await within(await section('시세')).findByText(title)).closest('p').textContent).toBe(note.textContent);
+  });
+
+  it('최근 거래 섹션 · 다 모았는데(READY) 그 면적대 거래가 0건이면 "최근 거래가 없습니다"', async () => {
+    api.getComplexMarketPrices.mockResolvedValue({ ...marketReady('SALE'), monthly: [], recentDeals: [] });
+    renderAt('/community/briefing');
+    const deals = await section('최근 거래');
+    expect(await within(deals).findByText('최근 거래가 없습니다')).toHaveAttribute('role', 'status');
+    expect(within(deals).queryByText(/모으는 중|불러오지 못했어요/)).not.toBeInTheDocument();
   });
 
   it('모으는 중 · 아직 시도 전(모은 달 · 실패한 달 0)이면 "하루 안에" 한 줄 그대로', async () => {
@@ -220,6 +247,8 @@ describe('브리핑', () => {
     expect(note).toHaveTextContent('시세를 모으는 중이에요최근 13개월 중 2개월을 모았어요 · 매일 새벽 이어서 모아요');
     expect(within(note).getByText('시세를 모으는 중이에요')).toHaveClass('block');
     expect(within(note).getByText('2')).toHaveClass('font-num', 'tabular-nums');
+    // 덩어리마다 inline-block — 좁은 칸(최근 거래)에서도 "이어 / 서" 처럼 낱말 안에서 끊기지 않고 덩어리 사이에서만 줄이 바뀐다
+    expect(within(note).getByText('매일 새벽 이어서 모아요')).toHaveClass('inline-block', 'break-keep');
     expect(within(market).queryByText(/하루 안에|불러오지 못했어요|마지막 시도|출처:/)).not.toBeInTheDocument();
   });
 

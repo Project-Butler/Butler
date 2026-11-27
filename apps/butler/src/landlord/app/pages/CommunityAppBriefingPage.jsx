@@ -20,26 +20,29 @@ import { CommunityAppFrame } from '../components/CommunityApp/CommunityAppFrame'
 // 시세 → 최근 거래 → 최근 게시글 → 최근 뉴스 → 최근 투표. 데이터 · 계산 · 문구는 PC 브리핑 칸의 훅 · 상수를 그대로 쓴다
 // (useBriefing* — 같은 요청 · 같은 건수 · 같은 빈 상태 문구). 카드마다 따로 불러오고 따로 비거나 실패한다.
 
+// 시세를 아직 모으는 중(COLLECTING)일 때 시세 카드 · 최근 거래 카드가 같이 쓰는 안내 — PC BriefingCollectingNote 와 같은 판단:
+// 아직 시도 전이면 한 줄, 일부 모음 · 받기 실패면 두 줄(utils/communityMarketCollecting). 서버가 거래를 비워 주는 것이라 "최근 거래가 없습니다" 가 아니다(#267)
+const CollectingNote = ({ prices }) => {
+  const notice = collectingNotice(prices);
+  if (notice.kind === 'FIRST') return <AppNote>{COLLECTING_BRIEFING_TEXT}</AppNote>;
+  return (
+    <AppNote>
+      <span className="block font-semibold text-ink-2">{notice.title}</span>
+      <span className="block">
+        <AppCollectingDescription notice={notice} />
+      </span>
+    </AppNote>
+  );
+};
+
 // 시세 카드(참고 시안 B-1 첫 카드): 큰 숫자(최근 3개월 평균) · "직전 3개월보다 ▲▼" · 무엇의 평균인지 한 줄 · 작은 흐름선 · 출처 줄
 const MarketCard = ({ building, band, onMore }) => {
   const { prices, data, summary, months, values } = useBriefingMarket({ building, band });
   let body;
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
-  else if (data.collectionStatus === 'COLLECTING') {
-    // PC 와 같은 판단: 일부 모음 · 받기 실패면 두 줄, 아직 시도 전이면 한 줄(utils/communityMarketCollecting)
-    const notice = collectingNotice(data);
-    body = notice.kind !== 'FIRST' ? (
-      <AppNote>
-        <span className="block font-semibold text-ink-2">{notice.title}</span>
-        <span className="block">
-          <AppCollectingDescription notice={notice} />
-        </span>
-      </AppNote>
-    ) : (
-      <AppNote>{COLLECTING_BRIEFING_TEXT}</AppNote>
-    );
-  } else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <AppNote>{briefingMarketEmptyText(band)}</AppNote>;
+  else if (data.collectionStatus === 'COLLECTING') body = <CollectingNote prices={data} />;
+  else if (data.recentDeals.length === 0 && data.monthly.length === 0) body = <AppNote>{briefingMarketEmptyText(band)}</AppNote>;
   else {
     body = (
       <div className="space-y-1 px-4 py-3">
@@ -72,6 +75,8 @@ const DealsCard = ({ building, band, onMore }) => {
   let body;
   if (prices.isPending) body = <AppNote>{BRIEFING_LOADING_TEXT}</AppNote>;
   else if (prices.isError) body = <AppNote tone="error">{BRIEFING_ERROR_TEXT}</AppNote>;
+  // 모으는 중이면 시세 카드와 같은 안내, "최근 거래가 없습니다" 는 다 모았는데(READY) 0건일 때만
+  else if (prices.data.collectionStatus === 'COLLECTING') body = <CollectingNote prices={prices.data} />;
   else if (deals.length === 0) body = <AppNote>{BRIEFING_DEALS_EMPTY_TEXT}</AppNote>;
   else {
     body = (
