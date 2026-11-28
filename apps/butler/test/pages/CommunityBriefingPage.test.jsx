@@ -375,3 +375,32 @@ describe('브리핑 — 일부만 모았을 때 시세 · 최근 거래 카드�
   });
 });
 
+
+// #274 — 브리핑 시세 · 최근 거래 카드는 시세 탭의 기본 선택 구간으로 연다(그 단지가 가진 면적대 안에서, 같은 함수 pickAreaBands)
+describe('브리핑 — 면적대는 그 단지가 가진 면적대 안에서 (#274)', () => {
+  const JUNGGYE = [39.6, 49.85, 59.39]; // 60㎡ 이하만
+  const marketCalls = () => api.getComplexMarketPrices.mock.calls.map(([params]) => params);
+
+  it('하나만 남은 단지(중계그린 모양, 내 호실 면적 없음)는 그 구간(60㎡ 이하)으로 연다 — 60–85 로 열려 비어 보이지 않는다', async () => {
+    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, name: '중계그린아파트', unitAreas: [], dealAreas: JUNGGYE }]);
+    renderAt('/community/briefing');
+    const market = await section('시세');
+    expect(within(market).getByText('중계그린아파트 · 매매 · 60㎡ 이하')).toBeInTheDocument();
+    expect(within(await section('최근 거래')).getByText('매매 · 60㎡ 이하')).toBeInTheDocument();
+    await within(market).findByText((_, el) => el?.tagName === 'P' && el.textContent === '출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    expect(marketCalls().length).toBeGreaterThan(0);
+    for (const params of marketCalls()) expect(params).toEqual({ complexId: BUILDING.complexId, dealType: 'SALE', areaMin: undefined, areaMax: 60 });
+  });
+
+  it('내 호실 구간이 있으면 그 구간, 없으면 60–85 가 보일 때 60–85(파크리오 모양) — 시세 탭 기본 선택과 같다', async () => {
+    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, unitAreas: [144.77], dealAreas: [35.24, 59.98, 84.79, 144.77] }]);
+    renderAt('/community/briefing');
+    expect(within(await section('시세')).getByText('잠실한빛아파트 · 매매 · 105㎡ 초과')).toBeInTheDocument();
+  });
+
+  it('내 호실 면적이 없고 60–85 도 없으면 보이는 구간 중 첫째', async () => {
+    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, unitAreas: [], dealAreas: [59.9, 120.36] }]);
+    renderAt('/community/briefing');
+    expect(within(await section('시세')).getByText('잠실한빛아파트 · 매매 · 60㎡ 이하')).toBeInTheDocument();
+  });
+});

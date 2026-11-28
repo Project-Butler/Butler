@@ -13,21 +13,22 @@ import { PartialBasis } from '../components/CommunityMarket/PartialBasis';
 import { ChartLegend, MissingLegend, PriceChart } from '../components/CommunityMarket/PriceChart';
 import { Segment } from '../components/CommunitySegment/Segment';
 import {
-  AREA_BANDS,
+  areaBandsOf,
   chartMonths,
   chartSeries,
   DEAL_TYPES,
   formatWon,
   getDealTypeLabel,
-  pickAreaBands,
   recentSummary,
+  resolveAreaBand,
+  singleAreaBandText,
 } from '../utils/communityMarketSummary';
 import { collectingNotice, hasNoPartialDeals, partialCoverage, partialMarketEmptyText } from '../utils/communityMarketCollecting';
 
 // 시세 화면.
 // 데이터는 useGetMarketPrices(시세 API — 국토교통부 실거래가, 연동 규격 2장 모양). 거래 유형 · 면적대를 바꾸면 그 조합으로 다시 가져온다.
 // 거래 유형은 주소(?dealType=JEONSE|MONTHLY, 매매는 안 씀)에 두어 새로고침 · 건물 바꾸기에도 남고,
-// 면적대는 건물마다 "내 호실 면적대"로 다시 시작한다(건물마다 내 면적대가 다르다).
+// 면적대는 건물마다 기본 선택으로 다시 시작한다(건물마다 보이는 칩 · 내 면적대가 다르다 — 규칙은 utils/communityMarketSummary "면적대 칩").
 
 // 한 거래의 금액 표기: 매매 가격 / 전세 보증금 / 월세 "보증금 1억 / 월 280만"
 export const formatDealAmount = (deal, dealType) => {
@@ -37,9 +38,9 @@ export const formatDealAmount = (deal, dealType) => {
 };
 export const AMOUNT_HEADER = { SALE: '금액', JEONSE: '보증금', MONTHLY: '보증금 / 월세' };
 
-const AreaChips = ({ owned, value, onChange }) => (
+const AreaChipGroup = ({ bands, owned, value, onChange }) => (
   <div role="radiogroup" aria-label="면적대" className="flex flex-wrap gap-2">
-    {AREA_BANDS.map((band) => {
+    {bands.map((band) => {
       const isActive = band.key === value;
       return (
         <button
@@ -61,6 +62,14 @@ const AreaChips = ({ owned, value, onChange }) => (
     })}
   </div>
 );
+
+// 면적대 칩 — 그 단지가 가진 면적대만(bands). 하나만 남으면 칩 대신 글자("전용 60㎡ 이하") — utils/communityMarketSummary "면적대 칩"
+const AreaChips = ({ bands, owned, value, onChange }) =>
+  bands.length === 1 ? (
+    <span className="flex h-8 flex-none items-center whitespace-nowrap text-chip font-semibold text-ink-2">{singleAreaBandText(bands[0])}</span>
+  ) : (
+    <AreaChipGroup bands={bands} owned={owned} value={value} onChange={onChange} />
+  );
 
 // 대표 숫자 카드: 최근 3개월 평균(지난달까지) + 증감률 + 무엇의 평균인지 한 줄 + 차트(지난달까지).
 // 이번 달은 신고가 덜 들어와 빼고, 이번 달 거래는 오른쪽 "최근 거래" 표에만 보인다(utils/communityMarketSummary "이번 달 빼기").
@@ -154,10 +163,14 @@ const DealTable = ({ deals, dealType }) => (
 
 // 시세 화면의 데이터 · 면적대 선택 · 상태(모으는 중 · 빈 상태). 앱 시세(app CommunityAppMarketPage)도 같은 것을 쓴다.
 export const useMarketBodyState = ({ building, dealType }) => {
-  // 내 호실 면적은 my-buildings 응답의 unitAreas(인증 호실 · 면적 있는 것만). 비면 점 없이 60–85㎡ 로 시작한다.
-  const { owned, defaultKey } = pickAreaBands(building.unitAreas ?? []);
-  const [bandKey, setBandKey] = useState(defaultKey);
-  const band = AREA_BANDS.find((item) => item.key === bandKey);
+  // 보이는 칩 · 기본 선택은 my-buildings 의 unitAreas(내 활성 호실 · 면적 있는 것만) + dealAreas(그 단지 실거래 면적)로 —
+  // 규칙은 utils/communityMarketSummary "면적대 칩"(브리핑 · 앱과 같은 함수)
+  const areaBands = areaBandsOf(building);
+  const [chosenKey, setBandKey] = useState(areaBands.defaultKey);
+  // 고른 칩이 보이는 칩에서 빠지면(건물 목록을 다시 받아 dealAreas 가 바뀜) 기본 선택으로
+  const band = resolveAreaBand(areaBands, chosenKey);
+  const bandKey = band.key;
+  const { bands, owned } = areaBands;
   const query = { complexId: building.complexId, areaMin: band.areaMin, areaMax: band.areaMax };
   const prices = useGetMarketPrices({ ...query, dealType });
   // 매매 화면의 전세 선 · "최근 3개월 · 전세" 용. 전세 · 월세 화면에서는 부르지 않는다.
@@ -174,7 +187,7 @@ export const useMarketBodyState = ({ building, dealType }) => {
     ? `${partialMarketEmptyText(partial, band.label, getDealTypeLabel(dealType))}.`
     : `${band.label}에는 최근 ${getDealTypeLabel(dealType)} 거래가 없습니다.`;
   const showData = Boolean(data) && (!isCollecting || Boolean(partial)) && !isEmpty;
-  return { owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, partial, isEmpty, emptyTitle, showData };
+  return { bands, owned, bandKey, setBandKey, band, prices, jeonse, data, isCollecting, collecting, partial, isEmpty, emptyTitle, showData };
 };
 
 // 거래 유형(?dealType=JEONSE|MONTHLY, 매매는 안 씀) — 앱 시세도 같은 주소 규칙
@@ -188,7 +201,7 @@ export const useMarketDealType = () => {
 
 // 건물마다 새로 시작하도록 key={complexId} 로 그린다(면적대 선택이 건물을 따라가지 않게).
 const MarketBody = ({ building, dealType, onDealTypeChange }) => {
-  const { owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
+  const { bands, owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
   // 출처 줄 + (일부만 모았으면) "최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요" — 감싸지 않고 차트 카드의 형제로(출처 줄이 카드 바로 다음)
   const source =
     data?.source && data.asOf ? (
@@ -200,12 +213,12 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
 
   return (
     <>
-      {/* 도구 줄: 거래 유형 · 면적 칩 · 안내(넘치면 줄바꿈) */}
+      {/* 도구 줄: 거래 유형 · 면적 칩(그 단지가 가진 면적대만, 하나면 글자) · 안내(넘치면 줄바꿈) */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="w-56 flex-none">
           <Segment label="거래 유형" options={DEAL_TYPES} value={dealType} onChange={onDealTypeChange} />
         </div>
-        <AreaChips owned={owned} value={bandKey} onChange={setBandKey} />
+        <AreaChips bands={bands} owned={owned} value={bandKey} onChange={setBandKey} />
         {owned.size > 0 && <span className="text-sub text-ink-3">내 호실이 있는 면적대입니다</span>}
       </div>
 

@@ -5,6 +5,7 @@
 // 옆 칸과 폭 다툼 · 창 폭 클래스) · 건물 바꾸기 · 신고 · 닉네임이 가운데 대화상자로 뜨거나 문구가 PC 와 다름 ·
 // 그 시트가 다른 앱 시트(BottomSheet)와 달리 X · [취소] · Esc · 바깥 · 저장(신고 · 건물 고르기) 뒤에 내려가지 않고 바로 사라지거나, 보내는 중 바깥을 누르면 닫힘 ·
 // 뉴스에 "우리 단지" 카드가 남거나, 단지 기사가 PC 처럼 "우리 지역" 맨 위(최대 3건 · 칩은 날짜 줄 앞 · 같은 주소는 한 번)에 오지 않음.
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -823,5 +824,100 @@ describe('앱 커뮤니티: 시세를 일부만 모았을 때 모은 달의 데�
     expect(await within(deals).findByText('모은 8개월 동안 거래가 없습니다')).toHaveAttribute('role', 'status');
     expect(within(deals).queryByText('최근 거래가 없습니다')).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: '시세' })).getByText('모은 8개월 동안 60–85㎡ 매매 거래가 없습니다')).toBeInTheDocument();
+  });
+});
+
+// #274 — 앱도 PC 와 같은 규칙(같은 훅 useMarketBodyState · 같은 함수 pickAreaBands): 칩 = 그 단지 실거래 구간 + 내 호실 구간,
+// 정보 없으면 4개, 하나면 글자, 브리핑은 기본 선택 구간으로. 면적은 로컬 실제 단지의 전용면적
+describe('앱 커뮤니티: 면적대 칩은 그 단지가 가진 면적대만 — PC 와 같은 규칙 (#274)', () => {
+  const PARKRIO = [35.24, 59.98, 84.79, 144.77]; // 85–105 거래 없음
+  const JUNGGYE = [39.6, 49.85, 59.39]; // 60㎡ 이하만
+  const open = (overrides, path = '/landlord/community/market') => {
+    api.getMyBuildings.mockResolvedValue([building(overrides)]);
+    renderAt(path);
+  };
+  const areaGroup = () => screen.findByRole('radiogroup', { name: '면적대' }, FIRST_RENDER);
+  const chipTexts = (group) => within(group).getAllByRole('radio').map((radio) => radio.textContent);
+  const checkedText = (group) => within(group).getByRole('radio', { checked: true }).textContent;
+  const saleCalls = () => api.getComplexMarketPrices.mock.calls.map(([params]) => params).filter((params) => params.dealType === 'SALE');
+
+  it('칩 3개(파크리오 모양) — 거래가 없는 85–105 는 빠지고, 내 호실 구간(점)이 기본', async () => {
+    open({ unitAreas: [84.79], dealAreas: PARKRIO });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('60–85㎡');
+    expect(within(group).getByRole('radio', { checked: true }).querySelector('[aria-label="내 호실"]')).not.toBeNull();
+    expect(screen.getByText('내 호실이 있는 면적대입니다')).toBeInTheDocument();
+  });
+
+  it('하나만 남음(중계그린 모양) — 칩 대신 글자 "전용 60㎡ 이하", 그 구간으로 부르고 내 호실 안내는 없다', async () => {
+    open({ name: '중계그린아파트', unitAreas: [], dealAreas: JUNGGYE });
+    expect(await screen.findByText('전용 60㎡ 이하', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: '면적대' })).not.toBeInTheDocument();
+    expect(screen.queryByText('내 호실이 있는 면적대입니다')).not.toBeInTheDocument();
+    await waitFor(() => expect(saleCalls().at(-1)).toEqual({ complexId: 'complex-1', dealType: 'SALE', areaMin: undefined, areaMax: 60 }));
+  });
+
+  it('하나만 남았는데 내 호실 구간이면 글자 + "내 호실이 있는 면적대입니다" 그대로', async () => {
+    open({ name: '중계그린아파트', unitAreas: [49.85], dealAreas: JUNGGYE });
+    expect(await screen.findByText('전용 60㎡ 이하', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('내 호실이 있는 면적대입니다')).toBeInTheDocument();
+  });
+
+  it('거래 정보 없음(빈 목록) — 지금처럼 4개, 60–85 로 시작', async () => {
+    open({ unitAreas: [], dealAreas: [] });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '85–105㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('60–85㎡');
+  });
+
+  it('내 호실 구간에 거래가 없어도 그 칩은 보이고(점) 기본으로 고른다', async () => {
+    open({ unitAreas: [101.2], dealAreas: PARKRIO });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '85–105㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('85–105㎡');
+    expect(within(group).getByRole('radio', { checked: true }).querySelector('[aria-label="내 호실"]')).not.toBeNull();
+  });
+
+  it.each([
+    ['① 내 호실 구간', { unitAreas: [144.77], dealAreas: PARKRIO }, '105㎡ 초과', { areaMin: 105, areaMax: undefined }],
+    ['② 내 호실이 없으면 60–85 가 보일 때 60–85', { unitAreas: [], dealAreas: PARKRIO }, '60–85㎡', { areaMin: 60, areaMax: 85 }],
+    ['③ 60–85 도 없으면 보이는 칩 중 첫째', { unitAreas: [], dealAreas: [59.9, 120.36] }, '60㎡ 이하', { areaMin: undefined, areaMax: 60 }],
+  ])('기본 선택 %s', async (_name, overrides, checked, area) => {
+    open(overrides);
+    expect(checkedText(await areaGroup())).toBe(checked);
+    await waitFor(() => expect(saleCalls().at(-1)).toEqual({ complexId: 'complex-1', dealType: 'SALE', ...area }));
+  });
+
+  it('고른 칩이 사라지면(건물 목록을 다시 받아 그 구간 거래가 빠짐) 기본 선택으로', async () => {
+    api.getMyBuildings.mockResolvedValue([building({ unitAreas: [], dealAreas: PARKRIO })]);
+    // 건물 목록을 바꿔 넣으려고 QueryClient 를 직접 둔다(안쪽 Provider 가 우선 — test/support/rtl.jsx)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/landlord/community/market']}>
+          <Routes>
+            <Route path="/landlord/*" element={<LandlordAppRoutes user={USER} onLogout={vi.fn()} onUnauthorized={vi.fn()} />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const group = await areaGroup();
+    await userEvent.click(within(group).getByRole('radio', { name: '105㎡ 초과' }));
+    expect(checkedText(screen.getByRole('radiogroup', { name: '면적대' }))).toBe('105㎡ 초과');
+    act(() => {
+      client.setQueryData(['COMMUNITY_MY_BUILDINGS'], [building({ unitAreas: [], dealAreas: [59.98, 84.79] })]);
+    });
+    await waitFor(() => expect(chipTexts(screen.getByRole('radiogroup', { name: '면적대' }))).toEqual(['60㎡ 이하', '60–85㎡']));
+    expect(checkedText(screen.getByRole('radiogroup', { name: '면적대' }))).toBe('60–85㎡');
+    await waitFor(() => expect(saleCalls().at(-1)).toEqual({ complexId: 'complex-1', dealType: 'SALE', areaMin: 60, areaMax: 85 }));
+  });
+
+  it('브리핑 — 하나만 남은 단지(내 호실 면적 없음)는 시세 · 최근 거래 카드를 그 구간(60㎡ 이하)으로 연다', async () => {
+    open({ name: '중계그린아파트', unitAreas: [], dealAreas: JUNGGYE }, '/landlord/community/briefing');
+    expect(await screen.findByText('중계그린아파트 · 매매 · 60㎡ 이하', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('매매 · 60㎡ 이하')).toBeInTheDocument();
+    await waitFor(() => expect(saleCalls().length).toBeGreaterThan(0));
+    for (const params of saleCalls()) expect(params).toEqual({ complexId: 'complex-1', dealType: 'SALE', areaMin: undefined, areaMax: 60 });
   });
 });

@@ -1,6 +1,17 @@
 // 시세 화면 계산 — 시세 응답(api-contract "시세" 모양)에서 대표 숫자 · 증감률 · 차트 값을 뽑는다. 순수 함수.
 // 데이터는 시세 API(국토교통부 실거래가, GET /market-prices/complexes/:complexId)의 응답이다.
 //
+// ┌ 면적대 칩 — 그 단지가 가진 면적대만(#274) ─────────────────────────────────────────────────────────────────────┐
+// │ 규칙은 pickAreaBands 하나 — 웹 시세 · 웹 브리핑 · 앱 시세 · 앱 브리핑이 같이 쓴다(areaBandsOf(building))                  │
+// │ 보이는 칩   그 단지 실거래에 나온 구간(my-buildings dealAreas — 보관 13개월, 매매 · 전세 · 월세 합침) + 내 호실 구간(unitAreas) │
+// │ 정보 없음   dealAreas 가 비면(수집 전 · 연결 전 · 0건) 4개 모두 — 예전 그대로                                             │
+// │ 기본 선택   내 호실 구간(호실이 많은 쪽, 같으면 큰 쪽) → 없으면 60–85 가 보일 때 60–85 → 아니면 보이는 칩 중 첫째              │
+// │ 사라지면    고른 칩이 보이는 칩에서 빠지면(건물 목록을 다시 받아서) 기본 선택으로(resolveAreaBand)                           │
+// │ 하나만     칩 대신 글자 "전용 60㎡ 이하"(singleAreaBandText) — 고를 것이 없는 칩 묶음은 누를 수 있는 조작처럼 보인다           │
+// │ 왜: 그 단지에 없는 크기의 칩을 누르면 "… 거래가 없습니다" 가 나와 거래가 뜸한 것처럼 읽혔다(11/28 중계그린 — 60㎡ 이하만).  │
+// │     유형을 합쳐 세는 것은 거래 유형을 바꿔도 칩이 바뀌지 않게. 구간 경계는 여기(AREA_BANDS) 한 곳 — 서버는 면적만 준다       │
+// └──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
 // ┌ 일부만 모았을 때(#267 2차) ─────────────────────────────────────────────────────────────────────────────┐
 // │ 원칙: 모은 달의 사실(거래 · 월별 평균)은 다 보이고, 빠진 달이 들어가면 틀리는 숫자만 조건이 맞을 때 보인다          │
 // │ 못 모은 달 = monthly 에서 collected 가 false 인 달(일부 모음 응답에만 있다 — READY 는 칸이 없고 모두 모은 달)          │
@@ -29,19 +40,37 @@ export const AREA_BANDS = [
   { key: 'gt105', label: '105㎡ 초과', areaMin: 105, contains: (area) => area > 105 },
 ];
 
-// 내 호실이 걸친 구간 전부(점 표시)와 기본 선택 — 호실이 많은 구간, 같으면 면적이 큰 구간.
-// 내 호실 면적을 모르면 60–85㎡ 로 시작한다.
-export const pickAreaBands = (myAreas) => {
+// 내 호실 구간이 없을 때 먼저 고르는 구간(보일 때만) — 예전 기본값 그대로
+const FALLBACK_BAND_KEY = '60to85';
+
+// 면적대 칩(맨 위 상자 "면적대 칩"). myAreas = 내 호실 전용면적(unitAreas), dealAreas = 그 단지 실거래 전용면적(my-buildings dealAreas).
+// 반환 { bands: 보이는 칩(AREA_BANDS 순서), owned: 내 호실이 걸친 구간 key(점 · 안내), defaultKey: 기본 선택 — 늘 bands 안에 있다 }
+export const pickAreaBands = (myAreas = [], dealAreas = []) => {
   const counts = AREA_BANDS.map((band) => myAreas.filter((area) => band.contains(area)).length);
+  const owned = new Set(AREA_BANDS.filter((_band, index) => counts[index] > 0).map((band) => band.key));
+  const dealt = new Set(AREA_BANDS.filter((band) => dealAreas.some((area) => band.contains(area))).map((band) => band.key));
+  const bands = dealt.size === 0 ? AREA_BANDS : AREA_BANDS.filter((band) => dealt.has(band.key) || owned.has(band.key));
+  // 내 호실 구간 — 호실이 많은 구간, 같으면 면적이 큰 구간
   let active = -1;
   counts.forEach((count, index) => {
     if (count > 0 && (active === -1 || count >= counts[active])) active = index;
   });
-  return {
-    owned: new Set(AREA_BANDS.filter((_band, index) => counts[index] > 0).map((band) => band.key)),
-    defaultKey: AREA_BANDS[active === -1 ? 1 : active].key,
-  };
+  let defaultKey;
+  if (active !== -1) defaultKey = AREA_BANDS[active].key;
+  else if (bands.some((band) => band.key === FALLBACK_BAND_KEY)) defaultKey = FALLBACK_BAND_KEY;
+  else defaultKey = bands[0].key;
+  return { bands, owned, defaultKey };
 };
+
+// 건물(my-buildings 한 줄)의 칩 — 화면 넷이 이것으로 부른다(없는 칸은 빈 목록: 예전 서버 · 면적 없는 호실)
+export const areaBandsOf = (building) => pickAreaBands(building.unitAreas ?? [], building.dealAreas ?? []);
+
+// 지금 칩 — 고른 key 가 보이는 칩에 없으면(사라지면) 기본 선택
+export const resolveAreaBand = ({ bands, defaultKey }, key) =>
+  bands.find((band) => band.key === key) ?? bands.find((band) => band.key === defaultKey);
+
+// 칩이 하나만 남았을 때 칩 대신 보이는 글자
+export const singleAreaBandText = (band) => `전용 ${band.label}`;
 
 // 거래 유형별로 쓰는 값: 매매는 가격, 전세는 보증금, 월세는 월세 금액(차트 · 증감률 · 평균)
 const MONTHLY_FIELD = { SALE: 'avgPrice', JEONSE: 'avgDeposit', MONTHLY: 'avgMonthlyRent' };

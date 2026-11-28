@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,6 +80,7 @@ const renderMarket = (path = '/community/market') => {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 };
 // 파일의 첫 렌더는 화면 코드를 처음 불러와 전체 실행 때 1초를 넘기기도 한다 — 첫 대기만 여유를 둔다
 const FIRST_RENDER = { timeout: 3000 };
@@ -392,5 +393,93 @@ describe('일부만 모았을 때 — 모은 달의 시세를 보이고 틀릴 �
     await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-16');
     expect(screen.queryByText(/개월 기준|수집 중/)).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /추이/ }).querySelector('[data-missing-band]')).toBeNull();
+  });
+});
+
+// #274 — 칩 = 그 단지 실거래 구간(my-buildings dealAreas) + 내 호실 구간, 정보 없으면 4개, 하나면 글자. 면적은 로컬 실제 단지의 전용면적
+describe('면적대 칩 — 그 단지가 가진 면적대만 (#274)', () => {
+  const PARKRIO = [35.24, 59.98, 84.79, 144.77]; // 85–105 거래 없음
+  const JUNGGYE = [39.6, 49.85, 59.39]; // 60㎡ 이하만
+  const openWith = (building) => {
+    api.getMyBuildings.mockResolvedValue([{ ...BUILDING, ...building }]);
+    return renderMarket();
+  };
+  const areaGroup = () => screen.findByRole('radiogroup', { name: '면적대' }, FIRST_RENDER);
+  const chipTexts = (group) => within(group).getAllByRole('radio').map((radio) => radio.textContent);
+  const checkedText = (group) => within(group).getByRole('radio', { checked: true }).textContent;
+  const lastSaleCall = () => api.getComplexMarketPrices.mock.calls.filter(([params]) => params.dealType === 'SALE').at(-1)[0];
+
+  it('칩 3개(파크리오 모양) — 거래가 없는 85–105 는 빠지고, 내 호실 구간(점)이 기본', async () => {
+    openWith({ unitAreas: [84.79], dealAreas: PARKRIO });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('60–85㎡');
+    expect(within(group).getByRole('radio', { checked: true }).querySelector('[aria-label="내 호실"]')).not.toBeNull();
+    expect(screen.getByText('내 호실이 있는 면적대입니다')).toBeInTheDocument();
+  });
+
+  it('하나만 남음(중계그린 모양) — 칩 대신 글자 "전용 60㎡ 이하", 그 구간으로 부르고 내 호실 안내는 없다', async () => {
+    openWith({ name: '중계그린아파트', unitAreas: [], dealAreas: JUNGGYE });
+    expect(await screen.findByText('전용 60㎡ 이하', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: '면적대' })).not.toBeInTheDocument();
+    expect(screen.queryByText('내 호실이 있는 면적대입니다')).not.toBeInTheDocument();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    expect(lastSaleCall()).toEqual({ complexId: 'complex-park', dealType: 'SALE', areaMin: undefined, areaMax: 60 });
+  });
+
+  it('하나만 남았는데 내 호실 구간이면 글자 + "내 호실이 있는 면적대입니다" 그대로', async () => {
+    openWith({ name: '중계그린아파트', unitAreas: [49.85], dealAreas: JUNGGYE });
+    expect(await screen.findByText('전용 60㎡ 이하', {}, FIRST_RENDER)).toBeInTheDocument();
+    expect(screen.getByText('내 호실이 있는 면적대입니다')).toBeInTheDocument();
+  });
+
+  it('거래 정보 없음(수집 전 · 연결 전 · 0건 — 빈 목록) — 지금처럼 4개, 60–85 로 시작', async () => {
+    openWith({ unitAreas: [], dealAreas: [] });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '85–105㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('60–85㎡');
+  });
+
+  it('내 호실 구간에 거래가 없어도 그 칩은 보이고(점) 기본으로 고른다', async () => {
+    openWith({ unitAreas: [101.2], dealAreas: PARKRIO });
+    const group = await areaGroup();
+    expect(chipTexts(group)).toEqual(['60㎡ 이하', '60–85㎡', '85–105㎡', '105㎡ 초과']);
+    expect(checkedText(group)).toBe('85–105㎡');
+    expect(within(group).getByRole('radio', { checked: true }).querySelector('[aria-label="내 호실"]')).not.toBeNull();
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    expect(lastSaleCall()).toEqual({ complexId: 'complex-park', dealType: 'SALE', areaMin: 85, areaMax: 105 });
+  });
+
+  it.each([
+    ['① 내 호실 구간', { unitAreas: [144.77], dealAreas: PARKRIO }, '105㎡ 초과', { areaMin: 105, areaMax: undefined }],
+    ['② 내 호실이 없으면 60–85 가 보일 때 60–85', { unitAreas: [], dealAreas: PARKRIO }, '60–85㎡', { areaMin: 60, areaMax: 85 }],
+    ['③ 60–85 도 없으면 보이는 칩 중 첫째', { unitAreas: [], dealAreas: [59.9, 120.36] }, '60㎡ 이하', { areaMin: undefined, areaMax: 60 }],
+  ])('기본 선택 %s', async (_name, building, checked, area) => {
+    openWith(building);
+    expect(checkedText(await areaGroup())).toBe(checked);
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    expect(lastSaleCall()).toEqual({ complexId: 'complex-park', dealType: 'SALE', ...area });
+  });
+
+  it('거래 유형을 바꿔도 칩은 그대로(매매 · 전세 · 월세 합쳐 센 구간)', async () => {
+    openWith({ unitAreas: [84.79], dealAreas: PARKRIO });
+    await sourceLine('출처: 국토교통부 실거래가 · 기준 2026-11-17');
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: '거래 유형' })).getByRole('radio', { name: '월세' }));
+    expect(await screen.findByText('보증금 / 월세')).toBeInTheDocument();
+    expect(chipTexts(screen.getByRole('radiogroup', { name: '면적대' }))).toEqual(['60㎡ 이하', '60–85㎡', '105㎡ 초과']);
+  });
+
+  it('고른 칩이 사라지면(건물 목록을 다시 받아 그 구간 거래가 빠짐) 기본 선택으로', async () => {
+    const client = openWith({ unitAreas: [], dealAreas: PARKRIO });
+    const group = await areaGroup();
+    await userEvent.click(within(group).getByRole('radio', { name: '105㎡ 초과' }));
+    expect(checkedText(screen.getByRole('radiogroup', { name: '면적대' }))).toBe('105㎡ 초과');
+    act(() => {
+      client.setQueryData(['community_my_buildings'], [{ ...BUILDING, unitAreas: [], dealAreas: [59.98, 84.79] }]);
+    });
+    // react-query 는 알림을 다음 차례(setTimeout 0)에 보낸다 — 다시 그려질 때까지 기다린다
+    await waitFor(() => expect(chipTexts(screen.getByRole('radiogroup', { name: '면적대' }))).toEqual(['60㎡ 이하', '60–85㎡']));
+    expect(checkedText(screen.getByRole('radiogroup', { name: '면적대' }))).toBe('60–85㎡');
+    expect(lastSaleCall()).toEqual({ complexId: 'complex-park', dealType: 'SALE', areaMin: 60, areaMax: 85 });
   });
 });

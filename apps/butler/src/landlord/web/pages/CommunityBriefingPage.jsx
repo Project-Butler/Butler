@@ -6,7 +6,7 @@ import { BriefingNews } from '../components/CommunityBriefing/BriefingNews';
 import { BriefingPolls } from '../components/CommunityBriefing/BriefingPolls';
 import { BriefingPosts } from '../components/CommunityBriefing/BriefingPosts';
 import { CommunityFrame } from '../components/CommunityLayout/CommunityFrame';
-import { AREA_BANDS, pickAreaBands } from '../utils/communityMarketSummary';
+import { AREA_BANDS, areaBandsOf } from '../utils/communityMarketSummary';
 import { splitRegionName } from '../utils/communityFormat';
 
 // 브리핑 — 커뮤니티의 첫 화면(/community/briefing). 동네 소식을 훑어보는 화면이다.
@@ -18,7 +18,8 @@ import { splitRegionName } from '../utils/communityFormat';
 export const CommunityBriefingPage = ({ frame, building }) => {
   const navigate = useNavigate();
   const { dong, sigungu } = splitRegionName(building.regionName);
-  const band = AREA_BANDS.find((item) => item.key === pickAreaBands(building.unitAreas ?? []).defaultKey);
+  // 시세 · 최근 거래 카드의 면적대 = 시세 탭의 기본 선택(utils/communityMarketSummary "면적대 칩" — 그 단지가 가진 면적대 안에서)
+  const band = AREA_BANDS.find((item) => item.key === areaBandsOf(building).defaultKey);
   const go = (path) => () => navigate(`${COMMUNITY_PATH}/${path}`);
 
   return (

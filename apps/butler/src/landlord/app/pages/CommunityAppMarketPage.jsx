@@ -4,7 +4,7 @@ import { MarketSource } from '../../web/components/CommunityMarket/MarketSource'
 import { PartialBasis } from '../../web/components/CommunityMarket/PartialBasis';
 import { ChartLegend, MissingLegend, PriceChart } from '../../web/components/CommunityMarket/PriceChart';
 import { AMOUNT_HEADER, priceSeries, useMarketBodyState, useMarketDealType } from '../../web/pages/CommunityMarketPage';
-import { AREA_BANDS, chartMonths, DEAL_TYPES, getDealTypeLabel, recentSummary } from '../../web/utils/communityMarketSummary';
+import { chartMonths, DEAL_TYPES, getDealTypeLabel, recentSummary, singleAreaBandText } from '../../web/utils/communityMarketSummary';
 import { getErrorMessage } from '../../web/utils/getErrorMessage';
 import { AppCard, AppNote } from '../components/CommunityApp/AppCard';
 import { AppChipGroup, AppSegment } from '../components/CommunityApp/AppControls';
@@ -15,7 +15,19 @@ import { CommunityAppFrame } from '../components/CommunityApp/CommunityAppFrame'
 // PC 와 같은 훅(useMarketBodyState · useMarketDealType), 숫자 · 문구는 같은 계산(utils/communityMarketSummary).
 // PC 의 두 칸(차트 카드 | 최근 거래 표) → 한 줄씩: 대표 숫자 카드 → 출처 줄 → 최근 거래 목록. 표의 열 이름은 카드 둘째 줄에 같은 글자로.
 
-const AREA_OPTIONS = AREA_BANDS.map((band) => ({ value: band.key, label: band.label }));
+// 면적대 칩 — 그 단지가 가진 면적대만(bands, PC 와 같은 훅). 하나만 남으면 칩 대신 글자("전용 60㎡ 이하") — utils/communityMarketSummary "면적대 칩"
+const AreaChips = ({ bands, owned, value, onChange }) =>
+  bands.length === 1 ? (
+    <p className="text-m-label font-semibold text-ink-2">{singleAreaBandText(bands[0])}</p>
+  ) : (
+    <AppChipGroup
+      label="면적대"
+      options={bands.map((band) => ({ value: band.key, label: band.label }))}
+      value={value}
+      onChange={onChange}
+      dotKeys={owned}
+    />
+  );
 
 // 대표 숫자 카드: "{유형} 시세" · 계산에 쓴 마지막 달 / 큰 숫자 / 증감 · 설명 / 차트(매매면 전세 선도) / 범례 — PC PriceCard 와 같은 내용
 // 일부만 모았을 때(#267 2차)도 PC 와 같다 — 차트 줄 · 못 모은 달은 priceSeries(PC 와 같은 함수), 큰 숫자 · 증감 조건은 recentSummary
@@ -48,7 +60,7 @@ const SummaryCard = ({ prices, jeonse, dealType, band }) => {
 };
 
 const MarketBody = ({ building, dealType, onDealTypeChange }) => {
-  const { owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
+  const { bands, owned, bandKey, setBandKey, band, prices, jeonse, data, collecting, isEmpty, emptyTitle, showData } = useMarketBodyState({ building, dealType });
   // 출처 줄 + (일부만 모았으면) "최근 13개월 중 8개월 기준 · 나머지는 매일 새벽 채워요" — PC 와 같은 부품
   const source =
     data?.source && data.asOf ? (
@@ -62,7 +74,7 @@ const MarketBody = ({ building, dealType, onDealTypeChange }) => {
     <>
       <div className="space-y-2">
         <AppSegment label="거래 유형" options={DEAL_TYPES} value={dealType} onChange={onDealTypeChange} />
-        <AppChipGroup label="면적대" options={AREA_OPTIONS} value={bandKey} onChange={setBandKey} dotKeys={owned} />
+        <AreaChips bands={bands} owned={owned} value={bandKey} onChange={setBandKey} />
         {owned.size > 0 && <p className="text-m-sub text-ink-3">내 호실이 있는 면적대입니다</p>}
       </div>
 

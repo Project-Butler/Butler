@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { AppError } from '../../platform/AppError.js';
 import { compareNatural } from '../../platform/naturalSort.js';
 import { prisma } from '../../platform/prismaClient.js';
+import { listDealAreasByComplex } from '../marketPrices/service/dealAreas.js';
 import {
   countRegionMembers,
   findAuthorUnit,
@@ -16,6 +17,8 @@ import { assertHasNickname, loadNicknames, nicknameOf } from './service/nickname
 // 건물명은 A팀 my_buildings.name을 그대로 쓴다(임대인이 고친 이름이 커뮤니티에도 따라온다).
 // unitCount · unitAreas: 이 단지 내 활성 호실 기준(인증 여부는 verificationStatus 가 말한다). 면적 없는 호실은 빠지고,
 // 동 · 호수는 넣지 않는다(이름 · 호수 · 연락처는 어디에도 노출하지 않는다).
+// dealAreas: 이 단지에 이어진 실거래의 전용면적(㎡, 겹침 없음) — 보관 13개월 · 매매 · 전세 · 월세 모두, 없으면 빈 배열.
+// 화면이 시세 면적대 칩(그 단지에 있는 면적대만)과 기본 선택을 정한다(#274, 규칙 · 이유는 marketPrices/marketPriceRules.js "단지의 거래 면적").
 // verificationStatus: 'VERIFIED' | 'UNVERIFIED' | 'EXPIRED', verifyPropertyId: 인증이 필요하면 인증할 호실 하나(권리자 인증 화면으로 가는 id).
 // 정렬: 인증된 건물 먼저, 그다음 호실 수 · 건물명.
 export const findMyBuildings = async (user) => {
@@ -31,7 +34,10 @@ export const findMyBuildings = async (user) => {
     },
   });
 
-  const memberCounts = await countRegionMembers([...new Set(buildings.map((b) => b.complex.regionId))]);
+  const [memberCounts, dealAreas] = await Promise.all([
+    countRegionMembers([...new Set(buildings.map((b) => b.complex.regionId))]),
+    listDealAreasByComplex(buildings.map((b) => b.complexId)),
+  ]);
 
   return buildings
     .map((building) => ({
@@ -41,6 +47,7 @@ export const findMyBuildings = async (user) => {
       regionName: building.complex.region.fullName,
       unitCount: myUnits.get(building.complexId).unitCount,
       unitAreas: myUnits.get(building.complexId).unitAreas,
+      dealAreas: dealAreas.get(building.complexId) ?? [],
       memberCount: memberCounts.get(building.complex.regionId) ?? 0,
       verificationStatus: myUnits.get(building.complexId).verificationStatus,
       verifyPropertyId: myUnits.get(building.complexId).verifyPropertyId,

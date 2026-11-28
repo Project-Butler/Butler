@@ -9,6 +9,7 @@ import { signAccessToken } from '../../../src/domains/auth/service.js';
 import { prisma } from '../../../src/platform/prismaClient.js';
 import { listAllOwnedComplexIds, requireRegionMember, requireRegionOwner } from '../../../src/domains/community/platformBridge.js';
 import { COMPLEX_MAX_PER_RUN } from '../../../src/domains/community/newsRules.js';
+import { retentionMonths, shiftYearMonth } from '../../../src/domains/marketPrices/months.js';
 import {
   createComment,
   createPost,
@@ -922,10 +923,67 @@ describe('임대인 커뮤니티', { skip: dbTestSkip }, () => {
       assert.equal(building.verifyPropertyId, null);
       assert.deepEqual([...building.unitAreas].sort((a, b) => a - b), [59.84, 84.97, 101.23, 120.5]);
       assert.ok(building.unitAreas.every((area) => typeof area === 'number'));
+      // 기존 칸 그대로 + dealAreas(#274)
       assert.deepEqual(Object.keys(building).sort(), [
-        'complexId', 'legalDongCode', 'memberCount', 'name', 'regionName', 'unitAreas', 'unitCount',
+        'complexId', 'dealAreas', 'legalDongCode', 'memberCount', 'name', 'regionName', 'unitAreas', 'unitCount',
         'verificationStatus', 'verifyPropertyId',
       ]);
+    });
+
+    // #274 — 시세 면적대 칩용. 거래는 이 테스트만 쓰는 가짜 시군구(99274)에 넣는다(시세 DB 테스트가 노원구 11350 거래를 지우고 넣어 서로 부딪치지 않게)
+    test('dealAreas 는 그 단지에 이어진 거래의 전용면적 — 보관 13개월 · 매매 · 전세 · 월세 모두, 겹침 없이 오름차순(소수 둘째 자리). 이어진 거래가 없는 단지는 빈 목록', async () => {
+      const SGG = '99274';
+      const user = await createUser();
+      const linked = await fixture.createComplex({ name: '거래면적아파트' });
+      const none = await fixture.createComplex({ name: '거래없는아파트' });
+      const other = await fixture.createComplex({ name: '남의거래아파트' });
+      for (const complex of [linked, none]) {
+        await prisma.myBuilding.create({ data: { userId: user.id, complexId: complex.id, name: complex.name } });
+        await addUnit(user, complex, { exclusiveArea: '84.97' });
+      }
+      const months = retentionMonths(new Date());
+      const [first, last] = [months[0], months.at(-1)];
+      const row = (yearMonth, dealType, exclusiveArea, complexId = linked.id) => ({
+        dealKind: dealType === 'SALE' ? 'TRADE' : 'RENT',
+        dealType,
+        sigunguCode: SGG,
+        contractYearMonth: yearMonth,
+        contractDate: new Date(`${yearMonth}-15T00:00:00Z`),
+        complexId,
+        linkMethod: complexId ? 'ROAD' : null,
+        exclusiveArea,
+        collectedAt: new Date(),
+      });
+      try {
+        await prisma.marketDeal.createMany({
+          data: [
+            row(first, 'SALE', 59.9), // 보관 기간 첫 달
+            row(last, 'SALE', 59.9), // 같은 면적은 한 번
+            row(last, 'JEONSE', 84.51),
+            row(months[6], 'MONTHLY', 120.3),
+            row(months[6], 'SALE', 59.0621), // 소수 둘째 자리 → 59.06
+            row(shiftYearMonth(first, -1), 'SALE', 101.5), // 보관 기간 앞 달 — 빠짐
+            row(last, 'SALE', 95.0, null), // 안 이어진 거래 — 빠짐
+            row(last, 'SALE', 70.0, other.id), // 다른 단지(내 건물 아님) — 빠짐
+          ],
+        });
+        const buildings = await findMyBuildings(user);
+        const byName = Object.fromEntries(buildings.map((building) => [building.name, building]));
+        assert.deepEqual(byName['거래면적아파트'].dealAreas, [59.06, 59.9, 84.51, 120.3]);
+        assert.deepEqual(byName['거래없는아파트'].dealAreas, []);
+        // 기존 칸은 그대로
+        assert.deepEqual(byName['거래면적아파트'].unitAreas, [84.97]);
+        assert.equal(byName['거래면적아파트'].unitCount, 1);
+        assert.equal(byName['거래면적아파트'].verificationStatus, 'VERIFIED');
+        // HTTP 응답에도 같은 칸
+        const response = await api(user, '/community/my-buildings');
+        assert.equal(response.status, 200);
+        const { data } = await response.json();
+        assert.deepEqual(data.find((building) => building.complexId === linked.id).dealAreas, [59.06, 59.9, 84.51, 120.3]);
+        assert.deepEqual(data.find((building) => building.complexId === none.id).dealAreas, []);
+      } finally {
+        await prisma.marketDeal.deleteMany({ where: { sigunguCode: SGG } });
+      }
     });
   });
 
