@@ -31,6 +31,7 @@ const SPLIT_COUNT = 5;
 // 점수 보정 확인용: 출현 횟수 / 제목 앞부분 / 근접도
 const TF_WORD = '퀘퀴쿼테스트어';
 const POSITION_WORD = '퉤튀퉈테스트어';
+const NUMBERED_WORD = '퀭큉퀑테스트어';
 const NEAR_A = '풰퓌풔테스트어';
 const NEAR_B = '훼휘훠테스트어';
 // 자료 종류 가산 확인용
@@ -144,6 +145,10 @@ ${SPACE_B} 본문` }),
   reference('position-start', { title: `${POSITION_WORD} 관련 사례` }),
   reference('position-late', { title: `앞부분이 아주 길게 이어지는 사례 제목의 맨 끝 ${POSITION_WORD}` }),
   reference('position-case-name', { title: `${POSITION_WORD}반환등` }),
+  // 제목 앞부분: 판례 쟁점 번호("[2] ")는 빼고 세고, "[서울시 상담]" 같은 머리말은 그대로 센다
+  reference('numbered-start', { title: `[2] ${NUMBERED_WORD} 관련 판례` }),
+  reference('numbered-plain', { title: `가 ${NUMBERED_WORD} 관련 사례` }),
+  reference('numbered-header', { title: `[서울시 상담] ${NUMBERED_WORD} 관련 질문` }),
   // 근접도: 본문에 두 단어가 조사를 끼고 가까이 / 멀리(붙은 말 점수는 둘 다 못 받음)
   reference('near', { content: `${NEAR_A}을 ${NEAR_B}했다` }),
   reference('far', { content: `${NEAR_A}을 두고 한참 동안 여러 가지 다른 이야기를 길게 나눈 끝에 ${NEAR_B}했다` }),
@@ -435,6 +440,11 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     const { keys } = await search(POSITION_WORD);
     assert.equal(keys[0], 'position-start');
     assert.deepEqual(new Set(keys.slice(1)), new Set(['position-late', 'position-case-name']));
+  });
+
+  test('제목 앞부분: 맨 앞 쟁점 번호([2])는 빼고 위치를 세고, [서울시 상담] 같은 머리말은 빼지 않는다', async () => {
+    // 번호를 빼지 않으면 numbered-start(5번째 글자)가 numbered-plain(3번째)보다 뒤, 머리말까지 빼면 numbered-header가 맨 앞이 된다.
+    assert.deepEqual((await search(NUMBERED_WORD)).keys, ['numbered-start', 'numbered-plain', 'numbered-header']);
   });
 
   test('근접도: 두 단어가 가까이 있는 자료가 멀리 떨어진 자료보다 앞선다', async () => {

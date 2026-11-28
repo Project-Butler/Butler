@@ -283,12 +283,16 @@ const contentScore = (text, weight) => {
 // "권리금"이면 "권리금 회수기회 보호…"가 "…에 관한 권리금"보다 앞(Meilisearch wordPosition과 같은 생각).
 // 띄어쓰기 없는 제목은 빼다: 판결요지가 없는 판례의 사건명(1,277건 — "보증금반환등", "관리비·건물인도등", "구상금")이라
 // 짧고 검색어로 시작하기 쉬워 내용 있는 제목을 밀어냈다. 사례·가이드 제목에는 띄어쓰기 없는 것이 없다.
+// 판례 제목 맨 앞의 쟁점 번호("[2] ", "[나] ", "[가·나] " — 판시사항 첫 쟁점이 아닌 쟁점을 제목으로 쓴 판례)는 빼고 위치를 센다.
+// "[서울시 상담] …" 같은 가이드 제목 머리말은 그대로 둔다.
 const TITLE_POSITION_FACTOR = 0.5;
 const TITLE_POSITION_WINDOW = 20;
+const TITLE_WITHOUT_ISSUE_NUMBER = Prisma.sql`regexp_replace(title, '^\\[([0-9]+|[가나다라마바사아자차카타파하])(·([0-9]+|[가나다라마바사아자차카타파하]))*\\] ', '')`;
 
 const titlePositionScore = (text, weight) => {
   if (!isPlainText(text)) return Prisma.sql`0`;
-  return Prisma.sql`(CASE WHEN strpos(title, ${text}) > 0 AND title ~ '\\s' THEN ${weight} * GREATEST(0, 1 - (strpos(title, ${text}) - 1)::float / ${TITLE_POSITION_WINDOW}) ELSE 0 END)`;
+  const position = Prisma.sql`strpos(${TITLE_WITHOUT_ISSUE_NUMBER}, ${text})`;
+  return Prisma.sql`(CASE WHEN ${position} > 0 AND title ~ '\\s' THEN ${weight} * GREATEST(0, 1 - (${position} - 1)::float / ${TITLE_POSITION_WINDOW}) ELSE 0 END)`;
 };
 
 // 단어(조사·동의어 포함) 점수에는 출현 횟수(withFrequency)를, 그중 입력한 말에는 제목 앞부분(withTitlePosition)도 더한다.
