@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   allCollected,
   AREA_BANDS,
+  areaBandsOf,
   chartMonths,
   chartSeries,
   completedMonthly,
   formatChange,
   isCollectedMonth,
   lastCompleteMonth,
+  pickAreaBands,
   recentSummary,
+  resolveAreaBand,
   roundAverage,
+  singleAreaBandText,
 } from '../../src/landlord/web/utils/communityMarketSummary';
 
 // 한국 시간 2026-11-17 12:00 — 이번 달은 2026-11, 지난달은 2026-10
@@ -154,5 +158,62 @@ describe('일부만 모았을 때 — 빠진 달 때문에 틀릴 수 있는 숫
     // 띠 · 범례 글자는 그 줄의 거래 이름(DEAL_TYPES) + "수집 중"
     expect(chartSeries(partial({}, [], 'avgDeposit'), ['2026-06'], 'JEONSE').missingLabel).toBe('전세 수집 중');
     expect(chartSeries(partial({}, [], 'avgMonthlyRent'), ['2026-06'], 'MONTHLY').missingLabel).toBe('월세 수집 중');
+  });
+});
+
+// #274 — 칩 = 그 단지 실거래 구간(dealAreas) + 내 호실 구간(unitAreas), 정보 없으면 4개. 면적은 로컬 실제 단지의 전용면적
+describe('면적대 칩 — 그 단지가 가진 면적대만 (#274)', () => {
+  const keys = ({ bands }) => bands.map((band) => band.key);
+  const PARKRIO = [35.24, 59.98, 84.79, 144.77]; // 파크리오: 85–105 거래 없음
+  const JUNGGYE = [39.6, 49.85, 59.39]; // 중계그린: 60㎡ 이하만
+
+  it('칩 3개(파크리오 모양) — 거래가 없는 85–105 는 빠지고 순서는 그대로', () => {
+    expect(keys(pickAreaBands([84.79], PARKRIO))).toEqual(['le60', '60to85', 'gt105']);
+  });
+
+  it('하나만 남음(중계그린 모양) — 칩 하나, 글자는 "전용 60㎡ 이하"', () => {
+    const result = pickAreaBands([], JUNGGYE);
+    expect(keys(result)).toEqual(['le60']);
+    expect(result.defaultKey).toBe('le60');
+    expect(singleAreaBandText(result.bands[0])).toBe('전용 60㎡ 이하');
+  });
+
+  it('거래 정보 없음(빈 목록 · 칸 없음) — 지금처럼 4개, 기본은 내 호실 구간 또는 60–85', () => {
+    expect(keys(pickAreaBands([], []))).toEqual(['le60', '60to85', '85to105', 'gt105']);
+    expect(pickAreaBands([], []).defaultKey).toBe('60to85');
+    expect(pickAreaBands([101.2], []).defaultKey).toBe('85to105');
+    expect(keys(areaBandsOf({ unitAreas: [84.79] }))).toHaveLength(4); // 예전 서버(dealAreas 없음)
+    expect(areaBandsOf({}).defaultKey).toBe('60to85'); // 면적 칸이 다 없어도
+  });
+
+  it('내 호실 구간에 거래가 없어도 그 칩은 보이고(점) 기본으로 고른다', () => {
+    const result = pickAreaBands([101.2], PARKRIO);
+    expect(keys(result)).toEqual(['le60', '60to85', '85to105', 'gt105']);
+    expect([...result.owned]).toEqual(['85to105']);
+    expect(result.defaultKey).toBe('85to105');
+    // 중계그린인데 내 호실이 84㎡ → 60 이하(거래) + 60–85(내 호실) 둘
+    expect(keys(pickAreaBands([84.0], JUNGGYE))).toEqual(['le60', '60to85']);
+  });
+
+  it('기본 선택 세 단계 — ① 내 호실 구간(호실이 많은 쪽, 같으면 큰 쪽) ② 없으면 60–85 가 보일 때 60–85 ③ 아니면 보이는 칩 중 첫째', () => {
+    expect(pickAreaBands([59.9, 84.79, 84.5], PARKRIO).defaultKey).toBe('60to85'); // ① 호실 많은 쪽
+    expect(pickAreaBands([59.9, 144.77], PARKRIO).defaultKey).toBe('gt105'); // ① 같으면 큰 쪽
+    expect(pickAreaBands([], PARKRIO).defaultKey).toBe('60to85'); // ②
+    expect(pickAreaBands([], [59.9, 120.36]).defaultKey).toBe('le60'); // ③ 60–85 없음 → 첫째
+    expect(pickAreaBands([], [64.26, 158.61]).defaultKey).toBe('60to85'); // ② (송파한양1차 — 60 이하 없음)
+    expect(pickAreaBands([], [95.0, 158.61]).defaultKey).toBe('85to105'); // ③
+  });
+
+  it('고른 칩이 사라지면 기본 선택으로, 남아 있으면 그대로', () => {
+    const before = pickAreaBands([], PARKRIO);
+    expect(resolveAreaBand(before, 'gt105').key).toBe('gt105');
+    const after = pickAreaBands([], [59.98, 84.79]); // 건물 목록을 다시 받아 105 초과가 빠짐
+    expect(resolveAreaBand(after, 'gt105').key).toBe('60to85');
+    expect(resolveAreaBand(pickAreaBands([], JUNGGYE), '60to85').key).toBe('le60');
+  });
+
+  it('경계값은 아래 구간(60㎡ 는 60 이하, 85㎡ 는 60–85) — 서버 areaRange 와 같다', () => {
+    expect(keys(pickAreaBands([], [60]))).toEqual(['le60']);
+    expect(keys(pickAreaBands([], [85, 105]))).toEqual(['60to85', '85to105']);
   });
 });

@@ -12,7 +12,7 @@ import { MissingLegend, PriceChart } from '../../web/components/CommunityMarket/
 import { COMMUNITY_PATH } from '../../web/routes';
 import { splitRegionName } from '../../web/utils/communityFormat';
 import { COLLECTING_BRIEFING_TEXT, collectingNotice } from '../../web/utils/communityMarketCollecting';
-import { AREA_BANDS, pickAreaBands } from '../../web/utils/communityMarketSummary';
+import { AREA_BANDS, areaBandsOf } from '../../web/utils/communityMarketSummary';
 import { AppCard, AppNote } from '../components/CommunityApp/AppCard';
 import { AppDealRow, AppNewsRow, AppPollRow, AppPostRow } from '../components/CommunityApp/AppListRows';
 import { CommunityAppFrame } from '../components/CommunityApp/CommunityAppFrame';
@@ -167,7 +167,8 @@ const PollsCard = ({ building, dongName, onOpen, onMore }) => {
 export const CommunityAppBriefingPage = ({ frame, building }) => {
   const navigate = useNavigate();
   const { dong, sigungu } = splitRegionName(building.regionName);
-  const band = AREA_BANDS.find((item) => item.key === pickAreaBands(building.unitAreas ?? []).defaultKey);
+  // 시세 · 최근 거래 카드의 면적대 = 시세 탭의 기본 선택(PC 브리핑과 같은 함수 — utils/communityMarketSummary "면적대 칩")
+  const band = AREA_BANDS.find((item) => item.key === areaBandsOf(building).defaultKey);
   const go = (path) => () => navigate(`${COMMUNITY_PATH}/${path}`);
   return (
     <CommunityAppFrame frame={frame} section="briefing">
