@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { prisma } from '../../../src/platform/prismaClient.js';
 import { EASY_FIRST_SORT_FIELD, findReferences, findRelatedByKeyword } from '../../../src/domains/disputes/service.js';
+import { CURATED_PRECEDENT_KEYS } from '../../../src/domains/disputes/curatedPrecedents.js';
 
 const KEY_PREFIX = 'dbtest-dispute-';
 const WORD_A = '가나다테스트어';
@@ -103,6 +104,8 @@ const REFERENCES = [
   reference('order-prec-old', { type: 'PRECEDENT', createdAt: new Date('2020-01-02T00:00:00Z') }),
   reference('order-guide-new', { type: 'GUIDELINE', createdAt: new Date('2020-01-03T00:00:00Z') }),
   reference('order-prec-newest', { type: 'PRECEDENT', createdAt: new Date('2020-01-05T00:00:00Z') }),
+  // 골라 둔 판례(테스트 동안만 CURATED_PRECEDENT_KEYS에 넣음). 판례 중 가장 오래됐어도 판례 묶음 맨 앞
+  reference('order-prec-curated', { type: 'PRECEDENT', createdAt: new Date('2020-01-01T12:00:00Z') }),
   // 동사 확인용(단어 J): 자료에는 동사 대신 법률 명사 "반환"만 / 동사 형태 "돌려받"이 그대로 있음 / J만 있음
   reference('verb-noun', { title: `${WORD_J} 보증금 반환` }),
   reference('verb-form', { content: `${WORD_J} 보증금을 돌려받지 못함` }),
@@ -454,8 +457,9 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
     assert.deepEqual(result.items.map((item) => item.sourceKey).sort(), [...keys].sort());
   });
 
-  test('검색어 없을 때 기본 정렬: 사례·가이드를 최신순으로 먼저, 판례는 그 뒤 최신순. 페이지를 이어 붙여도 같고 createdAt을 고르면 순수 최신순', async () => {
-    const ORDER_KEYS = ['order-case-old', 'order-prec-old', 'order-guide-new', 'order-prec-newest'];
+  test('검색어 없을 때 기본 정렬: 사례·가이드 → 골라 둔 판례 → 나머지 판례, 묶음마다 최신순. 판례 탭도 골라 둔 판례 먼저. 페이지를 이어 붙여도 같고 createdAt을 고르면 순수 최신순', async () => {
+    const ORDER_KEYS = ['order-case-old', 'order-prec-old', 'order-guide-new', 'order-prec-newest', 'order-prec-curated'];
+    const curatedKey = `${KEY_PREFIX}order-prec-curated`;
     const list = async ({ field = EASY_FIRST_SORT_FIELD, page = 1, size = 20, type } = {}) => {
       const result = await findReferences({
         filters: { sourceKey: { in: ORDER_KEYS.map((key) => `${KEY_PREFIX}${key}`) }, ...(type ? { type } : {}) },
@@ -467,21 +471,34 @@ describe('분쟁 참고자료 검색', { skip: dbTestSkip }, () => {
       return { keys: result.items.map((item) => item.sourceKey.slice(KEY_PREFIX.length)), meta: result.meta };
     };
 
-    const easyFirst = await list();
-    assert.deepEqual(easyFirst.keys, ['order-guide-new', 'order-case-old', 'order-prec-newest', 'order-prec-old']);
-    assert.equal(easyFirst.meta.total, 4);
-    assert.equal(easyFirst.meta.countsByType.PRECEDENT, 2);
+    CURATED_PRECEDENT_KEYS.push(curatedKey);
+    try {
+      const easyFirst = await list();
+      assert.deepEqual(easyFirst.keys, ['order-guide-new', 'order-case-old', 'order-prec-curated', 'order-prec-newest', 'order-prec-old']);
+      assert.equal(easyFirst.meta.total, 5);
+      assert.equal(easyFirst.meta.countsByType.PRECEDENT, 3);
 
-    // 페이지가 쉬운 자료와 판례에 걸쳐도(크기 3: 쉬운 2 + 판례 1 / 판례 1) 이어 붙이면 한 번에 받은 순서와 같다
-    const pagedBy3 = [...(await list({ size: 3 })).keys, ...(await list({ size: 3, page: 2 })).keys];
-    assert.deepEqual(pagedBy3, easyFirst.keys);
-    const pagedBy1 = [];
-    for (let page = 1; page <= 4; page += 1) pagedBy1.push(...(await list({ size: 1, page })).keys);
-    assert.deepEqual(pagedBy1, easyFirst.keys);
-    assert.equal((await list({ size: 3, page: 2 })).meta.hasNext, false);
+      // 페이지가 묶음에 걸쳐도(크기 3: 쉬운 2 + 골라 둔 1 / 나머지 2, 크기 2: 쉬운 2 / 골라 둔 1 + 나머지 1 / 나머지 1) 이어 붙이면 한 번에 받은 순서와 같다
+      for (const size of [1, 2, 3]) {
+        const paged = [];
+        for (let page = 1; page <= Math.ceil(5 / size); page += 1) paged.push(...(await list({ size, page })).keys);
+        assert.deepEqual(paged, easyFirst.keys, `size ${size}`);
+      }
+      assert.equal((await list({ size: 3, page: 2 })).meta.hasNext, false);
 
-    assert.deepEqual((await list({ type: 'PRECEDENT' })).keys, ['order-prec-newest', 'order-prec-old']);
-    assert.deepEqual((await list({ field: 'createdAt' })).keys, ['order-prec-newest', 'order-guide-new', 'order-prec-old', 'order-case-old']);
+      // 판례 탭: 골라 둔 판례가 가장 오래됐어도 먼저, 나머지는 최신순
+      assert.deepEqual((await list({ type: 'PRECEDENT' })).keys, ['order-prec-curated', 'order-prec-newest', 'order-prec-old']);
+      assert.deepEqual((await list({ type: 'PRECEDENT', size: 2, page: 2 })).keys, ['order-prec-old']);
+      assert.deepEqual((await list({ field: 'createdAt' })).keys, [
+        'order-prec-newest',
+        'order-guide-new',
+        'order-prec-old',
+        'order-prec-curated',
+        'order-case-old',
+      ]);
+    } finally {
+      CURATED_PRECEDENT_KEYS.splice(CURATED_PRECEDENT_KEYS.indexOf(curatedKey), 1);
+    }
   });
 
   test('관련도 점수에서 %는 와일드카드가 아니라 글자 그대로 찾는다', async () => {
