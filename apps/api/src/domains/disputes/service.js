@@ -14,6 +14,7 @@ import { findLegalReferences, normalizeLegalReferences, toLawTitlePatterns, toLe
 import { findClosestWord, latinToHangul, toJamo } from './searchSuggestion.js';
 import { toSourceUrl } from './sourceLinks.js';
 import { pickRelated, rankByWeightedOverlap, toRelatedQuery } from './related.js';
+import { CURATED_PRECEDENT_KEYS } from './curatedPrecedents.js';
 
 export const SORTABLE_FIELDS = ['createdAt', 'title', 'sourcePage'];
 // 관련도 순은 컬럼이 아니라 검색어로 계산한 점수라 검색어가 있을 때만 쓴다(controller.js).
@@ -493,34 +494,42 @@ const findPartialMatchIds = async (propertyKind, terms) => {
   };
 };
 
-// 쉬운 자료 먼저: [쉬운 자료 최신순 easyCount건] 뒤에 [판례 최신순]을 이어 붙인 목록에서 한 페이지를 자른다.
-// 페이지가 두 묶음에 걸치면 쉬운 자료 끝부분 + 판례 앞부분으로 채운다.
+// 쉬운 자료 먼저: [쉬운 자료] → [골라 둔 임대차 판례] → [나머지 판례], 묶음마다 최신순으로 이어 붙인 목록에서 한 페이지를 자른다.
+// 판례 탭(type=PRECEDENT)이면 첫 묶음이 0건이라 골라 둔 판례부터 나온다.
+// 페이지가 묶음에 걸치면 앞 묶음 끝부분 + 다음 묶음 앞부분으로 채운다.
 const NEWEST_ORDER = buildOrderBy({ field: 'createdAt', direction: 'desc' });
+const EASY_TIER = { type: { not: HARD_TYPE } };
+const EASY_FIRST_TIERS = [
+  EASY_TIER,
+  { type: HARD_TYPE, sourceKey: { in: CURATED_PRECEDENT_KEYS } },
+  { type: HARD_TYPE, sourceKey: { notIn: CURATED_PRECEDENT_KEYS } },
+];
 
+// easyCount는 첫 묶음(쉬운 자료) 수. 다음 묶음 수는 페이지가 그 뒤까지 갈 때만 센다(마지막 묶음은 셀 필요 없음).
 const findEasyFirstPage = async (where, easyCount, page, size) => {
-  const skip = (page - 1) * size;
-  const easy =
-    skip < easyCount
-      ? await prisma.disputeReference.findMany({
-          where: { AND: [where, { type: { not: HARD_TYPE } }] },
-          select: LIST_SELECT,
-          orderBy: NEWEST_ORDER,
-          skip,
-          take: size,
-        })
-      : [];
-  const remaining = size - easy.length;
-  const hard =
-    remaining > 0
-      ? await prisma.disputeReference.findMany({
-          where: { AND: [where, { type: HARD_TYPE }] },
-          select: LIST_SELECT,
-          orderBy: NEWEST_ORDER,
-          skip: Math.max(0, skip - easyCount),
-          take: remaining,
-        })
-      : [];
-  return [...easy, ...hard].map(toListItem);
+  let skip = (page - 1) * size;
+  const items = [];
+  for (const [index, tier] of EASY_FIRST_TIERS.entries()) {
+    if (items.length >= size) break;
+    const tierWhere = { AND: [where, tier] };
+    const isLast = index === EASY_FIRST_TIERS.length - 1;
+    const tierCount = index === 0 ? easyCount : isLast ? Infinity : await prisma.disputeReference.count({ where: tierWhere });
+    if (skip >= tierCount) {
+      skip -= tierCount;
+      continue;
+    }
+    items.push(
+      ...(await prisma.disputeReference.findMany({
+        where: tierWhere,
+        select: LIST_SELECT,
+        orderBy: NEWEST_ORDER,
+        skip,
+        take: size - items.length,
+      })),
+    );
+    skip = 0;
+  }
+  return items.map(toListItem);
 };
 
 // 검색 조건(match)에 맞는 한 페이지와 화면 숫자. scoreKeyword는 관련도 점수를 매길 검색어.
@@ -539,7 +548,7 @@ const searchReferences = async ({ filters, match, scoreKeyword, page, size, orde
     byRelevance
       ? prisma.disputeReference.findMany({ where, select: { id: true } })
       : easyFirst
-        ? prisma.disputeReference.count({ where: { AND: [where, { type: { not: HARD_TYPE } }] } })
+        ? prisma.disputeReference.count({ where: { AND: [where, EASY_TIER] } })
         : prisma.disputeReference.findMany({
             where,
             select: LIST_SELECT,
